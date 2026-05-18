@@ -27,6 +27,7 @@ from localcast.sensor_fusion import (
     TimestampedFrame,
     TimestampedFrameHistory,
     ClapDetectorConfig,
+    camera_mic_geometry_from_audio_profile,
     constraints_from_phase_sources,
     detect_clap_events,
     dense_stereo_points,
@@ -40,6 +41,7 @@ from localcast.sensor_fusion import (
     put_live_render_frame,
     lower_points_to_render_frame,
     stochastic_transient_matches,
+    speaker_geometry_from_audio_profile,
 )
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
 from audio_field.cultcache_audio import frame_to_numpy, get_live_audio_phase_field, get_live_spatial_audio_frame
@@ -658,8 +660,15 @@ def sync_status_position(sensor_id: str) -> np.ndarray:
 
 
 class LiveChirpPoseMapper:
-    def __init__(self, *, phase_cache: Path) -> None:
+    def __init__(self, *, phase_cache: Path, audio_profile: Path | None = None) -> None:
         self.phase_cache = phase_cache
+        self.camera_mics = None
+        self.speakers = None
+        if audio_profile is not None and audio_profile.exists():
+            loaded_mics = camera_mic_geometry_from_audio_profile(audio_profile)
+            loaded_speakers = speaker_geometry_from_audio_profile(audio_profile)
+            self.camera_mics = loaded_mics or None
+            self.speakers = loaded_speakers or None
         self.last_frame_id: int | None = None
         self.constraints: tuple[CameraChirpPoseConstraint, ...] = ()
 
@@ -674,6 +683,8 @@ class LiveChirpPoseMapper:
             self.constraints = constraints_from_phase_sources(
                 field.sources,
                 audio_time_ns=field.audio_time_ns,
+                camera_mics=self.camera_mics,
+                speakers=self.speakers,
             )
         return self._constraint_points(field.audio_time_ns)
 
@@ -1085,6 +1096,7 @@ def main() -> None:
     parser.add_argument("--lod-cache", default=str(ROOT / "calibration" / "runs" / "visual-lod-cache.json"))
     parser.add_argument("--audio-cache", default=str(ROOT / "calibration" / "runs" / "audio-state.msgpack"))
     parser.add_argument("--phase-cache", default=str(ROOT / "calibration" / "runs" / "audio-phase-field.msgpack"))
+    parser.add_argument("--audio-profile", default=str(ROOT / "config" / "audio-field.json"))
     parser.add_argument("--clap-cache", default=str(ROOT / "calibration" / "runs" / "clap-events.msgpack"))
     parser.add_argument("--no-clap-calibration", action="store_true")
     parser.add_argument("--no-chirp-pose", action="store_true")
@@ -1134,7 +1146,14 @@ def main() -> None:
         camera_width=args.rgb_width,
         camera_height=args.rgb_height,
     )
-    chirp_pose_mapper = None if args.no_chirp_pose else LiveChirpPoseMapper(phase_cache=Path(args.phase_cache))
+    audio_profile = Path(args.audio_profile)
+    if not audio_profile.exists() and audio_profile.name == "audio-field.json":
+        example_profile = audio_profile.with_name("audio-field.example.json")
+        audio_profile = example_profile if example_profile.exists() else audio_profile
+    chirp_pose_mapper = None if args.no_chirp_pose else LiveChirpPoseMapper(
+        phase_cache=Path(args.phase_cache),
+        audio_profile=audio_profile if audio_profile.exists() else None,
+    )
     try:
         while True:
             now = time.monotonic()

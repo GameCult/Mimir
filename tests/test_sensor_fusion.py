@@ -29,6 +29,8 @@ from localcast.sensor_fusion import (
     TimestampedFrameHistory,
     TrackCache,
     VirtualCamera,
+    camera_mic_geometry_from_audio_profile,
+    camera_sensor_id_for_microphone,
     constraints_from_phase_sources,
     detect_clap_events,
     frame_to_vertex_array,
@@ -44,7 +46,9 @@ from localcast.sensor_fusion import (
     put_live_clap_events,
     put_live_render_frame,
     remote_video_artifact_for_present_time,
+    phase_source_id_for_microphone,
     solve_common_space_from_fixed_board,
+    speaker_geometry_from_audio_profile,
     SurfaceFeatureObservation,
     triangulate_surface_tracks,
 )
@@ -318,6 +322,36 @@ class SensorFusionTests(unittest.TestCase):
 
         self.assertIs(frame, limited)
 
+    def test_render_point_budget_keeps_cross_modal_calibration_constraints(self):
+        pinned = (
+            RenderPointPacket("camera-chirp:kiyo-primary:local-speaker-left:body", np.array([0.0, 0.0, 1.0]), 0.02, (1, 1, 0, 1), 0.15, 1),
+            RenderPointPacket("camera-sync:kiyo-primary", np.array([0.0, 0.0, 1.0]), 0.02, (0, 1, 1, 1), 0.15, 1),
+            RenderPointPacket("clap-calibration:clap:test", np.array([0.0, 0.0, 1.0]), 0.02, (0, 1, 1, 1), 0.15, 1),
+        )
+        noisy = tuple(
+            RenderPointPacket(f"room-rgb:noisy:{index}", np.array([0.48, 0.28, 1.2]), 0.02, (1, 1, 1, 1), 1.0, 1)
+            for index in range(20)
+        )
+        frame = RenderFramePacket(
+            schema="localcast.sensor_fusion.render_frame.v1",
+            frame_id=3,
+            created_monotonic_ns=1,
+            source_time_min_ns=1,
+            source_time_max_ns=1,
+            present_time_ns=1,
+            audio_alignment_time_ns=1,
+            spout_sender_name="test",
+            target_width=320,
+            target_height=180,
+            points=pinned + noisy,
+        )
+
+        limited = frame_with_point_budget(frame, 6, "kiyo-mid-deru")
+        keys = {point.stable_key for point in limited.points}
+
+        self.assertEqual(6, len(limited.points))
+        self.assertTrue(all(point.stable_key in keys for point in pinned))
+
     def test_rasterizer_uses_gaussian_envelope_not_solid_ellipse(self):
         frame = RenderFramePacket(
             schema="localcast.sensor_fusion.render_frame.v1",
@@ -576,6 +610,34 @@ class SensorFusionTests(unittest.TestCase):
         self.assertAlmostEqual(1.12, constraint.observed_range_m)
         self.assertAlmostEqual(0.12, constraint.range_residual_m)
         self.assertEqual(12_345, constraint.timestamp_ns)
+
+    def test_chirp_pose_geometry_loads_from_audio_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "audio-field.json"
+            path.write_text(
+                """
+{
+  "microphones": [
+    {"id": "mic_kiyo_left", "positionMeters": [-0.4, 0.2, 1.3]},
+    {"id": "ignored_focusrite", "positionMeters": [0.0, 0.0, 1.0]},
+    {"id": "custom", "phaseSourceId": "ps-eye-1", "cameraSensorId": "ps3eye-right", "positionMeters": [0.7, -0.1, 1.2]}
+  ],
+  "speakers": [
+    {"id": "speaker_left", "positionMeters": [-0.6, 1.0, 1.1]}
+  ]
+}
+""",
+                encoding="utf-8",
+            )
+
+            mics = camera_mic_geometry_from_audio_profile(path)
+            speakers = speaker_geometry_from_audio_profile(path)
+
+        self.assertEqual(("kiyo-0", "ps-eye-1"), tuple(mic.source_id for mic in mics))
+        self.assertEqual(("kiyo-primary", "ps3eye-right"), tuple(mic.sensor_id for mic in mics))
+        self.assertEqual("speaker_left", speakers[0].speaker_id)
+        self.assertEqual("kiyo-0", phase_source_id_for_microphone({"id": "mic_kiyo_left"}))
+        self.assertEqual("kiyo-primary", camera_sensor_id_for_microphone({"id": "mic_kiyo_left"}))
 
     def test_audio_source_events_overlay_against_audio_alignment_time(self):
         frame = RenderFramePacket(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Mapping, Sequence
 
 import numpy as np
@@ -51,6 +53,58 @@ def default_speaker_geometry() -> tuple[SpeakerGeometry, ...]:
         SpeakerGeometry("local-speaker-left", np.array([-0.32, -1.08, 1.18], dtype=np.float64)),
         SpeakerGeometry("local-speaker-right", np.array([0.32, -1.08, 1.18], dtype=np.float64)),
     )
+
+
+def camera_mic_geometry_from_audio_profile(path: Path) -> tuple[CameraMicGeometry, ...]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    rows: list[CameraMicGeometry] = []
+    for mic in data.get("microphones", []):
+        source_id = phase_source_id_for_microphone(mic)
+        sensor_id = camera_sensor_id_for_microphone(mic)
+        position = mic.get("positionMeters")
+        if source_id is None or sensor_id is None or position is None:
+            continue
+        rows.append(CameraMicGeometry(sensor_id, source_id, np.asarray(position, dtype=np.float64)))
+    return tuple(rows)
+
+
+def speaker_geometry_from_audio_profile(path: Path) -> tuple[SpeakerGeometry, ...]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    rows: list[SpeakerGeometry] = []
+    for speaker in data.get("speakers", []):
+        position = speaker.get("positionMeters")
+        if position is None:
+            continue
+        rows.append(SpeakerGeometry(str(speaker.get("id", "")), np.asarray(position, dtype=np.float64)))
+    return tuple(row for row in rows if row.speaker_id)
+
+
+def phase_source_id_for_microphone(mic: Mapping[str, object]) -> str | None:
+    explicit = mic.get("phaseSourceId") or mic.get("sourceId")
+    if explicit:
+        return str(explicit)
+    mic_id = str(mic.get("id", ""))
+    known = {
+        "mic_kiyo_left": "kiyo-0",
+        "mic_kiyo_right": "kiyo-1",
+        "mic_ps_eye_left": "ps-eye-0",
+        "mic_ps_eye_right": "ps-eye-1",
+    }
+    return known.get(mic_id)
+
+
+def camera_sensor_id_for_microphone(mic: Mapping[str, object]) -> str | None:
+    explicit = mic.get("cameraSensorId") or mic.get("sensorId")
+    if explicit:
+        return str(explicit)
+    mic_id = str(mic.get("id", ""))
+    known = {
+        "mic_kiyo_left": "kiyo-primary",
+        "mic_kiyo_right": "kiyo-secondary",
+        "mic_ps_eye_left": "ps3eye-left",
+        "mic_ps_eye_right": "ps3eye-right",
+    }
+    return known.get(mic_id)
 
 
 def constraints_from_phase_sources(

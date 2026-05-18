@@ -232,20 +232,33 @@ def frame_with_point_budget(
 ) -> RenderFramePacket:
     if max_points <= 0 or len(frame.points) <= max_points:
         return frame
-    priority_count = max(1, int(max_points * 0.55))
-    temporal_count = max(0, max_points - priority_count)
+    pinned = sorted(
+        (point for point in frame.points if is_pinned_render_point(point)),
+        key=lambda point: (-render_priority(point, camera_preset_name), point.stable_key),
+    )[:max_points]
+    pinned_keys = {point.stable_key for point in pinned}
+    remaining_budget = max(0, max_points - len(pinned))
+    if remaining_budget <= 0:
+        points = pinned
+        return _frame_with_points(frame, points)
+    priority_count = max(1, int(remaining_budget * 0.55))
+    temporal_count = max(0, remaining_budget - priority_count)
     priority = sorted(
-        frame.points,
+        (point for point in frame.points if point.stable_key not in pinned_keys),
         key=lambda point: (-render_priority(point, camera_preset_name), stable_hash(point.stable_key, 0)),
     )[:priority_count]
-    selected_keys = {point.stable_key for point in priority}
+    selected_keys = pinned_keys | {point.stable_key for point in priority}
     remainder = [point for point in frame.points if point.stable_key not in selected_keys]
     temporal = sorted(
         remainder,
         key=lambda point: stable_hash(point.stable_key, frame.frame_id) / max(0.05, render_priority(point, camera_preset_name)),
     )[:temporal_count]
-    points = priority + temporal
+    points = pinned + priority + temporal
     points = sorted(points, key=lambda point: point.stable_key)
+    return _frame_with_points(frame, points)
+
+
+def _frame_with_points(frame: RenderFramePacket, points: list[RenderPointPacket]) -> RenderFramePacket:
     return RenderFramePacket(
         schema=frame.schema,
         frame_id=frame.frame_id,
@@ -261,6 +274,19 @@ def frame_with_point_budget(
     )
 
 
+def is_pinned_render_point(point: RenderPointPacket) -> bool:
+    return point.stable_key.startswith(
+        (
+            "camera-chirp:",
+            "camera-sync:",
+            "clap-calibration:",
+            "clap-ray:",
+            "clap-timing:",
+            "audio-event-",
+        )
+    )
+
+
 def stable_hash(key: str, salt: int) -> int:
     digest = hashlib.blake2s(f"{salt}:{key}".encode("utf-8"), digest_size=8).digest()
     return int.from_bytes(digest, "little")
@@ -270,12 +296,18 @@ def render_priority(point: RenderPointPacket, camera_preset_name: str) -> float:
     key = point.stable_key
     confidence = max(0.0, min(1.0, float(point.confidence)))
     semantic = 1.0
-    if key.startswith("dense-rgb:"):
+    if key.startswith("clap-calibration:"):
+        semantic = 3.2
+    elif key.startswith(("camera-sync:", "camera-chirp:")):
+        semantic = 2.6
+    elif key.startswith(("clap-ray:", "clap-timing:")):
+        semantic = 2.2
+    elif key.startswith("dense-rgb:"):
         semantic = 2.0
+    elif key.startswith("leap-motion:"):
+        semantic = 1.45
     elif key.startswith("room-rgb:"):
         semantic = 1.15
-    elif key.startswith("leap-motion:"):
-        semantic = 1.0
     elif key.startswith("stochastic:"):
         semantic = 0.36
     elif key.startswith("audio-event-"):

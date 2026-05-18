@@ -174,8 +174,12 @@ research:
       `localcast.sensor_fusion.chirp_pose` converts live phase-field delay
       meaning for Kiyo/PS Eye microphone sources into camera-body range
       constraints, which the live producer emits as `camera-chirp:*` render
-      points and `chirp-camera-pose` LOD evidence. These constraints augment
-      visual calibration; they do not own image geometry.
+      points and `chirp-camera-pose` LOD evidence. It can load geometry from
+      the audio-field profile, falling back to the example/default geometry
+      until measured local coordinates exist. These constraints augment visual
+      calibration; they do not own image geometry. The Spout point-budget policy
+      pins calibration and cross-modal constraints before spending adaptive LOD
+      budget on stable high-priority surfaces and frame-rotated samples.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >
