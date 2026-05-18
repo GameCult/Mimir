@@ -25,6 +25,8 @@ LIVE_SOURCE_EVENTS_KEY = "localcast.audio.source-events.live"
 SOURCE_EVENTS_SCHEMA_ID = "gamecult.localcast.audio.source_events.v1"
 LIVE_PHASE_FIELD_KEY = "localcast.audio.phase-field.live"
 PHASE_FIELD_SCHEMA_ID = "gamecult.localcast.audio.phase_field.v1"
+LIVE_MIC_FIELD_KEY = "localcast.audio.mic-field.live"
+MIC_FIELD_SCHEMA_ID = "gamecult.localcast.audio.mic_field.v1"
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,23 @@ class CultAudioPhaseField:
     global_confidence: float
     needs_active_probe: bool
     active_probe_reason: str
+
+
+@dataclass(frozen=True)
+class CultAudioMicFieldFrame:
+    schema_version: str
+    frame_id: int
+    created_monotonic_ns: int
+    audio_time_ns: int
+    sample_rate: int
+    start_sample: int
+    frame_count: int
+    channels: tuple[str, ...]
+    roles: tuple[dict[str, Any], ...]
+    graph_id: str
+    controls: tuple[dict[str, Any], ...]
+    sample_format: str
+    interleaved_pcm_f32le: bytes
 
 
 def _pack(value: Any) -> bytes:
@@ -212,6 +231,42 @@ def _decode_phase_field(raw: Any) -> CultAudioPhaseField:
     )
 
 
+def _encode_mic_field(frame: CultAudioMicFieldFrame) -> list[Any]:
+    return [
+        frame.schema_version,
+        frame.frame_id,
+        frame.created_monotonic_ns,
+        frame.audio_time_ns,
+        frame.sample_rate,
+        frame.start_sample,
+        frame.frame_count,
+        list(frame.channels),
+        list(frame.roles),
+        frame.graph_id,
+        list(frame.controls),
+        frame.sample_format,
+        frame.interleaved_pcm_f32le,
+    ]
+
+
+def _decode_mic_field(raw: Any) -> CultAudioMicFieldFrame:
+    return CultAudioMicFieldFrame(
+        schema_version=str(raw[0]),
+        frame_id=int(raw[1]),
+        created_monotonic_ns=int(raw[2]),
+        audio_time_ns=int(raw[3]),
+        sample_rate=int(raw[4]),
+        start_sample=int(raw[5]),
+        frame_count=int(raw[6]),
+        channels=tuple(str(channel) for channel in raw[7]),
+        roles=tuple(dict(item) for item in raw[8]),
+        graph_id=str(raw[9]),
+        controls=tuple(dict(item) for item in raw[10]),
+        sample_format=str(raw[11]),
+        interleaved_pcm_f32le=bytes(raw[12]),
+    )
+
+
 SPATIAL_AUDIO_FRAME_DOCUMENT = define_document_type(
     "localcast.audio.spatial_frame",
     encode=_encode_audio_frame,
@@ -248,6 +303,15 @@ PHASE_FIELD_DOCUMENT = define_document_type(
     payload_decoder=_unpack,
 )
 
+MIC_FIELD_DOCUMENT = define_document_type(
+    "localcast.audio.mic_field",
+    encode=_encode_mic_field,
+    decode=_decode_mic_field,
+    name=lambda frame: LIVE_MIC_FIELD_KEY if isinstance(frame, CultAudioMicFieldFrame) else None,
+    payload_encoder=_pack,
+    payload_decoder=_unpack,
+)
+
 
 def _retry_cache_io(operation):
     last_error: Exception | None = None
@@ -268,6 +332,7 @@ def _open_audio_cache_once(path: Path) -> CultCache:
         .register_document_type(AUDIO_STREAM_STATUS_DOCUMENT)
         .register_document_type(SOURCE_EVENTS_DOCUMENT)
         .register_document_type(PHASE_FIELD_DOCUMENT)
+        .register_document_type(MIC_FIELD_DOCUMENT)
         .add_generic_store(SingleFileMessagePackBackingStore(path))
         .build()
     )
@@ -420,5 +485,92 @@ def get_live_audio_phase_field(path: Path) -> CultAudioPhaseField | None:
     def operation() -> CultAudioPhaseField | None:
         cache = open_audio_cache(path)
         return cache.get(PHASE_FIELD_DOCUMENT, LIVE_PHASE_FIELD_KEY)
+
+    return _retry_cache_io(operation)
+
+
+DEFAULT_MIC_FIELD_CHANNELS = (
+    "host-focusrite",
+    "co-streamer-focusrite",
+    "kiyo-0",
+    "kiyo-1",
+    "ps-eye-0",
+    "ps-eye-1",
+)
+
+
+DEFAULT_MIC_FIELD_ROLES = (
+    {"channel": 0, "sourceId": "host-focusrite", "role": "host-voice-anchor"},
+    {"channel": 1, "sourceId": "co-streamer-focusrite", "role": "co-streamer-voice-anchor"},
+    {"channel": 2, "sourceId": "kiyo-0", "role": "room-witness"},
+    {"channel": 3, "sourceId": "kiyo-1", "role": "room-witness"},
+    {"channel": 4, "sourceId": "ps-eye-0", "role": "spatial-witness"},
+    {"channel": 5, "sourceId": "ps-eye-1", "role": "spatial-witness"},
+)
+
+
+DEFAULT_FAUST_VOICE_CONTROLS = (
+    {"path": "/host/gain", "value": 1.0},
+    {"path": "/host/witness_reject", "value": 0.35},
+    {"path": "/co_streamer/gain", "value": 1.0},
+    {"path": "/co_streamer/witness_reject", "value": 0.35},
+    {"path": "/ambient/gain", "value": 0.6},
+    {"path": "/transients/gain", "value": 0.7},
+)
+
+
+def make_mic_field_frame(
+    block: np.ndarray,
+    *,
+    frame_id: int,
+    sample_rate: int,
+    start_sample: int,
+    audio_time_ns: int,
+    channels: tuple[str, ...] = DEFAULT_MIC_FIELD_CHANNELS,
+    roles: tuple[dict[str, Any], ...] = DEFAULT_MIC_FIELD_ROLES,
+    graph_id: str = "localcast.faust.voice_separation.v1",
+    controls: tuple[dict[str, Any], ...] = DEFAULT_FAUST_VOICE_CONTROLS,
+) -> CultAudioMicFieldFrame:
+    pcm = np.asarray(block, dtype=np.float32)
+    if pcm.ndim != 2:
+        raise ValueError("mic field block must be a 2D frames-by-channels array")
+    if pcm.shape[1] != len(channels):
+        raise ValueError(f"expected {len(channels)} channels, got {pcm.shape[1]}")
+    return CultAudioMicFieldFrame(
+        schema_version=MIC_FIELD_SCHEMA_ID,
+        frame_id=int(frame_id),
+        created_monotonic_ns=time.monotonic_ns(),
+        audio_time_ns=int(audio_time_ns),
+        sample_rate=int(sample_rate),
+        start_sample=int(start_sample),
+        frame_count=int(pcm.shape[0]),
+        channels=tuple(channels),
+        roles=tuple(dict(item) for item in roles),
+        graph_id=str(graph_id),
+        controls=tuple(dict(item) for item in controls),
+        sample_format="f32le-interleaved",
+        interleaved_pcm_f32le=np.ascontiguousarray(pcm, dtype="<f4").tobytes(),
+    )
+
+
+def mic_field_to_numpy(frame: CultAudioMicFieldFrame) -> np.ndarray:
+    if frame.sample_format != "f32le-interleaved":
+        raise ValueError(f"unsupported sample format: {frame.sample_format}")
+    pcm = np.frombuffer(frame.interleaved_pcm_f32le, dtype="<f4")
+    return pcm.reshape((frame.frame_count, len(frame.channels))).copy()
+
+
+def put_live_mic_field_frame(path: Path, frame: CultAudioMicFieldFrame) -> None:
+    def operation() -> None:
+        cache = open_audio_cache(path)
+        cache.put(MIC_FIELD_DOCUMENT, LIVE_MIC_FIELD_KEY, frame)
+
+    _retry_cache_io(operation)
+
+
+def get_live_mic_field_frame(path: Path) -> CultAudioMicFieldFrame | None:
+    def operation() -> CultAudioMicFieldFrame | None:
+        cache = open_audio_cache(path)
+        return cache.get(MIC_FIELD_DOCUMENT, LIVE_MIC_FIELD_KEY)
 
     return _retry_cache_io(operation)

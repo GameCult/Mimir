@@ -60,6 +60,9 @@ flowchart TD
     K --> L["bounded field cache"]
     L --> M["aligned six-channel blocks"]
     M --> N["FOA encoder"]
+    M --> V["Faust mic-field publisher"]
+    V --> W["localcast.audio.mic_field"]
+    W --> X["Aquarium Faust voice-separation graph"]
     N --> O["AmbiX ACN/SN3D bus: W,Y,Z,X"]
 ```
 
@@ -73,6 +76,7 @@ Ownership:
 - Active probe optimization owns extra chirplet emission when confidence drops, bounded by level/spacing/audibility budget. `audio_field.active_probe` is the runtime join that converts phase-field confidence into emitted chirplet WAVs/manifests and optional default-device playback.
 - The camera/sensor-fusion pipeline may publish world poses later; it does not own audio clocks or channel timing.
 - OBS may ingest rendered output later; it is not the authority for the Ambisonic field.
+- Aquarium/Faust owns hot voice separation after LocalCastBridge publishes `localcast.audio.mic_field`; LocalCastBridge owns alignment, timing, mic roles, graph id, and controls.
 
 Invariant: distributed camera/Focusrite microphones must be aligned and resampled into one reference timeline before FOA encoding. Latency is allowed as bounded buffering, but cache depth must converge toward real-time. Speaker output chirplets are live telemetry; delay/SRO/phase state must update during runtime, not only during setup. Extra chirplets may be emitted automatically when confidence drops, but only under the active probe optimizer's budget. The local shielded cardioid and neighbor shotgun are the high-quality dialogue anchors; camera mics provide spatial/context evidence.
 

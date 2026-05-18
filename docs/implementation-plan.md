@@ -43,6 +43,10 @@
   - `scripts/stream_phase_field.py` publishes the live meaning document from an aligned mic field plus known program/loopback reference without exposing raw phase bands as the renderer API.
   - `audio_field.active_probe` wires low phase-field confidence into `ActiveProbeOptimizer`, emits bounded chirplet WAVs plus `active-probes.jsonl`, and can play probes through the default output device.
   - `scripts/start-live-audio-phase-field.ps1` starts the live dense harmonic confidence loop with near-ultrasonic probes; `scripts/stop-live-audio-phase-field.ps1` stops the PID recorded in `logs/audio-phase-field.pid`.
+- Faust voice-separation boundary:
+  - `localcast.audio.mic_field` publishes aligned six-mic float32 blocks at `calibration/runs/audio-mic-field.msgpack`.
+  - `faust/localcast_voice_separation.dsp` is the first Aquarium-hosted graph surface for host voice, co-streamer voice, ambient, transient, and loopback stems.
+  - `scripts/start-live-faust-mic-field.ps1` starts the mic-field publisher for Aquarium/Faust.
 
 ## Temporary
 
@@ -68,4 +72,4 @@
 13. Replace synthetic live-fusion observations with PS3 Eye detector observations and calibrated surface-feature tracks.
 14. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
 15. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
-16. Wire `stream_phase_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.
+16. Wire `stream_phase_field.py` and `stream_faust_mic_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.

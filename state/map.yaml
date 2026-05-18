@@ -139,6 +139,15 @@ research:
       harmonic near-ultrasonic probe textures so aliases have a musical
       relationship instead of arbitrary squeal. This is learned audio-field
       state, not a phase display.
+  faust_voice_separation:
+    summary: docs/aquarium-spatial-audio.md
+    key_decision: >
+      Voice separation should run in Aquarium's Faust DSP, not as Python hot
+      audio math after the mic field has already collapsed to AmbiX.
+      LocalCastBridge now publishes `localcast.audio.mic_field` with six
+      aligned mic channels, roles, controls, and graph id
+      `localcast.faust.voice_separation.v1`; the matching Faust graph lives at
+      `faust/localcast_voice_separation.dsp`.
   sensor_fusion_architecture:
     summary: docs/sensor-fusion-architecture.md
     key_decision: >

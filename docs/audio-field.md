@@ -195,6 +195,14 @@ Encode an offline aligned six-channel WAV to FOA AmbiX:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py encode-foa --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-aligned.wav --output .\calibration\runs\<run-folder>\field-foa-ambix.wav
 ```
 
+Publish the same aligned six-channel field directly to Aquarium/Faust for voice separation:
+
+```powershell
+.\scripts\start-live-faust-mic-field.ps1
+```
+
+This writes `localcast.audio.mic_field` into `calibration/runs/audio-mic-field.msgpack` with channel roles and graph id `localcast.faust.voice_separation.v1`. The Faust graph lives at `faust/localcast_voice_separation.dsp` and has six inputs plus six stem outputs: host voice, co-streamer voice, ambient, transients, local loopback placeholder, and co-streamer loopback placeholder.
+
 Suppress room/transient witness energy before FOA encoding:
 
 ```powershell
@@ -237,6 +245,7 @@ The `play-record` and `record-field` commands remain for a `shared-input-device`
 - Ultrasonic probes are allowed only as a bounded optimization strategy. They must stay below Nyquist, remain level-capped, and prove themselves by raising measured confidence; hardware may distort or discard them.
 - Dense probe textures should be harmonically organized so any lower-band aliases land closer to musical relationships than arbitrary squeal. This is damage control, not a license to trust aliasing.
 - FOA output is AmbiX: ACN channel order, SN3D normalization, channels `W,Y,Z,X`.
+- The Faust voice-separation input is the aligned six-mic field, not the AmbiX collapse. Voice separation needs anchor and witness channels before spatial rendering destroys useful evidence.
 - Speaker calibration is a measurement path, not a generic monitor output.
 - Source-event geometry is published beside the AmbiX bed; render effects do not have to infer transient positions from mixed audio.
 - Phase/chirplet evidence is reduced into alignment, correction, suppression, and probe-control meaning before it crosses the live cache boundary. Raw phase is an estimator detail, not a renderer API.
@@ -256,6 +265,7 @@ The audio code is split so the hard parts can be tested without the room, driver
 - `audio_field.phase_meaning` owns live extraction of meaning from phase/chirplet evidence. It consumes known reference audio plus aligned mic windows, keeps the smoothed phase/frequency state internal, and emits only actionable state for alignment, suppression, and probe control.
 - Room suppression owns stream-side cleanup: dialogue anchors define desired direct energy, spatial/context mics act as witnesses for room and transient clutter, and the cleaned aligned field feeds FOA/Aquarium/Faust.
 - Source-event analysis owns non-vocal spatial facts: dialogue focus weights and localized transient vectors are published beside the AmbiX bed, not hidden inside it.
+- Aquarium/Faust owns the hot voice-separation graph after `localcast.audio.mic_field`; LocalCastBridge owns alignment, timing, roles, and control publication.
 - `scripts/audio_field.py` stays as the operator CLI and hardware probe surface.
 
 This is the portfolio-piece line: each module owns one invariant, and the tests use mocks/fakes instead of asking a driver stack to please be emotionally available.

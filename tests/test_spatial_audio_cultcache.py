@@ -9,12 +9,16 @@ from audio_field.cultcache_audio import (
     frame_to_numpy,
     get_live_audio_phase_field,
     get_live_audio_source_events,
+    get_live_mic_field_frame,
     get_live_spatial_audio_frame,
     make_audio_phase_field,
     make_audio_source_events,
+    make_mic_field_frame,
     make_spatial_audio_frame,
+    mic_field_to_numpy,
     put_live_audio_phase_field,
     put_live_audio_source_events,
+    put_live_mic_field_frame,
     put_live_spatial_audio_frame,
 )
 
@@ -100,6 +104,27 @@ class SpatialAudioCultCacheTests(unittest.TestCase):
         self.assertEqual("local-loopback", loaded.reference_id)
         self.assertEqual(12.5, loaded.sources[0]["delaySamples"])
         self.assertFalse(loaded.needs_active_probe)
+
+    def test_live_mic_field_round_trip_through_cultcache(self):
+        block = np.arange(48, dtype=np.float32).reshape(8, 6) / 48.0
+        frame = make_mic_field_frame(
+            block,
+            frame_id=11,
+            sample_rate=48000,
+            start_sample=512,
+            audio_time_ns=789,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "audio-mic-field.msgpack"
+            put_live_mic_field_frame(path, frame)
+            loaded = get_live_mic_field_frame(path)
+
+        self.assertIsNotNone(loaded)
+        self.assertEqual("localcast.faust.voice_separation.v1", loaded.graph_id)
+        self.assertEqual(6, len(loaded.channels))
+        self.assertEqual("host-voice-anchor", loaded.roles[0]["role"])
+        np.testing.assert_allclose(block, mic_field_to_numpy(loaded))
 
 
 if __name__ == "__main__":

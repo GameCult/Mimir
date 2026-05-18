@@ -86,6 +86,18 @@ def msgpack_head(path: Path):
                 "needsActiveProbe": payload[9] if len(payload) > 9 else True,
             }
         )
+    elif summary["type"] == "localcast.audio.mic_field":
+        summary.update(
+            {
+                "frameId": payload[1],
+                "audioTimeNs": payload[3],
+                "sampleRate": payload[4],
+                "startSample": payload[5],
+                "frameCount": payload[6],
+                "channels": payload[7] if len(payload) > 7 else [],
+                "graphId": payload[9] if len(payload) > 9 else "",
+            }
+        )
     elif summary["type"] in ("localcast.visual.stream_status", "localcast.audio.stream_status"):
         summary["payloadHead"] = head
     return summary
@@ -110,6 +122,7 @@ def main() -> None:
             "visual-stream-status.msgpack",
             "audio-stream-status.msgpack",
             "audio-phase-field.msgpack",
+            "audio-mic-field.msgpack",
             "active-probes/active-probes.jsonl",
             "stream-spout-status.json",
             "av-sync-status.json",
@@ -124,6 +137,7 @@ def main() -> None:
         "audioHead": msgpack_head(runs / "audio-state.msgpack"),
         "eventsHead": msgpack_head(runs / "audio-events.msgpack"),
         "phaseFieldHead": msgpack_head(runs / "audio-phase-field.msgpack"),
+        "micFieldHead": msgpack_head(runs / "audio-mic-field.msgpack"),
         "lastActiveProbe": read_last_jsonl(runs / "active-probes" / "active-probes.jsonl"),
     }
     print(json.dumps(payload, indent=2, default=str))
