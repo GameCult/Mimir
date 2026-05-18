@@ -5,6 +5,14 @@
     "min_confidence": 0.1,
     "cache_ttl_ns": 500000000
   },
+  "render_bridge": {
+    "spout_sender_name": "LocalCastBridge Point Cloud",
+    "target_width": 1920,
+    "target_height": 1080,
+    "visual_delay_ns": 250000000,
+    "audio_alignment_delay_ns": 250000000,
+    "default_point_radius_m": 0.025
+  },
   "cameras": [
     {
       "id": "ps3eye_left",

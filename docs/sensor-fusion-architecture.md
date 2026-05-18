@@ -36,13 +36,17 @@ flowchart TD
     D --> F
     F --> G["TrackCache"]
     G --> H["PointCloud PLY"]
-    G --> I["Future brush/splat packets"]
+    G --> I["RenderFramePacket"]
+    I --> J["Aquarium GPU renderer"]
+    J --> K["Spout2 sender texture"]
+    K --> L["OBS Spout2 source"]
 ```
 
 ## Ownership
 
 - `localcast.sensor_fusion.core` owns calibrated camera models, 2D observations, DLT triangulation, reprojection gating, confidence scoring, point-cloud export, and track cache expiry.
 - `localcast.sensor_fusion.adapters` owns driver-facing frame ingress. Its first concrete adapter is an FFmpeg raw BGR reader for the PS3 Eye DirectShow path.
+- `localcast.sensor_fusion.render_bridge` owns the render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
 - `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.
 
@@ -57,8 +61,10 @@ sensor observation
 -> calibrated world ray
 -> triangulated marker claim
 -> cached track
--> point cloud / brush packet / splat packet
--> renderer
+-> render frame packet
+-> Aquarium brush/splat packet
+-> Spout sender texture
+-> OBS source
 ```
 
 The cache is not a bucket. `TrackCache` has a TTL and confidence update rule so the system can buffer and converge without pretending stale points are fresh. Later GPU buffers should mirror this shape: observation SoA, track SoA, brush packet SoA.
@@ -74,17 +80,51 @@ The core can be tested without cameras:
 
 Those tests matter because camera drivers are not unit-test dependencies. They are weather.
 
+## OBS And Spout Boundary
+
+OBS should see a named Spout sender, not a camera window, file tail, or desktop capture. Current references confirm the ordinary Windows path: the Off World Live OBS Spout2 plugin receives Spout shared textures, while the Spout2 SDK is the app-side texture sharing surface.
+
+The intended production handoff is:
+
+```text
+LocalCastBridge TrackCache
+-> RenderFramePacket JSON/binary stream
+-> Aquarium Engine typed runtime state
+-> GPU point/brush/splat buffer
+-> D3D render target
+-> Spout2 sender named "LocalCastBridge Point Cloud"
+-> OBS Spout2 Capture source
+```
+
+`RenderFramePacket` is a scaffold ABI, not the final hot path. JSON is useful for inspection, tests, and handoff. Once Aquarium consumes the shape, switch the transport to a binary or shared-memory ring with the same fields. The invariant is the packet contract, not JSON.
+
+## Latency Contract
+
+Latency is allowed. Drift is not.
+
+Each render frame carries:
+
+- `source_time_min_ns` and `source_time_max_ns`: the observation window that produced the cached points.
+- `present_time_ns`: when the visual frame wants to be presented after visual buffering.
+- `audio_alignment_time_ns`: the corresponding ambisonic output time.
+
+That lets the final stream compositor buffer point-cloud visuals until they align with the bounded audio-field cache. The renderer may show a slightly older world if the packet is coherent and labeled. It may not quietly mix fresh audio with stale visual geometry and call that sync.
+
 ## Next Cut
 
 1. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
 2. Load real ChArUco intrinsics/extrinsics into `config/sensor-fusion.json`.
 3. Record an observation JSONL/JSON run from the two PS3 Eyes.
 4. Generate a live sparse PLY stream or debug preview.
-5. Lower cached tracks into brush/splat packets once the point cloud is stable.
+5. Feed `RenderFramePacket` into Aquarium Engine.
+6. Add Aquarium-side GPU point/brush rendering to a D3D render target.
+7. Publish the render target as a Spout2 sender and receive it in OBS.
+8. Replace JSON packet transport with a binary/shared-memory ring once the contract is stable.
 
 ## References
 
 - OpenCV multi-camera calibration and triangulation are the geometry spine. See `research/visual-spatial-map/summary.md`.
 - Jacob and Haeb-Umbach 2015 motivates audio-visual coordinate alignment. See `research/visual-spatial-map/mirrors/krekovic-2015-audio-visual-geometry-calibration.pdf`.
 - Kerbl et al. 2023 and RTG-SLAM motivate splats as render packets, not state ownership. See `research/visual-spatial-map/summary.md` and `research/gpu-fusion-splatting/summary.md`.
+- Spout2 and the OBS Spout2 plugin are the Windows/OBS texture-sharing bridge. See `research/spout-obs-bridge/summary.md`.
 - `E:\Projects\gamecult-site\GameCult\Blog\fractal-domains-cache-that-bites.md` supplies the cache discipline: semantic authority first, backend packet lowering second.

@@ -7,7 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from localcast.sensor_fusion import Observation2D, PointCloud, TrackCache, load_fusion_config
+from localcast.sensor_fusion import (
+    Observation2D,
+    PointCloud,
+    RenderBridgeConfig,
+    TrackCache,
+    load_fusion_config,
+    lower_points_to_render_frame,
+)
 
 
 
@@ -19,7 +26,9 @@ def load_observations(path: Path) -> list[Observation2D]:
 
 
 def fuse_file(args) -> None:
-    rig = load_fusion_config(Path(args.config))
+    config_path = Path(args.config)
+    config_data = json.loads(config_path.read_text(encoding="utf-8"))
+    rig = load_fusion_config(config_path)
     observations = load_observations(Path(args.observations))
     result = rig.fuse(observations)
     cache = TrackCache(ttl_ns=rig.config.cache_ttl_ns)
@@ -30,8 +39,20 @@ def fuse_file(args) -> None:
     cloud = PointCloud(cache.points())
     output = Path(args.output)
     cloud.write_ply(output)
+    render_frame_output = None
+    if args.render_frame_json:
+        render_config = RenderBridgeConfig.from_dict(config_data.get("render_bridge", {}))
+        frame = lower_points_to_render_frame(
+            cloud.points,
+            render_config,
+            frame_id=args.frame_id,
+            created_monotonic_ns=args.created_ns,
+        )
+        render_frame_output = Path(args.render_frame_json)
+        frame.write_json(render_frame_output)
     summary = {
         "output": str(output),
+        "render_frame_json": None if render_frame_output is None else str(render_frame_output),
         "points": len(cloud.points),
         "dropped": list(result.dropped),
     }
@@ -47,6 +68,9 @@ def main() -> None:
     p.add_argument("--observations", required=True)
     p.add_argument("--output", required=True)
     p.add_argument("--now-ns", type=int)
+    p.add_argument("--render-frame-json")
+    p.add_argument("--frame-id", type=int, default=0)
+    p.add_argument("--created-ns", type=int, default=0)
     p.set_defaults(func=fuse_file)
 
     args = parser.parse_args()

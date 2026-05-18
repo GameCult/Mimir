@@ -3,7 +3,16 @@ import unittest
 
 import numpy as np
 
-from localcast.sensor_fusion import CameraModel, FusionConfig, Observation2D, PointCloud, SensorRig, TrackCache
+from localcast.sensor_fusion import (
+    CameraModel,
+    FusionConfig,
+    Observation2D,
+    PointCloud,
+    RenderBridgeConfig,
+    SensorRig,
+    TrackCache,
+    lower_points_to_render_frame,
+)
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
 
 
@@ -111,6 +120,31 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(1, len(frames))
         self.assertEqual("eye", frames[0].sensor_id)
         self.assertEqual((2, 2, 3), frames[0].image_bgr.shape)
+
+    def test_render_frame_packet_carries_spout_and_audio_alignment_metadata(self):
+        left = camera("left", -0.25)
+        right = camera("right", 0.25)
+        point = SensorRig(cameras={"left": left, "right": right}).fuse(
+            [
+                Observation2D("left", "ball", 1_000, left.project_world(np.array([0.0, 0.0, 2.0])), 1.0),
+                Observation2D("right", "ball", 2_000, right.project_world(np.array([0.0, 0.0, 2.0])), 0.8),
+            ]
+        ).points[0]
+        config = RenderBridgeConfig(
+            spout_sender_name="test-spout",
+            visual_delay_ns=100,
+            audio_alignment_delay_ns=200,
+            default_point_radius_m=0.05,
+        )
+
+        frame = lower_points_to_render_frame((point,), config, frame_id=7, created_monotonic_ns=3_000)
+        data = frame.to_dict()
+
+        self.assertEqual("localcast.sensor_fusion.render_frame.v1", data["schema"])
+        self.assertEqual("test-spout", data["spout_sender_name"])
+        self.assertEqual(2_100, data["present_time_ns"])
+        self.assertEqual(2_200, data["audio_alignment_time_ns"])
+        self.assertEqual(0.05, data["points"][0]["radius_m"])
 
 
 if __name__ == "__main__":

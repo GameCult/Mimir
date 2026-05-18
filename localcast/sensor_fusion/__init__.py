@@ -11,6 +11,7 @@ from .core import (
     TriangulatedPoint,
     load_fusion_config,
 )
+from .render_bridge import RenderBridgeConfig, RenderFramePacket, RenderPointPacket, lower_points_to_render_frame
 
 __all__ = [
     "CameraModel",
@@ -22,4 +23,8 @@ __all__ = [
     "TrackCache",
     "TriangulatedPoint",
     "load_fusion_config",
+    "RenderBridgeConfig",
+    "RenderFramePacket",
+    "RenderPointPacket",
+    "lower_points_to_render_frame",
 ]

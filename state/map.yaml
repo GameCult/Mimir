@@ -97,7 +97,7 @@ research:
       before adding RGB projection or Gaussian splat rendering. For a
       Dreams-like volumetric brushstroke look, keep the world model as truth and
       lower semantic scene claims into cached brush/splat packets under budget.
-    gpu_fusion_splatting:
+  gpu_fusion_splatting:
     summary: research/gpu-fusion-splatting/summary.md
     bibliography: research/gpu-fusion-splatting/bibliography.md
     key_decision: >
@@ -106,6 +106,15 @@ research:
       GPU-shaped observation and brush packet buffers, and CUDA/Vulkan/D3D
       splat rendering with minimal readback. CPU owns orchestration and
       semantics; kernels do not own calibration truth.
+  spout_obs_bridge:
+    summary: research/spout-obs-bridge/summary.md
+    bibliography: research/spout-obs-bridge/bibliography.md
+    key_decision: >
+      OBS should receive a named Spout2 shared texture from Aquarium Engine,
+      not desktop capture or file polling. LocalCastBridge emits typed
+      render-frame packets with source timestamps, intended presentation time,
+      audio-alignment time, target size, Spout sender name, and point/brush
+      claims. Aquarium owns GPU rendering and Spout publication.
   sensor_fusion_architecture:
     summary: docs/sensor-fusion-architecture.md
     key_decision: >
@@ -156,14 +165,21 @@ current_status:
     timestamped 2D observations, DLT triangulation, reprojection/confidence
     gating, a TTL track cache, and PLY point-cloud export; adapters own
     FFmpeg/raw-frame ingress; `scripts/sensor_fusion.py fuse-file` can turn an
-    observation file into a sparse PLY. Unit tests inject synthetic cameras and
-    frames so the core does not depend on live camera drivers.
+    observation file into a sparse PLY. The render bridge now lowers cached
+    points into `localcast.sensor_fusion.render_frame.v1` packets carrying
+    source time ranges, intended visual presentation time, audio-alignment
+    time, target render size, Spout sender name, and point draw metadata for
+    Aquarium/Spout. Unit tests inject synthetic cameras and frames so the core
+    does not depend on live camera drivers.
   next_action: >
     Capture real ChArUco intrinsics/extrinsics for the PS3 Eyes and Kiyos,
     replace `config/sensor-fusion.example.json` placeholder transforms with a
     local `config/sensor-fusion.json`, then add a detector adapter that turns
     FFmpeg PS3 Eye frames into marker `Observation2D` records for the fusion
-    core. In parallel, create local `config/audio-field.json`, confirm local
+    core. Then add an Aquarium Engine consumer for render-frame packets that
+    renders cached points/brushes into a GPU render target and publishes it as
+    Spout sender `LocalCastBridge Point Cloud` for OBS. In parallel, create local
+    `config/audio-field.json`, confirm local
     Kiyo/PS Eye/Focusrite device matches, confirm the neighbor Focusrite
     shotgun capture/transport path, replace placeholder mic/speaker geometry
     with measured world coordinates, then build the delay/SRO alignment stage
