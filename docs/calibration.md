@@ -132,6 +132,26 @@ Do not install the driver over `MI_01`; that is the working generic USB audio in
 
 CL Eye / Code Laboratories is historical reference material only. Do not make this repo depend on a paid, stale, or redistributed proprietary driver. Reverse engineering should stay inside interoperability research boundaries; the live machine should prefer the open driver.
 
+Current post-install status:
+
+- Both PS3 Eye `MI_00` video interfaces are now bound as `libusb-win32 devices` and show `OK` in PnP.
+- `E:\Tools\opentrack\modules\ps3eye-mode-test.exe` sees the cameras well enough to enumerate good modes up to `320x240@205Hz` and `640x480@83Hz`.
+- Frame reads still fail with repeated `ps3eye: payload error, data[1]=78` and `can't read any frame`.
+
+That means the next fault is not "missing driver"; it is driver/backend/USB streaming. opentrack's guide recommends `libusb-win32` first and `libusbK` as a fallback. PSMove's PS3 Eye documentation says WinUSB through Zadig has been tested with PS3EYEDriver on Windows. If libusb-win32 continues to enumerate modes but fail frames, try the fallback in this order on `MI_00` only:
+
+1. `libusbK`
+2. `WinUSB`
+
+After each driver swap, rerun:
+
+```powershell
+& 'E:\Tools\opentrack\modules\ps3eye-mode-test.exe'
+& 'E:\Tools\opentrack\modules\ps3eye-frame-test.exe'
+```
+
+Also test with one PS3 Eye unplugged and each camera connected directly to a motherboard USB 2.0/3.x port, not through a hub. A libusb issue report shows PS3 Eye/opentrack access can break when certain USB-C hubs are present, even when the camera itself is not plugged into that hub.
+
 Mirrored references:
 
 - `research/visual-spatial-map/mirrors/opentrack-ps3-eye-open-driver-instructions.html`
