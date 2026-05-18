@@ -37,6 +37,11 @@ focusrite srt://192.168.1.66:5101?mode=caller&latency=120000
 system    srt://192.168.1.66:5102?mode=caller&latency=120000
 ```
 
+Current video capture size is `1024x768`, matching the live `WinDisc` display
+reported by the sender. Do not force `1920x1080` unless Windows reports a real
+desktop of that size; `gdigrab` exits when the requested capture rectangle is
+larger than the current desktop.
+
 OBS on the receiver should add listener-mode Media Sources:
 
 ```text
@@ -75,6 +80,7 @@ Start launcher:
 - starts Voicemeeter
 - sets Windows default render to `Voicemeeter VAIO3 Input`
 - sets Windows default capture to `Voicemeeter Out B3`
+- writes FFmpeg logs under `C:\Meta\LocalCastBridge\logs`
 
 Stop launcher:
 
@@ -108,3 +114,18 @@ ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 If Madman cannot hear local audio while LocalCast is running, open Voicemeeter
 and set hardware output `A1` to the intended physical device, probably
 Focusrite speakers/headphones. The stream capture itself is independent of OBS.
+
+## SSH Testing Trap
+
+Do not use an SSH-launched sender process as proof that video capture is broken.
+When launched from SSH, `gdigrab` sees the remote Windows session desktop and
+can fail with `Failed to capture image (error 5)`. The sender video process
+must be launched from Madman's interactive desktop, normally through:
+
+```text
+C:\Users\Madman's Lullaby\Desktop\Start LocalCast Sender.cmd
+```
+
+Attached SSH probes are still useful for audio devices and SRT reachability.
+For example, an attached FFmpeg probe successfully transmitted audio to OBS on
+ports `5101` and `5102`.

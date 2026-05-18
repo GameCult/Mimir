@@ -13,6 +13,8 @@
 - Receiver OBS scene has `Neighbor PC - Video` and `Neighbor PC - Focusrite` Media Sources.
 - Voicemeeter loopback installed on the sender.
 - Receiver OBS scene has `Neighbor PC - System Audio` on SRT port `5102`.
+- Sender script uses `-nostdin` and repo-root logs so desktop launchers stay alive and diagnostics land in `C:\Meta\LocalCastBridge\logs`.
+- Sender video config currently matches the live `1024x768` desktop.
 
 ## Temporary
 
@@ -23,8 +25,8 @@
 
 ## Next
 
-1. Open OBS and confirm the `Neighbor PC - Video` and `Neighbor PC - Focusrite` sources load.
-2. Start the sender from Madman's desktop.
+1. Open OBS and confirm the three `Neighbor PC` sources load.
+2. Start the sender from Madman's interactive desktop, not SSH.
 3. Smoke-test the video endpoint in OBS.
 4. Smoke-test the Focusrite endpoint in OBS.
 5. Smoke-test the system-loopback endpoint in OBS.

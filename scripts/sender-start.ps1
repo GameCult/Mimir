@@ -5,6 +5,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+$LogRoot = Join-Path $Root "logs"
 
 function Resolve-ConfigPath {
     param([string]$Path)
@@ -54,6 +56,20 @@ function Format-CommandLine {
     return ($parts -join " ")
 }
 
+function Format-ArgumentList {
+    param([string[]]$Arguments)
+    $parts = @()
+    foreach ($arg in $Arguments) {
+        if ($arg -match '[\s"&?=]') {
+            $escaped = $arg.Replace('"', '\"')
+            $parts += '"' + $escaped + '"'
+        } else {
+            $parts += $arg
+        }
+    }
+    return ($parts -join " ")
+}
+
 function Start-SourceProcess {
     param(
         [string]$Name,
@@ -68,10 +84,11 @@ function Start-SourceProcess {
         return
     }
 
-    New-Item -ItemType Directory -Force ".\logs" | Out-Null
-    $stdout = Join-Path ".\logs" "$Name.out.log"
-    $stderr = Join-Path ".\logs" "$Name.err.log"
-    $process = Start-Process -FilePath $FfmpegPath -ArgumentList $Arguments -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
+    New-Item -ItemType Directory -Force $LogRoot | Out-Null
+    $stdout = Join-Path $LogRoot "$Name.out.log"
+    $stderr = Join-Path $LogRoot "$Name.err.log"
+    $argumentLine = Format-ArgumentList -Arguments $Arguments
+    $process = Start-Process -FilePath $FfmpegPath -ArgumentList $argumentLine -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
     Write-Host "$Name started. PID=$($process.Id) stdout=$stdout stderr=$stderr"
 }
 
@@ -88,6 +105,7 @@ if ($settings.video -and $settings.video.enabled) {
     $videoUrl = Get-SrtUrl -Receiver $settings.receiver -PortOffset ([int]$settings.video.portOffset)
     $videoArgs = @(
         "-hide_banner",
+        "-nostdin",
         "-loglevel", "info",
         "-f", "gdigrab",
         "-framerate", "$($settings.video.framerate)",
@@ -114,6 +132,7 @@ foreach ($audio in @($settings.audioSources)) {
     $audioUrl = Get-SrtUrl -Receiver $settings.receiver -PortOffset ([int]$audio.portOffset)
     $audioArgs = @(
         "-hide_banner",
+        "-nostdin",
         "-loglevel", "info",
         "-f", "dshow",
         "-i", "audio=$($audio.device)",

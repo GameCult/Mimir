@@ -49,7 +49,8 @@ current_status:
     First repo scaffold is in place and deployed to the neighbor sender at
     C:\Meta\LocalCastBridge. FFmpeg 8.1.1 with SRT and h264_nvenc is installed
     there, Voicemeeter supplies system-output loopback, Madman's desktop has
-    start/stop launchers, and the receiver OBS scene has matching Media Sources.
+    start/stop launchers, the sender script has launcher-safe FFmpeg arguments
+    and repo-root logs, and the receiver OBS scene has matching Media Sources.
   next_action: >
-    Open OBS, start the sender launcher from Madman's desktop, and smoke-test
-    video, Focusrite audio, and system audio.
+    With OBS open on the receiver, start the sender launcher from Madman's
+    interactive desktop and smoke-test video, Focusrite audio, and system audio.

@@ -27,12 +27,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
 - Receiver OBS scene collection has `Neighbor PC - Video`, `Neighbor PC - Focusrite`, and `Neighbor PC - System Audio` Media Sources added.
 - Sender has Voicemeeter plus SoundVolumeView installed for system-output loopback.
+- Sender script was patched after failed transmission: live FFmpeg commands now include `-nostdin`, logs go under `C:\Meta\LocalCastBridge\logs`, and video capture size is `1024x768`.
+- SSH-launched video capture fails with `gdigrab` error 5; test video from Madman's interactive desktop launcher.
 
 ## Current Pressure
 
 The useful next work is real hardware validation:
 
-- open OBS and smoke-test the three configured receiver sources
+- open OBS and smoke-test the three configured receiver sources from Madman's desktop launcher
 - tune latency once streams are live in OBS
 - add a real loopback/virtual audio capture source if system-output audio is required
 
