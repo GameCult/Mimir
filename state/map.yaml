@@ -45,6 +45,7 @@ active_subgoals:
   - Decide whether an OBS source generator or plugin investigation is justified.
   - Evaluate the Ambisonic AquaSynth path as a separate synchronized multichannel audio pipeline; do not treat heterogeneous mic feeds as raw first-order ambisonic A-format without geometry, calibration, and a shared clock.
   - Build the six-microphone/two-speaker audio-field sidecar around the actual distributed camera/Focusrite clocks, explicit geometry, speaker calibration, bounded buffering, delay/SRO alignment, testable pipeline seams, and FOA AmbiX output.
+  - Build the visual sensor-fusion sidecar around timestamped observations, calibrated sensor models, bounded track caches, sparse point-cloud output, and later brush/splat packet lowering.
 
 research:
   ambisonic_aquasynth:
@@ -96,7 +97,7 @@ research:
       before adding RGB projection or Gaussian splat rendering. For a
       Dreams-like volumetric brushstroke look, keep the world model as truth and
       lower semantic scene claims into cached brush/splat packets under budget.
-  gpu_fusion_splatting:
+    gpu_fusion_splatting:
     summary: research/gpu-fusion-splatting/summary.md
     bibliography: research/gpu-fusion-splatting/bibliography.md
     key_decision: >
@@ -105,6 +106,14 @@ research:
       GPU-shaped observation and brush packet buffers, and CUDA/Vulkan/D3D
       splat rendering with minimal readback. CPU owns orchestration and
       semantics; kernels do not own calibration truth.
+  sensor_fusion_architecture:
+    summary: docs/sensor-fusion-architecture.md
+    key_decision: >
+      The visual world model begins as timestamped sensor observations and
+      calibrated camera transforms, not render packets. The first sidecar keeps
+      capture adapters, detection, triangulation, track caching, and point-cloud
+      export as separate testable authorities. This follows the fractal-domain
+      cache rule: semantic claims first, cached backend lowerings second.
 
 current_status:
   summary: >
@@ -142,15 +151,21 @@ current_status:
     live input while delay/SRO estimates settle, but cache depth must converge
     toward real-time. Core audio modules now expose testable boundaries for
     buffering, latency convergence, injectable capture/alignment/encode/sink
-    ports, and pipeline orchestration.
+    ports, and pipeline orchestration. The first visual sensor-fusion sidecar is
+    in place: `localcast.sensor_fusion.core` owns calibrated camera models,
+    timestamped 2D observations, DLT triangulation, reprojection/confidence
+    gating, a TTL track cache, and PLY point-cloud export; adapters own
+    FFmpeg/raw-frame ingress; `scripts/sensor_fusion.py fuse-file` can turn an
+    observation file into a sparse PLY. Unit tests inject synthetic cameras and
+    frames so the core does not depend on live camera drivers.
   next_action: >
-    Use FFmpeg DirectShow device names `PS3 Eye Universal` and `PS3 Eye
-    Universal2` for PS3 Eye tracking capture at 320x240@60, then capture
-    ChArUco intrinsics for DirectShow indices 1-4. If more than 60 fps is still
-    required, patch/rebuild PS3EyeDirectShow rather than asking OpenCV for a
-    mode the installed filter does not expose. In parallel, create local
-    config/audio-field.json, confirm local Kiyo/PS Eye/Focusrite device matches,
-    confirm the neighbor Focusrite shotgun capture/transport path, replace
-    placeholder mic/speaker geometry with measured world coordinates, then build
-    the delay/SRO alignment stage that feeds the bounded field cache and emits
-    aligned six-channel blocks for FOA encoding.
+    Capture real ChArUco intrinsics/extrinsics for the PS3 Eyes and Kiyos,
+    replace `config/sensor-fusion.example.json` placeholder transforms with a
+    local `config/sensor-fusion.json`, then add a detector adapter that turns
+    FFmpeg PS3 Eye frames into marker `Observation2D` records for the fusion
+    core. In parallel, create local `config/audio-field.json`, confirm local
+    Kiyo/PS Eye/Focusrite device matches, confirm the neighbor Focusrite
+    shotgun capture/transport path, replace placeholder mic/speaker geometry
+    with measured world coordinates, then build the delay/SRO alignment stage
+    that feeds the bounded field cache and emits aligned six-channel blocks for
+    FOA encoding.
