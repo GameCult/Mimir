@@ -135,8 +135,10 @@ research:
       weights, correction energy, and active-probe need. `audio_field.active_probe`
       closes the next loop by feeding that confidence state into
       ActiveProbeOptimizer and emitting bounded chirplet WAVs/manifests, with
-      optional default-device playback. This is learned audio-field state, not
-      a phase display.
+      optional default-device playback. The live launcher now uses dense
+      harmonic near-ultrasonic probe textures so aliases have a musical
+      relationship instead of arbitrary squeal. This is learned audio-field
+      state, not a phase display.
   sensor_fusion_architecture:
     summary: docs/sensor-fusion-architecture.md
     key_decision: >

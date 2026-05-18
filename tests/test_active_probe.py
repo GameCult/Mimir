@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from audio_field.active_probe import ActiveConfidenceMaintainer, is_masked_window, make_probe_chirplet
+from audio_field.active_probe import ActiveConfidenceMaintainer, harmonic_frequencies, is_masked_window, make_harmonic_probe_texture, make_probe_chirplet
 from audio_field.phase_meaning import PhaseFieldMeaning, SourcePhaseMeaning
 from audio_field.probe_optimizer import ActiveProbeOptimizer, ProbePolicy
 from scripts.stream_phase_field import ultrasonic_probe_band
@@ -58,6 +58,26 @@ class ActiveProbeTests(unittest.TestCase):
 
         self.assertGreaterEqual(start_hz, 18000.0)
         self.assertLess(end_hz, 24000.0)
+
+    def test_harmonic_texture_packs_many_chirps_under_level_cap(self):
+        texture = make_harmonic_probe_texture(
+            48000,
+            duration_seconds=0.08,
+            start_hz=18500.0,
+            end_hz=22000.0,
+            level_dbfs=-18.0,
+            voices=36,
+        )
+
+        self.assertEqual((3840, 2), texture.shape)
+        self.assertLessEqual(float(np.max(np.abs(texture))), 0.127)
+        self.assertGreater(float(np.sqrt(np.mean(texture[:, 0] ** 2))), 0.005)
+
+    def test_harmonic_frequencies_follow_root(self):
+        freqs = harmonic_frequencies(440.0, 18500.0, 22000.0)
+
+        self.assertIn(18920.0, freqs)
+        self.assertIn(22000.0, freqs)
 
 
 if __name__ == "__main__":

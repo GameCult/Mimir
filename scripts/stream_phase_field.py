@@ -85,6 +85,10 @@ def main() -> None:
     parser.add_argument("--probe-seconds", type=float, default=0.03)
     parser.add_argument("--probe-band", default="1800:9000")
     parser.add_argument("--ultrasonic-probes", action="store_true", help="Use a near-ultrasonic probe band below Nyquist.")
+    parser.add_argument("--probe-pattern", choices=["single", "harmonic-dense"], default="single")
+    parser.add_argument("--cram-harmonic-probes", action="store_true", help="Shortcut for dense near-ultrasonic harmonic probes.")
+    parser.add_argument("--harmonic-root-hz", type=float, default=440.0)
+    parser.add_argument("--harmonic-voices", type=int, default=36)
     parser.add_argument("--probe-channel", type=int, default=0)
     parser.add_argument("--probe-output-channels", type=int, default=2)
     parser.add_argument("--probe-unmasked", action="store_true", help="Allow probes even when the reference block is not masking them.")
@@ -105,7 +109,9 @@ def main() -> None:
     )
     maintainer = None
     if args.maintain_confidence:
-        band_start, band_end = ultrasonic_probe_band(sample_rate) if args.ultrasonic_probes else parse_probe_band(args.probe_band)
+        use_ultrasonic = args.ultrasonic_probes or args.cram_harmonic_probes
+        probe_pattern = "harmonic-dense" if args.cram_harmonic_probes else args.probe_pattern
+        band_start, band_end = ultrasonic_probe_band(sample_rate) if use_ultrasonic else parse_probe_band(args.probe_band)
         maintainer = ActiveConfidenceMaintainer(
             ActiveProbeOptimizer(
                 ProbePolicy(
@@ -123,6 +129,9 @@ def main() -> None:
             end_hz=band_end,
             channels=args.probe_output_channels,
             channel=args.probe_channel,
+            pattern=probe_pattern,
+            harmonic_root_hz=args.harmonic_root_hz,
+            harmonic_voices=args.harmonic_voices,
         )
 
     start_monotonic = time.monotonic()

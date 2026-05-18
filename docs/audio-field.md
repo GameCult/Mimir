@@ -140,6 +140,18 @@ Close the confidence loop by letting the phase-field stream schedule strategic a
 
 `--maintain-confidence` converts low-confidence phase-field state into `ActiveProbeOptimizer` requests, writes each emitted chirplet to `calibration/runs/active-probes`, and appends `active-probes.jsonl`. `--play-probes` sends the emitted chirplet to the default output device through `sounddevice`; omit it for dry-run scheduling. `--ultrasonic-probes` uses the highest safe band under Nyquist, roughly `18.5-22 kHz` at 48 kHz. This can fail silently in the physical world if the speaker, mic, driver, or resampler refuses to carry that band; the confidence feedback is the judge, not the command line's self-esteem.
 
+For the current live app, start the dense harmonic confidence-maintenance loop:
+
+```powershell
+.\scripts\start-live-audio-phase-field.ps1
+```
+
+That launcher runs `stream_phase_field.py` in realtime loop mode with playback enabled, dense harmonic probes, a near-ultrasonic band, `-24 dBFS` level cap, 80 ms probe textures, and 48 harmonic voices. Stop it with:
+
+```powershell
+.\scripts\stop-live-audio-phase-field.ps1
+```
+
 Record local mics while playing one speaker sweep. Use the output rate that the device probe says is real:
 
 ```powershell
@@ -223,6 +235,7 @@ The `play-record` and `record-field` commands remain for a `shared-input-device`
 - Runtime sync updates delay/SRO/phase estimates from known speaker chirplets every block/frame, gated by confidence so a bad observation freezes rather than poisons the field.
 - Active chirplet probes are scheduled by an optimization loop, not by panic. It should prefer masked windows, respect minimum spacing and level caps, and maximize expected confidence gain per audible intrusion.
 - Ultrasonic probes are allowed only as a bounded optimization strategy. They must stay below Nyquist, remain level-capped, and prove themselves by raising measured confidence; hardware may distort or discard them.
+- Dense probe textures should be harmonically organized so any lower-band aliases land closer to musical relationships than arbitrary squeal. This is damage control, not a license to trust aliasing.
 - FOA output is AmbiX: ACN channel order, SN3D normalization, channels `W,Y,Z,X`.
 - Speaker calibration is a measurement path, not a generic monitor output.
 - Source-event geometry is published beside the AmbiX bed; render effects do not have to infer transient positions from mixed audio.
