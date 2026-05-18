@@ -126,6 +126,14 @@ After dropping the neighbor Focusrite WAV into the run's `sources/` folder, esti
 .\.venv\Scripts\python.exe .\scripts\audio_field.py assemble-aligned --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
 ```
 
+For the stream-day compensated field, use the sweep-derived response pass during assembly:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py assemble-aligned --profile .\config\audio-field.json --run .\calibration\runs\<run-folder> --compensate-response
+```
+
+This estimates each mic's magnitude response from the calibration sweep relative to the reference Focusrite, smooths the inverse curve, clips it to bounded boost/cut limits, and writes `response-compensation.json`. It deliberately corrects magnitude only; phase stays owned by the timing/sync path.
+
 Record the neighbor Focusrite shotgun directly into an existing distributed run over SSH/SFTP:
 
 ```powershell

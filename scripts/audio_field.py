@@ -861,6 +861,18 @@ def cmd_assemble_aligned(args):
     seconds = args.seconds
     source_by_mic = {item.get("micId"): item for item in manifest.get("sources", [])}
     analysis_by_mic = {item.get("micId"): item for item in analysis.get("sources", []) if item.get("status") == "ok"}
+    response_corrections = {}
+    response_report = []
+    if args.compensate_response:
+        response_corrections, response_report = estimate_response_corrections(
+            profile,
+            run,
+            manifest,
+            analysis_by_mic,
+            max_boost_db=float(args.max_response_boost_db),
+            max_cut_db=float(args.max_response_cut_db),
+            smoothing_bins=int(args.response_smoothing_bins),
+        )
 
     channels = []
     report = []
@@ -883,10 +895,20 @@ def cmd_assemble_aligned(args):
         if mic["id"] in analysis_by_mic:
             delay += int(analysis_by_mic[mic["id"]].get("relativeDelaySamplesAtFieldRate", 0))
         aligned = apply_integer_delay(mono, -delay)
+        if mic["id"] in response_corrections:
+            aligned = apply_frequency_response(aligned, response_corrections[mic["id"]])
         aligned *= db_to_amp(float(mic.get("gainDb", 0.0))) * int(mic.get("polarity", 1))
         channels.append(aligned)
         max_len = max(max_len, len(aligned))
-        report.append({"micId": mic["id"], "status": "ok", "file": file_name, "appliedDelaySamples": delay})
+        report.append(
+            {
+                "micId": mic["id"],
+                "status": "ok",
+                "file": file_name,
+                "appliedDelaySamples": delay,
+                "responseCompensated": mic["id"] in response_corrections,
+            }
+        )
 
     if seconds:
         frame_count = int(float(seconds) * field_rate)
@@ -901,6 +923,9 @@ def cmd_assemble_aligned(args):
     output = args.output or run / "field-aligned.wav"
     wavfile.write(output, field_rate, field)
     result = {"output": str(output), "sampleRate": field_rate, "shape": list(field.shape), "sources": report}
+    if response_report:
+        result["responseCompensation"] = response_report
+        write_json(run / "response-compensation.json", {"sources": response_report})
     write_json(run / "aligned-field-manifest.json", result)
     print(json.dumps(result, indent=2))
 
@@ -1013,6 +1038,106 @@ def normalized_delay(signal_a, signal_b, max_lag):
     lag = index - max_lag
     score = float(abs(segment[index]) / max(1, len(a)))
     return lag, score
+
+
+def estimate_response_corrections(profile, run, manifest, analysis_by_mic, *, max_boost_db, max_cut_db, smoothing_bins):
+    field_rate = int(profile["sampleRate"])
+    reference_id = profile.get("clockModel", {}).get("referenceMicId") or profile.get("calibration", {}).get("referenceMicId")
+    source_by_mic = {item.get("micId"): item for item in manifest.get("sources", [])}
+    stimulus_rate, stimulus = wavfile.read(run / manifest["stimulus"])
+    stimulus = resample_if_needed(mono(as_float_matrix(stimulus)), int(stimulus_rate), field_rate)
+    fft_size = int(2 ** math.ceil(math.log2(max(2048, len(stimulus)))))
+
+    responses = {}
+    for mic in sorted(profile["microphones"], key=mic_channel):
+        mic_id = mic["id"]
+        source = source_by_mic.get(mic_id)
+        analysis = analysis_by_mic.get(mic_id)
+        file_name = (source or {}).get("file") or (source or {}).get("expectedFile")
+        if not source or not analysis or not file_name or not (run / file_name).exists():
+            continue
+        rec_rate, data = wavfile.read(run / file_name)
+        data = resample_if_needed(mono(as_float_matrix(data)), int(rec_rate), field_rate)
+        delay_seconds = float(analysis.get("chirpletDelaySamples", analysis["sweepStartSample"])) / float(analysis["sampleRate"])
+        start = int(round(delay_seconds * field_rate))
+        segment = extract_window(data, start, len(stimulus))
+        if rms(segment) <= 1e-6:
+            continue
+        window = signal.windows.hann(len(stimulus), sym=False).astype(np.float32)
+        spectrum = np.fft.rfft(segment * window, n=fft_size)
+        responses[mic_id] = np.maximum(np.abs(spectrum), 1e-8).astype(np.float32)
+
+    reference = responses.get(reference_id)
+    if reference is None:
+        return {}, [{"status": "disabled", "reason": f"reference response unavailable: {reference_id}"}]
+
+    corrections = {}
+    report = []
+    for mic in sorted(profile["microphones"], key=mic_channel):
+        mic_id = mic["id"]
+        response = responses.get(mic_id)
+        if response is None:
+            report.append({"micId": mic_id, "status": "missing-calibration"})
+            continue
+        gain = reference / np.maximum(response, 1e-8)
+        gain = normalize_gain_at_frequency(gain, field_rate, 1000.0)
+        gain = smooth_log_gain(gain, smoothing_bins)
+        gain = np.clip(gain, db_to_amp(-abs(max_cut_db)), db_to_amp(abs(max_boost_db))).astype(np.float32)
+        corrections[mic_id] = gain
+        report.append(
+            {
+                "micId": mic_id,
+                "status": "ok",
+                "fftBins": int(gain.size),
+                "minGainDb": amp_to_db(float(np.min(gain))),
+                "maxGainDb": amp_to_db(float(np.max(gain))),
+            }
+        )
+    return corrections, report
+
+
+def extract_window(data, start, length):
+    out = np.zeros(length, dtype=np.float32)
+    src_start = max(0, start)
+    dst_start = max(0, -start)
+    count = min(length - dst_start, len(data) - src_start)
+    if count > 0:
+        out[dst_start : dst_start + count] = data[src_start : src_start + count]
+    return out
+
+
+def rms(x):
+    return float(np.sqrt(np.mean(np.asarray(x, dtype=np.float32) ** 2))) if len(x) else 0.0
+
+
+def normalize_gain_at_frequency(gain, sample_rate, frequency):
+    index = int(round(float(frequency) * (len(gain) - 1) * 2.0 / float(sample_rate)))
+    index = max(1, min(len(gain) - 1, index))
+    return gain / max(float(gain[index]), 1e-8)
+
+
+def smooth_log_gain(gain, bins):
+    if bins <= 1:
+        return gain.astype(np.float32)
+    bins = min(int(bins), len(gain))
+    kernel = np.ones(bins, dtype=np.float32) / float(bins)
+    log_gain = np.log(np.maximum(gain, 1e-8))
+    return np.exp(np.convolve(log_gain, kernel, mode="same")).astype(np.float32)
+
+
+def apply_frequency_response(samples, gain):
+    fft_size = max(len(samples), (len(gain) - 1) * 2)
+    spectrum = np.fft.rfft(samples.astype(np.float32), n=fft_size)
+    if len(gain) != len(spectrum):
+        x_old = np.linspace(0.0, 1.0, len(gain))
+        x_new = np.linspace(0.0, 1.0, len(spectrum))
+        gain = np.interp(x_new, x_old, gain).astype(np.float32)
+    corrected = np.fft.irfft(spectrum * gain, n=fft_size)
+    return corrected[: len(samples)].astype(np.float32)
+
+
+def amp_to_db(value):
+    return 20.0 * math.log10(max(float(value), 1e-12))
 
 
 def as_float_matrix(data):
@@ -1332,6 +1457,10 @@ def main():
     p.add_argument("--analysis", type=Path)
     p.add_argument("--output", type=Path)
     p.add_argument("--seconds", type=float)
+    p.add_argument("--compensate-response", action="store_true")
+    p.add_argument("--max-response-boost-db", type=float, default=9.0)
+    p.add_argument("--max-response-cut-db", type=float, default=12.0)
+    p.add_argument("--response-smoothing-bins", type=int, default=31)
     p.set_defaults(func=cmd_assemble_aligned)
 
     p = sub.add_parser("analyze-reference-sync", help="Estimate live mic delay stability against captured output loopback ground truth.")
