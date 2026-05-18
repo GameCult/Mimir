@@ -150,6 +150,18 @@ After each driver swap, rerun:
 & 'E:\Tools\opentrack\modules\ps3eye-frame-test.exe'
 ```
 
+Fallback results so far:
+
+- `libusbK` with both Eyes direct to motherboard: all opentrack modes report `GOOD`, including `320x240@30`, but frame reads still fail with `payload error, data[1]=78/79` and `bad header`.
+- `WinUSB` with both live `MI_00` instances: opentrack mode test still reports all modes `GOOD`, but one camera open reports `Access is denied` and frame streaming still repeats `payload error, data[1]=78/79`.
+- `libusb-win32`, `libusbK`, and `WinUSB` have all failed frame reads through opentrack on this machine.
+
+Next escalation is no longer "try the other Zadig driver." It is either:
+
+- test opentrack with exactly one PS3 Eye direct to motherboard and every other high-bandwidth camera unplugged
+- test a different PS3 Eye backend/library, such as PS3EYEDriver/PSMoveService-style access
+- abandon PS3 Eye video for v1 and use LeapUVC plus Kiyos for initial calibration/tracking while preserving the PS3 Eye driver notes as a rejected path until a cleaner backend is found
+
 Also test with one PS3 Eye unplugged and each camera connected directly to a motherboard USB 2.0/3.x port, not through a hub. A libusb issue report shows PS3 Eye/opentrack access can break when certain USB-C hubs are present, even when the camera itself is not plugged into that hub.
 
 USB topology note from this machine:
