@@ -121,6 +121,10 @@ def capture(args):
                     "file": filename,
                     "timestamp_monotonic": now,
                     "charuco_corners": corner_count,
+                    "charuco_ids": [] if charuco_ids is None else [int(value) for value in charuco_ids.reshape(-1)],
+                    "charuco_image_points": []
+                    if charuco_corners is None
+                    else [[float(x), float(y)] for x, y in charuco_corners.reshape((-1, 2))],
                     "marker_count": 0 if marker_ids is None else int(len(marker_ids)),
                 }
             )

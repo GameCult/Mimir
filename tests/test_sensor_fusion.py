@@ -7,7 +7,10 @@ import numpy as np
 
 from localcast.sensor_fusion import (
     AdaptiveCameraController,
+    BoardObservation,
+    BoardSpec,
     CameraModel,
+    CameraIntrinsics,
     CameraQualityTarget,
     DenseStereoConfig,
     FusionConfig,
@@ -24,9 +27,13 @@ from localcast.sensor_fusion import (
     get_live_render_frame,
     lower_frame_to_screen_brushes,
     lower_points_to_render_frame,
+    match_surface_features,
     overlay_audio_events,
     put_live_render_frame,
     remote_video_artifact_for_present_time,
+    solve_common_space_from_fixed_board,
+    SurfaceFeatureObservation,
+    triangulate_surface_tracks,
 )
 from localcast.sensor_fusion.spout_output import rasterize_frame_rgba
 from scripts.live_sensor_fusion import (
@@ -428,6 +435,74 @@ class SensorFusionTests(unittest.TestCase):
         self.assertGreater(len(points), 0)
         self.assertTrue(all(point.stable_key.startswith("dense-rgb") for point in points))
 
+    def test_fixed_board_calibration_solves_camera_into_common_space(self):
+        board = BoardSpec(squares_x=5, squares_y=4, square_length_m=0.04)
+        intrinsics = CameraIntrinsics(
+            sensor_id="cam-a",
+            camera_matrix=np.array([[420.0, 0.0, 160.0], [0.0, 420.0, 120.0], [0.0, 0.0, 1.0]]),
+            dist_coeffs=np.zeros(5),
+            width=320,
+            height=240,
+        )
+        expected = CameraModel(
+            sensor_id="cam-a",
+            camera_matrix=intrinsics.camera_matrix,
+            dist_coeffs=intrinsics.dist_coeffs,
+            world_from_sensor=np.array(
+                [
+                    [1.0, 0.0, 0.0, -0.12],
+                    [0.0, 1.0, 0.0, 0.03],
+                    [0.0, 0.0, 1.0, -0.80],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            ),
+            width=320,
+            height=240,
+        )
+        ids = np.array([0, 1, 2, 4, 5, 6, 8, 9, 10], dtype=np.int32)
+        image_points = np.vstack([expected.project_world(board.object_point(int(corner_id))) for corner_id in ids])
+
+        cameras, solves = solve_common_space_from_fixed_board(
+            [intrinsics],
+            board,
+            [BoardObservation("cam-a", 100, ids, image_points)],
+            max_reprojection_error_px=0.05,
+        )
+
+        self.assertEqual(1, len(solves))
+        np.testing.assert_allclose(expected.world_from_sensor, cameras["cam-a"].world_from_sensor, atol=1e-5)
+        self.assertLess(solves[0].reprojection_error_px, 1e-4)
+
+    def test_surface_features_match_and_triangulate_between_calibrated_views(self):
+        left = camera("left", -0.25)
+        right = camera("right", 0.25)
+        target = np.array([0.04, 0.02, 2.0])
+        left_obs = SurfaceFeatureObservation(
+            sensor_id="left",
+            feature_id="a",
+            timestamp_ns=1_000,
+            uv=left.project_world(target),
+            descriptor=np.array([1, 2, 3, 4], dtype=np.uint8),
+            confidence=0.95,
+        )
+        right_obs = SurfaceFeatureObservation(
+            sensor_id="right",
+            feature_id="b",
+            timestamp_ns=1_200,
+            uv=right.project_world(target),
+            descriptor=np.array([1, 2, 3, 4], dtype=np.uint8),
+            confidence=0.90,
+        )
+
+        tracks = match_surface_features([left_obs], [right_obs], max_descriptor_distance=0.0, max_dt_ns=1_000)
+        points = triangulate_surface_tracks(tracks, {"left": left, "right": right}, max_reprojection_error_px=0.01)
+
+        self.assertEqual(1, len(tracks))
+        self.assertEqual(1, len(points))
+        np.testing.assert_allclose(target, points[0].xyz, atol=1e-9)
+        self.assertEqual(("left", "right"), points[0].sensors)
+
 
 if __name__ == "__main__":
     unittest.main()
+    match_surface_features,

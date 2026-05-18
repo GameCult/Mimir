@@ -231,13 +231,18 @@ current_status:
     OpenCV capture adapter when the driver accepts them. Active illumination now
     has an optional Tuya local-network pulse hook for deliberately modulating
     room light as calibration telemetry; pulse timestamps can be aligned against
-    camera brightness/depth response. Unit tests inject
+    camera brightness/depth response. Common-space calibration now has a real
+    owner: fixed-board ChArUco observations plus intrinsics solve
+    `CameraModel.world_from_sensor` transforms, and cross-view surface-feature
+    observations can be descriptor-matched and triangulated into world-space
+    tracks. Unit tests inject
     synthetic cameras and frames so the core does not depend on live camera
     drivers.
   next_action: >
-    Capture real ChArUco intrinsics/extrinsics for the PS3 Eyes and Kiyos,
-    replace `config/sensor-fusion.example.json` placeholder transforms with a
-    local `config/sensor-fusion.json`, then move the dense RGB stereo matcher
+    Capture real ChArUco intrinsics for the PS3 Eyes and Kiyos, capture
+    fixed-board observations from every camera, solve a local
+    `config/sensor-fusion.json`, and prove calibrated cross-view surface tracks
+    with `scripts/triangulate_surface_features.py`. Then move the dense RGB stereo matcher
     to a GPU-resident stereo/flow pass so high-detail surface claims can scale
     toward the million-splat temporal accumulator without Python owning each
     point. If a Tuya light is available, run the local-key pulse hook and record
