@@ -60,6 +60,28 @@ _program_reference = load_program_reference_module()
 suppress_program_reference = _program_reference.suppress_program_reference
 
 
+def load_source_events_module():
+    spec = importlib.util.spec_from_file_location("localcast_source_events", ROOT / "audio_field" / "source_events.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_source_events = load_source_events_module()
+analyze_source_field = _source_events.analyze_source_field
+
+
+def load_cultcache_audio_module():
+    spec = importlib.util.spec_from_file_location("localcast_cultcache_audio", ROOT / "audio_field" / "cultcache_audio.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 
@@ -1818,6 +1840,87 @@ def cmd_suppress_reference(args):
     print(json.dumps(result, indent=2))
 
 
+def cmd_analyze_source_events(args):
+    profile = load_profile(args.profile)
+    sample_rate, data = wavfile.read(args.input)
+    if int(sample_rate) != int(profile["sampleRate"]):
+        raise SystemExit(f"Input sample-rate {sample_rate} does not match profile {profile['sampleRate']}")
+    field = as_float_matrix(data)
+    anchors = infer_anchor_channels(profile) if not args.anchor_channel else [int(value) for value in args.anchor_channel]
+    witnesses = infer_witness_channels(profile, anchors) if not args.witness_channel else [int(value) for value in args.witness_channel]
+    mic_positions = {
+        mic_channel(mic): tuple(float(value) for value in mic["positionMeters"])
+        for mic in profile["microphones"]
+        if len(mic.get("positionMeters", [])) == 3
+    }
+    events, focus = analyze_source_field(
+        field,
+        int(sample_rate),
+        mic_positions,
+        anchors,
+        witnesses,
+        block_size=int(args.block_size),
+        hop_size=int(args.hop_size),
+        transient_ratio=float(args.transient_ratio),
+        min_event_energy=float(args.min_event_energy),
+        onset_ratio=float(args.onset_ratio),
+        min_event_spacing_samples=int(args.min_event_spacing_samples),
+    )
+    result = {
+        "input": str(args.input),
+        "sampleRate": int(sample_rate),
+        "anchors": anchors,
+        "witnesses": witnesses,
+        "eventCount": len(events),
+        "events": [
+            {
+                "eventId": event.event_id,
+                "startSample": event.start_sample,
+                "durationSamples": event.duration_samples,
+                "timeSeconds": event.start_sample / float(sample_rate),
+                "positionMeters": list(event.position_m),
+                "direction": list(event.direction_m),
+                "energy": event.energy,
+                "confidence": event.confidence,
+                "kind": event.kind,
+            }
+            for event in events
+        ],
+        "voiceFocus": [
+            {
+                "startSample": item.start_sample,
+                "durationSamples": item.duration_samples,
+                "anchorWeights": {str(channel): weight for channel, weight in item.anchor_weights.items()},
+                "witnessEnergy": item.witness_energy,
+                "anchorEnergy": item.anchor_energy,
+                "noiseRatio": item.noise_ratio,
+            }
+            for item in focus
+        ],
+        "notes": "Dialogue anchors are the protected voice bed; witness-dominant transients are emitted as estimated volumetric events for the renderer.",
+    }
+    output = args.output or args.input.with_suffix(".source-events.json")
+    write_json(output, result)
+    if args.cache:
+        cultcache_audio = load_cultcache_audio_module()
+
+        start_sample = int(result["voiceFocus"][0]["startSample"]) if result["voiceFocus"] else 0
+        frame_count = int(field.shape[0])
+        cultcache_audio.put_live_audio_source_events(
+            args.cache,
+            cultcache_audio.make_audio_source_events(
+                frame_id=int(time.monotonic_ns() % (2**31)),
+                sample_rate=int(sample_rate),
+                start_sample=start_sample,
+                frame_count=frame_count,
+                audio_time_ns=time.monotonic_ns(),
+                events=result["events"][: int(args.max_cache_events)],
+                voice_focus=result["voiceFocus"][-int(args.max_cache_focus) :],
+            ),
+        )
+    print(json.dumps(result, indent=2))
+
+
 def infer_anchor_channels(profile):
     anchors = []
     for mic in profile["microphones"]:
@@ -2109,6 +2212,23 @@ def main():
     p.add_argument("--regularization", type=float, default=1e-6)
     p.add_argument("--subtraction-strength", type=float, default=0.85)
     p.set_defaults(func=cmd_suppress_reference)
+
+    p = sub.add_parser("analyze-source-events", help="Estimate dialogue focus and witness-dominant volumetric transient events from an aligned field.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--input", type=Path, required=True)
+    p.add_argument("--output", type=Path)
+    p.add_argument("--cache", type=Path)
+    p.add_argument("--anchor-channel", type=int, action="append")
+    p.add_argument("--witness-channel", type=int, action="append")
+    p.add_argument("--block-size", type=int, default=1024)
+    p.add_argument("--hop-size", type=int, default=512)
+    p.add_argument("--transient-ratio", type=float, default=2.5)
+    p.add_argument("--min-event-energy", type=float, default=1e-6)
+    p.add_argument("--onset-ratio", type=float, default=1.8)
+    p.add_argument("--min-event-spacing-samples", type=int, default=2048)
+    p.add_argument("--max-cache-events", type=int, default=128)
+    p.add_argument("--max-cache-focus", type=int, default=64)
+    p.set_defaults(func=cmd_analyze_source_events)
 
     args = parser.parse_args()
     args.func(args)

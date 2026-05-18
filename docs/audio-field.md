@@ -182,6 +182,14 @@ Suppress known speaker/program bleed using output loopback as ground truth:
 
 This is the music-as-both-enemy-and-teacher path. The reference program audio is transformed into a time/frequency transfer estimate per mic channel, reconstructed as predicted bleed, subtracted from the aligned field, and exported as phase/frequency mapping evidence. A future live loop should publish the known program stem as its own OBS/Aquarium channel while using the same ground truth to keep learning the room.
 
+Estimate dialogue focus and volumetric transient events:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-source-events --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-cleaned.wav --cache .\calibration\runs\audio-events.msgpack
+```
+
+This emits `localcast.audio.source_events` for Aquarium. Dialogue anchors produce voice-focus weights; camera/context mics produce witness-dominant transient events with sample time, estimated room position, direction, energy, and confidence. This is the boundary between a clean vocal bed and renderer-visible clutter: clicks, taps, and other spatial transients should become geometry instead of being smeared into the voice mix.
+
 The `play-record` and `record-field` commands remain for a `shared-input-device` profile only. They deliberately refuse the distributed rig until an alignment stage emits one coherent six-channel WAV.
 
 ## Invariants
@@ -198,6 +206,7 @@ The `play-record` and `record-field` commands remain for a `shared-input-device`
 - Active chirplet probes are scheduled by an optimization loop, not by panic. It should prefer masked windows, respect minimum spacing and level caps, and maximize expected confidence gain per audible intrusion.
 - FOA output is AmbiX: ACN channel order, SN3D normalization, channels `W,Y,Z,X`.
 - Speaker calibration is a measurement path, not a generic monitor output.
+- Source-event geometry is published beside the AmbiX bed; render effects do not have to infer transient positions from mixed audio.
 - Camera fusion may publish listener or source pose later, but it does not own audio channel timing.
 
 ## Module Boundaries
@@ -211,6 +220,7 @@ The audio code is split so the hard parts can be tested without the room, driver
 - The next runtime estimator module should own chirplet observations, delay/SRO/phase state, confidence gates, and phase-field updates. It should feed the aligner; it should not be hidden inside the FOA encoder.
 - The active probe optimizer owns whether to emit extra chirplets. It reads sync confidence and probe budget, then decides when and where an intentional chirplet is worth the cost.
 - Room suppression owns stream-side cleanup: dialogue anchors define desired direct energy, spatial/context mics act as witnesses for room and transient clutter, and the cleaned aligned field feeds FOA/Aquarium/Faust.
+- Source-event analysis owns non-vocal spatial facts: dialogue focus weights and localized transient vectors are published beside the AmbiX bed, not hidden inside it.
 - `scripts/audio_field.py` stays as the operator CLI and hardware probe surface.
 
 This is the portfolio-piece line: each module owns one invariant, and the tests use mocks/fakes instead of asking a driver stack to please be emotionally available.

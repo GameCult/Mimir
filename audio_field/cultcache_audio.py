@@ -21,6 +21,8 @@ LIVE_SPATIAL_AUDIO_KEY = "localcast.audio.spatial-frame.live"
 SPATIAL_AUDIO_SCHEMA_ID = "gamecult.localcast.audio.spatial_frame.v1"
 AUDIO_STREAM_STATUS_KEY = "localcast.audio.stream-status.live"
 AUDIO_STREAM_STATUS_SCHEMA_ID = "gamecult.localcast.audio.stream_status.v1"
+LIVE_SOURCE_EVENTS_KEY = "localcast.audio.source-events.live"
+SOURCE_EVENTS_SCHEMA_ID = "gamecult.localcast.audio.source_events.v1"
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,18 @@ class CultAudioStreamStatus:
     channels: tuple[str, ...]
     updated_monotonic_ns: int
     last_error: str
+
+
+@dataclass(frozen=True)
+class CultAudioSourceEvents:
+    schema_version: str
+    frame_id: int
+    audio_time_ns: int
+    sample_rate: int
+    start_sample: int
+    frame_count: int
+    events: tuple[dict[str, Any], ...]
+    voice_focus: tuple[dict[str, Any], ...]
 
 
 def _pack(value: Any) -> bytes:
@@ -123,6 +137,32 @@ def _decode_audio_status(raw: Any) -> CultAudioStreamStatus:
     )
 
 
+def _encode_source_events(events: CultAudioSourceEvents) -> list[Any]:
+    return [
+        events.schema_version,
+        events.frame_id,
+        events.audio_time_ns,
+        events.sample_rate,
+        events.start_sample,
+        events.frame_count,
+        list(events.events),
+        list(events.voice_focus),
+    ]
+
+
+def _decode_source_events(raw: Any) -> CultAudioSourceEvents:
+    return CultAudioSourceEvents(
+        schema_version=str(raw[0]),
+        frame_id=int(raw[1]),
+        audio_time_ns=int(raw[2]),
+        sample_rate=int(raw[3]),
+        start_sample=int(raw[4]),
+        frame_count=int(raw[5]),
+        events=tuple(dict(item) for item in raw[6]),
+        voice_focus=tuple(dict(item) for item in raw[7]),
+    )
+
+
 SPATIAL_AUDIO_FRAME_DOCUMENT = define_document_type(
     "localcast.audio.spatial_frame",
     encode=_encode_audio_frame,
@@ -137,6 +177,15 @@ AUDIO_STREAM_STATUS_DOCUMENT = define_document_type(
     encode=_encode_audio_status,
     decode=_decode_audio_status,
     name=lambda status: AUDIO_STREAM_STATUS_KEY if isinstance(status, CultAudioStreamStatus) else None,
+    payload_encoder=_pack,
+    payload_decoder=_unpack,
+)
+
+SOURCE_EVENTS_DOCUMENT = define_document_type(
+    "localcast.audio.source_events",
+    encode=_encode_source_events,
+    decode=_decode_source_events,
+    name=lambda events: LIVE_SOURCE_EVENTS_KEY if isinstance(events, CultAudioSourceEvents) else None,
     payload_encoder=_pack,
     payload_decoder=_unpack,
 )
@@ -159,6 +208,7 @@ def _open_audio_cache_once(path: Path) -> CultCache:
         CultCache.builder()
         .register_document_type(SPATIAL_AUDIO_FRAME_DOCUMENT)
         .register_document_type(AUDIO_STREAM_STATUS_DOCUMENT)
+        .register_document_type(SOURCE_EVENTS_DOCUMENT)
         .add_generic_store(SingleFileMessagePackBackingStore(path))
         .build()
     )
@@ -231,3 +281,41 @@ def put_audio_stream_status(path: Path, status: CultAudioStreamStatus) -> None:
         cache.put(AUDIO_STREAM_STATUS_DOCUMENT, AUDIO_STREAM_STATUS_KEY, status)
 
     _retry_cache_io(operation)
+
+
+def make_audio_source_events(
+    *,
+    frame_id: int,
+    sample_rate: int,
+    start_sample: int,
+    frame_count: int,
+    audio_time_ns: int,
+    events: list[dict[str, Any]],
+    voice_focus: list[dict[str, Any]],
+) -> CultAudioSourceEvents:
+    return CultAudioSourceEvents(
+        schema_version=SOURCE_EVENTS_SCHEMA_ID,
+        frame_id=int(frame_id),
+        audio_time_ns=int(audio_time_ns),
+        sample_rate=int(sample_rate),
+        start_sample=int(start_sample),
+        frame_count=int(frame_count),
+        events=tuple(dict(item) for item in events),
+        voice_focus=tuple(dict(item) for item in voice_focus),
+    )
+
+
+def put_live_audio_source_events(path: Path, events: CultAudioSourceEvents) -> None:
+    def operation() -> None:
+        cache = open_audio_cache(path)
+        cache.put(SOURCE_EVENTS_DOCUMENT, LIVE_SOURCE_EVENTS_KEY, events)
+
+    _retry_cache_io(operation)
+
+
+def get_live_audio_source_events(path: Path) -> CultAudioSourceEvents | None:
+    def operation() -> CultAudioSourceEvents | None:
+        cache = open_audio_cache(path)
+        return cache.get(SOURCE_EVENTS_DOCUMENT, LIVE_SOURCE_EVENTS_KEY)
+
+    return _retry_cache_io(operation)
