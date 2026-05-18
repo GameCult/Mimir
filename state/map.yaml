@@ -133,6 +133,15 @@ research:
       capture adapters, detection, triangulation, track caching, and point-cloud
       export as separate testable authorities. This follows the fractal-domain
       cache rule: semantic claims first, cached backend lowerings second.
+  typed_visual_state:
+    summary: docs/typed-visual-state.md
+    key_decision: >
+      Live visual state now lives in typed CultCache MessagePack documents:
+      `localcast.visual.render_frame` in `calibration/runs/visual-state.msgpack`
+      and `localcast.visual.stream_status` in
+      `calibration/runs/visual-stream-status.msgpack`. CultNet document_put is
+      the intended process/network API boundary. JSON render-frame files are no
+      longer the authority.
 
 current_status:
   summary: >
@@ -188,21 +197,26 @@ current_status:
     source time ranges, intended visual presentation time, audio-alignment
     time, target render size, Spout sender name, and point draw metadata for
     Aquarium/Spout. A deadline OBS Spout sender is now live-shaped:
-    `scripts/stream_spout.py` reads render-frame JSON, lowers points into
-    compact anisotropic screen brush packets, uploads an OpenGL texture,
-    publishes Spout sender `LocalCastBridge Point Cloud`, and writes
+    `scripts/live_sensor_fusion.py` now writes fused render frames into typed
+    CultCache state at `calibration/runs/visual-state.msgpack`. `scripts/stream_spout.py`
+    consumes that CultCache document, lowers points into compact anisotropic
+    screen brush packets, uploads an OpenGL texture, publishes Spout sender
+    `LocalCastBridge Point Cloud`, and writes both typed status
+    `calibration/runs/visual-stream-status.msgpack` and compatibility JSON
     `calibration/runs/stream-spout-status.json`; OBS now has a Spout2 Capture
     source pointed at that sender, and an OBS websocket screenshot verified
-    nonblack brush output. The detached sender can run demo packets until live
-    fusion writes `calibration/runs/live-render-frame.json`. Unit tests inject
-    synthetic cameras and frames so the core does not depend on live camera
-    drivers.
+    nonblack brush output. The live producer currently uses synthetic calibrated
+    observations through the real `SensorRig.fuse` path until camera detector
+    observations replace them. Unit tests inject synthetic cameras and frames so
+    the core does not depend on live camera drivers.
   next_action: >
     Capture real ChArUco intrinsics/extrinsics for the PS3 Eyes and Kiyos,
     replace `config/sensor-fusion.example.json` placeholder transforms with a
-    local `config/sensor-fusion.json`, then add a detector adapter that turns
-    FFmpeg PS3 Eye frames into marker `Observation2D` records for the fusion
-    core. In parallel, move the render-frame consumer into Aquarium Engine so
+    local `config/sensor-fusion.json`, then replace the synthetic live producer
+    with a detector adapter that turns FFmpeg PS3 Eye frames into marker
+    `Observation2D` records for the fusion core and publishes the same typed
+    CultCache/CultNet render-frame document. In parallel, move the render-frame
+    consumer into Aquarium Engine so
     Aquarium renders cached points/brushes into its GPU render target and
     publishes or hands off the same Spout sender `LocalCastBridge Point Cloud`
     for OBS, replacing the deadline OpenGL point sink without changing packet

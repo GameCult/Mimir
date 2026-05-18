@@ -36,7 +36,7 @@ flowchart TD
     D --> F
     F --> G["TrackCache"]
     G --> H["PointCloud PLY"]
-    G --> I["RenderFramePacket"]
+    G --> I["CultCache RenderFrame document"]
     I --> J["Spout sink / Aquarium GPU renderer"]
     J --> K["Spout2 sender texture"]
     K --> L["OBS Spout2 source"]
@@ -46,7 +46,8 @@ flowchart TD
 
 - `localcast.sensor_fusion.core` owns calibrated camera models, 2D observations, DLT triangulation, reprojection gating, confidence scoring, point-cloud export, and track cache expiry.
 - `localcast.sensor_fusion.adapters` owns driver-facing frame ingress. Its first concrete adapter is an FFmpeg raw BGR reader for the PS3 Eye DirectShow path.
-- `localcast.sensor_fusion.render_bridge` owns the render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
+- `localcast.sensor_fusion.render_bridge` owns the in-process render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
+- `localcast.sensor_fusion.cultcache_docs` owns the typed CultCache document boundary for live visual state.
 - `localcast.sensor_fusion.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
 - `scripts/stream_spout.py` owns the live Spout sender loop for OBS.
@@ -90,7 +91,7 @@ The intended production handoff is:
 
 ```text
 LocalCastBridge TrackCache
--> RenderFramePacket JSON/binary stream
+-> CultCache render-frame document
 -> Aquarium Engine typed runtime state
 -> GPU point/brush/splat buffer
 -> D3D render target
@@ -98,13 +99,14 @@ LocalCastBridge TrackCache
 -> OBS Spout2 Capture source
 ```
 
-`RenderFramePacket` is a scaffold ABI, not the final hot path. JSON is useful for inspection, tests, and handoff. Once Aquarium consumes the shape, switch the transport to a binary or shared-memory ring with the same fields. The invariant is the packet contract, not JSON.
+`RenderFramePacket` is the in-process shape. The live boundary is now a typed CultCache MessagePack document, with CultNet `document_put` as the intended process/network API boundary. JSON render-frame files are compatibility scaffolding only.
 
 The current streamable cut is:
 
 ```text
-RenderFramePacket JSON
--> OpenGL FBO point renderer
+CultCache render-frame document
+-> compact anisotropic screen brush lowering
+-> OpenGL texture upload
 -> SpoutGL sendTexture
 -> OBS Spout2 Capture source
 ```
@@ -127,12 +129,12 @@ That lets the final stream compositor buffer point-cloud visuals until they alig
 
 1. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
 2. Load real ChArUco intrinsics/extrinsics into `config/sensor-fusion.json`.
-3. Record an observation JSONL/JSON run from the two PS3 Eyes.
+3. Record an observation run from the two PS3 Eyes into typed CultCache docs.
 4. Generate a live sparse PLY stream or debug preview.
 5. Feed `RenderFramePacket` into Aquarium Engine.
 6. Add Aquarium-side GPU point/brush rendering to a D3D render target.
 7. Publish the render target as a Spout2 sender and receive it in OBS.
-8. Replace JSON packet transport with a binary/shared-memory ring once the contract is stable.
+8. Replace compatibility JSON render-frame paths once no deadline script depends on them.
 
 ## References
 

@@ -10,7 +10,7 @@ This is the deadline stream surface. It is not a preview window and it is not a 
 
 ```mermaid
 flowchart TD
-    A["TrackCache / demo source"] --> B["RenderFramePacket JSON"]
+    A["Sensor fusion producer"] --> B["CultCache render-frame doc"]
     B --> C["scripts/stream_spout.py"]
     C --> D["ScreenBrushPacket lowering"]
     D --> E["OpenGL texture/FBO"]
@@ -18,7 +18,7 @@ flowchart TD
     F --> G["OBS Spout2 Capture"]
 ```
 
-Aquarium Engine remains the intended authority for dense brush/splat rendering. The useful boundary is `RenderFramePacket`: Aquarium can replace the OpenGL renderer behind the same packet contract without changing capture, fusion, timing, or OBS ingestion.
+Aquarium Engine remains the intended authority for dense brush/splat rendering. The useful boundary is the typed `localcast.visual.render_frame` CultCache document: Aquarium can replace the OpenGL renderer behind the same packet contract without changing capture, fusion, timing, or OBS ingestion.
 
 The deadline sink borrows the Zyphos brush rule rather than pretending points are enough: each render point lowers into a compact anisotropic screen brush with center, radii, rotation, and color. That shape mirrors Aquarium's bounded brush/splat direction while keeping the stream path simple enough to verify under pressure.
 
@@ -34,13 +34,24 @@ Start the Spout sender:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\stream_spout.py `
-  --frame-json .\calibration\runs\live-render-frame.json `
+  --source cultcache `
+  --frame-cache .\calibration\runs\visual-state.msgpack `
   --demo-if-missing `
   --sender-name "LocalCastBridge Point Cloud" `
   --width 1920 `
   --height 1080 `
   --fps 60 `
-  --status .\calibration\runs\stream-spout-status.json
+  --status .\calibration\runs\stream-spout-status.json `
+  --status-cache .\calibration\runs\visual-stream-status.msgpack
+```
+
+Start the current live fusion producer:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\live_sensor_fusion.py `
+  --cache .\calibration\runs\visual-state.msgpack `
+  --fps 30 `
+  --points 256
 ```
 
 For OBS, add a Spout2 Capture source and select `LocalCastBridge Point Cloud`. On this workstation, OBS websocket was enabled locally and the Off World Live `win-spout` plugin was installed under `C:\ProgramData\obs-studio\plugins\win-spout`.
@@ -61,11 +72,14 @@ Fields:
 - `frame_path`: packet source path.
 - `last_error`: `null` during healthy output.
 
+The typed status document is written to `calibration/runs/visual-stream-status.msgpack`. The JSON file is only the blunt terminal heartbeat.
+
 ## Invariants
 
 - OBS receives a named Spout texture.
 - The Spout sink owns presentation only; it does not own camera calibration, fusion, or scene truth.
-- JSON packet polling is a deadline ABI. The field contract survives; the transport can become shared memory or Aquarium runtime state later.
+- CultCache MessagePack documents are the live local state authority. CultNet document replication is the process/network boundary.
+- JSON render-frame polling is compatibility scaffolding only.
 - Latency is explicit in the packet timestamps. The renderer may buffer, but it may not silently erase the visual/audio alignment fields.
 
 ## Aquarium Cut
@@ -74,6 +88,7 @@ The next renderer cut is to move the `RenderFramePacket` consumer into Aquarium 
 
 ```text
 RenderFramePacket
+-> CultRenderFrame / CultNet document_put
 -> Aquarium typed runtime state
 -> compact anisotropic brush/splat buffers
 -> D3D render target

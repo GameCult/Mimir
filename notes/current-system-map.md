@@ -72,3 +72,25 @@ Ownership:
 - OBS may ingest rendered output later; it is not the authority for the Ambisonic field.
 
 Invariant: distributed camera/Focusrite microphones must be aligned and resampled into one reference timeline before FOA encoding. Latency is allowed as bounded buffering, but cache depth must converge toward real-time. Speaker output chirplets are live telemetry; delay/SRO/phase state must update during runtime, not only during setup. Extra chirplets may be emitted automatically when confidence drops, but only under the active probe optimizer's budget. The local shielded cardioid and neighbor shotgun are the high-quality dialogue anchors; camera mics provide spatial/context evidence.
+
+## Visual Fusion Sidecar
+
+```mermaid
+flowchart TD
+    A["synthetic/live observations"] --> B["SensorRig.fuse"]
+    B --> C["RenderFramePacket"]
+    C --> D["CultCache visual-state.msgpack"]
+    D --> E["stream_spout.py"]
+    E --> F["ScreenBrushPacket lowering"]
+    F --> G["Spout sender"]
+    G --> H["OBS Spout2 Capture"]
+```
+
+Ownership:
+
+- `localcast.sensor_fusion.cultcache_docs` owns typed visual state documents.
+- `scripts/live_sensor_fusion.py` currently owns the live producer and writes `localcast.visual.render_frame` into CultCache.
+- `scripts/stream_spout.py` consumes typed CultCache state and publishes Spout.
+- CultNet document replication is the intended API boundary for other producers/consumers.
+
+Invariant: JSON is not the visual-state authority. The current renderer can still write a JSON heartbeat for human inspection, but live visual state lives in typed CultCache MessagePack documents.

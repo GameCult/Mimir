@@ -11,6 +11,7 @@ import time
 import numpy as np
 
 from .render_bridge import RenderFramePacket, RenderPointPacket, load_render_frame
+from .cultcache_docs import CultStreamStatus, get_live_render_frame, put_stream_status
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,27 @@ class RenderFrameFileSource:
                 self._frame = load_render_frame(self.path)
                 self._mtime_ns = mtime_ns
             return self._frame
+        if not self.demo_if_missing:
+            raise FileNotFoundError(self.path)
+        return demo_render_frame(now_s, config)
+
+
+class CultCacheRenderFrameSource:
+    def __init__(self, path: Path, demo_if_missing: bool = False, demo_point_count: int = 4096) -> None:
+        self.path = path
+        self.demo_if_missing = demo_if_missing
+        self.demo_point_count = demo_point_count
+        self._mtime_ns: int | None = None
+        self._frame: RenderFramePacket | None = None
+
+    def current_frame(self, now_s: float, config: SpoutOutputConfig) -> RenderFramePacket:
+        if self.path.exists():
+            mtime_ns = self.path.stat().st_mtime_ns
+            if self._frame is None or mtime_ns != self._mtime_ns:
+                self._frame = get_live_render_frame(self.path)
+                self._mtime_ns = mtime_ns
+            if self._frame is not None:
+                return self._frame
         if not self.demo_if_missing:
             raise FileNotFoundError(self.path)
         return demo_render_frame(now_s, config)
@@ -171,6 +193,28 @@ def write_status(
         "last_error": last_error,
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def write_cult_status(
+    path: Path,
+    *,
+    sender_name: str,
+    frames_sent: int,
+    point_count: int,
+    frame_source: str,
+    last_error: str | None = None,
+) -> None:
+    put_stream_status(
+        path,
+        CultStreamStatus(
+            sender_name=sender_name,
+            frames_sent=frames_sent,
+            point_count=point_count,
+            frame_source=frame_source,
+            updated_monotonic_ns=time.monotonic_ns(),
+            last_error="" if last_error is None else last_error,
+        ),
+    )
 
 
 class OpenGLSpoutPointRenderer:

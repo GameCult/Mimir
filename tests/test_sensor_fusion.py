@@ -1,4 +1,6 @@
 import io
+from pathlib import Path
+import tempfile
 import unittest
 
 import numpy as np
@@ -14,8 +16,10 @@ from localcast.sensor_fusion import (
     SpoutOutputConfig,
     TrackCache,
     frame_to_vertex_array,
+    get_live_render_frame,
     lower_frame_to_screen_brushes,
     lower_points_to_render_frame,
+    put_live_render_frame,
 )
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
 
@@ -163,6 +167,27 @@ class SensorFusionTests(unittest.TestCase):
         config = SpoutOutputConfig(sender_name="unit-test", width=128, height=72, fps=30)
         self.assertEqual("unit-test", config.sender_name)
         self.assertEqual(128, config.width)
+
+    def test_render_frame_round_trips_through_typed_cultcache_doc(self):
+        left = camera("left", -0.25)
+        right = camera("right", 0.25)
+        point = SensorRig(cameras={"left": left, "right": right}).fuse(
+            [
+                Observation2D("left", "ball", 1_000, left.project_world(np.array([0.0, 0.0, 2.0])), 1.0),
+                Observation2D("right", "ball", 1_000, right.project_world(np.array([0.0, 0.0, 2.0])), 1.0),
+            ]
+        ).points[0]
+        frame = lower_points_to_render_frame((point,), RenderBridgeConfig(), frame_id=3, created_monotonic_ns=10)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "visual-state.msgpack"
+            put_live_render_frame(path, frame)
+            loaded = get_live_render_frame(path)
+
+        self.assertIsNotNone(loaded)
+        self.assertEqual(3, loaded.frame_id)
+        self.assertEqual(1, len(loaded.points))
+        self.assertEqual("ball", loaded.points[0].stable_key)
 
 
 if __name__ == "__main__":

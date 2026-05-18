@@ -8,9 +8,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from localcast.sensor_fusion.spout_output import (
+    CultCacheRenderFrameSource,
     OpenGLSpoutPointRenderer,
     RenderFrameFileSource,
     SpoutOutputConfig,
+    write_cult_status,
     write_status,
 )
 
@@ -18,6 +20,7 @@ from localcast.sensor_fusion.spout_output import (
 def main() -> None:
     parser = argparse.ArgumentParser(description="Publish render-frame packets as a named Spout texture for OBS.")
     parser.add_argument("--frame-json", default=str(ROOT / "calibration" / "runs" / "synthetic-render-frame.json"))
+    parser.add_argument("--frame-cache", default=str(ROOT / "calibration" / "runs" / "visual-state.msgpack"))
     parser.add_argument("--sender-name", default="LocalCastBridge Point Cloud")
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
@@ -26,11 +29,15 @@ def main() -> None:
     parser.add_argument("--demo-if-missing", action="store_true")
     parser.add_argument("--demo-point-count", type=int, default=4096)
     parser.add_argument("--status", default=str(ROOT / "calibration" / "runs" / "stream-spout-status.json"))
+    parser.add_argument("--status-cache", default=str(ROOT / "calibration" / "runs" / "visual-stream-status.msgpack"))
+    parser.add_argument("--source", choices=["cultcache", "json"], default="cultcache")
     parser.add_argument("--duration", type=float, help="Optional run duration in seconds for smoke tests.")
     args = parser.parse_args()
 
     frame_path = Path(args.frame_json)
+    frame_cache_path = Path(args.frame_cache)
     status_path = Path(args.status)
+    status_cache_path = Path(args.status_cache)
     config = SpoutOutputConfig(
         sender_name=args.sender_name,
         width=args.width,
@@ -39,7 +46,12 @@ def main() -> None:
         point_scale=args.point_scale,
         demo_point_count=args.demo_point_count,
     )
-    source = RenderFrameFileSource(frame_path, demo_if_missing=args.demo_if_missing, demo_point_count=args.demo_point_count)
+    if args.source == "cultcache":
+        source = CultCacheRenderFrameSource(frame_cache_path, demo_if_missing=args.demo_if_missing, demo_point_count=args.demo_point_count)
+        frame_source_name = str(frame_cache_path)
+    else:
+        source = RenderFrameFileSource(frame_path, demo_if_missing=args.demo_if_missing, demo_point_count=args.demo_point_count)
+        frame_source_name = str(frame_path)
     frame_interval = 1.0 / max(1.0, args.fps)
     start = time.monotonic()
     last_status = 0.0
@@ -57,7 +69,15 @@ def main() -> None:
                     sender_name=config.sender_name,
                     frames_sent=renderer.frames_sent,
                     point_count=len(frame.points),
-                    frame_path=frame_path,
+                    frame_path=Path(frame_source_name),
+                    last_error=None if ok else "SpoutGL sendTexture returned false",
+                )
+                write_cult_status(
+                    status_cache_path,
+                    sender_name=config.sender_name,
+                    frames_sent=renderer.frames_sent,
+                    point_count=len(frame.points),
+                    frame_source=frame_source_name,
                     last_error=None if ok else "SpoutGL sendTexture returned false",
                 )
                 last_status = now
@@ -69,7 +89,15 @@ def main() -> None:
         sender_name=config.sender_name,
         frames_sent=renderer.frames_sent,
         point_count=0,
-        frame_path=frame_path,
+        frame_path=Path(frame_source_name),
+        last_error="stopped",
+    )
+    write_cult_status(
+        status_cache_path,
+        sender_name=config.sender_name,
+        frames_sent=renderer.frames_sent,
+        point_count=0,
+        frame_source=frame_source_name,
         last_error="stopped",
     )
 

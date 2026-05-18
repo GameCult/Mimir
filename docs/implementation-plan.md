@@ -23,9 +23,12 @@
   - `docs/audio-field.md` maps the audio pipeline and its invariants.
 - Sensor-fusion render bridge:
   - `localcast.sensor_fusion.render_bridge` emits render-frame packets with visual/audio timing metadata and Spout sender identity.
+  - `localcast.sensor_fusion.cultcache_docs` stores live visual state as typed CultCache MessagePack documents.
   - `localcast.sensor_fusion.spout_output` renders render-frame packets into a GPU texture and publishes it as a named Spout sender for OBS.
-  - `scripts/stream_spout.py` runs the deadline Spout sender loop with a heartbeat status file.
+  - `scripts/live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`.
+  - `scripts/stream_spout.py` runs the deadline Spout sender loop from the typed cache with typed and JSON heartbeat status.
   - `docs/obs-spout-streaming.md` documents OBS setup and the Aquarium replacement boundary.
+  - `docs/typed-visual-state.md` documents the CultCache/CultNet visual boundary.
 
 ## Temporary
 
@@ -47,3 +50,4 @@
 9. Create local `config/audio-field.json`, confirm local Kiyo/PS Eye/Focusrite device matches, and confirm the neighbor Focusrite shotgun capture/transport path.
 10. Replace placeholder mic/speaker geometry with measured world coordinates, then build the delay/SRO alignment stage that feeds the bounded field cache and emits aligned six-channel blocks before FOA encoding.
 11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
+12. Replace synthetic live-fusion observations with PS3 Eye detector observations.
