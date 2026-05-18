@@ -75,11 +75,25 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
     witness_channels = [channel for channel in (0, 2, 3) if channel < field.shape[1]]
     witness_mix = mix_channels(field, witness_channels) if witness_channels else np.zeros(frame_count, dtype=np.float32)
     host_voice = channel_or_silence(field, 4)
-    co_streamer_voice = channel_or_silence(field, 5)
+    co_streamer_voice, co_streamer_voice_status = load_co_streamer_surface(
+        run / "co_streamer_surfaces" / "aligned_focusrite.wav",
+        field_rate,
+        frame_count,
+        channel_fallback=channel_or_silence(field, 5),
+        placeholder_status="placeholder-silence-until-neighbor-focusrite-is-in-aligned-timeline",
+        synced_status="synced-from-neighbor-focusrite-surface",
+    )
     ambient = make_ambient_stem(witness_mix, host_voice, co_streamer_voice)
     transients = make_transient_stem(witness_mix, events_doc, frame_count)
     local_loopback = load_optional_program_audio(run / "ground_truth_loopback.wav", field_rate, frame_count)
-    co_streamer_loopback = np.zeros((frame_count, 2), dtype=np.float32)
+    co_streamer_loopback, co_streamer_loopback_status = load_co_streamer_surface(
+        run / "co_streamer_surfaces" / "aligned_loopback.wav",
+        field_rate,
+        frame_count,
+        channel_fallback=np.zeros((frame_count, 2), dtype=np.float32),
+        placeholder_status="placeholder-silence-until-neighbor-loopback-is-captured-and-aligned",
+        synced_status="synced-from-neighbor-loopback-surface",
+    )
 
     stems = [
         stem_spec(
@@ -97,7 +111,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
             co_streamer_voice,
             field_rate,
             role="dialogue",
-            status="placeholder-silence-until-neighbor-focusrite-is-in-aligned-timeline",
+            status=co_streamer_voice_status,
             position_m=[0.0, 2.0, 1.2],
         ),
         stem_spec(
@@ -124,7 +138,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
             co_streamer_loopback,
             field_rate,
             role="program-loopback",
-            status="placeholder-silence-until-neighbor-loopback-is-captured-and-aligned",
+            status=co_streamer_loopback_status,
             position_m=None,
         ),
         stem_spec(
@@ -318,6 +332,23 @@ def load_optional_program_audio(path: Path, sample_rate: int, frame_count: int) 
         pad = np.zeros((frame_count - samples.shape[0], samples.shape[1]), dtype=np.float32)
         samples = np.vstack([samples, pad])
     return samples[:frame_count]
+
+
+def load_co_streamer_surface(
+    path: Path,
+    sample_rate: int,
+    frame_count: int,
+    *,
+    channel_fallback: np.ndarray,
+    placeholder_status: str,
+    synced_status: str,
+) -> tuple[np.ndarray, str]:
+    if not path.exists():
+        return channel_fallback, placeholder_status
+    loaded = load_optional_program_audio(path, sample_rate, frame_count)
+    if np.asarray(channel_fallback).ndim == 1 and loaded.ndim == 2:
+        loaded = np.mean(loaded, axis=1, dtype=np.float32)
+    return loaded, synced_status
 
 
 def limit_peak(samples: np.ndarray, target: float = 0.98) -> np.ndarray:

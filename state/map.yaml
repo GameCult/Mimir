@@ -209,9 +209,11 @@ current_status:
     per-channel stems from the aligned program audio timeline, creates/updates
     OBS Media Sources for host voice, co-streamer voice, ambient, transients,
     co-streamer loopback, and local loopback, and can disable every scene item
-    except synchronized LocalCastBridge program surfaces. Missing synchronized
-    neighbor feeds are explicit silent placeholders, not raw unsynchronized
-    substitutes. The live producer currently uses synthetic calibrated
+    except synchronized LocalCastBridge program surfaces. Co-streamer surface
+    capture now records neighbor Focusrite and neighbor loopback while recording
+    local loopback ground truth, then writes aligned co-streamer surface WAVs
+    for the stem packer. Missing synchronized neighbor feeds are explicit
+    silent placeholders, not raw unsynchronized substitutes. The live producer currently uses synthetic calibrated
     observations through the real `SensorRig.fuse` path until camera detector
     observations replace them. Unit tests inject synthetic cameras and frames so
     the core does not depend on live camera drivers.
@@ -232,6 +234,6 @@ current_status:
     shotgun capture/transport path, replace placeholder mic/speaker geometry
     with measured world coordinates, then build the delay/SRO alignment stage
     that feeds the bounded field cache and emits aligned six-channel blocks for
-    FOA encoding. Replace the current silent co-streamer voice and co-streamer
-    loopback OBS stems only after those neighbor feeds are captured into the
-    aligned timeline.
+    FOA encoding. Fix the neighbor loopback routing so the remote loopback is a
+    real timing witness, then let the co-streamer surface family set the shared
+    presentation buffer horizon for audio stems, AmbiX, and remote video.

@@ -31,6 +31,7 @@
   - `docs/typed-visual-state.md` documents the CultCache/CultNet visual boundary.
 - OBS synchronized program surface:
   - `scripts/setup_obs_synced_program.py` derives OBS-controllable stems from an aligned program audio timeline: host voice, co-streamer voice, ambient, transients, co-streamer loopback, and local loopback.
+  - `scripts/capture_co_streamer_surfaces.py` captures neighbor Focusrite and neighbor loopback with local loopback ground truth, estimates the late remote-family offset, and writes aligned co-streamer surfaces for the stem packer.
   - The tool creates/updates local OBS Media Sources for those stems and mutes/disables raw unsynchronized inputs.
   - Strict mode disables every scene item except the synchronized LocalCastBridge program video and stem controls.
 
@@ -55,4 +56,5 @@
 10. Replace placeholder mic/speaker geometry with measured world coordinates, then build the delay/SRO alignment stage that feeds the bounded field cache and emits aligned six-channel blocks before FOA encoding.
 11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
 12. Replace synthetic live-fusion observations with PS3 Eye detector observations.
-13. Replace placeholder silent co-streamer voice/loopback stems with synchronized neighbor Focusrite and loopback captures once those feeds are in the aligned timeline.
+13. Fix the neighbor loopback route so `Voicemeeter Out B3` carries real program audio; current remote loopback captures are near-silent and cannot serve as the timing witness.
+14. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
