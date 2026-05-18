@@ -152,6 +152,22 @@ After each driver swap, rerun:
 
 Also test with one PS3 Eye unplugged and each camera connected directly to a motherboard USB 2.0/3.x port, not through a hub. A libusb issue report shows PS3 Eye/opentrack access can break when certain USB-C hubs are present, even when the camera itself is not plugged into that hub.
 
+USB topology note from this machine:
+
+- The two PS3 Eyes, Razer Kiyo, Razer Kiyo Pro, and Leap Motion are effectively sharing the same external hub/root path.
+- After binding both PS3 Eye `MI_00` interfaces, one PS3 Eye composite device and one PS3 Eye audio interface showed `Unknown`, while both `MI_00` interfaces remained visible as `libusb-win32`.
+- Two `Unknown USB Device (Device Descriptor Request Failed)` entries were also present on the same hub path.
+
+That makes the hub/root topology a live suspect. A USB3 hub does not make old USB2 high-bandwidth devices independent; USB2 traffic still shares the hub's USB2 side and transaction scheduling. iPiSoft's multiple-PS Eye guidance says a single USB2 hub is only acceptable for low-resolution capture, and opentrack's guide says to try another USB2/USB3 controller if the camera fails.
+
+Practical next cut:
+
+1. Test one PS3 Eye alone on the current hub.
+2. If it still fails, test one PS3 Eye alone on a different motherboard root port/controller.
+3. Once one streams, add the second PS3 Eye at low tracking mode first, e.g. `320x240@60`, then increase.
+4. Put Kiyos/Leap on a different hub/root path if possible.
+5. If no physical split is possible, plan for lower PS3 Eye rates and treat the hub as a scarce shared resource, not a magic blue rectangle.
+
 Mirrored references:
 
 - `research/visual-spatial-map/mirrors/opentrack-ps3-eye-open-driver-instructions.html`

@@ -118,7 +118,11 @@ current_status:
     accessible; both PS3 Eye video interfaces are attached but missing their
     video-side driver. LeapUVC MSMF mode probing accepts a 320x240x120 request
     and reports about 115 fps, though measured OpenCV throughput is lower in the
-    first rough probe.
+    first rough probe. PS3 Eye video interfaces now bind through libusb-win32
+    and opentrack enumerates high-rate modes, but frame reads fail while all
+    cameras sit on one external hub/root path; USB topology is now a live
+    suspect.
   next_action: >
-    Fix PS3 Eye video driver access, then capture ChArUco intrinsics frames for
-    LeapUVC and both Kiyo cameras before moving to multi-camera extrinsics.
+    Test one PS3 Eye alone on the current hub and then on a different root port
+    if needed; once one streams, add the second at a low tracking rate before
+    capturing ChArUco intrinsics.
