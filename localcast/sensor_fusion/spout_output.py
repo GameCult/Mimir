@@ -32,6 +32,7 @@ class ScreenBrushPacket:
     radii_px: tuple[int, int]
     rotation_deg: float
     color_rgba: tuple[int, int, int, int]
+    depth: float = 0.0
 
 
 class RenderFrameFileSource:
@@ -207,32 +208,37 @@ def lower_frame_to_screen_brushes(
     point_scale: float = 1.0,
 ) -> tuple[ScreenBrushPacket, ...]:
     brushes: list[ScreenBrushPacket] = []
+    view_proj = camera_matrix(0.0, width / max(1, height))
     for point in frame.points:
-        x, y, z = point.xyz
-        px = int(round((0.5 + float(x) * 0.29) * width))
-        py = int(round((0.5 - ((float(z) - 1.18) * 0.575 + float(y) * 0.08)) * height))
-        radius = max(2, int(round(float(point.radius_m) * point_scale * height * 0.75)))
+        projected = project_world_to_screen(point.xyz, view_proj, width, height)
+        if projected is None:
+            continue
+        px, py, depth, clip_w = projected
+        radius = max(2, int(round(float(point.radius_m) * point_scale * height * 1.45 / max(0.42, clip_w))))
         if px < -radius * 3 or px >= width + radius * 3 or py < -radius * 3 or py >= height + radius * 3:
             continue
         stable = hashlib.blake2s(point.stable_key.encode("utf-8"), digest_size=4).digest()
         angle = int.from_bytes(stable[:2], "little") / 65535.0 * 180.0
-        stretch = 1.0 + (stable[2] / 255.0) * 1.8
+        semantic_stretch = 2.8 if point.stable_key.startswith(("frustum:", "ray:", "floor:", "wall:")) else 1.0
+        stretch = semantic_stretch * (1.0 + (stable[2] / 255.0) * 1.45)
         radii = (max(2, int(round(radius * stretch))), radius)
         rgba = np.clip(np.asarray(point.color_rgba, dtype=np.float32), 0.0, 1.0)
         rgba[3] *= max(0.0, min(1.0, float(point.confidence)))
         color = tuple(int(v) for v in (rgba * 255.0)[:4])
-        brushes.append(ScreenBrushPacket((px, py), radii, angle, color))
-    return tuple(brushes)
+        brushes.append(ScreenBrushPacket((px, py), radii, angle, color, depth))
+    return tuple(sorted(brushes, key=lambda brush: brush.depth, reverse=True))
 
 
 def rasterize_frame_rgba(frame: RenderFramePacket, width: int, height: int, point_scale: float = 1.0) -> np.ndarray:
     import cv2
 
     image = np.zeros((height, width, 4), dtype=np.uint8)
-    image[:, :, 0] = 10
-    image[:, :, 1] = 14
-    image[:, :, 2] = 20
+    image[:, :, 0] = 7
+    image[:, :, 1] = 10
+    image[:, :, 2] = 15
     image[:, :, 3] = 255
+    draw_reconstruction_guides(image)
+    draw_floor_shadows(image, frame, point_scale)
     for brush in lower_frame_to_screen_brushes(frame, width, height, point_scale):
         cv2.ellipse(
             image,
@@ -246,6 +252,92 @@ def rasterize_frame_rgba(frame: RenderFramePacket, width: int, height: int, poin
             lineType=cv2.LINE_AA,
         )
     return image
+
+
+def project_world_to_screen(
+    xyz: np.ndarray,
+    view_proj: np.ndarray,
+    width: int,
+    height: int,
+) -> tuple[int, int, float, float] | None:
+    point = np.ones(4, dtype=np.float64)
+    point[:3] = np.asarray(xyz, dtype=np.float64)
+    clip = view_proj @ point
+    if clip[3] <= 0.001:
+        return None
+    ndc = clip[:3] / clip[3]
+    if ndc[0] < -1.35 or ndc[0] > 1.35 or ndc[1] < -1.35 or ndc[1] > 1.35:
+        return None
+    px = int(round((ndc[0] * 0.5 + 0.5) * width))
+    py = int(round((0.5 - ndc[1] * 0.5) * height))
+    return px, py, float(ndc[2]), float(clip[3])
+
+
+def draw_reconstruction_guides(image: np.ndarray) -> None:
+    import cv2
+
+    height, width = image.shape[:2]
+    view_proj = camera_matrix(0.0, width / max(1, height))
+    grid_color = (36, 50, 62, 255)
+    wall_color = (24, 36, 50, 255)
+    for x in np.linspace(-1.8, 1.8, 13):
+        draw_world_line(image, view_proj, np.array([x, -1.0, 0.0]), np.array([x, 1.15, 0.0]), grid_color, 1)
+    for y in np.linspace(-1.0, 1.15, 9):
+        draw_world_line(image, view_proj, np.array([-1.8, y, 0.0]), np.array([1.8, y, 0.0]), grid_color, 1)
+    for x in np.linspace(-1.8, 1.8, 9):
+        draw_world_line(image, view_proj, np.array([x, 1.15, 0.0]), np.array([x, 1.15, 2.2]), wall_color, 1)
+    for z in np.linspace(0.35, 2.1, 6):
+        draw_world_line(image, view_proj, np.array([-1.8, 1.15, z]), np.array([1.8, 1.15, z]), wall_color, 1)
+    sensors = [
+        (np.array([-0.78, -0.82, 1.34]), np.array([0.10, 0.72, 1.05]), (72, 160, 255, 255)),
+        (np.array([0.78, -0.82, 1.34]), np.array([-0.10, 0.72, 1.05]), (72, 160, 255, 255)),
+        (np.array([-0.28, -1.05, 1.62]), np.array([-0.15, 0.45, 1.15]), (255, 160, 72, 255)),
+        (np.array([0.38, -1.02, 1.66]), np.array([0.20, 0.48, 1.18]), (255, 160, 72, 255)),
+        (np.array([0.0, -0.18, 0.76]), np.array([0.0, 0.20, 1.05]), (120, 255, 185, 255)),
+    ]
+    for origin, target, color in sensors:
+        draw_world_line(image, view_proj, origin, target, color, 2)
+        projected = project_world_to_screen(origin, view_proj, width, height)
+        if projected is not None:
+            cv2.circle(image, projected[:2], 5, color, thickness=-1, lineType=cv2.LINE_AA)
+
+
+def draw_floor_shadows(image: np.ndarray, frame: RenderFramePacket, point_scale: float) -> None:
+    import cv2
+
+    height, width = image.shape[:2]
+    view_proj = camera_matrix(0.0, width / max(1, height))
+    for point in frame.points:
+        xyz = np.asarray(point.xyz, dtype=np.float64)
+        if xyz[2] <= 0.10 or point.stable_key.startswith(("sensor:", "frustum:")):
+            continue
+        shadow = xyz.copy()
+        shadow[2] = 0.012
+        projected = project_world_to_screen(shadow, view_proj, width, height)
+        if projected is None:
+            continue
+        px, py, _, clip_w = projected
+        radius = max(2, int(round(float(point.radius_m) * point_scale * height * 0.9 / max(0.42, clip_w))))
+        shade = int(18 + 18 * max(0.0, min(1.0, float(point.confidence))))
+        cv2.ellipse(image, (px, py), (radius * 2, max(1, radius // 2)), 0.0, 0.0, 360.0, (shade // 3, shade // 2, shade, 255), -1, cv2.LINE_AA)
+
+
+def draw_world_line(
+    image: np.ndarray,
+    view_proj: np.ndarray,
+    start: np.ndarray,
+    end: np.ndarray,
+    color: tuple[int, int, int, int],
+    thickness: int,
+) -> None:
+    import cv2
+
+    height, width = image.shape[:2]
+    a = project_world_to_screen(start, view_proj, width, height)
+    b = project_world_to_screen(end, view_proj, width, height)
+    if a is None or b is None:
+        return
+    cv2.line(image, a[:2], b[:2], color, thickness=thickness, lineType=cv2.LINE_AA)
 
 
 def write_status(

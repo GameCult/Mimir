@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import sys
 import time
+from typing import BinaryIO
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -16,6 +17,23 @@ from localcast.sensor_fusion.spout_output import (
     write_sync_status,
     write_status,
 )
+
+
+def acquire_runtime_lock(path: Path) -> BinaryIO | None:
+    import msvcrt
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a+b")
+    handle.seek(0)
+    handle.write(b"\0")
+    handle.flush()
+    handle.seek(0)
+    try:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        handle.close()
+        return None
+    return handle
 
 
 def main() -> None:
@@ -50,6 +68,9 @@ def main() -> None:
     status_path = Path(args.status)
     status_cache_path = Path(args.status_cache)
     sync_status_path = Path(args.sync_status)
+    lock = acquire_runtime_lock(status_path.with_suffix(".sender.lock"))
+    if lock is None:
+        return
     config = SpoutOutputConfig(
         sender_name=args.sender_name,
         width=args.width,
