@@ -94,3 +94,34 @@ Ownership:
 - CultNet document replication is the intended API boundary for other producers/consumers.
 
 Invariant: JSON is not the visual-state authority. The current renderer can still write a JSON heartbeat for human inspection, but live visual state lives in typed CultCache MessagePack documents.
+
+## OBS Program Surface
+
+OBS should not expose raw unsynchronized ingest as broadcast controls once a synchronized audio/video program is available.
+
+```mermaid
+flowchart TD
+    A["aligned audio program timeline"] --> B["setup_obs_synced_program.py"]
+    B --> C["Host Voice stem"]
+    B --> D["CoStreamer Voice stem"]
+    B --> E["Ambient stem"]
+    B --> F["Transients stem"]
+    B --> G["CoStreamer Loopback stem"]
+    B --> H["Local Loopback stem"]
+    I["CultCache visual/audio timing"] --> J["Spout/Aquarium program video"]
+    C --> K["OBS synchronized scene"]
+    D --> K
+    E --> K
+    F --> K
+    G --> K
+    H --> K
+    J --> K
+```
+
+Ownership:
+
+- `scripts/setup_obs_synced_program.py` owns packaging aligned program audio into OBS-controllable stems and muting/disabling raw unsynchronized OBS inputs.
+- OBS owns final source volume, track assignment, filters, and stream/record output.
+- Aquarium/Spout owns synchronized program video, not raw remote desktop capture.
+
+Invariant: raw SRT ingest, Desktop Audio, Mic/Aux, and other non-program scene items may exist for diagnostics, but they must be disabled or muted when broadcasting the synchronized program. Missing synchronized feeds should appear as explicit silent placeholders, not as live unsynchronized substitutes.

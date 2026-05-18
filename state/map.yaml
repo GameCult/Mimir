@@ -205,7 +205,13 @@ current_status:
     `calibration/runs/visual-stream-status.msgpack` and compatibility JSON
     `calibration/runs/stream-spout-status.json`; OBS now has a Spout2 Capture
     source pointed at that sender, and an OBS websocket screenshot verified
-    nonblack brush output. The live producer currently uses synthetic calibrated
+    nonblack brush output. OBS synchronized program setup now derives six
+    per-channel stems from the aligned program audio timeline, creates/updates
+    OBS Media Sources for host voice, co-streamer voice, ambient, transients,
+    co-streamer loopback, and local loopback, and can disable every scene item
+    except synchronized LocalCastBridge program surfaces. Missing synchronized
+    neighbor feeds are explicit silent placeholders, not raw unsynchronized
+    substitutes. The live producer currently uses synthetic calibrated
     observations through the real `SensorRig.fuse` path until camera detector
     observations replace them. Unit tests inject synthetic cameras and frames so
     the core does not depend on live camera drivers.
@@ -226,4 +232,6 @@ current_status:
     shotgun capture/transport path, replace placeholder mic/speaker geometry
     with measured world coordinates, then build the delay/SRO alignment stage
     that feeds the bounded field cache and emits aligned six-channel blocks for
-    FOA encoding.
+    FOA encoding. Replace the current silent co-streamer voice and co-streamer
+    loopback OBS stems only after those neighbor feeds are captured into the
+    aligned timeline.
