@@ -47,6 +47,19 @@ RoomSuppressionConfig = _room_suppression.RoomSuppressionConfig
 suppress_room_field = _room_suppression.suppress_room_field
 
 
+def load_program_reference_module():
+    spec = importlib.util.spec_from_file_location("localcast_program_reference", ROOT / "audio_field" / "program_reference.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_program_reference = load_program_reference_module()
+suppress_program_reference = _program_reference.suppress_program_reference
+
+
 def utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 
@@ -1759,6 +1772,52 @@ def cmd_suppress_room(args):
     print(json.dumps(result, indent=2))
 
 
+def cmd_suppress_reference(args):
+    profile = load_profile(args.profile)
+    sample_rate, data = wavfile.read(args.input)
+    field = as_float_matrix(data)
+    ref_rate, reference = wavfile.read(args.reference)
+    reference = mono(as_float_matrix(reference))
+    reference = resample_if_needed(reference, int(ref_rate), int(sample_rate))
+    channels = [int(value) for value in args.channel] if args.channel else list(range(field.shape[1]))
+    cleaned, reports = suppress_program_reference(
+        field,
+        reference,
+        int(sample_rate),
+        channels,
+        nperseg=int(args.window_size),
+        noverlap=int(args.overlap),
+        regularization=float(args.regularization),
+        subtraction_strength=float(args.subtraction_strength),
+    )
+    output = args.output or args.input.with_name(args.input.stem + "-program-suppressed.wav")
+    wavfile.write(output, int(sample_rate), cleaned.astype(np.float32))
+    result = {
+        "output": str(output),
+        "reference": str(args.reference),
+        "sampleRate": int(sample_rate),
+        "shape": list(cleaned.shape),
+        "channels": [
+            {
+                "channel": report.channel,
+                "inputRms": report.input_rms,
+                "predictedRms": report.predicted_rms,
+                "outputRms": report.output_rms,
+                "reductionDb": report.reduction_db,
+                "phaseMapping": [
+                    {"frequencyHz": frequency, "phaseRadians": phase, "magnitude": magnitude}
+                    for frequency, phase, magnitude in report.phase_mapping
+                ],
+            }
+            for report in reports
+        ],
+        "notes": "Known program/reference bleed is transformed, mapped into each mic channel, subtracted, and exported as phase/frequency evidence for runtime fitting.",
+    }
+    report_path = args.report or output.with_suffix(".program-reference.json")
+    write_json(report_path, result)
+    print(json.dumps(result, indent=2))
+
+
 def infer_anchor_channels(profile):
     anchors = []
     for mic in profile["microphones"]:
@@ -2037,6 +2096,19 @@ def main():
     p.add_argument("--envelope-floor", type=float, default=1e-5)
     p.add_argument("--limit-peak", type=float, default=0.98)
     p.set_defaults(func=cmd_suppress_room)
+
+    p = sub.add_parser("suppress-reference", help="Subtract known speaker/program reference bleed from an aligned field and export phase mapping.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--input", type=Path, required=True)
+    p.add_argument("--reference", type=Path, required=True)
+    p.add_argument("--output", type=Path)
+    p.add_argument("--report", type=Path)
+    p.add_argument("--channel", type=int, action="append")
+    p.add_argument("--window-size", type=int, default=2048)
+    p.add_argument("--overlap", type=int, default=1536)
+    p.add_argument("--regularization", type=float, default=1e-6)
+    p.add_argument("--subtraction-strength", type=float, default=0.85)
+    p.set_defaults(func=cmd_suppress_reference)
 
     args = parser.parse_args()
     args.func(args)

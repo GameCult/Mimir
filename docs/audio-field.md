@@ -174,6 +174,14 @@ Suppress room/transient witness energy before FOA encoding:
 
 This first suppression pass treats the Focusrite dialogue anchors as wanted direct sources and the camera mics as room/transient witnesses. It attenuates witness-heavy broadband transients, lightly subtracts witness room energy from anchors, and writes a JSON report. It is deliberately a stream-side cleanup stage, not physical cancellation in the room.
 
+Suppress known speaker/program bleed using output loopback as ground truth:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py suppress-reference --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-aligned.wav --reference .\calibration\runs\<run-folder>\ground_truth_loopback.wav --output .\calibration\runs\<run-folder>\field-program-suppressed.wav
+```
+
+This is the music-as-both-enemy-and-teacher path. The reference program audio is transformed into a time/frequency transfer estimate per mic channel, reconstructed as predicted bleed, subtracted from the aligned field, and exported as phase/frequency mapping evidence. A future live loop should publish the known program stem as its own OBS/Aquarium channel while using the same ground truth to keep learning the room.
+
 The `play-record` and `record-field` commands remain for a `shared-input-device` profile only. They deliberately refuse the distributed rig until an alignment stage emits one coherent six-channel WAV.
 
 ## Invariants
