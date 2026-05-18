@@ -27,6 +27,14 @@ Capture camera snapshots:
 .\.venv\Scripts\python.exe .\scripts\calibration_probe.py snapshot --max-index 10
 ```
 
+List DirectShow devices and options through FFmpeg:
+
+```powershell
+$ff = .\.venv\Scripts\python.exe -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+& $ff -hide_banner -list_devices true -f dshow -i dummy
+& $ff -hide_banner -list_options true -f dshow -i video="PS3 Eye Universal"
+```
+
 Probe camera mode behavior:
 
 ```powershell
@@ -180,17 +188,36 @@ After registration, this machine exposes:
 - `dshow:3`: PS3 Eye, default `640x480`, about 30 fps.
 - `dshow:4`: PS3 Eye, default `640x480`, about 30 fps.
 - Simultaneous three-second capture from indices 3 and 4 produced 90 frames each, about 29.8-30.0 fps.
+- DirectShow device names are `PS3 Eye Universal` and `PS3 Eye Universal2`; use these names when forcing high-rate modes through FFmpeg.
 
 Known caveats:
 
 - OpenCV `mode-probe` calls that set width/height/fps may time out against the PS3EyeDirectShow filter.
 - Parallel probes can race the same libusb/backend state and produce `Access is denied`; test PS3 Eye mode changes one handle at a time.
-- High-rate modes such as `320x240@60` or `320x240@120` remain unproven through the DirectShow path.
+- OpenCV by index does not negotiate high-rate PS3 Eye modes correctly. It can report a requested FPS while delivering the wrong shape or frame rate.
+- FFmpeg by DirectShow device name does negotiate the filter pins correctly. Verified modes:
+  - single `PS3 Eye Universal` at `640x480@30/40/50/60`; `640x480@60` delivered about 56 fps over three seconds
+  - single `PS3 Eye Universal` at `320x240@30/40/50/60`; `320x240@60` delivered 180 frames over three seconds
+  - single `PS3 Eye Universal2` at `640x480@60` and `320x240@60`; both delivered about 59-60 fps
+  - dual `640x480@60` delivered about 54-56 fps per Eye over five seconds
+  - dual `320x240@60` delivered 300 frames per Eye over five seconds
+- Requests above 60 fps through the installed DirectShow filter do not increase delivered frame rate. `320x240@70` still delivered about 60 fps; `640x480@70` delivered about 51-52 fps.
+
+Current tracking capture command shape:
+
+```powershell
+$ff = .\.venv\Scripts\python.exe -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+& $ff -hide_banner -f dshow -video_size 320x240 -framerate 60 -pixel_format bgr24 -i video="PS3 Eye Universal" -an -f rawvideo -
+& $ff -hide_banner -f dshow -video_size 320x240 -framerate 60 -pixel_format bgr24 -i video="PS3 Eye Universal2" -an -f rawvideo -
+```
+
+That command emits raw BGR frames to stdout. A real tracker should launch each FFmpeg capture as a child process, read fixed-size `320 * 240 * 3` frame packets, and timestamp packet arrival at the process boundary.
 
 Next escalation is no longer "find any video path." It is:
 
 - capture ChArUco intrinsics for `dshow:3` and `dshow:4` at the working default mode
-- test PS3 Eye high-rate mode negotiation sequentially, with no other process holding either Eye
+- use FFmpeg DirectShow capture for PS3 Eye tracking at `320x240@60`
+- patch/rebuild PS3EyeDirectShow if more than 60 fps is required; the installed filter advertises a practical 60 fps ceiling
 - keep Leap/Kiyos/PS3 Eyes split across USB root paths where possible
 
 Also test with one PS3 Eye unplugged and each camera connected directly to a motherboard USB 2.0/3.x port, not through a hub. A libusb issue report shows PS3 Eye/opentrack access can break when certain USB-C hubs are present, even when the camera itself is not plugged into that hub.

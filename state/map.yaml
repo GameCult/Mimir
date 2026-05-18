@@ -44,7 +44,7 @@ active_subgoals:
   - Smoke-test each audio endpoint in OBS and tune latency.
   - Decide whether an OBS source generator or plugin investigation is justified.
   - Evaluate the Ambisonic AquaSynth path as a separate synchronized multichannel audio pipeline; do not treat heterogeneous mic feeds as raw first-order ambisonic A-format without geometry, calibration, and a shared clock.
-  - Build the six-microphone/two-speaker audio-field sidecar around one clocked capture path, explicit geometry, speaker calibration, and FOA AmbiX output.
+  - Build the six-microphone/two-speaker audio-field sidecar around the actual distributed camera/Focusrite clocks, explicit geometry, speaker calibration, delay/SRO alignment, and FOA AmbiX output.
 
 research:
   ambisonic_aquasynth:
@@ -122,18 +122,27 @@ current_status:
     but fails frame reads across libusb-win32, libusbK, and WinUSB. The
     AllanCat PS3 Eye Universal Driver / PS3EyeDirectShow path now exposes both
     PS3 Eyes as DirectShow indices 3 and 4 after registering the source filter
-    for two cameras; both streams can run simultaneously at default 640x480
-    near 30 fps. High-FPS PS3 Eye mode control is not proven yet. Audio-field
-    scaffolding now exists as a separate sidecar:
-    six-mic/two-speaker profile, validation, calibration sweep capture/analysis,
-    raw field recording, and offline FOA AmbiX encoding. Current PortAudio
-    enumeration does not expose a matching six-channel WASAPI input, so live
-    field capture requires either a shared six-input device/profile or a
-    separately proven adaptive sync path for independent USB microphones.
+    for two cameras. OpenCV index capture is reliable at default 640x480 near
+    30 fps but does not negotiate high-rate modes correctly. FFmpeg DirectShow
+    capture by device name negotiates the filter pins properly: both Eyes can
+    run simultaneously at 320x240@60, and dual 640x480@60 lands around 54-56
+    fps per Eye. Requests above 60 do not increase delivered frame rate through
+    the installed filter. Audio-field scaffolding now exists as a separate sidecar
+    for the actual distributed rig: two Kiyo mics, two PS Eye mics, local
+    Focusrite ADC with a shielded cardioid near the host's face, neighbor
+    Focusrite ADC with a shotgun mic pointed at the co-streamer, and two local
+    speakers. The Focusrite mics are high-quality dialogue anchors; camera mics
+    provide spatial/context evidence. The tool refuses to treat independent
+    USB/network clocks as an Ambisonic field until they have been aligned and
+    resampled into one six-channel reference timeline.
   next_action: >
-    Capture ChArUco intrinsics for DirectShow indices 1-4, then test PS3 Eye
-    high-rate DirectShow mode negotiation sequentially after the baseline
-    640x480@30 path is no longer in doubt. In parallel, create local
-    config/audio-field.json, confirm whether one device exposes six synchronized
-    mic inputs, replace placeholder mic/speaker geometry with measured world
-    coordinates, then run the two-speaker calibration sweep.
+    Use FFmpeg DirectShow device names `PS3 Eye Universal` and `PS3 Eye
+    Universal2` for PS3 Eye tracking capture at 320x240@60, then capture
+    ChArUco intrinsics for DirectShow indices 1-4. If more than 60 fps is still
+    required, patch/rebuild PS3EyeDirectShow rather than asking OpenCV for a
+    mode the installed filter does not expose. In parallel, create local
+    config/audio-field.json, confirm local Kiyo/PS Eye/Focusrite device matches,
+    confirm the neighbor Focusrite shotgun capture/transport path, replace
+    placeholder mic/speaker geometry with measured world coordinates, then build
+    the delay/SRO alignment stage that emits one six-channel WAV for FOA
+    encoding.
