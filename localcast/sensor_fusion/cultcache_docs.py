@@ -23,6 +23,8 @@ LIVE_RENDER_FRAME_KEY = "localcast.visual.render-frame.live"
 RENDER_FRAME_SCHEMA_ID = "gamecult.localcast.visual.render_frame.v1"
 STREAM_STATUS_KEY = "localcast.visual.stream-status.live"
 STREAM_STATUS_SCHEMA_ID = "gamecult.localcast.visual.stream_status.v1"
+CLAP_EVENTS_KEY = "localcast.calibration.clap-events.live"
+CLAP_EVENTS_SCHEMA_ID = "gamecult.localcast.calibration.clap_events.v1"
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,26 @@ class CultStreamStatus:
     frame_source: str
     updated_monotonic_ns: int
     last_error: str
+
+
+@dataclass(frozen=True)
+class CultClapEvent:
+    stable_key: str
+    position_m: tuple[float, float, float]
+    acoustic_oracle_ns: int
+    visual_observed_ns: int
+    timing_uncertainty_us: float
+    visual_confidence: float
+    acoustic_confidence: float
+    camera_peaks: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class CultClapEventsFrame:
+    schema_version: str
+    frame_id: int
+    created_monotonic_ns: int
+    events: tuple[CultClapEvent, ...]
 
 
 def _pack(value: Any) -> bytes:
@@ -148,6 +170,50 @@ def _decode_status(raw: Any) -> CultStreamStatus:
     )
 
 
+def _encode_clap_event(event: CultClapEvent) -> list[Any]:
+    return [
+        event.stable_key,
+        list(event.position_m),
+        event.acoustic_oracle_ns,
+        event.visual_observed_ns,
+        event.timing_uncertainty_us,
+        event.visual_confidence,
+        event.acoustic_confidence,
+        list(event.camera_peaks),
+    ]
+
+
+def _decode_clap_event(raw: Any) -> CultClapEvent:
+    return CultClapEvent(
+        stable_key=str(raw[0]),
+        position_m=(float(raw[1][0]), float(raw[1][1]), float(raw[1][2])),
+        acoustic_oracle_ns=int(raw[2]),
+        visual_observed_ns=int(raw[3]),
+        timing_uncertainty_us=float(raw[4]),
+        visual_confidence=float(raw[5]),
+        acoustic_confidence=float(raw[6]),
+        camera_peaks=tuple(dict(item) for item in raw[7]),
+    )
+
+
+def _encode_clap_events_frame(frame: CultClapEventsFrame) -> list[Any]:
+    return [
+        frame.schema_version,
+        frame.frame_id,
+        frame.created_monotonic_ns,
+        [_encode_clap_event(event) for event in frame.events],
+    ]
+
+
+def _decode_clap_events_frame(raw: Any) -> CultClapEventsFrame:
+    return CultClapEventsFrame(
+        schema_version=str(raw[0]),
+        frame_id=int(raw[1]),
+        created_monotonic_ns=int(raw[2]),
+        events=tuple(_decode_clap_event(item) for item in raw[3]),
+    )
+
+
 RENDER_FRAME_DOCUMENT = define_document_type(
     "localcast.visual.render_frame",
     encode=_encode_render_frame,
@@ -162,6 +228,15 @@ STREAM_STATUS_DOCUMENT = define_document_type(
     encode=_encode_status,
     decode=_decode_status,
     name=lambda status: STREAM_STATUS_KEY if isinstance(status, CultStreamStatus) else None,
+    payload_encoder=_pack,
+    payload_decoder=_unpack,
+)
+
+CLAP_EVENTS_DOCUMENT = define_document_type(
+    "localcast.calibration.clap_events",
+    encode=_encode_clap_events_frame,
+    decode=_decode_clap_events_frame,
+    name=lambda frame: CLAP_EVENTS_KEY if isinstance(frame, CultClapEventsFrame) else None,
     payload_encoder=_pack,
     payload_decoder=_unpack,
 )
@@ -184,6 +259,7 @@ def _open_visual_cache_once(path: Path) -> CultCache:
         CultCache.builder()
         .register_document_type(RENDER_FRAME_DOCUMENT)
         .register_document_type(STREAM_STATUS_DOCUMENT)
+        .register_document_type(CLAP_EVENTS_DOCUMENT)
         .add_generic_store(SingleFileMessagePackBackingStore(path))
         .build()
     )
@@ -270,3 +346,48 @@ def put_stream_status(path: Path, status: CultStreamStatus) -> None:
         cache.put(STREAM_STATUS_DOCUMENT, STREAM_STATUS_KEY, status)
 
     _retry_cache_io(operation)
+
+
+def make_clap_events_frame(*, frame_id: int, events: list[Any] | tuple[Any, ...]) -> CultClapEventsFrame:
+    return CultClapEventsFrame(
+        schema_version=CLAP_EVENTS_SCHEMA_ID,
+        frame_id=int(frame_id),
+        created_monotonic_ns=time.monotonic_ns(),
+        events=tuple(
+            CultClapEvent(
+                stable_key=str(event.stable_key),
+                position_m=tuple(float(value) for value in event.position_m),
+                acoustic_oracle_ns=int(event.acoustic_oracle_ns),
+                visual_observed_ns=int(event.visual_observed_ns),
+                timing_uncertainty_us=float(event.timing_uncertainty_us),
+                visual_confidence=float(event.visual_confidence),
+                acoustic_confidence=float(event.acoustic_confidence),
+                camera_peaks=tuple(
+                    {
+                        "sensorId": peak.sensor_id,
+                        "timestampNs": int(peak.timestamp_ns),
+                        "uv": [float(peak.uv[0]), float(peak.uv[1])],
+                        "score": float(peak.score),
+                    }
+                    for peak in event.camera_peaks
+                ),
+            )
+            for event in events
+        ),
+    )
+
+
+def put_live_clap_events(path: Path, frame: CultClapEventsFrame) -> None:
+    def operation() -> None:
+        cache = open_visual_cache(path)
+        cache.put(CLAP_EVENTS_DOCUMENT, CLAP_EVENTS_KEY, frame)
+
+    _retry_cache_io(operation)
+
+
+def get_live_clap_events(path: Path) -> CultClapEventsFrame | None:
+    def operation() -> CultClapEventsFrame | None:
+        cache = open_visual_cache(path)
+        return cache.get(CLAP_EVENTS_DOCUMENT, CLAP_EVENTS_KEY)
+
+    return _retry_cache_io(operation)

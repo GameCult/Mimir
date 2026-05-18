@@ -65,6 +65,7 @@ flowchart TD
 - `localcast.sensor_fusion.camera_control` owns measurement-quality policy: luminance, clipping, contrast, and sharpness in; normalized exposure/gain/focus commands out. Driver adapters own translating those commands to OpenCV, DirectShow, vendor tools, or no-op mocks.
 - `localcast.sensor_fusion.dense_stereo` owns a debug CPU reference for dense calibrated RGB surface claims. It is useful for tests and shader parity, but the live million-splat path belongs to Aquarium/GPU compute.
 - `localcast.sensor_fusion.active_illumination` owns deliberate light pulses as calibration telemetry. A Tuya bulb is an optional local-network actuator, not a rendering authority; its pulse timestamps are evidence for camera exposure/depth response.
+- `localcast.sensor_fusion.clap_calibration` owns deliberate clap detection: chirplet-synced audio transients nominate oracle timestamps, camera frame windows around that oracle look for motion derivatives, calibrated camera peaks triangulate the impact point, and only audio-plus-visual agreement becomes a clap calibration event.
 - `localcast.sensor_fusion.render_bridge` owns the in-process render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
 - `localcast.sensor_fusion.cultcache_docs` owns the typed CultCache document boundary for live visual state.
 - `localcast.sensor_fusion.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out.
@@ -123,6 +124,17 @@ LocalCastBridge TrackCache
 ```
 
 `RenderFramePacket` is the in-process shape. The live boundary is now a typed CultCache MessagePack document, with CultNet `document_put` as the intended process/network API boundary. JSON render-frame files are compatibility scaffolding only.
+
+Clap calibration events use the same typed-state rule. A clap is not every sharp
+audio transient. The detector first finds a sharp broadband audio onset in the
+audio oracle timeline, then opens a short camera window around that timestamp
+and looks for high frame-derivative peaks per camera. At least the configured
+minimum number of cameras must agree; when a calibrated rig is available, their
+motion centroids are triangulated into a world-space impact point. The typed
+`localcast.calibration.clap_events` document carries stable event id, acoustic
+oracle time, visual observed time, timing uncertainty, confidence, world
+position, and the contributing camera peaks. Aquarium consumes those events as
+high-confidence calibration constraints beside ultrasonic chirplet room evidence.
 
 The current streamable cut is:
 

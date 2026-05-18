@@ -46,6 +46,14 @@ Live files:
 - payload: MessagePack array, decoded as `CultStreamStatus`
 - owns: sender heartbeat and renderer health
 
+`localcast.calibration.clap_events`
+
+- schema id: `gamecult.localcast.calibration.clap_events.v1`
+- key: `localcast.calibration.clap-events.live`
+- payload: MessagePack array, decoded as `CultClapEventsFrame`
+- owns: deliberate clap calibration events aligned against the audio timing oracle
+- fields: stable key, world position, acoustic oracle timestamp, visual observed timestamp, timing uncertainty in microseconds, visual/acoustic confidence, and contributing camera motion peaks
+
 ## CultNet Boundary
 
 The API boundary is CultNet document replication, not ad hoc file polling:

@@ -12,6 +12,7 @@ from localcast.sensor_fusion import (
     CameraModel,
     CameraIntrinsics,
     CameraQualityTarget,
+    ClapDetectorConfig,
     DenseStereoConfig,
     FusionConfig,
     Observation2D,
@@ -21,14 +22,19 @@ from localcast.sensor_fusion import (
     RenderPointPacket,
     SensorRig,
     SpoutOutputConfig,
+    TimestampedFrame,
     TrackCache,
+    detect_clap_events,
     frame_to_vertex_array,
     dense_stereo_points,
+    get_live_clap_events,
     get_live_render_frame,
     lower_frame_to_screen_brushes,
     lower_points_to_render_frame,
     match_surface_features,
     overlay_audio_events,
+    make_clap_events_frame,
+    put_live_clap_events,
     put_live_render_frame,
     remote_video_artifact_for_present_time,
     solve_common_space_from_fixed_board,
@@ -244,6 +250,98 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(3, loaded.frame_id)
         self.assertEqual(1, len(loaded.points))
         self.assertEqual("ball", loaded.points[0].stable_key)
+
+    def test_clap_detector_promotes_audio_transient_with_camera_motion(self):
+        left = camera("left", -0.25)
+        right = camera("right", 0.25)
+        rig = SensorRig(
+            cameras={"left": left, "right": right},
+            config=FusionConfig(max_pair_dt_ns=40_000_000, max_reprojection_error_px=2.0),
+        )
+        target = np.array([0.02, 0.01, 2.0])
+        sample_rate = 48_000
+        start_ns = 1_000_000_000
+        clap_sample = 960
+        oracle_ns = start_ns + round(clap_sample * 1_000_000_000 / sample_rate)
+        field = np.zeros((4096, 4), dtype=np.float32)
+        field[clap_sample] = np.array([0.85, -0.75, 0.6, -0.55], dtype=np.float32)
+
+        frames = {}
+        for cam in (left, right):
+            uv = cam.project_world(target)
+            previous = np.zeros((cam.height, cam.width), dtype=np.float32)
+            current = previous.copy()
+            x, y = int(round(uv[0])), int(round(uv[1]))
+            current[y - 2 : y + 3, x - 2 : x + 3] = 1.0
+            frames[cam.sensor_id] = (
+                TimestampedFrame(cam.sensor_id, oracle_ns - 8_000_000, previous),
+                TimestampedFrame(cam.sensor_id, oracle_ns + 8_000_000, current),
+            )
+
+        events = detect_clap_events(
+            field,
+            sample_rate,
+            frames,
+            audio_time_ns=start_ns,
+            rig=rig,
+            config=ClapDetectorConfig(
+                audio_window_samples=128,
+                audio_hop_samples=32,
+                audio_onset_ratio=3.0,
+                min_audio_energy=1.0e-6,
+                min_camera_motion_score=0.2,
+            ),
+        )
+
+        self.assertEqual(1, len(events))
+        event = events[0]
+        np.testing.assert_allclose(np.asarray(event.position_m), target, atol=0.04)
+        self.assertLessEqual(abs(oracle_ns - event.acoustic_oracle_ns), 3_000_000)
+        self.assertGreater(event.acoustic_confidence, 0.5)
+        self.assertGreater(event.visual_confidence, 0.5)
+
+    def test_clap_events_round_trip_through_typed_cultcache_doc(self):
+        left = camera("left", -0.25)
+        sample_rate = 48_000
+        start_ns = 2_000_000_000
+        clap_sample = 960
+        oracle_ns = start_ns + round(clap_sample * 1_000_000_000 / sample_rate)
+        field = np.zeros((2048, 1), dtype=np.float32)
+        field[clap_sample] = 1.0
+        previous = np.zeros((left.height, left.width), dtype=np.float32)
+        current = previous.copy()
+        current[100:108, 120:128] = 1.0
+        events = detect_clap_events(
+            field,
+            sample_rate,
+            {
+                "left": (
+                    TimestampedFrame("left", oracle_ns - 5_000_000, previous),
+                    TimestampedFrame("left", oracle_ns + 5_000_000, current),
+                )
+            },
+            audio_time_ns=start_ns,
+            rig=None,
+            config=ClapDetectorConfig(
+                audio_window_samples=128,
+                audio_hop_samples=32,
+                audio_onset_ratio=3.0,
+                min_audio_energy=1.0e-6,
+                min_camera_count=1,
+                min_camera_motion_score=0.2,
+            ),
+        )
+        frame = make_clap_events_frame(frame_id=12, events=events)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "visual-state.msgpack"
+            put_live_clap_events(path, frame)
+            loaded = get_live_clap_events(path)
+
+        self.assertIsNotNone(loaded)
+        self.assertEqual(12, loaded.frame_id)
+        self.assertEqual(1, len(loaded.events))
+        self.assertEqual(events[0].acoustic_oracle_ns, loaded.events[0].acoustic_oracle_ns)
 
     def test_audio_source_events_overlay_against_audio_alignment_time(self):
         frame = RenderFramePacket(
