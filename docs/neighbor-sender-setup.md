@@ -81,7 +81,11 @@ Start launcher:
   winget alias is not reliably available in interactive `cmd.exe`
 - sets Windows default render to `Voicemeeter VAIO3 Input`
 - sets Windows default capture to `Voicemeeter Out B3`
+- runs `scripts\configure-voicemeeter-routing.ps1` to route Voicemeeter virtual
+  inputs to B3 and unmute output buses before FFmpeg starts
 - writes FFmpeg logs under `C:\Meta\LocalCastBridge\logs`
+  - Voicemeeter routing details are written to
+    `C:\Meta\LocalCastBridge\logs\voicemeeter-routing.log`
 
 Stop launcher:
 
@@ -105,6 +109,11 @@ Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)
 ```
 
 LocalCastBridge uses that device as `system-loopback`.
+
+The routing script can prove that Voicemeeter accepted the B3 route, but B3
+will still be silent when no app audio is actually playing into the default
+render device. In that case the co-streamer Focusrite bleed remains the
+alignment witness until real loopback audio appears.
 
 Do not rename the loopback in config unless the replacement appears in:
 

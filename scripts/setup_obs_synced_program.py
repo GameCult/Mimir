@@ -93,6 +93,8 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
         channel_fallback=np.zeros((frame_count, 2), dtype=np.float32),
         placeholder_status="placeholder-silence-until-neighbor-loopback-is-captured-and-aligned",
         synced_status="synced-from-neighbor-loopback-surface",
+        low_signal_status="captured-but-low-confidence-neighbor-loopback-is-near-silent",
+        min_rms=1e-4,
     )
 
     stems = [
@@ -342,13 +344,22 @@ def load_co_streamer_surface(
     channel_fallback: np.ndarray,
     placeholder_status: str,
     synced_status: str,
+    low_signal_status: str | None = None,
+    min_rms: float = 0.0,
 ) -> tuple[np.ndarray, str]:
     if not path.exists():
         return channel_fallback, placeholder_status
     loaded = load_optional_program_audio(path, sample_rate, frame_count)
     if np.asarray(channel_fallback).ndim == 1 and loaded.ndim == 2:
         loaded = np.mean(loaded, axis=1, dtype=np.float32)
+    if min_rms > 0.0 and rms(loaded) < float(min_rms):
+        return loaded, low_signal_status or placeholder_status
     return loaded, synced_status
+
+
+def rms(samples: np.ndarray) -> float:
+    samples = np.asarray(samples, dtype=np.float32)
+    return float(np.sqrt(np.mean(samples * samples))) if samples.size else 0.0
 
 
 def limit_peak(samples: np.ndarray, target: float = 0.98) -> np.ndarray:

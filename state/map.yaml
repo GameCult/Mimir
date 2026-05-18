@@ -212,7 +212,9 @@ current_status:
     except synchronized LocalCastBridge program surfaces. Co-streamer surface
     capture now records neighbor Focusrite and neighbor loopback while recording
     local loopback ground truth, then writes aligned co-streamer surface WAVs
-    for the stem packer. Missing synchronized neighbor feeds are explicit
+    for the stem packer. The neighbor desktop launcher now runs Voicemeeter
+    Remote routing so virtual inputs are sent to B3 before sender FFmpeg starts.
+    Missing synchronized neighbor feeds are explicit
     silent placeholders, not raw unsynchronized substitutes. The live producer currently uses synthetic calibrated
     observations through the real `SensorRig.fuse` path until camera detector
     observations replace them. Unit tests inject synthetic cameras and frames so
@@ -234,6 +236,6 @@ current_status:
     shotgun capture/transport path, replace placeholder mic/speaker geometry
     with measured world coordinates, then build the delay/SRO alignment stage
     that feeds the bounded field cache and emits aligned six-channel blocks for
-    FOA encoding. Fix the neighbor loopback routing so the remote loopback is a
-    real timing witness, then let the co-streamer surface family set the shared
-    presentation buffer horizon for audio stems, AmbiX, and remote video.
+    FOA encoding. Verify remote loopback again when actual neighbor app audio is
+    playing; if B3 remains silent with real app audio, replace the loopback
+    capture endpoint instead of widening OBS to unsynchronized raw sources.

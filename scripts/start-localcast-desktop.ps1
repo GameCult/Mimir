@@ -6,11 +6,13 @@ $soundVolumeView = "C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Lin
 $ffmpeg = "C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe"
 $config = Join-Path $root "config\localcast.json"
 $senderStart = Join-Path $root "scripts\sender-start.ps1"
+$voicemeeterRouting = Join-Path $root "scripts\configure-voicemeeter-routing.ps1"
 
 Set-Location $root
 
 if (Test-Path -LiteralPath $voicemeeter) {
     Start-Process -FilePath $voicemeeter
+    Start-Sleep -Seconds 2
 } else {
     Write-Warning "Voicemeeter was not found at $voicemeeter"
 }
@@ -24,5 +26,10 @@ if (Test-Path -LiteralPath $soundVolumeView) {
     Write-Warning "SoundVolumeView was not found at $soundVolumeView"
 }
 
-& $senderStart -Config $config -FfmpegPath $ffmpeg
+if (Test-Path -LiteralPath $voicemeeterRouting) {
+    & $voicemeeterRouting
+} else {
+    Write-Warning "Voicemeeter routing script was not found at $voicemeeterRouting"
+}
 
+& $senderStart -Config $config -FfmpegPath $ffmpeg

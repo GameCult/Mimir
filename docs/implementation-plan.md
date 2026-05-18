@@ -32,6 +32,7 @@
 - OBS synchronized program surface:
   - `scripts/setup_obs_synced_program.py` derives OBS-controllable stems from an aligned program audio timeline: host voice, co-streamer voice, ambient, transients, co-streamer loopback, and local loopback.
   - `scripts/capture_co_streamer_surfaces.py` captures neighbor Focusrite and neighbor loopback with local loopback ground truth, estimates the late remote-family offset, and writes aligned co-streamer surfaces for the stem packer.
+  - `scripts/configure-voicemeeter-routing.ps1` is called by the neighbor desktop launcher to route Voicemeeter virtual inputs to B3 before FFmpeg starts.
   - The tool creates/updates local OBS Media Sources for those stems and mutes/disables raw unsynchronized inputs.
   - Strict mode disables every scene item except the synchronized LocalCastBridge program video and stem controls.
 

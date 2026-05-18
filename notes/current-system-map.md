@@ -122,6 +122,7 @@ Ownership:
 
 - `scripts/setup_obs_synced_program.py` owns packaging aligned program audio into OBS-controllable stems and muting/disabling raw unsynchronized OBS inputs.
 - `scripts/capture_co_streamer_surfaces.py` owns the late-arriving neighbor surface import: it captures neighbor Focusrite and neighbor loopback over SSH while recording local loopback, estimates the remote-family offset, and writes aligned co-streamer surfaces for the OBS stem packer.
+- `scripts/configure-voicemeeter-routing.ps1` owns the neighbor launcher-side route from Voicemeeter virtual inputs to B3, with a sender-side routing log.
 - OBS owns final source volume, track assignment, filters, and stream/record output.
 - Aquarium/Spout owns synchronized program video, not raw remote desktop capture.
 
