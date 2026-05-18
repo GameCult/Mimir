@@ -12,13 +12,18 @@ RUNS = ROOT / "calibration" / "runs"
 
 
 def utc_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 
 
 def run_dir(kind: str) -> Path:
-    path = RUNS / f"{utc_stamp()}-{kind}"
-    path.mkdir(parents=True, exist_ok=False)
-    return path
+    for suffix in ["", *[f"-{i}" for i in range(1, 100)]]:
+        path = RUNS / f"{utc_stamp()}-{kind}{suffix}"
+        try:
+            path.mkdir(parents=True, exist_ok=False)
+            return path
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"Could not create unique calibration run directory for {kind}")
 
 
 def write_json(path: Path, data) -> None:

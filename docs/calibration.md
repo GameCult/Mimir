@@ -71,14 +71,15 @@ Observed video access:
 
 - `dshow:0` / `msmf:0`: LeapUVC raw stereo IR image, visible as green/magenta packed output.
 - `dshow:1` / `msmf:1`: Razer Kiyo-class RGB camera.
-- `dshow:2`: second Razer Kiyo-class RGB camera, likely Kiyo Pro.
-- PS3 Eye video interfaces are attached but not usable yet. Both `USB\VID_1415&PID_2000&MI_00` devices report Windows problem code `28`, meaning the video-side driver is missing. Their audio interfaces are working through generic USB audio.
+- `dshow:2` / `msmf:2`: second Razer Kiyo-class RGB camera, likely Kiyo Pro.
+- `dshow:3`: first PS3 Eye through PS3 Eye Universal Driver / PS3EyeDirectShow.
+- `dshow:4`: second PS3 Eye through PS3 Eye Universal Driver / PS3EyeDirectShow.
 
 Mode probe notes:
 
 - `msmf:0` LeapUVC accepts a `320x240x120` request and reports about 115 fps, with rough OpenCV measured capture around 52 fps in the first short probe. Treat that as "tracking mode is plausible," not calibrated throughput.
 - Kiyo RGB devices produce snapshots, but initial isolated mode probes against Kiyo indices timed out. Do not trust FPS configuration for Kiyos until a backend-specific capture path is chosen.
-- PS3 Eye tracking modes cannot be tested until the open driver is installed for `MI_00`.
+- PS3 Eye default DirectShow capture works at `640x480` near 30 fps. High-FPS tracking modes are not proven yet; mode probes against the DirectShow filter can hang or collide with another open handle, so test them sequentially.
 
 Observed audio access over WASAPI at 48 kHz:
 
@@ -132,7 +133,7 @@ Do not install the driver over `MI_01`; that is the working generic USB audio in
 
 CL Eye / Code Laboratories is historical reference material only. Do not make this repo depend on a paid, stale, or redistributed proprietary driver. Reverse engineering should stay inside interoperability research boundaries; the live machine should prefer the open driver.
 
-Current post-install status:
+opentrack/libusb status:
 
 - Both PS3 Eye `MI_00` video interfaces are now bound as `libusb-win32 devices` and show `OK` in PnP.
 - `E:\Tools\opentrack\modules\ps3eye-mode-test.exe` sees the cameras well enough to enumerate good modes up to `320x240@205Hz` and `640x480@83Hz`.
@@ -156,11 +157,41 @@ Fallback results so far:
 - `WinUSB` with both live `MI_00` instances: opentrack mode test still reports all modes `GOOD`, but one camera open reports `Access is denied` and frame streaming still repeats `payload error, data[1]=78/79`.
 - `libusb-win32`, `libusbK`, and `WinUSB` have all failed frame reads through opentrack on this machine.
 
-Next escalation is no longer "try the other Zadig driver." It is either:
+That path is currently rejected for frame capture on this machine. Keep it as a mode-enumeration reference, not the live capture path.
 
-- test opentrack with exactly one PS3 Eye direct to motherboard and every other high-bandwidth camera unplugged
-- test a different PS3 Eye backend/library, such as PS3EYEDriver/PSMoveService-style access
-- abandon PS3 Eye video for v1 and use LeapUVC plus Kiyos for initial calibration/tracking while preserving the PS3 Eye driver notes as a rejected path until a cleaner backend is found
+Working DirectShow path:
+
+- Installed AllanCat `PS3 Eye Universal Driver` / `PS3EyeDirectShow` from `PS3EyeInstaller1.1.msi`.
+- Installed source filters:
+  - `C:\Program Files\PS3 Eye Universal Driver\PS3EyeSourceFilter64.dll`
+  - `C:\Program Files (x86)\PS3 Eye Universal Driver\PS3EyeSourceFilter.dll`
+- The filter's camera count is controlled by `ChangeCameraNumber.bat`, which unregisters/registers the source filter with `/i:<count>`.
+- With two cameras connected, register both filters for two cameras from an elevated shell:
+
+```powershell
+$dll32 = 'C:\Program Files (x86)\PS3 Eye Universal Driver\PS3EyeSourceFilter.dll'
+$dll64 = 'C:\Program Files\PS3 Eye Universal Driver\PS3EyeSourceFilter64.dll'
+Start-Process regsvr32.exe -ArgumentList "/n /i:2 `"$dll32`"" -Verb RunAs -Wait
+Start-Process regsvr32.exe -ArgumentList "/n /i:2 `"$dll64`"" -Verb RunAs -Wait
+```
+
+After registration, this machine exposes:
+
+- `dshow:3`: PS3 Eye, default `640x480`, about 30 fps.
+- `dshow:4`: PS3 Eye, default `640x480`, about 30 fps.
+- Simultaneous three-second capture from indices 3 and 4 produced 90 frames each, about 29.8-30.0 fps.
+
+Known caveats:
+
+- OpenCV `mode-probe` calls that set width/height/fps may time out against the PS3EyeDirectShow filter.
+- Parallel probes can race the same libusb/backend state and produce `Access is denied`; test PS3 Eye mode changes one handle at a time.
+- High-rate modes such as `320x240@60` or `320x240@120` remain unproven through the DirectShow path.
+
+Next escalation is no longer "find any video path." It is:
+
+- capture ChArUco intrinsics for `dshow:3` and `dshow:4` at the working default mode
+- test PS3 Eye high-rate mode negotiation sequentially, with no other process holding either Eye
+- keep Leap/Kiyos/PS3 Eyes split across USB root paths where possible
 
 Also test with one PS3 Eye unplugged and each camera connected directly to a motherboard USB 2.0/3.x port, not through a hub. A libusb issue report shows PS3 Eye/opentrack access can break when certain USB-C hubs are present, even when the camera itself is not plugged into that hub.
 

@@ -116,20 +116,24 @@ current_status:
     receiver OBS scene has matching Media Sources. Local calibration harness now
     has first physical-device access: LeapUVC raw IR video, two Razer Kiyo-class
     RGB cameras, all expected microphones, and Scarlett speaker output are
-    accessible; both PS3 Eye video interfaces are attached but missing their
-    video-side driver. LeapUVC MSMF mode probing accepts a 320x240x120 request
-    and reports about 115 fps, though measured OpenCV throughput is lower in the
-    first rough probe. PS3 Eye video interfaces now bind through libusb-win32
-    and opentrack enumerates high-rate modes, but frame reads fail while all
-    cameras sit on one external hub/root path; USB topology is now a live
-    suspect. Audio-field scaffolding now exists as a separate sidecar:
+    accessible. LeapUVC MSMF mode probing accepts a 320x240x120 request and
+    reports about 115 fps, though measured OpenCV throughput is lower in the
+    first rough probe. The opentrack/libusb PS3 Eye path still enumerates modes
+    but fails frame reads across libusb-win32, libusbK, and WinUSB. The
+    AllanCat PS3 Eye Universal Driver / PS3EyeDirectShow path now exposes both
+    PS3 Eyes as DirectShow indices 3 and 4 after registering the source filter
+    for two cameras; both streams can run simultaneously at default 640x480
+    near 30 fps. High-FPS PS3 Eye mode control is not proven yet. Audio-field
+    scaffolding now exists as a separate sidecar:
     six-mic/two-speaker profile, validation, calibration sweep capture/analysis,
     raw field recording, and offline FOA AmbiX encoding. Current PortAudio
     enumeration does not expose a matching six-channel WASAPI input, so live
     field capture requires either a shared six-input device/profile or a
     separately proven adaptive sync path for independent USB microphones.
   next_action: >
-    In parallel with the camera driver's next cut, create local
+    Capture ChArUco intrinsics for DirectShow indices 1-4, then test PS3 Eye
+    high-rate DirectShow mode negotiation sequentially after the baseline
+    640x480@30 path is no longer in doubt. In parallel, create local
     config/audio-field.json, confirm whether one device exposes six synchronized
     mic inputs, replace placeholder mic/speaker geometry with measured world
     coordinates, then run the two-speaker calibration sweep.
