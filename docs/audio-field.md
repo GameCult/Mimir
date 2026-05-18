@@ -82,6 +82,31 @@ Generate a calibration sweep without touching hardware:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py make-stimulus --profile .\config\audio-field.json
 ```
 
+Create a distributed run folder that can accept one WAV per mic:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py init-run --profile .\config\audio-field.json
+```
+
+Record all locally visible distributed mics for a deadline calibration pass:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py record-local-calibration --profile .\config\audio-field.json --seconds 10
+```
+
+Record local mics while playing one speaker sweep. Use the output rate that the device probe says is real:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py record-local-calibration --profile .\config\audio-field.json --seconds 10 --play-sweep --speaker-channel 0 --output-rate 44100
+```
+
+After dropping the neighbor Focusrite WAV into the run's `sources/` folder, estimate sweep arrivals and assemble the aligned field:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-distributed --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
+.\.venv\Scripts\python.exe .\scripts\audio_field.py assemble-aligned --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
+```
+
 Encode an offline aligned six-channel WAV to FOA AmbiX:
 
 ```powershell

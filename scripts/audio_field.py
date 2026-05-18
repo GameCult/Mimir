@@ -2,6 +2,7 @@ import argparse
 import json
 import math
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -182,6 +183,14 @@ def find_devices(sd, spec, direction: str):
     return matches
 
 
+def match_indexed_device(sd, spec, direction: str):
+    matches = find_devices(sd, spec, direction)
+    match_index = int(spec.get("matchIndex", 0))
+    if match_index < 0 or match_index >= len(matches):
+        raise SystemExit(f"No {direction} device match {match_index} for {spec!r}; found {len(matches)}")
+    return matches[match_index]
+
+
 def cmd_devices(args):
     sd = sounddevice_module()
     hostapis = sd.query_hostapis()
@@ -345,6 +354,207 @@ def cmd_make_stimulus(args):
     print(out)
 
 
+def cmd_init_run(args):
+    profile = load_profile(args.profile)
+    out = args.output or run_dir("audio-distributed")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "sources").mkdir(exist_ok=True)
+    sweep = make_sweep(profile)
+    wavfile.write(out / "calibration-sweep.wav", int(profile["sampleRate"]), sweep)
+    sources = []
+    for mic in sorted(profile["microphones"], key=mic_channel):
+        sources.append(
+            {
+                "micId": mic["id"],
+                "fieldChannel": mic_channel(mic),
+                "machine": mic.get("machine"),
+                "clockDomain": mic.get("clockDomain"),
+                "expectedFile": f"sources/{mic['id']}.wav",
+                "role": mic.get("role"),
+            }
+        )
+    write_json(
+        out / "manifest.json",
+        {
+            "kind": "distributed-audio-calibration",
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "profile": str(args.profile),
+            "sampleRate": int(profile["sampleRate"]),
+            "stimulus": "calibration-sweep.wav",
+            "sources": sources,
+            "notes": "Drop one mono WAV per mic at expectedFile, or use record-local-calibration for local mics.",
+        },
+    )
+    print(out)
+
+
+def cmd_record_local_calibration(args):
+    profile = load_profile(args.profile)
+    sd = sounddevice_module()
+    out = args.output or run_dir("audio-local-calibration")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "sources").mkdir(exist_ok=True)
+
+    input_rate = int(args.input_rate or profile["sampleRate"])
+    seconds = float(args.seconds)
+    frames = int(input_rate * seconds)
+    local_mics = [mic for mic in profile["microphones"] if mic.get("machine") == args.machine]
+    grouped = local_device_groups(sd, local_mics)
+    captures = {
+        key: np.zeros((frames, group["channels"]), dtype=np.float32)
+        for key, group in grouped.items()
+        if key != "_missing"
+    }
+    positions = {key: 0 for key in captures}
+
+    streams = []
+
+    def make_callback(key):
+        def callback(indata, frame_count, time_info, status):
+            pos = positions[key]
+            end = min(pos + frame_count, frames)
+            if end > pos:
+                captures[key][pos:end, :] = indata[: end - pos, :]
+            positions[key] = end
+
+        return callback
+
+    for key, group in grouped.items():
+        if key == "_missing":
+            continue
+        streams.append(
+            sd.InputStream(
+                device=group["device"]["index"],
+                channels=group["channels"],
+                samplerate=input_rate,
+                dtype="float32",
+                callback=make_callback(key),
+            )
+        )
+
+    stimulus_file = None
+    output_device = None
+    output_rate = None
+    if args.play_sweep:
+        output_device = match_device(sd, profile["outputDevice"], "output")
+        output_rate = int(args.output_rate or output_device["default_samplerate"] or profile["sampleRate"])
+        sweep = make_sweep_at_rate(profile, output_rate)
+        playback = np.zeros((len(sweep), int(profile["outputDevice"]["channels"])), dtype=np.float32)
+        speaker_channel = int(args.speaker_channel)
+        playback[:, speaker_channel] = sweep
+        stimulus_file = "calibration-sweep-played.wav"
+        wavfile.write(out / stimulus_file, output_rate, sweep)
+
+    try:
+        for stream in streams:
+            stream.start()
+        if args.play_sweep:
+            sd.play(playback, samplerate=output_rate, device=output_device["index"], blocking=True)
+            remaining = max(0.0, seconds - len(playback) / output_rate)
+            time.sleep(remaining)
+        else:
+            time.sleep(seconds)
+    finally:
+        for stream in streams:
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
+
+    sources = []
+    for missing in grouped.get("_missing", []):
+        sources.append(
+            {
+                "micId": missing["micId"],
+                "fieldChannel": missing["fieldChannel"],
+                "machine": args.machine,
+                "status": "missing-device",
+                "error": missing["error"],
+            }
+        )
+    for mic in sorted(local_mics, key=mic_channel):
+        if any(missing["micId"] == mic["id"] for missing in grouped.get("_missing", [])):
+            continue
+        group_key = device_group_key(grouped, mic)
+        data = captures[group_key][:, int(mic.get("device", {}).get("channel", 0))]
+        file_name = f"sources/{mic['id']}.wav"
+        wavfile.write(out / file_name, input_rate, data.astype(np.float32))
+        sources.append(
+            {
+                "micId": mic["id"],
+                "fieldChannel": mic_channel(mic),
+                "machine": mic.get("machine"),
+                "clockDomain": mic.get("clockDomain"),
+                "file": file_name,
+                "sampleRate": input_rate,
+            }
+        )
+
+    if stimulus_file is None:
+        sweep = make_sweep(profile)
+        stimulus_file = "calibration-sweep-reference.wav"
+        wavfile.write(out / stimulus_file, int(profile["sampleRate"]), sweep)
+
+    write_json(
+        out / "manifest.json",
+        {
+            "kind": "distributed-audio-calibration",
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "profile": str(args.profile),
+            "sampleRate": int(profile["sampleRate"]),
+            "inputSampleRate": input_rate,
+            "stimulus": stimulus_file,
+            "sources": sources,
+            "playback": {
+                "played": bool(args.play_sweep),
+                "speakerChannel": int(args.speaker_channel) if args.play_sweep else None,
+                "outputDevice": summarize_device(output_device) if output_device else None,
+                "outputSampleRate": output_rate,
+            },
+        },
+    )
+    print(out)
+
+
+def make_sweep_at_rate(profile, sample_rate):
+    clone = dict(profile)
+    clone["sampleRate"] = int(sample_rate)
+    return make_sweep(clone)
+
+
+def local_device_groups(sd, mics):
+    groups = {"_missing": []}
+    for mic in mics:
+        try:
+            device = match_indexed_device(sd, mic.get("device", {}), "input")
+        except SystemExit as exc:
+            groups["_missing"].append(
+                {
+                    "micId": mic["id"],
+                    "fieldChannel": mic_channel(mic),
+                    "error": str(exc),
+                }
+            )
+            continue
+        channel = int(mic.get("device", {}).get("channel", 0))
+        key = str(device["index"])
+        if key not in groups:
+            groups[key] = {"device": device, "mics": [], "channels": channel + 1}
+        groups[key]["mics"].append(mic)
+        groups[key]["channels"] = max(groups[key]["channels"], channel + 1)
+    return groups
+
+
+def device_group_key(groups, mic):
+    for key, group in groups.items():
+        if key == "_missing":
+            continue
+        if any(item["id"] == mic["id"] for item in group["mics"]):
+            return key
+    raise KeyError(mic["id"])
+
+
 def cmd_play_record(args):
     profile = load_profile(args.profile)
     if profile.get("captureMode", "shared-input-device") == "distributed-clocks":
@@ -433,6 +643,112 @@ def cmd_analyze_calibration(args):
     print(json.dumps(output, indent=2))
 
 
+def cmd_analyze_distributed(args):
+    profile = load_profile(args.profile)
+    run = args.run
+    manifest = read_json(run / "manifest.json")
+    stim_rate, stimulus = wavfile.read(run / manifest["stimulus"])
+    stimulus = as_float_matrix(stimulus).reshape(-1)
+    results = {
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "sourceRun": str(run),
+        "referenceMicId": args.reference_mic or profile.get("clockModel", {}).get("referenceMicId"),
+        "sources": [],
+    }
+    detections = {}
+    for source in manifest.get("sources", []):
+        file_name = source.get("file") or source.get("expectedFile")
+        if not file_name or not (run / file_name).exists():
+            results["sources"].append({"micId": source.get("micId"), "status": "missing", "file": file_name})
+            continue
+        rec_rate, recorded = wavfile.read(run / file_name)
+        recorded = as_float_matrix(recorded).reshape(-1)
+        stim_for_rate = resample_if_needed(stimulus, int(stim_rate), int(rec_rate))
+        delay, peak, polarity = estimate_delay(recorded, stim_for_rate)
+        rms = float(np.sqrt(np.mean(recorded * recorded))) if recorded.size else 0.0
+        item = {
+            "micId": source["micId"],
+            "fieldChannel": source.get("fieldChannel"),
+            "status": "ok",
+            "file": file_name,
+            "sampleRate": int(rec_rate),
+            "sweepStartSample": int(delay),
+            "sweepStartMs": 1000.0 * delay / rec_rate,
+            "peak": float(abs(peak)),
+            "polarity": int(polarity),
+            "rms": rms,
+        }
+        results["sources"].append(item)
+        detections[source["micId"]] = item
+
+    reference = detections.get(results["referenceMicId"])
+    if reference:
+        ref_time = reference["sweepStartSample"] / reference["sampleRate"]
+        for item in results["sources"]:
+            if item.get("status") != "ok":
+                continue
+            item_time = item["sweepStartSample"] / item["sampleRate"]
+            item["relativeDelaySeconds"] = item_time - ref_time
+            item["relativeDelaySamplesAtFieldRate"] = int(round((item_time - ref_time) * int(profile["sampleRate"])))
+
+    write_json(run / "distributed-analysis.json", results)
+    print(json.dumps(results, indent=2))
+
+
+def cmd_assemble_aligned(args):
+    profile = load_profile(args.profile)
+    run = args.run
+    manifest = read_json(run / "manifest.json")
+    analysis_path = args.analysis or run / "distributed-analysis.json"
+    analysis = read_json(analysis_path) if analysis_path.exists() else {"sources": []}
+    field_rate = int(profile["sampleRate"])
+    seconds = args.seconds
+    source_by_mic = {item.get("micId"): item for item in manifest.get("sources", [])}
+    analysis_by_mic = {item.get("micId"): item for item in analysis.get("sources", []) if item.get("status") == "ok"}
+
+    channels = []
+    report = []
+    max_len = 0
+    for mic in sorted(profile["microphones"], key=mic_channel):
+        source = source_by_mic.get(mic["id"])
+        if not source:
+            channels.append(None)
+            report.append({"micId": mic["id"], "status": "missing-source-entry"})
+            continue
+        file_name = source.get("file") or source.get("expectedFile")
+        if not file_name or not (run / file_name).exists():
+            channels.append(None)
+            report.append({"micId": mic["id"], "status": "missing-file", "file": file_name})
+            continue
+        rec_rate, data = wavfile.read(run / file_name)
+        mono = as_float_matrix(data).reshape(-1)
+        mono = resample_if_needed(mono, int(rec_rate), field_rate)
+        delay = int(mic.get("delaySamples", 0))
+        if mic["id"] in analysis_by_mic:
+            delay += int(analysis_by_mic[mic["id"]].get("relativeDelaySamplesAtFieldRate", 0))
+        aligned = apply_integer_delay(mono, -delay)
+        aligned *= db_to_amp(float(mic.get("gainDb", 0.0))) * int(mic.get("polarity", 1))
+        channels.append(aligned)
+        max_len = max(max_len, len(aligned))
+        report.append({"micId": mic["id"], "status": "ok", "file": file_name, "appliedDelaySamples": delay})
+
+    if seconds:
+        frame_count = int(float(seconds) * field_rate)
+    else:
+        frame_count = max_len
+    field = np.zeros((frame_count, len(channels)), dtype=np.float32)
+    for index, channel in enumerate(channels):
+        if channel is None:
+            continue
+        count = min(frame_count, len(channel))
+        field[:count, index] = channel[:count]
+    output = args.output or run / "field-aligned.wav"
+    wavfile.write(output, field_rate, field)
+    result = {"output": str(output), "sampleRate": field_rate, "shape": list(field.shape), "sources": report}
+    write_json(run / "aligned-field-manifest.json", result)
+    print(json.dumps(result, indent=2))
+
+
 def as_float_matrix(data):
     arr = np.asarray(data)
     if arr.ndim == 1:
@@ -442,6 +758,15 @@ def as_float_matrix(data):
     else:
         arr = arr.astype(np.float32)
     return arr
+
+
+def resample_if_needed(samples, source_rate, target_rate):
+    if int(source_rate) == int(target_rate):
+        return samples.astype(np.float32)
+    gcd = math.gcd(int(source_rate), int(target_rate))
+    up = int(target_rate) // gcd
+    down = int(source_rate) // gcd
+    return signal.resample_poly(samples.astype(np.float32), up, down).astype(np.float32)
 
 
 def estimate_delay(recorded, sweep):
@@ -621,6 +946,22 @@ def main():
     p.add_argument("--output", type=Path)
     p.set_defaults(func=cmd_make_stimulus)
 
+    p = sub.add_parser("init-run", help="Create a distributed calibration run folder and manifest.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--output", type=Path)
+    p.set_defaults(func=cmd_init_run)
+
+    p = sub.add_parser("record-local-calibration", help="Record local distributed mic sources, optionally while playing one speaker sweep.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--output", type=Path)
+    p.add_argument("--machine", default="local")
+    p.add_argument("--seconds", type=float, default=8.0)
+    p.add_argument("--input-rate", type=int)
+    p.add_argument("--play-sweep", action="store_true")
+    p.add_argument("--speaker-channel", type=int, default=0)
+    p.add_argument("--output-rate", type=int)
+    p.set_defaults(func=cmd_record_local_calibration)
+
     p = sub.add_parser("play-record", help="Play each speaker calibration sweep while recording all microphones.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
     p.add_argument("--output", type=Path)
@@ -634,6 +975,20 @@ def main():
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
     p.add_argument("--run", type=Path, required=True)
     p.set_defaults(func=cmd_analyze_calibration)
+
+    p = sub.add_parser("analyze-distributed", help="Detect calibration sweep arrival in one WAV per mic and estimate relative delays.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--run", type=Path, required=True)
+    p.add_argument("--reference-mic")
+    p.set_defaults(func=cmd_analyze_distributed)
+
+    p = sub.add_parser("assemble-aligned", help="Assemble a distributed run into one aligned six-channel WAV.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--run", type=Path, required=True)
+    p.add_argument("--analysis", type=Path)
+    p.add_argument("--output", type=Path)
+    p.add_argument("--seconds", type=float)
+    p.set_defaults(func=cmd_assemble_aligned)
 
     p = sub.add_parser("record-field", help="Record the raw synchronized six-channel microphone field.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
