@@ -21,6 +21,7 @@ from localcast.sensor_fusion import (
     lower_points_to_render_frame,
     overlay_audio_events,
     put_live_render_frame,
+    remote_video_artifact_for_present_time,
 )
 from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
@@ -231,6 +232,19 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual("audio-event-1", augmented.points[0].stable_key)
         self.assertTrue(status.synchronized)
         self.assertEqual(1, status.overlay_event_count)
+
+    def test_remote_video_artifact_reports_sync_delta(self):
+        artifact = remote_video_artifact_for_present_time(
+            source_name="Neighbor PC - Video",
+            url="srt://0.0.0.0:5100?mode=listener&latency=120000",
+            present_time_ns=1_250_000_000,
+            observed_time_ns=1_100_000_000,
+            expected_latency_ns=120_000_000,
+            tolerance_ns=40_000_000,
+        )
+
+        self.assertEqual(30_000_000, artifact.delta_ns)
+        self.assertTrue(artifact.synchronized)
 
 
 if __name__ == "__main__":

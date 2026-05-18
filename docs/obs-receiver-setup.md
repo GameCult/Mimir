@@ -28,6 +28,18 @@ If using a passphrase, append:
 
 OBS should be open before the sender starts if OBS is the SRT listener. If a source gets wedged, deactivate and reactivate the Media Source before changing ports; port churn is a symptom, not a configuration strategy.
 
+## Synchronization
+
+The video SRT source is a timed media artifact in the Aquarium path, not just scenery in OBS. Keep the listener URL and latency aligned with `stream_spout.py`:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\stream_spout.py `
+  --remote-video-url "srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000" `
+  --remote-video-latency-ms 250
+```
+
+The live sync heartbeat is `calibration/runs/av-sync-status.json`. `remote-video-latency-ms` is presentation delay, not merely the SRT URL's `latency` parameter. Check `remote_video.delta_ns` before trusting the composite. If that number grows, fix the configured media delay or the ingest path instead of eyeballing it in OBS like a doomed little stage magician.
+
 ## Source Layout
 
 Recommended OBS scene:
@@ -39,4 +51,3 @@ Husband PC - Voice       Media Source, audio only, monitor as needed
 ```
 
 Mute the video source if it carries no audio. Keep audio filters on the separate audio sources.
-

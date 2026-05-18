@@ -60,9 +60,23 @@ For the deadline rig, both producer and renderer share the local CultCache file.
 
 ## Audio Synchronization
 
-`stream_spout.py` can now read `calibration/runs/audio-state.msgpack` and `calibration/runs/audio-events.msgpack` while it renders the visual frame. It selects source events against `RenderFramePacket.audio_alignment_time_ns`, adds synchronized audio-event points to the render packet, and writes `calibration/runs/av-sync-status.json` with the active visual frame id, audio frame id, audio delta, event count, and overlay count.
+`stream_spout.py` can now read `calibration/runs/audio-state.msgpack` and `calibration/runs/audio-events.msgpack` while it renders the visual frame. It selects source events against `RenderFramePacket.audio_alignment_time_ns`, adds synchronized audio-event points to the render packet, and writes `calibration/runs/av-sync-status.json` with the active visual frame id, audio frame id, audio delta, event count, overlay count, and remote video sync status.
 
 The audio bed still travels as `localcast.audio.spatial_frame`; the visual render packet only receives renderer-visible transient geometry. That keeps the machine legible: audio owns sound, source-event analysis owns acoustic facts, Aquarium owns the final pixel/audio package for OBS.
+
+The neighbor SRT video feed is also a timed media artifact. For the deadline path, `stream_spout.py` records its URL and expected SRT latency in the sync status:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\stream_spout.py `
+  --source cultcache `
+  --frame-cache .\calibration\runs\visual-state.msgpack `
+  --audio-cache .\calibration\runs\audio-state.msgpack `
+  --audio-events-cache .\calibration\runs\audio-events.msgpack `
+  --remote-video-url "srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000" `
+  --remote-video-latency-ms 250
+```
+
+That does not make the SRT feed disappear into the point renderer. It makes the dependency honest: OBS/Aquarium must delay or present the remote video according to the same presentation clock as the Spout texture and AmbiX bed. This value is presentation delay, not only the SRT socket's `latency` parameter.
 
 ## Cut Line
 
@@ -71,3 +85,4 @@ The audio bed still travels as `localcast.audio.spatial_frame`; the visual rende
 - Cut next: JSON render-frame polling once no script depends on it.
 - Do not add a second scene authority. Sensor fusion owns world claims; renderer owns pixels.
 - Do not make OBS synchronize separate sources. Aquarium receives synchronized visual/audio documents and emits the OBS-facing package.
+- Do not treat the neighbor SRT video feed as untimed scenery. It is a presentation artifact and belongs in the same sync status as audio and render frames.

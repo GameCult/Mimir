@@ -10,7 +10,8 @@ import time
 
 import numpy as np
 
-from .audio_overlay import AudioVisualSyncStatus, overlay_audio_events
+from .audio_overlay import AudioVisualSyncStatus, overlay_audio_events, with_remote_video_status
+from .media_artifacts import remote_video_artifact_for_present_time
 from .render_bridge import RenderFramePacket, RenderPointPacket, load_render_frame
 from .cultcache_docs import CultStreamStatus, get_live_render_frame, put_stream_status
 
@@ -62,6 +63,10 @@ class CultCacheRenderFrameSource:
         audio_cache: Path | None = None,
         audio_events_cache: Path | None = None,
         audio_event_window_ns: int = 120_000_000,
+        remote_video_name: str | None = None,
+        remote_video_url: str | None = None,
+        remote_video_latency_ns: int = 120_000_000,
+        remote_video_tolerance_ns: int = 120_000_000,
     ) -> None:
         self.path = path
         self.demo_if_missing = demo_if_missing
@@ -69,6 +74,10 @@ class CultCacheRenderFrameSource:
         self.audio_cache = audio_cache
         self.audio_events_cache = audio_events_cache
         self.audio_event_window_ns = int(audio_event_window_ns)
+        self.remote_video_name = remote_video_name
+        self.remote_video_url = remote_video_url
+        self.remote_video_latency_ns = int(remote_video_latency_ns)
+        self.remote_video_tolerance_ns = int(remote_video_tolerance_ns)
         self._mtime_ns: int | None = None
         self._frame: RenderFramePacket | None = None
         self._audio_mtime_ns: int | None = None
@@ -101,6 +110,17 @@ class CultCacheRenderFrameSource:
             audio_frame,
             window_ns=self.audio_event_window_ns,
         )
+        remote_video = None
+        if self.remote_video_name and self.remote_video_url:
+            remote_video = remote_video_artifact_for_present_time(
+                source_name=self.remote_video_name,
+                url=self.remote_video_url,
+                present_time_ns=frame.present_time_ns,
+                observed_time_ns=frame.source_time_max_ns,
+                expected_latency_ns=self.remote_video_latency_ns,
+                tolerance_ns=self.remote_video_tolerance_ns,
+            )
+        status = with_remote_video_status(status, remote_video)
         self.last_sync_status = status
         return augmented
 
@@ -285,6 +305,16 @@ def write_sync_status(path: Path, status: AudioVisualSyncStatus | None) -> None:
                 "audio_delta_ns": status.audio_delta_ns,
                 "source_event_count": status.source_event_count,
                 "overlay_event_count": status.overlay_event_count,
+                "remote_video": None
+                if status.remote_video is None
+                else {
+                    "source_name": status.remote_video.source_name,
+                    "url": status.remote_video.url,
+                    "expected_latency_ns": status.remote_video.expected_latency_ns,
+                    "present_time_ns": status.remote_video.present_time_ns,
+                    "delta_ns": status.remote_video.delta_ns,
+                    "synchronized": status.remote_video.synchronized,
+                },
                 "synchronized": status.synchronized,
                 "updated_monotonic_ns": time.monotonic_ns(),
             },

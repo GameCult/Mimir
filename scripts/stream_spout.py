@@ -36,6 +36,11 @@ def main() -> None:
     parser.add_argument("--audio-events-cache", default=str(ROOT / "calibration" / "runs" / "audio-events.msgpack"))
     parser.add_argument("--audio-event-window-ms", type=float, default=120.0)
     parser.add_argument("--no-audio-overlay", action="store_true")
+    parser.add_argument("--remote-video-name", default="Neighbor PC - Video")
+    parser.add_argument("--remote-video-url", default="srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000")
+    parser.add_argument("--remote-video-latency-ms", type=float, default=250.0)
+    parser.add_argument("--remote-video-tolerance-ms", type=float, default=120.0)
+    parser.add_argument("--no-remote-video-sync", action="store_true")
     parser.add_argument("--source", choices=["cultcache", "json"], default="cultcache")
     parser.add_argument("--duration", type=float, help="Optional run duration in seconds for smoke tests.")
     args = parser.parse_args()
@@ -61,6 +66,10 @@ def main() -> None:
             audio_cache=None if args.no_audio_overlay else Path(args.audio_cache),
             audio_events_cache=None if args.no_audio_overlay else Path(args.audio_events_cache),
             audio_event_window_ns=int(float(args.audio_event_window_ms) * 1_000_000),
+            remote_video_name=None if args.no_remote_video_sync else args.remote_video_name,
+            remote_video_url=None if args.no_remote_video_sync else args.remote_video_url,
+            remote_video_latency_ns=int(float(args.remote_video_latency_ms) * 1_000_000),
+            remote_video_tolerance_ns=int(float(args.remote_video_tolerance_ms) * 1_000_000),
         )
         frame_source_name = str(frame_cache_path)
     else:

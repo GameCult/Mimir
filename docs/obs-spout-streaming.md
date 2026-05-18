@@ -42,7 +42,11 @@ Start the Spout sender:
   --height 1080 `
   --fps 60 `
   --status .\calibration\runs\stream-spout-status.json `
-  --status-cache .\calibration\runs\visual-stream-status.msgpack
+  --status-cache .\calibration\runs\visual-stream-status.msgpack `
+  --audio-cache .\calibration\runs\audio-state.msgpack `
+  --audio-events-cache .\calibration\runs\audio-events.msgpack `
+  --remote-video-url "srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000" `
+  --remote-video-latency-ms 250
 ```
 
 Start the current live fusion producer:
@@ -74,6 +78,14 @@ Fields:
 
 The typed status document is written to `calibration/runs/visual-stream-status.msgpack`. The JSON file is only the blunt terminal heartbeat.
 
+The sync heartbeat is written to `calibration/runs/av-sync-status.json`. It includes the audio frame delta and the remote SRT video artifact:
+
+- `remote_video.source_name`: OBS/Aquarium-facing source name.
+- `remote_video.url`: the SRT listener URL for the neighbor feed.
+- `remote_video.expected_latency_ns`: configured presentation delay, not just the SRT socket latency.
+- `remote_video.delta_ns`: difference between the render presentation clock and the expected remote video presentation time.
+- `remote_video.synchronized`: whether the delta is inside tolerance.
+
 ## Invariants
 
 - OBS receives a named Spout texture.
@@ -81,6 +93,7 @@ The typed status document is written to `calibration/runs/visual-stream-status.m
 - CultCache MessagePack documents are the live local state authority. CultNet document replication is the process/network boundary.
 - JSON render-frame polling is compatibility scaffolding only.
 - Latency is explicit in the packet timestamps. The renderer may buffer, but it may not silently erase the visual/audio alignment fields.
+- The neighbor SRT video feed is a timed artifact. OBS must not be left to eyeball-sync it against the Spout texture and AmbiX bed.
 
 ## Aquarium Cut
 

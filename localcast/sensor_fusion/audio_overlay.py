@@ -7,6 +7,7 @@ import sys
 import numpy as np
 
 from .render_bridge import RenderFramePacket, RenderPointPacket
+from .media_artifacts import RemoteVideoArtifact
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,7 @@ class AudioVisualSyncStatus:
     audio_delta_ns: int | None
     source_event_count: int
     overlay_event_count: int
+    remote_video: RemoteVideoArtifact | None
     synchronized: bool
 
 
@@ -38,7 +40,7 @@ def overlay_audio_events(
     max_events: int = 128,
 ) -> tuple[RenderFramePacket, AudioVisualSyncStatus]:
     if events is None:
-        return frame, sync_status(frame, None, 0, 0, False)
+        return frame, sync_status(frame, None, 0, 0, None, False)
     overlay = select_events_for_visual_frame(frame, events, audio_frame, int(window_ns), int(max_events))
     points = list(frame.points)
     for event in overlay:
@@ -70,7 +72,7 @@ def overlay_audio_events(
             target_height=frame.target_height,
             points=tuple(points),
         ),
-        sync_status(frame, audio_frame, len(events.events), len(overlay), True),
+        sync_status(frame, audio_frame, len(events.events), len(overlay), None, True),
     )
 
 
@@ -114,9 +116,11 @@ def sync_status(
     audio_frame: CultSpatialAudioFrame | None,
     source_event_count: int,
     overlay_event_count: int,
+    remote_video: RemoteVideoArtifact | None,
     synchronized: bool,
 ) -> AudioVisualSyncStatus:
     audio_delta_ns = None if audio_frame is None else frame.audio_alignment_time_ns - audio_frame.audio_time_ns
+    remote_ok = True if remote_video is None else remote_video.synchronized
     return AudioVisualSyncStatus(
         visual_frame_id=frame.frame_id,
         visual_present_time_ns=frame.present_time_ns,
@@ -125,6 +129,23 @@ def sync_status(
         audio_delta_ns=audio_delta_ns,
         source_event_count=source_event_count,
         overlay_event_count=overlay_event_count,
-        synchronized=bool(synchronized and audio_frame is not None),
+        remote_video=remote_video,
+        synchronized=bool(synchronized and audio_frame is not None and remote_ok),
     )
 
+
+def with_remote_video_status(status: AudioVisualSyncStatus | None, remote_video: RemoteVideoArtifact | None) -> AudioVisualSyncStatus | None:
+    if status is None:
+        return None
+    remote_ok = True if remote_video is None else remote_video.synchronized
+    return AudioVisualSyncStatus(
+        visual_frame_id=status.visual_frame_id,
+        visual_present_time_ns=status.visual_present_time_ns,
+        audio_frame_id=status.audio_frame_id,
+        audio_time_ns=status.audio_time_ns,
+        audio_delta_ns=status.audio_delta_ns,
+        source_event_count=status.source_event_count,
+        overlay_event_count=status.overlay_event_count,
+        remote_video=remote_video,
+        synchronized=bool(status.synchronized and remote_ok),
+    )
