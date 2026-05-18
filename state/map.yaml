@@ -156,6 +156,9 @@ research:
       capture adapters, detection, triangulation, track caching, and point-cloud
       export as separate testable authorities. This follows the fractal-domain
       cache rule: semantic claims first, cached backend lowerings second.
+      Stochastic transient matching now lowers descriptor-consistent image
+      observations into scene-ray hypotheses and a multi-LOD world-space cache
+      for Aquarium compute-shader reconciliation.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >

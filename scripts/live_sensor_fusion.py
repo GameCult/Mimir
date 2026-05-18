@@ -19,10 +19,13 @@ from localcast.sensor_fusion import (
     RenderFramePacket,
     RenderPointPacket,
     SensorRig,
+    SurfaceFeatureObservation,
     dense_stereo_points,
     measure_frame_quality,
+    multilod_cache_from_points,
     put_live_render_frame,
     lower_points_to_render_frame,
+    stochastic_transient_matches,
 )
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
 
@@ -73,6 +76,41 @@ def synthetic_observations(rig: SensorRig, now_s: float, count: int) -> list[Obs
         observations.append(Observation2D("ps3eye_left", marker, timestamp, left.project_world(point), 0.95))
         observations.append(Observation2D("ps3eye_right", marker, timestamp, right.project_world(point), 0.92))
     return observations
+
+
+def stochastic_surface_observations(observations: list[Observation2D]) -> list[SurfaceFeatureObservation]:
+    surface: list[SurfaceFeatureObservation] = []
+    for obs in observations:
+        marker_hash = abs(hash(obs.marker_id)) % 255
+        descriptor = np.full(32, marker_hash, dtype=np.uint8)
+        surface.append(
+            SurfaceFeatureObservation(
+                sensor_id=obs.sensor_id,
+                feature_id=obs.marker_id,
+                timestamp_ns=obs.timestamp_ns,
+                uv=obs.uv,
+                descriptor=descriptor,
+                confidence=obs.confidence,
+            )
+        )
+    return surface
+
+
+def transient_match_render_points(matches, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
+    points: list[RenderPointPacket] = []
+    for match in matches:
+        confidence = max(0.0, min(1.0, float(match.confidence)))
+        points.append(
+            render_point(
+                f"stochastic:{match.stable_key}",
+                match.xyz,
+                0.018 + 0.020 * confidence,
+                (1.0, 0.88, 0.32, 0.35 + 0.55 * confidence),
+                confidence,
+                timestamp_ns,
+            )
+        )
+    return tuple(points)
 
 
 def reconstruction_targets(now_s: float, count: int) -> list[np.ndarray]:
@@ -710,6 +748,8 @@ def main() -> None:
     parser.add_argument("--leap-height", type=int, default=240)
     parser.add_argument("--leap-fps", type=float, default=120.0)
     parser.add_argument("--leap-step", type=int, default=12)
+    parser.add_argument("--lod-cache", default=str(ROOT / "calibration" / "runs" / "visual-lod-cache.json"))
+    parser.add_argument("--no-stochastic-transients", action="store_true")
     args = parser.parse_args()
 
     left = camera("ps3eye_left", -0.25)
@@ -723,6 +763,7 @@ def main() -> None:
     start = time.monotonic()
     frame_id = 0
     cache_path = Path(args.cache)
+    lod_cache_path = Path(args.lod_cache)
     lock = acquire_runtime_lock(cache_path.with_suffix(".producer.lock"))
     if lock is None:
         return
@@ -755,6 +796,19 @@ def main() -> None:
                 break
             observations = synthetic_observations(rig, now, args.points)
             result = rig.fuse(observations)
+            transient_matches = () if args.no_stochastic_transients else stochastic_transient_matches(
+                stochastic_surface_observations(observations),
+                rig.cameras,
+                max_descriptor_distance=0.0,
+                max_reprojection_error_px=0.05,
+                samples_per_observation=2,
+                seed=frame_id,
+            )
+            multilod_cache_from_points(
+                tuple(result.points) + tuple(transient_matches),
+                levels=(0.02, 0.08, 0.32),
+                created_monotonic_ns=time.monotonic_ns(),
+            ).write_json(lod_cache_path)
             frame = lower_points_to_render_frame(
                 result.points,
                 render_config,
@@ -767,6 +821,7 @@ def main() -> None:
             if leap_sampler is not None and leap_sampler.last_timestamp_ns is not None:
                 timestamp_ns = max(timestamp_ns, leap_sampler.last_timestamp_ns)
             support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
+            stochastic_points = transient_match_render_points(transient_matches, timestamp_ns)
             frame = RenderFramePacket(
                 schema=frame.schema,
                 frame_id=frame.frame_id,
@@ -778,7 +833,7 @@ def main() -> None:
                 spout_sender_name=frame.spout_sender_name,
                 target_width=frame.target_width,
                 target_height=frame.target_height,
-                points=leap_points + rgb_points + support_points,
+                points=leap_points + rgb_points + stochastic_points + support_points,
             )
             put_live_render_frame(cache_path, frame)
             frame_id += 1

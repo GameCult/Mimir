@@ -124,6 +124,7 @@ def main() -> None:
             "audio-phase-field.msgpack",
             "audio-mic-field.msgpack",
             "active-probes/active-probes.jsonl",
+            "visual-lod-cache.json",
             "stream-spout-status.json",
             "av-sync-status.json",
         ]

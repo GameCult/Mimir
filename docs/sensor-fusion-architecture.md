@@ -47,9 +47,12 @@ flowchart TD
     H["SensorRig calibration"] --> I["Fusion core"]
     F --> I
     I --> J["TrackCache"]
+    F --> Q["stochastic transient matcher"]
+    Q --> R["scene-ray / LOD cache"]
     G --> K["RGB surface claims"]
     J --> L["PointCloud PLY"]
     J --> M["CultCache RenderFrame document"]
+    R --> M
     K --> M
     M --> N["Spout sink / Aquarium GPU renderer"]
     N --> O["Spout2 sender texture"]
@@ -62,6 +65,7 @@ flowchart TD
 - `localcast.sensor_fusion.adapters` owns driver-facing frame ingress. Its first concrete adapter is an FFmpeg raw BGR reader for the PS3 Eye DirectShow path.
 - `localcast.sensor_fusion.calibration_space` owns fixed-board common-space calibration: ChArUco corner observations plus intrinsics become `CameraModel.world_from_sensor` transforms in one room frame.
 - `localcast.sensor_fusion.surface_features` owns cross-view feature observations, descriptor matching, and triangulated surface tracks. It consumes calibrated cameras; it does not invent camera geometry.
+- `localcast.sensor_fusion.stochastic_mapping` owns transient feature hypothesis sampling, image-pixel to scene-ray lowering, learned image-ray bias cells, and multi-LOD scene cache packets for later compute-shader reconciliation.
 - `localcast.sensor_fusion.camera_control` owns measurement-quality policy: luminance, clipping, contrast, and sharpness in; normalized exposure/gain/focus commands out. Driver adapters own translating those commands to OpenCV, DirectShow, vendor tools, or no-op mocks.
 - `localcast.sensor_fusion.dense_stereo` owns a debug CPU reference for dense calibrated RGB surface claims. It is useful for tests and shader parity, but the live million-splat path belongs to Aquarium/GPU compute.
 - `localcast.sensor_fusion.active_illumination` owns deliberate light pulses as calibration telemetry. A Tuya bulb is an optional local-network actuator, not a rendering authority; its pulse timestamps are evidence for camera exposure/depth response.
@@ -83,6 +87,8 @@ For this project:
 sensor observation
 -> calibrated world ray
 -> triangulated marker claim
+-> stochastic transient hypothesis
+-> multi-LOD scene cache
 -> cached track
 -> render frame packet
 -> Aquarium brush/splat packet
@@ -91,6 +97,8 @@ sensor observation
 ```
 
 The cache is not a bucket. `TrackCache` has a TTL and confidence update rule so the system can buffer and converge without pretending stale points are fresh. Later GPU buffers should mirror this shape: observation SoA, track SoA, brush packet SoA.
+
+`visual-lod-cache.json` is the current CPU-authored shape for the next compute pass. It is not the final renderer. It groups stochastic/fused scene claims into multiple world-space voxel sizes, carrying center, radius, confidence, count, and source-time bounds so an Aquarium compute shader can reconcile fine and coarse claims without pulling the whole observation history through the renderer.
 
 ## Test Boundaries
 
@@ -102,6 +110,7 @@ The core can be tested without cameras:
 - raw-frame adapter can be tested from an in-memory byte stream
 - fixed-board ChArUco observations solve camera poses into the expected common frame
 - matched surface descriptors triangulate to a known 3D point
+- stochastic transient matches triangulate descriptor-consistent rays and lower them into a multi-LOD scene cache
 - adaptive camera control responds to overexposure without live hardware
 - dense stereo turns shifted textured camera pairs into calibrated RGB surface claims
 
@@ -165,13 +174,14 @@ That lets the final stream compositor buffer point-cloud visuals until they alig
 1. Capture ChArUco intrinsics for each camera with `scripts/charuco_calibration.py calibrate`.
 2. Capture fixed-board observations from every camera and solve shared extrinsics with `scripts/solve_common_camera_space.py`.
 3. Use `scripts/triangulate_surface_features.py` on calibrated image pairs to prove real cross-view surface tracks before promoting the matcher into the live producer.
-4. Move dense matching from CPU block search to GPU-resident stereo/flow so the million-sample target is not murdered by Python loops.
-5. If a Tuya light is available on the local network, run `scripts/pulse_tuya_light.py` with its local key and align pulse timestamps against camera brightness response.
-6. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
-7. Record an observation run from the two PS3 Eyes into typed CultCache docs.
-8. Feed `RenderFramePacket` into Aquarium Engine.
-9. Publish the render target as a Spout2 sender and receive it in OBS.
-10. Replace compatibility JSON render-frame paths once no deadline script depends on them.
+4. Replace the synthetic stochastic transient observations in `scripts/live_sensor_fusion.py` with real ORB/flow observations from PS3 Eye/Kiyo frames.
+5. Move dense matching and LOD reconciliation from CPU block search/JSON to GPU-resident stereo/flow and compute-shader cache reduction so the million-sample target is not murdered by Python loops.
+6. If a Tuya light is available on the local network, run `scripts/pulse_tuya_light.py` with its local key and align pulse timestamps against camera brightness response.
+7. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
+8. Record an observation run from the two PS3 Eyes into typed CultCache docs.
+9. Feed `RenderFramePacket` and the multi-LOD scene cache into Aquarium Engine.
+10. Publish the render target as a Spout2 sender and receive it in OBS.
+11. Replace compatibility JSON render-frame paths once no deadline script depends on them.
 
 ## References
 

@@ -37,6 +37,17 @@ from .surface_features import (
     orb_surface_observations,
     triangulate_surface_tracks,
 )
+from .stochastic_mapping import (
+    ImageRayBiasMap,
+    LODCell,
+    MultiLODSceneCache,
+    RayBiasSample,
+    SceneRay,
+    TransientMatchHypothesis,
+    multilod_cache_from_points,
+    pixel_scene_ray,
+    stochastic_transient_matches,
+)
 from .audio_overlay import AudioVisualSyncStatus, overlay_audio_events
 from .media_artifacts import RemoteVideoArtifact, remote_video_artifact_for_present_time
 from .clap_calibration import (
@@ -90,6 +101,12 @@ __all__ = [
     "FrameQuality",
     "SurfaceFeatureObservation",
     "SurfaceFeatureTrack",
+    "ImageRayBiasMap",
+    "LODCell",
+    "MultiLODSceneCache",
+    "RayBiasSample",
+    "SceneRay",
+    "TransientMatchHypothesis",
     "AudioVisualSyncStatus",
     "AudioTransientCandidate",
     "CameraMotionPeak",
@@ -117,7 +134,10 @@ __all__ = [
     "match_surface_features",
     "measure_frame_quality",
     "orb_surface_observations",
+    "multilod_cache_from_points",
     "overlay_audio_events",
+    "pixel_scene_ray",
+    "stochastic_transient_matches",
     "detect_audio_transients",
     "detect_camera_motion_peaks",
     "detect_clap_events",
