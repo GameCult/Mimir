@@ -24,6 +24,30 @@ class SpoutOutputConfig:
     fps: float = 60.0
     point_scale: float = 1.0
     demo_point_count: int = 4096
+    camera_preset: str = "kiyo-mid-deru"
+    max_render_points: int = 5000
+
+
+@dataclass(frozen=True)
+class VirtualCamera:
+    eye: tuple[float, float, float]
+    target: tuple[float, float, float]
+    up: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    fov_degrees: float = 62.0
+    near_m: float = 0.05
+    far_m: float = 50.0
+
+    @property
+    def eye_np(self) -> np.ndarray:
+        return np.asarray(self.eye, dtype=np.float64)
+
+    @property
+    def target_np(self) -> np.ndarray:
+        return np.asarray(self.target, dtype=np.float64)
+
+    @property
+    def up_np(self) -> np.ndarray:
+        return np.asarray(self.up, dtype=np.float64)
 
 
 @dataclass(frozen=True)
@@ -201,14 +225,52 @@ def frame_to_vertex_array(frame: RenderFramePacket, point_scale: float = 1.0) ->
     return vertices
 
 
+def frame_with_point_budget(frame: RenderFramePacket, max_points: int) -> RenderFramePacket:
+    if max_points <= 0 or len(frame.points) <= max_points:
+        return frame
+    priority_count = max(1, int(max_points * 0.55))
+    temporal_count = max(0, max_points - priority_count)
+    priority = sorted(
+        frame.points,
+        key=lambda point: (-float(point.confidence), stable_hash(point.stable_key, 0)),
+    )[:priority_count]
+    selected_keys = {point.stable_key for point in priority}
+    remainder = [point for point in frame.points if point.stable_key not in selected_keys]
+    temporal = sorted(
+        remainder,
+        key=lambda point: stable_hash(point.stable_key, frame.frame_id),
+    )[:temporal_count]
+    points = priority + temporal
+    points = sorted(points, key=lambda point: point.stable_key)
+    return RenderFramePacket(
+        schema=frame.schema,
+        frame_id=frame.frame_id,
+        created_monotonic_ns=frame.created_monotonic_ns,
+        source_time_min_ns=frame.source_time_min_ns,
+        source_time_max_ns=frame.source_time_max_ns,
+        present_time_ns=frame.present_time_ns,
+        audio_alignment_time_ns=frame.audio_alignment_time_ns,
+        spout_sender_name=frame.spout_sender_name,
+        target_width=frame.target_width,
+        target_height=frame.target_height,
+        points=tuple(points),
+    )
+
+
+def stable_hash(key: str, salt: int) -> int:
+    digest = hashlib.blake2s(f"{salt}:{key}".encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, "little")
+
+
 def lower_frame_to_screen_brushes(
     frame: RenderFramePacket,
     width: int,
     height: int,
     point_scale: float = 1.0,
+    camera: VirtualCamera | None = None,
 ) -> tuple[ScreenBrushPacket, ...]:
     brushes: list[ScreenBrushPacket] = []
-    view_proj = camera_matrix(0.0, width / max(1, height))
+    view_proj = camera_matrix(0.0, width / max(1, height), camera)
     for point in frame.points:
         projected = project_world_to_screen(point.xyz, view_proj, width, height)
         if projected is None:
@@ -229,16 +291,22 @@ def lower_frame_to_screen_brushes(
     return tuple(sorted(brushes, key=lambda brush: brush.depth, reverse=True))
 
 
-def rasterize_frame_rgba(frame: RenderFramePacket, width: int, height: int, point_scale: float = 1.0) -> np.ndarray:
+def rasterize_frame_rgba(
+    frame: RenderFramePacket,
+    width: int,
+    height: int,
+    point_scale: float = 1.0,
+    camera: VirtualCamera | None = None,
+) -> np.ndarray:
     image = np.zeros((height, width, 4), dtype=np.uint8)
     image[:, :, 0] = 7
     image[:, :, 1] = 10
     image[:, :, 2] = 15
     image[:, :, 3] = 255
-    draw_reconstruction_guides(image)
-    draw_floor_shadows(image, frame, point_scale)
+    draw_reconstruction_guides(image, camera)
+    draw_floor_shadows(image, frame, point_scale, camera)
     canvas = image.astype(np.float32) / 255.0
-    for brush in lower_frame_to_screen_brushes(frame, width, height, point_scale):
+    for brush in lower_frame_to_screen_brushes(frame, width, height, point_scale, camera):
         composite_gaussian_brush(canvas, brush)
     return np.clip(canvas * 255.0, 0.0, 255.0).astype(np.uint8)
 
@@ -303,11 +371,11 @@ def project_world_to_screen(
     return px, py, float(ndc[2]), float(clip[3])
 
 
-def draw_reconstruction_guides(image: np.ndarray) -> None:
+def draw_reconstruction_guides(image: np.ndarray, camera: VirtualCamera | None = None) -> None:
     import cv2
 
     height, width = image.shape[:2]
-    view_proj = camera_matrix(0.0, width / max(1, height))
+    view_proj = camera_matrix(0.0, width / max(1, height), camera)
     grid_color = (36, 50, 62, 255)
     wall_color = (24, 36, 50, 255)
     for x in np.linspace(-1.8, 1.8, 13):
@@ -319,11 +387,16 @@ def draw_reconstruction_guides(image: np.ndarray) -> None:
     for z in np.linspace(0.35, 2.1, 6):
         draw_world_line(image, view_proj, np.array([-1.8, 1.15, z]), np.array([1.8, 1.15, z]), wall_color, 1)
 
-def draw_floor_shadows(image: np.ndarray, frame: RenderFramePacket, point_scale: float) -> None:
+def draw_floor_shadows(
+    image: np.ndarray,
+    frame: RenderFramePacket,
+    point_scale: float,
+    camera: VirtualCamera | None = None,
+) -> None:
     import cv2
 
     height, width = image.shape[:2]
-    view_proj = camera_matrix(0.0, width / max(1, height))
+    view_proj = camera_matrix(0.0, width / max(1, height), camera)
     for point in frame.points:
         xyz = np.asarray(point.xyz, dtype=np.float64)
         if xyz[2] <= 0.10 or point.stable_key.startswith(("sensor:", "frustum:")):
@@ -443,6 +516,7 @@ class OpenGLSpoutPointRenderer:
         self.vbo = None
         self.vao = None
         self.frames_sent = 0
+        self.last_render_point_count = 0
 
     def __enter__(self) -> "OpenGLSpoutPointRenderer":
         self.open()
@@ -565,20 +639,23 @@ class OpenGLSpoutPointRenderer:
         assert self.vbo is not None
         assert self.vao is not None
 
-        vertices = frame_to_vertex_array(frame, self.config.point_scale)
+        render_frame = frame_with_point_budget(frame, self.config.max_render_points)
+        self.last_render_point_count = len(render_frame.points)
+        vertices = frame_to_vertex_array(render_frame, self.config.point_scale)
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, self.config.width, self.config.height)
         glClearColor(0.025, 0.035, 0.048, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glUseProgram(self.program)
-        view_proj = camera_matrix(time.monotonic(), self.config.width / max(1, self.config.height))
+        camera = camera_preset(self.config.camera_preset, time.monotonic())
+        view_proj = camera_matrix(time.monotonic(), self.config.width / max(1, self.config.height), camera)
         glUniformMatrix4fv(glGetUniformLocation(self.program, "u_view_proj"), 1, GL_TRUE, view_proj.astype(np.float32))
         glUniform2f(glGetUniformLocation(self.program, "u_viewport"), float(self.config.width), float(self.config.height))
         glBindVertexArray(self.vao)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_DYNAMIC_DRAW)
         glDrawArrays(GL_POINTS, 0, len(vertices))
-        image = rasterize_frame_rgba(frame, self.config.width, self.config.height, self.config.point_scale)
+        image = rasterize_frame_rgba(render_frame, self.config.width, self.config.height, self.config.point_scale, camera)
         glBindTexture(GL_TEXTURE_2D, self.texture)
         glTexSubImage2D(
             GL_TEXTURE_2D,
@@ -604,11 +681,29 @@ class OpenGLSpoutPointRenderer:
             self.sender = None
 
 
-def camera_matrix(now_s: float, aspect: float) -> np.ndarray:
-    eye = np.array([2.4 * math.sin(now_s * 0.08), -3.4, 1.85 + 0.2 * math.cos(now_s * 0.11)], dtype=np.float64)
-    target = np.array([0.0, 0.0, 1.15], dtype=np.float64)
-    up = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-    return perspective(math.radians(58.0), aspect, 0.05, 50.0) @ look_at(eye, target, up)
+def camera_preset(name: str, now_s: float = 0.0) -> VirtualCamera:
+    if name == "orbit":
+        return VirtualCamera(
+            eye=(2.4 * math.sin(now_s * 0.08), -3.4, 1.85 + 0.2 * math.cos(now_s * 0.11)),
+            target=(0.0, 0.0, 1.15),
+            fov_degrees=58.0,
+        )
+    if name == "kiyo-mid-deru":
+        return VirtualCamera(
+            eye=(0.05, -1.035, 1.64),
+            target=(0.48, 0.28, 1.24),
+            fov_degrees=64.0,
+        )
+    raise ValueError(f"unknown camera preset: {name}")
+
+
+def camera_matrix(now_s: float, aspect: float, camera: VirtualCamera | None = None) -> np.ndarray:
+    view = camera_preset("orbit", now_s) if camera is None else camera
+    return perspective(math.radians(view.fov_degrees), aspect, view.near_m, view.far_m) @ look_at(
+        view.eye_np,
+        view.target_np,
+        view.up_np,
+    )
 
 
 def look_at(eye: np.ndarray, target: np.ndarray, up: np.ndarray) -> np.ndarray:

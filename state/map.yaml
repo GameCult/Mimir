@@ -114,7 +114,11 @@ research:
       not desktop capture or file polling. LocalCastBridge emits typed
       render-frame packets with source timestamps, intended presentation time,
       audio-alignment time, target size, Spout sender name, and point/brush
-      claims. Aquarium owns GPU rendering and Spout publication.
+      claims. The deadline Spout sink now defaults to a `kiyo-mid-deru`
+      virtual camera, with the eye halfway between the two Kiyo-class cameras
+      and the target on the co-streamer body volume. Its point budget is
+      temporal: stable high-confidence anchors plus a frame-varying remainder
+      for TAA/supersampling. Aquarium owns GPU rendering and Spout publication.
   live_spout_deadline_sink:
     summary: docs/obs-spout-streaming.md
     key_decision: >

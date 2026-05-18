@@ -24,8 +24,10 @@ from localcast.sensor_fusion import (
     SpoutOutputConfig,
     TimestampedFrame,
     TrackCache,
+    VirtualCamera,
     detect_clap_events,
     frame_to_vertex_array,
+    frame_with_point_budget,
     dense_stereo_points,
     get_live_clap_events,
     get_live_render_frame,
@@ -196,6 +198,105 @@ class SensorFusionTests(unittest.TestCase):
         config = SpoutOutputConfig(sender_name="unit-test", width=128, height=72, fps=30)
         self.assertEqual("unit-test", config.sender_name)
         self.assertEqual(128, config.width)
+        self.assertEqual("kiyo-mid-deru", config.camera_preset)
+
+    def test_kiyo_midpoint_camera_frames_deru_target(self):
+        frame = RenderFramePacket(
+            schema="localcast.sensor_fusion.render_frame.v1",
+            frame_id=1,
+            created_monotonic_ns=1,
+            source_time_min_ns=1,
+            source_time_max_ns=1,
+            present_time_ns=1,
+            audio_alignment_time_ns=1,
+            spout_sender_name="test",
+            target_width=320,
+            target_height=180,
+            points=(
+                RenderPointPacket(
+                    stable_key="deru-focus",
+                    xyz=np.array([0.48, 0.28, 1.24]),
+                    radius_m=0.06,
+                    color_rgba=(0.2, 1.0, 0.7, 1.0),
+                    confidence=1.0,
+                    source_timestamp_ns=1,
+                ),
+            ),
+        )
+        camera = VirtualCamera(eye=(0.05, -1.035, 1.64), target=(0.48, 0.28, 1.24), fov_degrees=64.0)
+
+        brushes = lower_frame_to_screen_brushes(frame, width=320, height=180, camera=camera)
+
+        self.assertEqual(1, len(brushes))
+        self.assertAlmostEqual(160, brushes[0].center_px[0], delta=8)
+        self.assertAlmostEqual(90, brushes[0].center_px[1], delta=8)
+
+    def test_render_point_budget_preserves_high_confidence_claims_and_rotates_remainder(self):
+        def make_frame(frame_id):
+            return RenderFramePacket(
+                schema="localcast.sensor_fusion.render_frame.v1",
+                frame_id=frame_id,
+                created_monotonic_ns=1,
+                source_time_min_ns=1,
+                source_time_max_ns=1,
+                present_time_ns=1,
+                audio_alignment_time_ns=1,
+                spout_sender_name="test",
+                target_width=320,
+                target_height=180,
+                points=tuple(
+                    RenderPointPacket(
+                        stable_key=f"point-{index}",
+                        xyz=np.array([0.0, 0.0, 1.0 + index * 0.01]),
+                        radius_m=0.02,
+                        color_rgba=(1.0, 1.0, 1.0, 1.0),
+                        confidence=index / 10.0,
+                        source_timestamp_ns=1,
+                    )
+                    for index in range(10)
+                ),
+            )
+
+        first = frame_with_point_budget(make_frame(1), 4)
+        second = frame_with_point_budget(make_frame(2), 4)
+
+        self.assertEqual(4, len(first.points))
+        self.assertEqual(4, len(second.points))
+        self.assertTrue({"point-8", "point-9"}.issubset({point.stable_key for point in first.points}))
+        self.assertTrue({"point-8", "point-9"}.issubset({point.stable_key for point in second.points}))
+        self.assertNotEqual(
+            {point.stable_key for point in first.points},
+            {point.stable_key for point in second.points},
+        )
+
+    def test_render_point_budget_keeps_all_points_when_under_budget(self):
+        frame = RenderFramePacket(
+            schema="localcast.sensor_fusion.render_frame.v1",
+            frame_id=1,
+            created_monotonic_ns=1,
+            source_time_min_ns=1,
+            source_time_max_ns=1,
+            present_time_ns=1,
+            audio_alignment_time_ns=1,
+            spout_sender_name="test",
+            target_width=320,
+            target_height=180,
+            points=tuple(
+                RenderPointPacket(
+                    stable_key=f"point-{index}",
+                    xyz=np.array([0.0, 0.0, 1.0 + index * 0.01]),
+                    radius_m=0.02,
+                    color_rgba=(1.0, 1.0, 1.0, 1.0),
+                    confidence=index / 10.0,
+                    source_timestamp_ns=1,
+                )
+                for index in range(10)
+            ),
+        )
+
+        limited = frame_with_point_budget(frame, 20)
+
+        self.assertIs(frame, limited)
 
     def test_rasterizer_uses_gaussian_envelope_not_solid_ellipse(self):
         frame = RenderFramePacket(

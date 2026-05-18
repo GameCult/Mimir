@@ -101,7 +101,7 @@ Ownership:
 - `localcast.sensor_fusion.cultcache_docs` owns typed visual state documents.
 - `scripts/live_sensor_fusion.py` currently owns the live producer and writes `localcast.visual.render_frame` into CultCache.
 - The live producer also writes a multi-LOD scene cache with source kind and priority. Real Leap frames are the highest-priority timing/spatial evidence; Leap fallback frames are tagged as fallback and do not become ground truth.
-- `scripts/stream_spout.py` consumes typed CultCache state and publishes Spout.
+- `scripts/stream_spout.py` consumes typed CultCache state and publishes Spout. Its presentation camera defaults to `kiyo-mid-deru`: the virtual eye sits halfway between the two Kiyo-class cameras and aims at the co-streamer body target. Its render budget is temporal: high-confidence anchors stay stable while the remaining samples rotate by frame id for TAA/supersampling reconciliation.
 - CultNet document replication is the intended API boundary for other producers/consumers.
 
 Invariant: JSON is not the visual-state authority. The current renderer can still write a JSON heartbeat for human inspection, but live visual state lives in typed CultCache MessagePack documents. Leap outranks camera surfaces only when the frame source is actual Leap capture; diagnostics must stay labeled as diagnostics.

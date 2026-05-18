@@ -45,6 +45,8 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--fps", type=float, default=60.0)
     parser.add_argument("--point-scale", type=float, default=1.0)
+    parser.add_argument("--camera-preset", choices=["kiyo-mid-deru", "orbit"], default="kiyo-mid-deru")
+    parser.add_argument("--max-render-points", type=int, default=5000)
     parser.add_argument("--demo-if-missing", action="store_true")
     parser.add_argument("--demo-point-count", type=int, default=4096)
     parser.add_argument("--status", default=str(ROOT / "calibration" / "runs" / "stream-spout-status.json"))
@@ -78,6 +80,8 @@ def main() -> None:
         fps=args.fps,
         point_scale=args.point_scale,
         demo_point_count=args.demo_point_count,
+        camera_preset=args.camera_preset,
+        max_render_points=args.max_render_points,
     )
     if args.source == "cultcache":
         source = CultCacheRenderFrameSource(
@@ -134,7 +138,7 @@ def main() -> None:
                     status_path,
                     sender_name=config.sender_name,
                     frames_sent=renderer.frames_sent,
-                    point_count=len(frame.points),
+                    point_count=renderer.last_render_point_count,
                     frame_path=Path(frame_source_name),
                     last_error=None if ok else "SpoutGL sendTexture returned false",
                 )
@@ -142,7 +146,7 @@ def main() -> None:
                     status_cache_path,
                     sender_name=config.sender_name,
                     frames_sent=renderer.frames_sent,
-                    point_count=len(frame.points),
+                    point_count=renderer.last_render_point_count,
                     frame_source=frame_source_name,
                     last_error=None if ok else "SpoutGL sendTexture returned false",
                 )
