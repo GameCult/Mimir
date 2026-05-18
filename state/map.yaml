@@ -44,6 +44,7 @@ active_subgoals:
   - Smoke-test each audio endpoint in OBS and tune latency.
   - Decide whether an OBS source generator or plugin investigation is justified.
   - Evaluate the Ambisonic AquaSynth path as a separate synchronized multichannel audio pipeline; do not treat heterogeneous mic feeds as raw first-order ambisonic A-format without geometry, calibration, and a shared clock.
+  - Build the six-microphone/two-speaker audio-field sidecar around one clocked capture path, explicit geometry, speaker calibration, and FOA AmbiX output.
 
 research:
   ambisonic_aquasynth:
@@ -121,8 +122,14 @@ current_status:
     first rough probe. PS3 Eye video interfaces now bind through libusb-win32
     and opentrack enumerates high-rate modes, but frame reads fail while all
     cameras sit on one external hub/root path; USB topology is now a live
-    suspect.
+    suspect. Audio-field scaffolding now exists as a separate sidecar:
+    six-mic/two-speaker profile, validation, calibration sweep capture/analysis,
+    raw field recording, and offline FOA AmbiX encoding. Current PortAudio
+    enumeration does not expose a matching six-channel WASAPI input, so live
+    field capture requires either a shared six-input device/profile or a
+    separately proven adaptive sync path for independent USB microphones.
   next_action: >
-    Test one PS3 Eye alone on the current hub and then on a different root port
-    if needed; once one streams, add the second at a low tracking rate before
-    capturing ChArUco intrinsics.
+    In parallel with the camera driver's next cut, create local
+    config/audio-field.json, confirm whether one device exposes six synchronized
+    mic inputs, replace placeholder mic/speaker geometry with measured world
+    coordinates, then run the two-speaker calibration sweep.

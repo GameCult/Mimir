@@ -16,6 +16,10 @@
 - Sender script uses `-nostdin` and repo-root logs so desktop launchers stay alive and diagnostics land in `C:\Meta\LocalCastBridge\logs`.
 - Sender video config is `1920x1080` for the interactive desktop. The `1024x768` SSH session size is not the streaming target.
 - Desktop `.cmd` launchers delegate to PowerShell wrappers so paths with spaces and apostrophes are handled in one place.
+- Audio-field sidecar profile and tool:
+  - `config/audio-field.example.json` declares six mic channels, two speaker channels, placeholder geometry, calibration sweep settings, and FOA AmbiX ACN/SN3D output.
+  - `scripts/audio_field.py` lists devices, validates the profile, generates calibration sweeps, records speaker-to-mic calibration returns, analyzes delay/gain/polarity, records raw six-channel fields, and encodes offline WAVs to FOA.
+  - `docs/audio-field.md` maps the audio pipeline and its invariants.
 
 ## Temporary
 
@@ -34,3 +38,5 @@
 6. Tune SRT latency and FFmpeg buffering for the local network.
 7. Decide whether a small OBS scene/source generator is worth adding.
 8. Reconsider plugin/fork only if standard OBS Media Source cannot preserve the required behavior.
+9. Create local `config/audio-field.json`, confirm whether one device exposes six synchronized mic inputs, and replace placeholder mic/speaker geometry with measured world coordinates.
+10. Run audio speaker sweeps, copy measured delay/gain/polarity into the profile, then encode a first FOA AmbiX test WAV.

@@ -1,4 +1,5 @@
 config/localcast.json
+config/audio-field.json
 logs/
 *.log
 *.tmp

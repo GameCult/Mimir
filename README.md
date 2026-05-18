@@ -17,6 +17,12 @@ flowchart LR
 
 The video stream is encoded on the sender. Audio sources are separate endpoints so OBS can mix, mute, filter, and monitor them independently.
 
+## Audio Field
+
+The expanded rig has a separate audio-field spine for six microphones and two calibration speakers. Start with `docs/audio-field.md` and `config/audio-field.example.json`.
+
+That path is stricter than the OBS endpoint path: microphones feeding the Ambisonic field need one synchronized capture device, explicit geometry, and calibration before they become an AmbiX FOA bus. Separate USB microphones can still be investigated, but they do not get waved through as a coherent field just because the JSON is feeling brave.
+
 ## Current Status
 
 This repo is the first coherent scaffold: architecture docs, persistence machinery, and Windows scripts for device discovery, config validation, and FFmpeg command generation. It is ready for a real two-PC smoke test once FFmpeg with SRT/NVENC support is installed on the sender.

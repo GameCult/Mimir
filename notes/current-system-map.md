@@ -34,3 +34,28 @@ An OBS plugin would be justified if OBS could not ingest stable LAN streams, or 
 - Some FFmpeg builds omit SRT or NVENC.
 - Separate endpoints can drift; local latency should be tuned before adding a synchronization layer.
 - OBS SRT reconnection behavior can be fussy. Use stable ports and source reactivation before treating port changes as a fix.
+
+## Audio Field Sidecar
+
+The six-microphone Ambisonic path is separate from the OBS endpoint path.
+
+```mermaid
+flowchart TD
+    A["config/audio-field.json"] --> B["scripts/audio_field.py"]
+    C["6 mic channels from one clocked input device"] --> D["raw field recording"]
+    E["2 speaker outputs"] --> F["calibration sweeps"]
+    F --> G["speaker-to-mic return recordings"]
+    G --> H["delay/gain/polarity analysis"]
+    H --> A
+    D --> I["FOA encoder"]
+    I --> J["AmbiX ACN/SN3D bus: W,Y,Z,X"]
+```
+
+Ownership:
+
+- `config/audio-field.json` owns mic/speaker identity, channel mapping, geometry, gain, delay, polarity, and Ambisonic bus format.
+- `scripts/audio_field.py` owns hardware validation, calibration stimulus/return capture, offline calibration analysis, raw field recording, and FOA encoding.
+- The camera/sensor-fusion pipeline may publish world poses later; it does not own audio clocks or channel timing.
+- OBS may ingest rendered output later; it is not the authority for the Ambisonic field.
+
+Invariant: the six field microphones must enter through one synchronized capture path before FOA encoding. If the actual rig uses independent USB microphone clocks, prove the adaptive sync path first; do not treat separate endpoints as raw Ambisonics.
