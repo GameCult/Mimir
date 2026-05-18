@@ -6,3 +6,6 @@ logs/
 __pycache__/
 .venv/
 calibration/runs/
+tools/drivers/
+tools/obs-spout2-plugin/
+tools/src/

@@ -14,6 +14,7 @@ from localcast.sensor_fusion import (
     SpoutOutputConfig,
     TrackCache,
     frame_to_vertex_array,
+    lower_frame_to_screen_brushes,
     lower_points_to_render_frame,
 )
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
@@ -154,6 +155,9 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual((1, 8), vertices.shape)
         self.assertAlmostEqual(0.10, float(vertices[0, 7]), places=6)
         self.assertGreater(float(vertices[0, 6]), 0.0)
+        brushes = lower_frame_to_screen_brushes(loaded, width=1920, height=1080, point_scale=2.0)
+        self.assertEqual(1, len(brushes))
+        self.assertGreaterEqual(brushes[0].radii_px[0], brushes[0].radii_px[1])
 
     def test_spout_output_config_is_importable_without_gpu_context(self):
         config = SpoutOutputConfig(sender_name="unit-test", width=128, height=72, fps=30)

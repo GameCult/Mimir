@@ -120,10 +120,11 @@ research:
     key_decision: >
       The deadline OBS surface is a real Spout sender named LocalCastBridge
       Point Cloud. `scripts/stream_spout.py` consumes render-frame packets,
-      renders points into an OpenGL FBO, publishes the texture through SpoutGL,
-      and writes a heartbeat status file. This is a sink boundary, not a new
-      scene authority; Aquarium should replace the renderer body behind the
-      same RenderFramePacket contract for dense brush/splat rendering.
+      lowers them into compact anisotropic screen brush packets inspired by the
+      Zyphos/Aquarium brush model, uploads the texture through SpoutGL, and
+      writes a heartbeat status file. This is a sink boundary, not a new scene
+      authority; Aquarium should replace the renderer body behind the same
+      RenderFramePacket contract for dense brush/splat rendering.
   sensor_fusion_architecture:
     summary: docs/sensor-fusion-architecture.md
     key_decision: >
@@ -187,12 +188,15 @@ current_status:
     source time ranges, intended visual presentation time, audio-alignment
     time, target render size, Spout sender name, and point draw metadata for
     Aquarium/Spout. A deadline OBS Spout sender is now live-shaped:
-    `scripts/stream_spout.py` reads render-frame JSON, renders points into an
-    OpenGL FBO, publishes Spout sender `LocalCastBridge Point Cloud`, and writes
-    `calibration/runs/stream-spout-status.json`; a smoke run sent real Spout
-    frames, and the detached sender can run demo packets until live fusion writes
-    `calibration/runs/live-render-frame.json`. Unit tests inject synthetic
-    cameras and frames so the core does not depend on live camera drivers.
+    `scripts/stream_spout.py` reads render-frame JSON, lowers points into
+    compact anisotropic screen brush packets, uploads an OpenGL texture,
+    publishes Spout sender `LocalCastBridge Point Cloud`, and writes
+    `calibration/runs/stream-spout-status.json`; OBS now has a Spout2 Capture
+    source pointed at that sender, and an OBS websocket screenshot verified
+    nonblack brush output. The detached sender can run demo packets until live
+    fusion writes `calibration/runs/live-render-frame.json`. Unit tests inject
+    synthetic cameras and frames so the core does not depend on live camera
+    drivers.
   next_action: >
     Capture real ChArUco intrinsics/extrinsics for the PS3 Eyes and Kiyos,
     replace `config/sensor-fusion.example.json` placeholder transforms with a

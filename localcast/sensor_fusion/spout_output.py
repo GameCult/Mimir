@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import ctypes
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -20,6 +21,14 @@ class SpoutOutputConfig:
     fps: float = 60.0
     point_scale: float = 1.0
     demo_point_count: int = 4096
+
+
+@dataclass(frozen=True)
+class ScreenBrushPacket:
+    center_px: tuple[int, int]
+    radii_px: tuple[int, int]
+    rotation_deg: float
+    color_rgba: tuple[int, int, int, int]
 
 
 class RenderFrameFileSource:
@@ -95,6 +104,54 @@ def frame_to_vertex_array(frame: RenderFramePacket, point_scale: float = 1.0) ->
     return vertices
 
 
+def lower_frame_to_screen_brushes(
+    frame: RenderFramePacket,
+    width: int,
+    height: int,
+    point_scale: float = 1.0,
+) -> tuple[ScreenBrushPacket, ...]:
+    brushes: list[ScreenBrushPacket] = []
+    for point in frame.points:
+        x, y, z = point.xyz
+        px = int(round((0.5 + float(x) * 0.29) * width))
+        py = int(round((0.5 - ((float(z) - 1.18) * 0.575 + float(y) * 0.08)) * height))
+        radius = max(2, int(round(float(point.radius_m) * point_scale * height * 0.75)))
+        if px < -radius * 3 or px >= width + radius * 3 or py < -radius * 3 or py >= height + radius * 3:
+            continue
+        stable = hashlib.blake2s(point.stable_key.encode("utf-8"), digest_size=4).digest()
+        angle = int.from_bytes(stable[:2], "little") / 65535.0 * 180.0
+        stretch = 1.0 + (stable[2] / 255.0) * 1.8
+        radii = (max(2, int(round(radius * stretch))), radius)
+        rgba = np.clip(np.asarray(point.color_rgba, dtype=np.float32), 0.0, 1.0)
+        rgba[3] *= max(0.0, min(1.0, float(point.confidence)))
+        color = tuple(int(v) for v in (rgba * 255.0)[:4])
+        brushes.append(ScreenBrushPacket((px, py), radii, angle, color))
+    return tuple(brushes)
+
+
+def rasterize_frame_rgba(frame: RenderFramePacket, width: int, height: int, point_scale: float = 1.0) -> np.ndarray:
+    import cv2
+
+    image = np.zeros((height, width, 4), dtype=np.uint8)
+    image[:, :, 0] = 10
+    image[:, :, 1] = 14
+    image[:, :, 2] = 20
+    image[:, :, 3] = 255
+    for brush in lower_frame_to_screen_brushes(frame, width, height, point_scale):
+        cv2.ellipse(
+            image,
+            brush.center_px,
+            brush.radii_px,
+            brush.rotation_deg,
+            0.0,
+            360.0,
+            brush.color_rgba,
+            thickness=-1,
+            lineType=cv2.LINE_AA,
+        )
+    return image
+
+
 def write_status(
     path: Path,
     *,
@@ -164,6 +221,7 @@ class OpenGLSpoutPointRenderer:
             GL_FLOAT,
             GL_ONE,
             GL_ONE_MINUS_SRC_ALPHA,
+            GL_PROGRAM_POINT_SIZE,
         )
 
         from OpenGL.GL.shaders import compileProgram, compileShader
@@ -208,6 +266,7 @@ class OpenGLSpoutPointRenderer:
         glEnableVertexAttribArray(2)
         glVertexAttribPointer(2, 1, GL_FLOAT, False, stride, ctypes.c_void_p(28))
         glEnable(GL_BLEND)
+        glEnable(GL_PROGRAM_POINT_SIZE)
         glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
 
     def render(self, frame: RenderFramePacket) -> bool:
@@ -216,12 +275,15 @@ class OpenGLSpoutPointRenderer:
             GL_COLOR_BUFFER_BIT,
             GL_DEPTH_BUFFER_BIT,
             GL_DYNAMIC_DRAW,
-            GL_FALSE,
             GL_FRAMEBUFFER,
             GL_POINTS,
+            GL_RGBA,
             GL_TEXTURE_2D,
+            GL_TRUE,
+            GL_UNSIGNED_BYTE,
             glBindBuffer,
             glBindFramebuffer,
+            glBindTexture,
             glBindVertexArray,
             glBufferData,
             glClear,
@@ -231,6 +293,7 @@ class OpenGLSpoutPointRenderer:
             glGetUniformLocation,
             glUniform2f,
             glUniformMatrix4fv,
+            glTexSubImage2D,
             glUseProgram,
             glViewport,
         )
@@ -245,16 +308,29 @@ class OpenGLSpoutPointRenderer:
         vertices = frame_to_vertex_array(frame, self.config.point_scale)
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, self.config.width, self.config.height)
-        glClearColor(0.015, 0.018, 0.022, 1.0)
+        glClearColor(0.025, 0.035, 0.048, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glUseProgram(self.program)
         view_proj = camera_matrix(time.monotonic(), self.config.width / max(1, self.config.height))
-        glUniformMatrix4fv(glGetUniformLocation(self.program, "u_view_proj"), 1, GL_FALSE, view_proj.astype(np.float32))
+        glUniformMatrix4fv(glGetUniformLocation(self.program, "u_view_proj"), 1, GL_TRUE, view_proj.astype(np.float32))
         glUniform2f(glGetUniformLocation(self.program, "u_viewport"), float(self.config.width), float(self.config.height))
         glBindVertexArray(self.vao)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_DYNAMIC_DRAW)
         glDrawArrays(GL_POINTS, 0, len(vertices))
+        image = rasterize_frame_rgba(frame, self.config.width, self.config.height, self.config.point_scale)
+        glBindTexture(GL_TEXTURE_2D, self.texture)
+        glTexSubImage2D(
+            GL_TEXTURE_2D,
+            0,
+            0,
+            0,
+            self.config.width,
+            self.config.height,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            image,
+        )
         glFlush()
         ok = bool(self.sender.sendTexture(self.texture, GL_TEXTURE_2D, self.config.width, self.config.height, False, self.fbo))
         if ok:
@@ -311,9 +387,9 @@ uniform vec2 u_viewport;
 out vec4 v_color;
 
 void main() {
-    vec4 clip = u_view_proj * vec4(in_pos, 1.0);
-    gl_Position = clip;
-    float radius_px = max(2.0, in_radius * u_viewport.y / max(0.05, abs(clip.w)) * 2.1);
+    vec2 projected = vec2(in_pos.x * 0.58, (in_pos.z - 1.18) * 1.15 + in_pos.y * 0.16);
+    gl_Position = vec4(projected, 0.0, 1.0);
+    float radius_px = max(5.0, in_radius * u_viewport.y * 2.8);
     gl_PointSize = radius_px;
     v_color = in_color;
 }

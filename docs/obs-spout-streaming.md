@@ -12,12 +12,15 @@ This is the deadline stream surface. It is not a preview window and it is not a 
 flowchart TD
     A["TrackCache / demo source"] --> B["RenderFramePacket JSON"]
     B --> C["scripts/stream_spout.py"]
-    C --> D["OpenGL FBO"]
-    D --> E["Spout sender texture"]
-    E --> F["OBS Spout2 Capture"]
+    C --> D["ScreenBrushPacket lowering"]
+    D --> E["OpenGL texture/FBO"]
+    E --> F["Spout sender texture"]
+    F --> G["OBS Spout2 Capture"]
 ```
 
 Aquarium Engine remains the intended authority for dense brush/splat rendering. The useful boundary is `RenderFramePacket`: Aquarium can replace the OpenGL renderer behind the same packet contract without changing capture, fusion, timing, or OBS ingestion.
+
+The deadline sink borrows the Zyphos brush rule rather than pretending points are enough: each render point lowers into a compact anisotropic screen brush with center, radii, rotation, and color. That shape mirrors Aquarium's bounded brush/splat direction while keeping the stream path simple enough to verify under pressure.
 
 ## Run
 
@@ -40,7 +43,7 @@ Start the Spout sender:
   --status .\calibration\runs\stream-spout-status.json
 ```
 
-For OBS, add a Spout2 Capture source and select `LocalCastBridge Point Cloud`.
+For OBS, add a Spout2 Capture source and select `LocalCastBridge Point Cloud`. On this workstation, OBS websocket was enabled locally and the Off World Live `win-spout` plugin was installed under `C:\ProgramData\obs-studio\plugins\win-spout`.
 
 ## Status
 
@@ -72,7 +75,7 @@ The next renderer cut is to move the `RenderFramePacket` consumer into Aquarium 
 ```text
 RenderFramePacket
 -> Aquarium typed runtime state
--> GPU splat/brush buffers
+-> compact anisotropic brush/splat buffers
 -> D3D render target
 -> Spout2 sender texture
 -> OBS Spout2 Capture
