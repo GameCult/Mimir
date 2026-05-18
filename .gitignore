@@ -1,0 +1,6 @@
+config/localcast.json
+logs/
+*.log
+*.tmp
+__pycache__/
+

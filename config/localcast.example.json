@@ -1,0 +1,37 @@
+{
+  "receiver": {
+    "host": "192.168.1.50",
+    "basePort": 5100,
+    "srtLatencyMicros": 120000,
+    "passphrase": ""
+  },
+  "video": {
+    "enabled": true,
+    "source": "desktop",
+    "width": 1920,
+    "height": 1080,
+    "framerate": 60,
+    "bitrate": "12000k",
+    "maxrate": "12000k",
+    "bufsize": "24000k",
+    "preset": "p5",
+    "tune": "ll",
+    "portOffset": 0
+  },
+  "audioSources": [
+    {
+      "name": "desktop",
+      "device": "CABLE Output (VB-Audio Virtual Cable)",
+      "portOffset": 1,
+      "codec": "aac",
+      "bitrate": "160k"
+    },
+    {
+      "name": "voice",
+      "device": "Microphone (USB Audio Device)",
+      "portOffset": 2,
+      "codec": "aac",
+      "bitrate": "128k"
+    }
+  ]
+}

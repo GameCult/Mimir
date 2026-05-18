@@ -1,0 +1,55 @@
+workspace:
+  name: LocalCastBridge
+  status: active
+  focus: local-obs-lan-source
+  premise: >
+    A second Windows PC should appear inside OBS as video plus separately
+    mixable audio sources. Use ordinary media transport first; native OBS code
+    only earns its keep after standard OBS/FFmpeg surfaces fail a real invariant.
+
+objective:
+  primary: >
+    Provide a repeatable local streaming environment where the sender captures
+    desktop/video and audio sources, encodes video with NVENC, and delivers
+    stable OBS Media Source URLs to the receiver over LAN.
+  current: >
+    Establish the script-and-doc spine for a two-PC smoke test.
+
+constraints:
+  - Sender is Windows.
+  - Receiver uses OBS.
+  - Video encode must happen on the sender using NVENC when available.
+  - Audio sources must remain separately controllable in OBS.
+  - V1 is LAN-only.
+  - Persistent state must clarify rehydrate, not become transcript tax.
+
+invariants:
+  - OBS composition authority stays in OBS.
+  - FFmpeg owns capture, encoding, and transport.
+  - One stable port equals one OBS source endpoint.
+  - Video endpoint uses H.264 over MPEG-TS/SRT.
+  - Audio endpoints default to AAC over MPEG-TS/SRT for broad OBS/FFmpeg compatibility.
+  - Local secrets remain untracked.
+
+accepted_design:
+  - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
+  - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
+  - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.
+  - OBS receives each source through Media Source URLs documented in `docs/obs-receiver-setup.md`.
+  - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
+
+active_subgoals:
+  - Validate the actual sender FFmpeg build and capture device names.
+  - Smoke-test the video endpoint in OBS.
+  - Smoke-test each audio endpoint in OBS and tune latency.
+  - Decide whether an OBS source generator or plugin investigation is justified.
+
+current_status:
+  summary: >
+    First repo scaffold is in place with persistence machinery, architecture
+    docs, example config, and sender scripts for FFmpeg/SRT/NVENC local OBS
+    source delivery.
+  next_action: >
+    Run sender discovery on the husband's PC, fill config/localcast.json with
+    actual receiver IP and audio device names, then dry-run sender-start before
+    opening live streams into OBS.
