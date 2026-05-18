@@ -74,6 +74,7 @@ def main() -> None:
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--smoke-readback", action="store_true")
+    parser.add_argument("--max-lag-ms", type=float, default=250.0)
     args = parser.parse_args()
 
     source = None
@@ -92,6 +93,10 @@ def main() -> None:
         now = time.monotonic()
         if args.duration is not None and now - start_monotonic >= args.duration:
             break
+        realtime_start_sample = int((now - start_monotonic) * sample_rate)
+        max_lag_samples = int(float(args.max_lag_ms) * sample_rate / 1000.0)
+        if start_sample + args.chunk_frames < realtime_start_sample - max_lag_samples:
+            start_sample = max(0, realtime_start_sample - (realtime_start_sample % args.chunk_frames))
         block = source_block(source, sample_rate, start_sample, args.chunk_frames, loop=args.loop)
         if block is None:
             break

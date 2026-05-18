@@ -19,8 +19,10 @@ from localcast.sensor_fusion import (
     get_live_render_frame,
     lower_frame_to_screen_brushes,
     lower_points_to_render_frame,
+    overlay_audio_events,
     put_live_render_frame,
 )
+from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
 
 
@@ -188,6 +190,47 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(3, loaded.frame_id)
         self.assertEqual(1, len(loaded.points))
         self.assertEqual("ball", loaded.points[0].stable_key)
+
+    def test_audio_source_events_overlay_against_audio_alignment_time(self):
+        frame = RenderFramePacket(
+            schema="localcast.sensor_fusion.render_frame.v1",
+            frame_id=9,
+            created_monotonic_ns=1_000,
+            source_time_min_ns=1_000,
+            source_time_max_ns=1_000,
+            present_time_ns=1_100,
+            audio_alignment_time_ns=1_000_000_000,
+            spout_sender_name="test",
+            target_width=128,
+            target_height=72,
+            points=(),
+        )
+        audio = make_spatial_audio_frame(
+            np.zeros((1024, 4), dtype=np.float32),
+            frame_id=4,
+            sample_rate=48000,
+            start_sample=48000,
+            audio_time_ns=1_000_000_000,
+        )
+        events = make_audio_source_events(
+            frame_id=5,
+            sample_rate=48000,
+            start_sample=0,
+            frame_count=96000,
+            audio_time_ns=0,
+            events=[
+                {"eventId": 1, "startSample": 48000, "positionMeters": [0.2, 0.3, 1.4], "confidence": 0.9, "energy": 0.001},
+                {"eventId": 2, "startSample": 70000, "positionMeters": [2.0, 0.0, 1.0], "confidence": 0.9, "energy": 0.001},
+            ],
+            voice_focus=[],
+        )
+
+        augmented, status = overlay_audio_events(frame, events, audio, window_ns=40_000_000)
+
+        self.assertEqual(1, len(augmented.points))
+        self.assertEqual("audio-event-1", augmented.points[0].stable_key)
+        self.assertTrue(status.synchronized)
+        self.assertEqual(1, status.overlay_event_count)
 
 
 if __name__ == "__main__":

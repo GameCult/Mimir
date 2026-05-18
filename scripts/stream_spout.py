@@ -13,6 +13,7 @@ from localcast.sensor_fusion.spout_output import (
     RenderFrameFileSource,
     SpoutOutputConfig,
     write_cult_status,
+    write_sync_status,
     write_status,
 )
 
@@ -30,6 +31,11 @@ def main() -> None:
     parser.add_argument("--demo-point-count", type=int, default=4096)
     parser.add_argument("--status", default=str(ROOT / "calibration" / "runs" / "stream-spout-status.json"))
     parser.add_argument("--status-cache", default=str(ROOT / "calibration" / "runs" / "visual-stream-status.msgpack"))
+    parser.add_argument("--sync-status", default=str(ROOT / "calibration" / "runs" / "av-sync-status.json"))
+    parser.add_argument("--audio-cache", default=str(ROOT / "calibration" / "runs" / "audio-state.msgpack"))
+    parser.add_argument("--audio-events-cache", default=str(ROOT / "calibration" / "runs" / "audio-events.msgpack"))
+    parser.add_argument("--audio-event-window-ms", type=float, default=120.0)
+    parser.add_argument("--no-audio-overlay", action="store_true")
     parser.add_argument("--source", choices=["cultcache", "json"], default="cultcache")
     parser.add_argument("--duration", type=float, help="Optional run duration in seconds for smoke tests.")
     args = parser.parse_args()
@@ -38,6 +44,7 @@ def main() -> None:
     frame_cache_path = Path(args.frame_cache)
     status_path = Path(args.status)
     status_cache_path = Path(args.status_cache)
+    sync_status_path = Path(args.sync_status)
     config = SpoutOutputConfig(
         sender_name=args.sender_name,
         width=args.width,
@@ -47,7 +54,14 @@ def main() -> None:
         demo_point_count=args.demo_point_count,
     )
     if args.source == "cultcache":
-        source = CultCacheRenderFrameSource(frame_cache_path, demo_if_missing=args.demo_if_missing, demo_point_count=args.demo_point_count)
+        source = CultCacheRenderFrameSource(
+            frame_cache_path,
+            demo_if_missing=args.demo_if_missing,
+            demo_point_count=args.demo_point_count,
+            audio_cache=None if args.no_audio_overlay else Path(args.audio_cache),
+            audio_events_cache=None if args.no_audio_overlay else Path(args.audio_events_cache),
+            audio_event_window_ns=int(float(args.audio_event_window_ms) * 1_000_000),
+        )
         frame_source_name = str(frame_cache_path)
     else:
         source = RenderFrameFileSource(frame_path, demo_if_missing=args.demo_if_missing, demo_point_count=args.demo_point_count)
@@ -80,6 +94,7 @@ def main() -> None:
                     frame_source=frame_source_name,
                     last_error=None if ok else "SpoutGL sendTexture returned false",
                 )
+                write_sync_status(sync_status_path, getattr(source, "last_sync_status", None))
                 last_status = now
             sleep_for = frame_interval - (time.monotonic() - now)
             if sleep_for > 0:

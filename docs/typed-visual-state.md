@@ -13,7 +13,10 @@ flowchart TD
     A["live_sensor_fusion.py"] --> B["SensorRig.fuse"]
     B --> C["RenderFramePacket"]
     C --> D["CultRenderFrame"]
-    D --> E["CultCache MessagePack store"]
+    X["audio-state.msgpack"] --> Y["audio event overlay"]
+    Z["audio-events.msgpack"] --> Y
+    D --> Y
+    Y --> E["CultCache MessagePack store"]
     E --> F["stream_spout.py"]
     F --> G["ScreenBrushPacket lowering"]
     G --> H["Spout sender"]
@@ -25,6 +28,7 @@ Live files:
 - `calibration/runs/visual-state.msgpack`: typed live visual frame state.
 - `calibration/runs/visual-stream-status.msgpack`: typed stream status state.
 - `calibration/runs/stream-spout-status.json`: compatibility heartbeat for quick terminal checks.
+- `calibration/runs/av-sync-status.json`: visual/audio sync heartbeat from the Spout/Aquarium publisher.
 
 ## Document Types
 
@@ -54,9 +58,16 @@ CultNetDocumentPut(localcast.visual.render_frame)
 
 For the deadline rig, both producer and renderer share the local CultCache file. The boundary is still the document contract: a future camera process, Aquarium process, or remote sensor node should publish the same document through CultNet `document_put` messages rather than inventing another transport shape.
 
+## Audio Synchronization
+
+`stream_spout.py` can now read `calibration/runs/audio-state.msgpack` and `calibration/runs/audio-events.msgpack` while it renders the visual frame. It selects source events against `RenderFramePacket.audio_alignment_time_ns`, adds synchronized audio-event points to the render packet, and writes `calibration/runs/av-sync-status.json` with the active visual frame id, audio frame id, audio delta, event count, and overlay count.
+
+The audio bed still travels as `localcast.audio.spatial_frame`; the visual render packet only receives renderer-visible transient geometry. That keeps the machine legible: audio owns sound, source-event analysis owns acoustic facts, Aquarium owns the final pixel/audio package for OBS.
+
 ## Cut Line
 
 - Keep: typed CultCache document contracts and MessagePack payloads.
 - Keep temporarily: JSON heartbeat for human shell checks.
 - Cut next: JSON render-frame polling once no script depends on it.
 - Do not add a second scene authority. Sensor fusion owns world claims; renderer owns pixels.
+- Do not make OBS synchronize separate sources. Aquarium receives synchronized visual/audio documents and emits the OBS-facing package.

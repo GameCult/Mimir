@@ -10,6 +10,7 @@ import time
 
 import numpy as np
 
+from .audio_overlay import AudioVisualSyncStatus, overlay_audio_events
 from .render_bridge import RenderFramePacket, RenderPointPacket, load_render_frame
 from .cultcache_docs import CultStreamStatus, get_live_render_frame, put_stream_status
 
@@ -53,12 +54,28 @@ class RenderFrameFileSource:
 
 
 class CultCacheRenderFrameSource:
-    def __init__(self, path: Path, demo_if_missing: bool = False, demo_point_count: int = 4096) -> None:
+    def __init__(
+        self,
+        path: Path,
+        demo_if_missing: bool = False,
+        demo_point_count: int = 4096,
+        audio_cache: Path | None = None,
+        audio_events_cache: Path | None = None,
+        audio_event_window_ns: int = 120_000_000,
+    ) -> None:
         self.path = path
         self.demo_if_missing = demo_if_missing
         self.demo_point_count = demo_point_count
+        self.audio_cache = audio_cache
+        self.audio_events_cache = audio_events_cache
+        self.audio_event_window_ns = int(audio_event_window_ns)
         self._mtime_ns: int | None = None
         self._frame: RenderFramePacket | None = None
+        self._audio_mtime_ns: int | None = None
+        self._audio_frame = None
+        self._events_mtime_ns: int | None = None
+        self._events = None
+        self.last_sync_status: AudioVisualSyncStatus | None = None
 
     def current_frame(self, now_s: float, config: SpoutOutputConfig) -> RenderFramePacket:
         if self.path.exists():
@@ -67,10 +84,47 @@ class CultCacheRenderFrameSource:
                 self._frame = get_live_render_frame(self.path)
                 self._mtime_ns = mtime_ns
             if self._frame is not None:
-                return self._frame
+                return self._with_audio_overlay(self._frame)
         if not self.demo_if_missing:
             raise FileNotFoundError(self.path)
-        return demo_render_frame(now_s, config)
+        return self._with_audio_overlay(demo_render_frame(now_s, config))
+
+    def _with_audio_overlay(self, frame: RenderFramePacket) -> RenderFramePacket:
+        if self.audio_cache is None and self.audio_events_cache is None:
+            self.last_sync_status = None
+            return frame
+        audio_frame = self._read_audio_frame()
+        events = self._read_audio_events()
+        augmented, status = overlay_audio_events(
+            frame,
+            events,
+            audio_frame,
+            window_ns=self.audio_event_window_ns,
+        )
+        self.last_sync_status = status
+        return augmented
+
+    def _read_audio_frame(self):
+        if self.audio_cache is None or not self.audio_cache.exists():
+            return None
+        mtime_ns = self.audio_cache.stat().st_mtime_ns
+        if self._audio_frame is None or mtime_ns != self._audio_mtime_ns:
+            from audio_field.cultcache_audio import get_live_spatial_audio_frame
+
+            self._audio_frame = get_live_spatial_audio_frame(self.audio_cache)
+            self._audio_mtime_ns = mtime_ns
+        return self._audio_frame
+
+    def _read_audio_events(self):
+        if self.audio_events_cache is None or not self.audio_events_cache.exists():
+            return None
+        mtime_ns = self.audio_events_cache.stat().st_mtime_ns
+        if self._events is None or mtime_ns != self._events_mtime_ns:
+            from audio_field.cultcache_audio import get_live_audio_source_events
+
+            self._events = get_live_audio_source_events(self.audio_events_cache)
+            self._events_mtime_ns = mtime_ns
+        return self._events
 
 
 def demo_render_frame(now_s: float, config: SpoutOutputConfig) -> RenderFramePacket:
@@ -214,6 +268,29 @@ def write_cult_status(
             updated_monotonic_ns=time.monotonic_ns(),
             last_error="" if last_error is None else last_error,
         ),
+    )
+
+
+def write_sync_status(path: Path, status: AudioVisualSyncStatus | None) -> None:
+    if status is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "visual_frame_id": status.visual_frame_id,
+                "visual_present_time_ns": status.visual_present_time_ns,
+                "audio_frame_id": status.audio_frame_id,
+                "audio_time_ns": status.audio_time_ns,
+                "audio_delta_ns": status.audio_delta_ns,
+                "source_event_count": status.source_event_count,
+                "overlay_event_count": status.overlay_event_count,
+                "synchronized": status.synchronized,
+                "updated_monotonic_ns": time.monotonic_ns(),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
     )
 
 

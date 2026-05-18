@@ -17,6 +17,7 @@ flowchart TD
     I --> J["audio-events.msgpack / CultNet document_put"]
     E --> F["Aquarium client"]
     J --> F
+    K["visual-state.msgpack"] --> F
     F --> G["native Faust spatial DSP + volumetric renderer"]
 ```
 
@@ -25,6 +26,7 @@ Live files:
 - `calibration/runs/audio-state.msgpack`: latest typed AmbiX audio block.
 - `calibration/runs/audio-stream-status.msgpack`: audio publisher heartbeat.
 - `calibration/runs/audio-events.msgpack`: latest typed dialogue-focus and transient vector field.
+- `calibration/runs/av-sync-status.json`: current Aquarium/Spout publisher view of visual frame id, audio frame id, audio delta, and synchronized event overlay count.
 
 Document type:
 
@@ -54,10 +56,17 @@ Source-event analysis command:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-source-events --profile .\calibration\runs\audio-field-loud-profile.json --input .\calibration\runs\<run-folder>\field-cleaned.wav --cache .\calibration\runs\audio-events.msgpack
 ```
 
+Synchronized Aquarium/Spout publisher command:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\stream_spout.py --source cultcache --frame-cache .\calibration\runs\visual-state.msgpack --audio-cache .\calibration\runs\audio-state.msgpack --audio-events-cache .\calibration\runs\audio-events.msgpack --sync-status .\calibration\runs\av-sync-status.json
+```
+
 ## Invariants
 
 - Aquarium owns rendering and Faust DSP, not microphone capture or clock correction.
 - LocalCastBridge publishes declared AmbiX blocks, not undecoded heterogeneous microphone channels.
 - LocalCastBridge publishes source-event geometry separately from AmbiX audio; render effects do not have to infer transient positions from the sound bed.
+- Aquarium/Spout packaging selects audio source events against each visual frame's `audio_alignment_time_ns`; OBS should receive the already synchronized output rather than trying to align independent media sources.
 - The audio frame carries `start_sample` and `audio_time_ns` so visual packets can align against the same bounded-latency timeline.
 - OBS may receive a rendered monitor output later, but OBS is not the spatial bus authority.
