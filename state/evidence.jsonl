@@ -1,3 +1,4 @@
 {"ts":"2026-05-18T00:00:00+00:00","type":"decision","status":"ok","note":"Use FFmpeg SRT endpoints plus OBS Media Source for v1; OBS plugin or fork is not justified until standard ingest fails a concrete invariant."}
 
 {"ts": "2026-05-18T09:55:45+00:00", "type": "verification", "status": "ok", "note": "State helper and sender dry-run produce valid repo status and SRT URLs with explicit ports for the example config."}
+{"ts": "2026-05-18T10:24:49+00:00", "type": "deployment", "status": "ok", "note": "Neighbor sender 192.168.1.84 has LocalCastBridge under C:\\Meta\\LocalCastBridge, FFmpeg 8.1.1 with SRT/h264_nvenc, and desktop start/stop launchers targeting receiver 192.168.1.66 ports 5100/5101."}

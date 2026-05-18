@@ -46,10 +46,9 @@ active_subgoals:
 
 current_status:
   summary: >
-    First repo scaffold is in place with persistence machinery, architecture
-    docs, example config, and sender scripts for FFmpeg/SRT/NVENC local OBS
-    source delivery.
+    First repo scaffold is in place and deployed to the neighbor sender at
+    C:\Meta\LocalCastBridge. FFmpeg 8.1.1 with SRT and h264_nvenc is installed
+    there, and Madman's desktop has start/stop launchers.
   next_action: >
-    Run sender discovery on the husband's PC, fill config/localcast.json with
-    actual receiver IP and audio device names, then dry-run sender-start before
-    opening live streams into OBS.
+    Add OBS listener Media Sources on the receiver for ports 5100 and 5101,
+    then start the sender launcher and smoke-test video plus Focusrite audio.

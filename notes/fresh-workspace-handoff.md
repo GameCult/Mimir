@@ -23,14 +23,16 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Sender-side video encoding is `h264_nvenc`.
 - Audio sources are separate SRT endpoints so OBS can mix them separately.
 - The repo contains scripts and docs, not a native OBS plugin.
+- Neighbor sender is deployed at `C:\Meta\LocalCastBridge` on `192.168.1.84`.
+- Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
 
 ## Current Pressure
 
 The useful next work is real hardware validation:
 
-- confirm the sender FFmpeg build has `srt` and `h264_nvenc`
-- capture actual audio device names
+- add OBS listener Media Sources on this workstation
 - tune latency once streams are live in OBS
+- add a real loopback/virtual audio capture source if system-output audio is required
 
 ## Immediate Re-entry Instruction
 
