@@ -73,19 +73,19 @@ C:\Users\Madman's Lullaby\Desktop\Stop LocalCast Sender.cmd
 
 Start launcher:
 
-- runs `scripts\sender-start.ps1`
+- runs `scripts\start-localcast-desktop.ps1`
 - uses `config\localcast.json`
 - passes the winget FFmpeg alias path explicitly
 - starts Voicemeeter
-- calls `SoundVolumeView.exe` by absolute path because the winget alias is not
-  reliably available in interactive `cmd.exe`
+- calls `SoundVolumeView.exe` by absolute path inside PowerShell because the
+  winget alias is not reliably available in interactive `cmd.exe`
 - sets Windows default render to `Voicemeeter VAIO3 Input`
 - sets Windows default capture to `Voicemeeter Out B3`
 - writes FFmpeg logs under `C:\Meta\LocalCastBridge\logs`
 
 Stop launcher:
 
-- runs `scripts\sender-stop.ps1`
+- runs `scripts\stop-localcast-desktop.ps1`
 - stops FFmpeg processes whose command line contains `srt://`
 - restores Windows default render to `Focusrite USB Audio\Device\Speakers\Render`
 - closes `voicemeeter_x64.exe`

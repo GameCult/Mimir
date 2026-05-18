@@ -28,7 +28,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Receiver OBS scene collection has `Neighbor PC - Video`, `Neighbor PC - Focusrite`, and `Neighbor PC - System Audio` Media Sources added.
 - Sender has Voicemeeter plus SoundVolumeView installed for system-output loopback.
 - Sender script was patched after failed transmission: live FFmpeg commands now include `-nostdin`, logs go under `C:\Meta\LocalCastBridge\logs`, and interactive video capture size is `1920x1080`.
-- Madman's desktop launchers call `SoundVolumeView.exe` and `ffmpeg.exe` by absolute winget-link path.
+- Madman's desktop launchers call PowerShell wrappers: `scripts\start-localcast-desktop.ps1` and `scripts\stop-localcast-desktop.ps1`.
 - SSH-launched video capture fails with `gdigrab` error 5; test video from Madman's interactive desktop launcher.
 
 ## Current Pressure

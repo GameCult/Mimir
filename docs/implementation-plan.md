@@ -15,7 +15,7 @@
 - Receiver OBS scene has `Neighbor PC - System Audio` on SRT port `5102`.
 - Sender script uses `-nostdin` and repo-root logs so desktop launchers stay alive and diagnostics land in `C:\Meta\LocalCastBridge\logs`.
 - Sender video config is `1920x1080` for the interactive desktop. The `1024x768` SSH session size is not the streaming target.
-- Desktop launchers use absolute paths for winget-installed tools because interactive `cmd.exe` did not resolve `SoundVolumeView`.
+- Desktop `.cmd` launchers delegate to PowerShell wrappers so paths with spaces and apostrophes are handled in one place.
 
 ## Temporary
 
