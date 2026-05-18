@@ -132,8 +132,11 @@ research:
       `audio_field.phase_meaning` keeps raw phase internal and publishes
       `localcast.audio.phase_field` with delay correction, coherence,
       confidence, distance-equivalent delta, reference-bleed/suppression
-      weights, correction energy, and active-probe need. This is learned
-      audio-field state, not a phase display.
+      weights, correction energy, and active-probe need. `audio_field.active_probe`
+      closes the next loop by feeding that confidence state into
+      ActiveProbeOptimizer and emitting bounded chirplet WAVs/manifests, with
+      optional default-device playback. This is learned audio-field state, not
+      a phase display.
   sensor_fusion_architecture:
     summary: docs/sensor-fusion-architecture.md
     key_decision: >

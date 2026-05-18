@@ -12,7 +12,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from audio_field.cultcache_audio import make_audio_phase_field, put_live_audio_phase_field  # noqa: E402
+from audio_field.active_probe import ActiveConfidenceMaintainer  # noqa: E402
 from audio_field.phase_meaning import LivePhaseMeaningExtractor  # noqa: E402
+from audio_field.probe_optimizer import ActiveProbeOptimizer, ProbePolicy  # noqa: E402
 
 
 def read_float_wav(path: Path) -> tuple[int, np.ndarray]:
@@ -74,6 +76,19 @@ def main() -> None:
     parser.add_argument("--duration", type=float)
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--realtime", action="store_true")
+    parser.add_argument("--maintain-confidence", action="store_true")
+    parser.add_argument("--target-confidence", type=float, default=0.65)
+    parser.add_argument("--trigger-confidence", type=float, default=0.35)
+    parser.add_argument("--min-probe-interval-frames", type=int, default=45)
+    parser.add_argument("--probe-level-dbfs", type=float, default=-18.0)
+    parser.add_argument("--probe-output-dir", type=Path, default=ROOT / "calibration" / "runs" / "active-probes")
+    parser.add_argument("--probe-seconds", type=float, default=0.03)
+    parser.add_argument("--probe-band", default="1800:9000")
+    parser.add_argument("--ultrasonic-probes", action="store_true", help="Use a near-ultrasonic probe band below Nyquist.")
+    parser.add_argument("--probe-channel", type=int, default=0)
+    parser.add_argument("--probe-output-channels", type=int, default=2)
+    parser.add_argument("--probe-unmasked", action="store_true", help="Allow probes even when the reference block is not masking them.")
+    parser.add_argument("--play-probes", action="store_true", help="Play scheduled probes through the default output device.")
     args = parser.parse_args()
 
     sample_rate, field = read_float_wav(args.field)
@@ -88,6 +103,27 @@ def main() -> None:
         parse_frequencies(args.frequency),
         reference_id=args.reference_id,
     )
+    maintainer = None
+    if args.maintain_confidence:
+        band_start, band_end = ultrasonic_probe_band(sample_rate) if args.ultrasonic_probes else parse_probe_band(args.probe_band)
+        maintainer = ActiveConfidenceMaintainer(
+            ActiveProbeOptimizer(
+                ProbePolicy(
+                    target_confidence=args.target_confidence,
+                    trigger_confidence=args.trigger_confidence,
+                    min_interval_frames=args.min_probe_interval_frames,
+                    max_probe_level_dbfs=args.probe_level_dbfs,
+                    prefer_masked_windows=not args.probe_unmasked,
+                )
+            ),
+            sample_rate=sample_rate,
+            output_dir=args.probe_output_dir,
+            duration_seconds=args.probe_seconds,
+            start_hz=band_start,
+            end_hz=band_end,
+            channels=args.probe_output_channels,
+            channel=args.probe_channel,
+        )
 
     start_monotonic = time.monotonic()
     audio_origin_ns = time.monotonic_ns()
@@ -122,6 +158,10 @@ def main() -> None:
                 active_probe_reason=meaning.active_probe_reason,
             ),
         )
+        if maintainer is not None:
+            emitted = maintainer.update(meaning, block_ref, force_masked=args.probe_unmasked)
+            if emitted is not None and args.play_probes:
+                play_probe_file(emitted.path)
         frame_id += 1
         cursor += args.hop_frames
         if cursor + args.chunk_frames > max_samples and args.loop:
@@ -131,6 +171,29 @@ def main() -> None:
             sleep_for = target_time - time.monotonic()
             if sleep_for > 0:
                 time.sleep(sleep_for)
+
+
+def parse_probe_band(value: str) -> tuple[float, float]:
+    parts = value.split(":")
+    if len(parts) != 2:
+        raise SystemExit(f"probe band must be start:end Hz, got {value!r}")
+    return float(parts[0]), float(parts[1])
+
+
+def ultrasonic_probe_band(sample_rate: int) -> tuple[float, float]:
+    nyquist = 0.5 * float(sample_rate)
+    end_hz = min(22_000.0, nyquist - 1200.0)
+    start_hz = min(18_500.0, end_hz - 2500.0)
+    if end_hz <= 16_000.0 or start_hz <= 0.0:
+        raise SystemExit(f"sample rate {sample_rate} leaves no useful ultrasonic probe band")
+    return start_hz, end_hz
+
+
+def play_probe_file(path: Path) -> None:
+    import sounddevice as sd
+
+    rate, data = wavfile.read(path)
+    sd.play(data.astype(np.float32), int(rate), blocking=True)
 
 
 if __name__ == "__main__":

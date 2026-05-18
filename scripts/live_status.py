@@ -14,6 +14,15 @@ def read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def read_last_jsonl(path: Path):
+    if not path.exists():
+        return None
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        return None
+    return json.loads(lines[-1])
+
+
 def msgpack_head(path: Path):
     if not path.exists():
         return None
@@ -101,6 +110,7 @@ def main() -> None:
             "visual-stream-status.msgpack",
             "audio-stream-status.msgpack",
             "audio-phase-field.msgpack",
+            "active-probes/active-probes.jsonl",
             "stream-spout-status.json",
             "av-sync-status.json",
         ]
@@ -114,6 +124,7 @@ def main() -> None:
         "audioHead": msgpack_head(runs / "audio-state.msgpack"),
         "eventsHead": msgpack_head(runs / "audio-events.msgpack"),
         "phaseFieldHead": msgpack_head(runs / "audio-phase-field.msgpack"),
+        "lastActiveProbe": read_last_jsonl(runs / "active-probes" / "active-probes.jsonl"),
     }
     print(json.dumps(payload, indent=2, default=str))
 

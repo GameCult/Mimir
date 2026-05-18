@@ -70,7 +70,7 @@ Ownership:
 - `audio_field/` owns unit-testable buffering, bounded-latency convergence, injectable port protocols, and pipeline orchestration.
 - Runtime sync owns per-block chirplet observations from known speaker output and updates delay/SRO/phase estimates with confidence gates before alignment.
 - `audio_field.phase_meaning` owns extracting usable meaning from internal phase/chirplet evidence. The live cache publishes delay correction, coherence, confidence, distance-equivalent delta, reference-bleed/suppression estimates, correction energy, and active-probe need; raw phase bands stay inside the estimator.
-- Active probe optimization owns extra chirplet emission when confidence drops, bounded by level/spacing/audibility budget.
+- Active probe optimization owns extra chirplet emission when confidence drops, bounded by level/spacing/audibility budget. `audio_field.active_probe` is the runtime join that converts phase-field confidence into emitted chirplet WAVs/manifests and optional default-device playback.
 - The camera/sensor-fusion pipeline may publish world poses later; it does not own audio clocks or channel timing.
 - OBS may ingest rendered output later; it is not the authority for the Ambisonic field.
 

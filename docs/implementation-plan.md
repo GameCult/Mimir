@@ -41,6 +41,7 @@
   - `audio_field.phase_meaning` extracts actionable delay, coherence, confidence, suppression, correction-energy, and active-probe need from internal phase/chirplet evidence.
   - `localcast.audio.phase_field` is a typed CultCache document at `calibration/runs/audio-phase-field.msgpack`.
   - `scripts/stream_phase_field.py` publishes the live meaning document from an aligned mic field plus known program/loopback reference without exposing raw phase bands as the renderer API.
+  - `audio_field.active_probe` wires low phase-field confidence into `ActiveProbeOptimizer`, emits bounded chirplet WAVs plus `active-probes.jsonl`, and can play probes through the default output device.
 
 ## Temporary
 
@@ -66,4 +67,4 @@
 13. Replace synthetic live-fusion observations with PS3 Eye detector observations and calibrated surface-feature tracks.
 14. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
 15. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
-16. Wire `stream_phase_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed its low-confidence state into the active chirplet probe optimizer.
+16. Wire `stream_phase_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.
