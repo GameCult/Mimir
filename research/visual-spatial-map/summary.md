@@ -16,6 +16,8 @@ Extend the AquaSynth/LocalCastBridge concept from "one camera view plus spatial 
 
 The high-rate cheap cameras in this rig are **two PlayStation Eye / PS3 Eye** units, not PS2 EyeToys. The PS3 developer wiki lists PlayStation Eye video modes at 640x480 @ 60 Hz and 320x240 @ 120 Hz [PS3 Eye]. Community tracking stacks sometimes expose higher practical modes/settings, but that needs verification against the exact driver and USB topology. The PS2 EyeToy is described as a normal USB 1.1 camera [PS2 EyeToy], so it remains only a rejected naming confusion path.
 
+Windows driver state matters. The opentrack wiki documents a current open-driver route for PS3 Eye using Zadig to install `libusb-win32` on interface 0, with `libusbK` as a fallback if needed [opentrack PS3 Eye; Zadig]. The old Code Laboratories CL Eye driver exists and advertised DirectShow/high-frame-rate support, but its own page targets Windows XP/Vista/7 era systems [CL Eye]. For this rig, the open-driver path is the default candidate; CL Eye is historical reference material, not a dependency to pirate or preserve.
+
 The beauty/RGB cameras are **two Razer Kiyos, one of them Kiyo Pro**. Their microphones can participate in the audio system, but camera attachment does not imply audio clock sync. They need the same live adaptive sync treatment as other independent USB audio devices.
 
 The **Leap Motion** is a separate stereo IR sensor. LeapUVC gives low-level UVC access to Leap Motion image data and controls such as LED brightness, gamma, exposure, gain, resolution, and camera calibration/depth examples [LeapUVC]. Ultraleap's LeapC image API also exposes stereo infrared image buffers and distortion/calibration maps, with functions for rectilinear/pixel mapping [Ultraleap Images]. In this rig, installing the LeapUVC driver means the device shows up as a generic UVC device and is no longer addressable through Ultraleap software in that mode. Treat LeapUVC and Ultraleap tracking as mutually exclusive operating modes unless proven otherwise on the actual machine.
@@ -136,6 +138,10 @@ After that spine holds, add RGB projection, then splats.
 - [PS3 Eye] PS3 Developer Wiki, "PlayStation Eye." Mirror: `mirrors/ps3-playstation-eye-devwiki.html`.
 - [PS2 EyeToy] PS2 Developer Wiki, "EyeToy." Mirror: `mirrors/ps2-eyetoy-devwiki.html`.
 - [iPiSoft] iPiSoft Wiki, "User Guide for Multiple PlayStation Eye Cameras Configuration." Mirror: `mirrors/ipisoft-multiple-playstation-eye-cameras.html`.
+- [opentrack PS3 Eye] opentrack Wiki, "PS3 Eye open driver instructions." Mirror: `mirrors/opentrack-ps3-eye-open-driver-instructions.html`.
+- [Zadig] Zadig. Mirror: `mirrors/zadig-home.html`.
+- [CL Eye] Code Laboratories, "CL Eye Platform Driver." Mirror: `mirrors/code-laboratories-cl-eye-driver.html`.
+- [DelanClip] DelanClip, "PS3 Eye Camera Head Tracking - OpenTrack - Open Driver." Mirror: `mirrors/delanclip-ps3-eye-open-driver.html`.
 - [LeapUVC] Leap Motion, `leapuvc` repository and manual. Mirrors: `mirrors/leapuvc-github.html`, `mirrors/leapuvc-readme.md`, `mirrors/leapuvc-manual.pdf`.
 - [Ultraleap Images] Ultraleap, "Images." Mirror: `mirrors/ultraleap-leapc-images.html`.
 - [OpenCV] OpenCV, "Multi-camera Calibration." Mirror: `mirrors/opencv-multi-camera-calibration.html`.

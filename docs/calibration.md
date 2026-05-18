@@ -100,3 +100,28 @@ Solve intrinsics from a capture run:
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\charuco_calibration.py calibrate --images .\calibration\runs\<run-folder>
 ```
+
+## PS3 Eye Driver Cut
+
+Use the open-driver path first. The current candidate is the opentrack PS3 Eye open driver route:
+
+1. uninstall any old CL Eye / PS3 Eye video driver
+2. use Zadig on PS3 Eye interface `MI_00`
+3. install `libusb-win32` first
+4. if that fails, try `libusbK`
+5. re-run:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\calibration_probe.py discover --max-index 10
+.\.venv\Scripts\python.exe .\scripts\calibration_probe.py snapshot --max-index 10
+```
+
+Do not install the driver over `MI_01`; that is the working generic USB audio interface.
+
+CL Eye / Code Laboratories is historical reference material only. Do not make this repo depend on a paid, stale, or redistributed proprietary driver. Reverse engineering should stay inside interoperability research boundaries; the live machine should prefer the open driver.
+
+Mirrored references:
+
+- `research/visual-spatial-map/mirrors/opentrack-ps3-eye-open-driver-instructions.html`
+- `research/visual-spatial-map/mirrors/zadig-home.html`
+- `research/visual-spatial-map/mirrors/code-laboratories-cl-eye-driver.html`

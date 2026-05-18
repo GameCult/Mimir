@@ -1,0 +1,476 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"> 
+<html xmlns="//www.w3.org/1999/xhtml" xml:lang="en" lang="en"> 
+<head profile="//www.w3.org/2005/10/profile"> 
+<title>CL - About CL Eye Platform - Code Laboratories</title> 
+<meta name="Description" content="Code Laboratories is an agile research & development firm which provides consulting solutions for government, commercial & communal sectors."> 
+<meta name="keywords" content="ps3eye, ps3, playstation eye, windows driver, code labs, alexp, krism, code laboratories, codelabs, the code labs, cl-eye, cl eye, cleye, nuigroup, computer vision, webcamera, security"> 
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" /> 
+<link rel="shortcut icon" type="image/ico" href="//codelaboratories.com/favicon.png" /> 
+<link href="//codelaboratories.com/template/css/layout.css?v1" rel="stylesheet" type="text/css" /> 
+<!--[if IE 6]><link rel="stylesheet" type="text/css" href="//codelaboratories.com/template/css/ie6.css" /><![endif]-->    
+<!--[if IE 7]><link rel="stylesheet" type="text/css" href="//codelaboratories.com/template/css/ie7.css" /><![endif]-->  
+<link rel="stylesheet" type="text/css" href="//codelaboratories.com/template/css/panels.css" /> 
+<link rel="stylesheet" type="text/css" href="//codelaboratories.com/template/css/letterbox.css" />
+<link rel="stylesheet" type="text/css" href="//codelaboratories.com/template/css/local_panels.css" /> 
+<!-- <link rel="stylesheet" type="text/css" href="//codelaboratories.com/template/css/local_letterbox.css" /> -->  
+<link rel="stylesheet" href="//codelaboratories.com/css-buttons.css" type="text/css" title="default" /> 
+
+<!--<script type='text/javascript' src='//codelaboratories.com/template//js/jquery-1.3.2.js'></script> -->
+<!-- --><script src="//codelaboratories.com/plugins/note/js/jquery-1.9.0.min.js"></script>
+<script type='text/javascript' src='//codelaboratories.com/template//js/js2.js'></script>
+
+<!--
+<link href="//codelaboratories.com/plugins/note/css/MetroBanner.css?v1" rel="stylesheet" type="text/css" media="screen">
+<script type='text/javascript' src="//codelaboratories.com/plugins/note/js/jquery.cookie.js"></script>
+<script type='text/javascript' src="//codelaboratories.com/plugins/note/js/MetroBanner.js?v1.2"></script>
+
+<link href="//codelaboratories.com/js/facebox/facebox.css" media="screen" rel="stylesheet" type="text/css"/>
+<script src="//codelaboratories.com/js/facebox/facebox.js" type="text/javascript"></script>
+-->
+
+
+
+
+
+
+</head> 
+<body id="top"> 
+
+
+
+<style>
+.bg {
+	width: 100%;
+    height: 100%;
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: -1000;
+	background:#151515;
+    }
+</style>
+
+<div id="background-img" class="bg"></div>
+
+<style> 
+#open_bar ul {
+  margin: 0;
+  padding: 0;
+}
+ 
+#open_bar li {
+  list-style-type: none;
+  line-height: normal;
+  padding: 0;
+}
+ 
+#open_bar ul.menus {
+  padding: 0 35px;
+}
+ 
+#open_bar li.menu {
+  float: left;
+  position: relative;
+  margin-right: 4px;
+}
+ 
+#open_bar li.menu a {
+  position: relative;
+  display: block;
+  padding: 4px 5px;
+  font-size: 10px;
+  color: #999;
+  text-decoration: none;
+}
+ 
+#open_bar li.menu a:hover {
+  xbackground: #000;color:#FFF
+}
+ 
+#open_bar li.menu a.on {
+  color: #ddd;
+}
+ 
+#open_bar li.menu a.on:hover {
+  color: #ddd;
+}
+ 
+#open_bar li.menu a.account:hover {
+  color: #fff;
+}
+#open_bar li.menu a.current_account:hover {
+  color: #999;
+}
+ 
+ 
+#menux {
+position:absolute;xmargin-top:10px;z-index:1000;xcursor:pointer;  font-size: 9px; xpadding: 4px 6px;
+  color: #999;
+  text-decoration: none;
+    font-family: Verdana, sans-serif;}
+#menux ul .item{display:none;xmargin:5px;}
+#menux ul:hover .item{display:block;background:#000;
+xpadding:0px 15px 5px 5px ;
+xpadding-top:3px;
+xpadding-bottom:3px;
+xpadding-left:12px;
+xpadding-right:17px;
+margin:0px;
+}
+ 
+#menux ul:hover .item a{color:#fff;text-decoration:none;}
+#menux ul:hover .item a:hover{color:#999;}
+ 
+#menux ul{xwidth:100px;float:left;margin:0px;xpadding:2px;xbackground:#222;list-style:none;}
+
+#menuy {
+position:absolute;xmargin-top:10px;z-index:1000;xcursor:pointer;  font-size: 9px; xpadding: 4px 6px;
+  color: #999;
+  text-decoration: none;
+    font-family: Verdana, sans-serif;}
+
+#menuy ul .item{display:none;xmargin:5px;}
+
+#menuy ul:hover .item{
+display:block;background:#000;
+xpadding:0px 15px 5px 5px ;
+xpadding-top:3px;
+xpadding-bottom:3px;
+xpadding-left:12px;
+xpadding-right:17px;
+margin:0px;
+}
+ 
+#menuy ul:hover .item a{color:#fff;text-decoration:none;}
+#menuy ul:hover .item a:hover{color:#999;}
+ 
+#menuy ul{xwidth:100px;float:left;margin:0px;xpadding:2px;xbackground:#222;list-style:none;}
+</style> 
+ 
+
+<div id="open_bar" style="position:relative;     width               : 988px;
+    margin              : 0 auto;height:22px; background-color:#000;xdisplay:none"> 
+
+
+<ul class="menus" style="xfloat:right; margin-left:-15px;"> 
+
+<!--
+<li class="menu hover_container"><a href="http://codelaboratories.com/home/"  style="xcolor:#5CCE61">CL</a> </li>
+<li class="menu hover_container" style="color:#ccc; padding-top:4px">&middot;</li>	
+<li class="menu hover_container"><a href="http://codelaboratories.com/studio/"  style="xcolor:#5CCE61">Studio</a> </li>
+<li class="menu hover_container" style="color:#ccc; padding-top:4px">&middot;</li>	
+<li class="menu hover_container"><a href="http://codelaboratories.com/live/">Live</a> </li>
+-->
+<li class="menu hover_container"><a href="http://codelaboratories.com/home/"  style="xcolor:#5CCE61">CL</a> </li>
+<li class="menu hover_container" style="color:#ccc; padding-top:4px">&middot;</li>	
+<li class="menu hover_container"><a href="http://codelaboratories.com/studio/"  style="xcolor:#5CCE61">Studio</a> </li>
+<li class="menu hover_container" style="color:#ccc; padding-top:4px">&middot;</li>	
+<li class="menu hover_container"><a href="http://duo3d.com/">Duo</a> </li>
+
+</ul>   
+<!--<li class="menu hover_container"><a href="http://codelaboratories.com/nui/">Kinect</a> </li>
+
+
+<ul class="menus" style="xfloat:right; margin-left:-20px;"> 
+<li class="menu hover_container"><a href="http://clstudiolive.com/">CL Studio Live - 10/10/10</a>
+</ul> 
+ 
+
+-->
+
+ 
+<ul class="menus" style="float:right"> 
+ 	
+<li class="menu hover_container"><a href="http://codelaboratories.com/login/create">New Account</a> </li>
+<li class="menu hover_container" style="color:#ccc; padding-top:4px">&nbsp;&middot;&nbsp;</li>
+<li class="menu hover_container"><a href="http://codelaboratories.com/login/go">Login</a></li> 
+</ul>    
+</div> 
+  
+<div id="header" > 
+<a href="#pageContent" class="hidden">Skip to content</a> 
+<div class="column3" style="width:800px"> 
+<a href="https://codelaboratories.com/home/"><img src="//codelaboratories.com/template/images/logo.png" alt="Code Laboratories" style="margin-left:34px;margin-top:5px" width=32 height=40 /></a> 
+<ul id="navMain" class="inlineUL" xstyle="display:none" >
+<li id="About" ><a href="https://codelaboratories.com/about/">Code Laboratories</a></li>
+<!--<li id="Community" ><a href="https://codelaboratories.com/community/">Community</a></li>-->
+<li id="Downloads" ><a href="https://codelaboratories.com/downloads/">Downloads</a></li>
+<li id="Forums" ><a href="https://codelaboratories.com/forums/">Forums</a></li>
+<li id="Products" class="on"><a href="https://codelaboratories.com/products/">Products</a></li>
+<li id="Research" ><a href="https://codelaboratories.com/research/">Research</a></li>
+<!--<li id="Showcase" ><a href="https://codelaboratories.com/showcase/">Showcase</a></li>-->
+<li id="Support" ><a href="https://codelaboratories.com/support/">Support</a></li>
+</ul>   
+  
+ 
+
+</div> 
+</div> 
+
+
+<div class="container">   
+	<div class="container"> 
+<style>
+#container{
+border:0px;
+width:100%;
+background:#FFF;
+}
+.myFade{opacity:0;}
+</style>
+<div class="containerWrap" style="background:#FFF"> 
+<div id="test" style="width:100%;height:300px;background:#FFF url('//codelaboratories.com/images/eye-driver.png') center 0px no-repeat; color:#FFF"  class="myFade">
+<a href="https://codelaboratories.com/products/" style="position:absolute; border:0px solid #FF0000; width:250px; height:300px;margin-left:-750px;"></a>
+</div> 
+</div>
+<div class="content"> 
+
+   
+
+
+	    <ul class="breadcrumbs inlineUL column3" xstyle="margin-bottom:6px; padding-top:3px;"> 
+<li><a href="https://codelaboratories.com/home/" style="text-decoration:none">Home</a></li>
+<li><a href="https://codelaboratories.com/products/">Products</a></li>
+<li><a href="https://codelaboratories.com/products/eye/">CL Eye Platform</a></li>
+<li><span class="currentcrumb">Driver</span></li> 
+  
+
+</ul>    
+        <hr id="pageContent" class="headerHR"/> 
+	  <div class="letterboxHome" id="letterbox" style="height:5px"> 
+             </div>          
+			<ul class="inlineUL clear">      
+		<li style="margin-top:-7px"> 
+
+
+
+
+
+<li> 
+             <div class="column1 panelNoHeightHP" style="height:424px;background:#111 url('//codelaboratories.com/images/green_bg_split.png') center -2px;">
+             <span class="header">CL Eye Platform Driver </span> 
+         <hr class="myHR">
+<ul style="height:170px">
+             The <b style="color:#FFF">CL Eye Platform Driver</b> provides users a signed hardware driver which exposes supported cameras to third party applications such as Adobe Flash, Skype, MSN or Yahoo for video chat or conferencing. Two modes allow basic compatibility mode and a advanced mode for high frame rate development use.
+
+
+ </ul>   
+
+<hr class="myHR">
+<br>
+
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/grey_button2.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:1px; text-align:center"> 
+<a href="https://codelaboratories.com/products/eye/" style="color:#FFF; xfont-size:12px; xfont-weight:bold">CL Eye Platform Overview</a>
+</div> 
+
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/green_button.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:0px; text-align:center"> 
+<a href="https://codelaboratories.com/products/eye/driver/" style="color:#FFF;xfont-size:12px;font-weight:bold">CL Eye Platform Driver</a>
+</div> 
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/blue_button.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:1px; text-align:center"> 
+<a href="https://codelaboratories.com/products/eye/sdk/" style="color:#FFF; xfont-size:12px; xfont-weight:bold">CL Eye Platform SDK</a>
+</div> 
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/red_button.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:1px; text-align:center"> 
+<a href="https://codelaboratories.com/products/eye/packs/" style="color:#FFF; xfont-size:12px; xfont-weight:bold">CL Eye Platform Packs</a>
+</div> 
+
+               </div>
+                </li> 
+
+
+
+
+
+ </li> 
+		<li style="margin-top:-7px"> 
+
+
+
+  <li> 
+                       <div href="https://codelaboratories.com/camera/driver/" class="column1 panelNoHeightHP" style="height:424px;background:#111 url('//codelaboratories.com/images/green_bg_long.png') center -2px no-repeat">
+                    <span class="header">Features</span>     
+         <hr class="myHR">
+ <ul>
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Driver License</strong> <br> <span style="color:#999">Single camera support for personal non-commercial use.</span><br><br></li>
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Camera Controls</strong> <br> <span style="color:#999">Fully configurable settings such as resolution, exposure and gain.</span><br><br></li>
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Chat/Communication Usage</strong> <br> <span style="color:#999">Rich video chat applications (Adobe FlashAIM/Skype/MSN)</span><br><br></li> 
+
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Dual Operation Modes</strong> <br> <span style="color:#999">Offers two modes for basic and advanced usage.</span><br><br></li> 
+
+ <li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Testing Application</strong> <br> <span style="color:#999">A platform utility for running baseline audio and video tests.</span><br><br></li> 
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Web Video Streaming</strong> <br> <span style="color:#999">Supports for web based video chat applications.</span><br><br></li> 
+
+
+
+
+</ul> 
+
+<br>
+                   </div >
+                </li> 
+  
+
+ </li>  
+		<li style="margin-top:-7px"> 
+
+
+      <li>
+  <div href="https://codelaboratories.com/camera/driver/" class="column1 panelNoHeightHP" style="height:424px;background:#111 url('//codelaboratories.com/images/green_bg_long.png') center -2px no-repeat">
+              <span class="header">Hardware Supported<a href="#" style="color:#FFF"></a></span> 
+            <hr class="myHR">
+<ul>
+
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><a href="https://codelaboratories.com/wiki/Sony Playstation 3 Eye/">Sony Playstation™ 3 Eye</a></li>
+</ul>
+             <span class="header" style="margin-top:40px;">Supported Applications<a href="#" style="color:#FFF"></a></span> 
+            <hr class="myHR">
+<ul>
+<li style="display:list-item; list-style:square;color:#999; padding-left:2px;margin-left:14px">AOL Aim</li><br>
+<li style="display:list-item; list-style:square;color:#999; padding-left:2px;margin-left:14px">Adobe Flash™</li><br>
+<li style="display:list-item; xlist-style:square;color:#999; padding-left:2px;margin-left:14px"> - www.cameroid.com</li><br>
+<li style="display:list-item; xlist-style:square;color:#999; padding-left:2px;margin-left:14px"> - www.ustream.com</li><br>
+<li style="display:list-item; xlist-style:square;color:#999; padding-left:2px;margin-left:14px"> - www.youtube.com</li><br>
+<li style="display:list-item; list-style:square;color:#999; padding-left:2px;margin-left:14px">MSN Messenger</li><br>
+<li style="display:list-item; list-style:square;color:#999; padding-left:2px;margin-left:14px">Skype Video</li><br>
+<li style="display:list-item; list-style:square;color:#999; padding-left:2px;margin-left:14px"><a href="https://codelaboratories.com/eye/apps/" style="color:#FFF">View more...</a></li>
+
+</ul>
+      <span class="header" style="margin-top:30px;">Software Modes</span> 
+         <hr class="myHR">
+<ul>
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Basic Mode</strong> <br> <span style="color:#999">Featuring frame rates optimized for compatibility with chat usage.</span><br><br></li> 
+<li style="display:list-item; list-style:square;color:#ccc; padding-left:2px;margin-left:14px"><strong style="color:#FFF">Advanced Mode</strong> <br> <span style="color:#999"> Featuring full range of supported frame rates for research usage. </span><br><br></li> 
+
+
+</ul>
+             </div>
+                </li>  
+  
+
+ </li> 
+		<li style="margin-top:-7px"> 
+
+
+  <li> 
+       <div class="column1 panelNoHeightHP" style="height:424px;background:#111 url('//codelaboratories.com/images/green_bg.png') center -2px;">
+            
+
+ <span class="header" xstyle="margin-top:30px;">Technical Specifications</span> 
+         <hr class="myHR">
+  <ul style="xmargin-top:30px;height:170px">
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">Microsoft Windows XP, Vista, 7 </li>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">Support for 32/64 bit Windows</li>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">15-125 FPS Capture Frame Rate</li>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">320x240/640x480 Resolution</li>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">High Quality Uncompressed Image</li>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">Microsoft DirectShow™ Support</li>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">Signed USB 2.0 Driver</li><br><br>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">Windows Installer Application</li><br><br>
+<li style="display:list-item; list-style:square;xcolor:#ccc; padding-left:2px;margin-left:14px">Basic and Advanced Modes</li><br><br>
+</ul>
+
+  <hr class="myHR">
+
+<br>
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/green_button.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:0px; text-align:center"> 
+<a href="https://codelaboratories.com/get/cl-eye-driver/" style="color:#FFF; xfont-size:12px; font-weight:bold">Download CL Eye Driver</a>
+</div> 
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/grey_button2.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:1px; text-align:center"> 
+<a href="https://codelaboratories.com/screencast/cl-eye-driver/" style="color:#FFF; xfont-size:12px; xfont-weight:bold">View Installation Video</a>
+</div> 
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/grey_button2.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:1px; text-align:center"> 
+<a href="https://codelaboratories.com/eye/apps/" style="color:#FFF; xfont-size:12px; xfont-weight:bold">View Supported Applications</a>
+</div> 
+<div  class="column1 panelNoHeightHP;" style=" background: url('https://codelaboratories.com/uploads/buttons/grey_button2.png') no-repeat; padding:10px; width:190px; xheight:20px; padding-left:1px; text-align:center"> 
+<a href="https://codelaboratories.com/test/eye/" style="color:#FFF; xfont-size:12px; xfont-weight:bold">View Web Camera Test</a>
+</div> 
+
+               </div>
+                </li> 
+  
+
+ </li> 
+		</ul> 	
+		<hr class="footerHR" />  
+	<ul class="breadcrumbs inlineUL column3" style="margin-bottom:5px; padding-top:3px;"> 
+<li><a href="https://codelaboratories.com/home/" style="text-decoration:none">Home</a></li>
+<li><a href="https://codelaboratories.com/products/">Products</a></li>
+<li><a href="https://codelaboratories.com/products/eye/">CL Eye Platform</a></li>
+<li><span class="currentcrumb">Driver</span></li> 
+  
+
+</ul>     
+</div> 
+</div>  
+<div id="footer_wrap" style="background:#151515 url('../../../uploads/mainfootbg.png') center 0 no-repeat;height:125px; width:100%;z-index:0"> 
+<div id="footer" style="padding-top:14px;background:#151515;background-image:url('../../../uploads/mainfooterbg.png');z-index:500; height:75px"> 
+ 
+
+              <a href="https://codelaboratories.com/home/" class="noBorder"><img src="//codelaboratories.com/template/images/logo.png" alt="CL" class="fLeft" width=21 style="margin-top:17px; margin-left:35px"/> </a>
+    <div class="column3" style="width:800px">   
+      <ul class="sitemap inlineUL" xstyle="font-size:9px"> 
+          <li><a href="https://codelaboratories.com/about/" class="noBorder" >Code Laboratories</a></li> 
+         <!-- <li><a href="https://codelaboratories.com/community/" >Community</a></li> -->
+          <li><a href="https://codelaboratories.com/downloads/" >Downloads</a></li>        
+         <li><a href="https://codelaboratories.com/forums/" >Forums</a></li> 
+         <li><a href="https://codelaboratories.com/products/" style="color:#FFF">Products</a></li> 
+          <li><a href="https://codelaboratories.com/research/" >Research</a></li> 
+           <!-- <li><a href="https://codelaboratories.com/showcase/" >Showcase</a></li>  -->
+          <li><a href="https://codelaboratories.com/support/" >Support</a></li> 
+        </ul>  
+      <ul class="sitemap inlineUL cBoth" xstyle="xfont-size:9px; float:right"> 
+          <li><a href="https://codelaboratories.com/contact/" class="noBorder">Contact us</a></li> 
+     <li><a href="https://codelaboratories.com/kb/" xclass="noBorder">Knowledge Base</a></li> 
+                <li><a href="https://codelaboratories.com/terms/">Terms &amp; Trademarks</a></li> 
+   
+ <li><a href="https://codelaboratories.com/privacy/">Privacy</a></li>   <li><a href="https://codelaboratories.com/press/">Press</a></li>
+
+       <!-- 
+          <li><a href="https://codelaboratories.com/wiki/">Wiki</a></li> 
+          <li><a href="https://codelaboratories.com/wiki/">Test</a></li> 
+-->
+             <li><a href="https://codelaboratories.com/sitemap/">Sitemap</a></li> 
+        </ul> 
+
+
+
+ </div> 
+
+</div>   
+</div>   
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+try {
+var pageTracker = _gat._getTracker("UA-12104152-1");
+pageTracker._trackPageview();
+} catch(err) {}</script>
+
+
+
+
+
+<script type="text/javascript">
+/*
+$(document).ready(function() {  
+
+	$.MetroBanner( 
+	{
+		title: "",
+		content: '<a href="http://duo3d.com/"><img src="https://codelaboratories.com/plugins/note/img/KS_B2.png" border="0/"></a>',
+		//position: "top",
+		position: "botton",
+		color: "#141414"
+		//color: "#0f1010"
+	});
+
+});
+*/
+</script>
+
+
+
+</body> 
+</html> 
+

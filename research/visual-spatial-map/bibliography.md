@@ -13,6 +13,18 @@ Mirrored copies live under `research/visual-spatial-map/mirrors/`.
 - [iPiSoft Wiki, "User Guide for Multiple PlayStation Eye Cameras Configuration"](https://wiki.ipisoft.com/index.php?title=User_Guide_for_Multiple_PlayStation_Eye_Cameras_Configuration_%28printable_version%29&useskin=cleanmonobook)  
   Mirror: `mirrors/ipisoft-multiple-playstation-eye-cameras.html`
 
+- [opentrack Wiki, "PS3 Eye open driver instructions"](https://github.com/opentrack/opentrack/wiki/PS3-Eye-open-driver-instructions/54df68ead70a4069d24bc96f987feb1f57f1b25a)  
+  Mirror: `mirrors/opentrack-ps3-eye-open-driver-instructions.html`
+
+- [Zadig](https://zadig.akeo.ie/)  
+  Mirror: `mirrors/zadig-home.html`
+
+- [Code Laboratories, "CL Eye Platform Driver"](https://codelaboratories.com/products/eye/driver/)  
+  Mirror: `mirrors/code-laboratories-cl-eye-driver.html`
+
+- [DelanClip, "PS3 Eye Camera Head Tracking - OpenTrack - Open Driver"](https://delanclip.com/manuals/ps3-eye-camera-head-tracking/)  
+  Mirror: `mirrors/delanclip-ps3-eye-open-driver.html`
+
 - [Leap Motion, `leapuvc`](https://github.com/leapmotion/leapuvc)  
   Mirrors: `mirrors/leapuvc-github.html`, `mirrors/leapuvc-readme.md`, `mirrors/leapuvc-manual.pdf`
 
