@@ -215,21 +215,32 @@ current_status:
     for the stem packer. The neighbor desktop launcher no longer uses
     Voicemeeter; it restores the Focusrite speakers as the primary playback
     device and the Focusrite analogue input as the default capture device. A
-    direct Core Audio WASAPI loopback shim exists, but the current Focusrite
-    render endpoint rejects loopback initialization with 0x88890008.
+    direct Core Audio WASAPI loopback shim now works when launched in the
+    neighbor's interactive console session; SSH-only launches can see the
+    endpoint but receive no render packets.
     Missing synchronized neighbor feeds are explicit
     silent placeholders, not raw unsynchronized substitutes. The live producer currently uses synthetic calibrated
     observations through the real `SensorRig.fuse` path until camera detector
-    observations replace them. Unit tests inject synthetic cameras and frames so
-    the core does not depend on live camera drivers.
+    observations replace them. The RGB path now has a debug-only CPU dense
+    stereo reference: the two Kiyo-class frames can be block-matched as a
+    provisional calibrated pair and triangulated into `dense-rgb:*` surface
+    claims, but production dense reconstruction must move to Aquarium/GPU
+    compute rather than Python loops. A separate
+    adaptive camera-control policy measures luminance, clipping, contrast, and
+    sharpness, then emits normalized exposure/gain/focus commands through the
+    OpenCV capture adapter when the driver accepts them. Unit tests inject
+    synthetic cameras and frames so the core does not depend on live camera
+    drivers.
   next_action: >
     Capture real ChArUco intrinsics/extrinsics for the PS3 Eyes and Kiyos,
     replace `config/sensor-fusion.example.json` placeholder transforms with a
-    local `config/sensor-fusion.json`, then replace the synthetic live producer
-    with a detector adapter that turns FFmpeg PS3 Eye frames into marker
-    `Observation2D` records for the fusion core and publishes the same typed
-    CultCache/CultNet render-frame document. In parallel, move the render-frame
-    consumer into Aquarium Engine so
+    local `config/sensor-fusion.json`, then move the dense RGB stereo matcher
+    to a GPU-resident stereo/flow pass so high-detail surface claims can scale
+    toward the million-splat temporal accumulator without Python owning each
+    point. Then replace the synthetic live producer with a detector adapter that
+    turns FFmpeg PS3 Eye frames into marker `Observation2D` records for the
+    fusion core and publishes the same typed CultCache/CultNet render-frame
+    document. In parallel, move the render-frame consumer into Aquarium Engine so
     Aquarium renders cached points/brushes into its GPU render target and
     publishes or hands off the same Spout sender `LocalCastBridge Point Cloud`
     for OBS, replacing the deadline OpenGL point sink without changing packet
@@ -239,7 +250,7 @@ current_status:
     shotgun capture/transport path, replace placeholder mic/speaker geometry
     with measured world coordinates, then build the delay/SRO alignment stage
     that feeds the bounded field cache and emits aligned six-channel blocks for
-    FOA encoding. Fix neighbor loopback by using a render endpoint/driver that
-    accepts WASAPI loopback or a sender FFmpeg build with native WASAPI input;
-    do not reintroduce a virtual mixer unless direct loopback fails a concrete
-    invariant that the mixer actually satisfies.
+    FOA encoding. Keep neighbor loopback on the scheduled interactive WASAPI
+    capture path and use it as the timing witness once actual neighbor app
+    audio is present; do not reintroduce a virtual mixer unless direct loopback
+    fails a concrete invariant that the mixer actually satisfies.

@@ -6,7 +6,10 @@ import unittest
 import numpy as np
 
 from localcast.sensor_fusion import (
+    AdaptiveCameraController,
     CameraModel,
+    CameraQualityTarget,
+    DenseStereoConfig,
     FusionConfig,
     Observation2D,
     PointCloud,
@@ -17,6 +20,7 @@ from localcast.sensor_fusion import (
     SpoutOutputConfig,
     TrackCache,
     frame_to_vertex_array,
+    dense_stereo_points,
     get_live_render_frame,
     lower_frame_to_screen_brushes,
     lower_points_to_render_frame,
@@ -27,6 +31,7 @@ from localcast.sensor_fusion import (
 from localcast.sensor_fusion.spout_output import rasterize_frame_rgba
 from scripts.live_sensor_fusion import (
     leap_channel_motion_points,
+    rgb_dense_stereo_splats,
     rgb_room_splats,
     unpack_leap_packed_channels,
 )
@@ -326,6 +331,71 @@ class SensorFusionTests(unittest.TestCase):
         self.assertGreater(len(points), 0)
         self.assertTrue(all(point.stable_key.startswith("leap-motion:green") for point in points))
         self.assertTrue(all(point.source_timestamp_ns == 456 for point in points))
+
+    def test_adaptive_camera_controller_reduces_overexposure(self):
+        controller = AdaptiveCameraController(target=CameraQualityTarget(mean_luma=0.5, luma_deadband=0.02))
+
+        command = controller.update(
+            quality=type(
+                "Quality",
+                (),
+                {
+                    "mean_luma": 0.82,
+                    "dark_clip": 0.0,
+                    "bright_clip": 0.12,
+                    "contrast": 0.2,
+                    "sharpness": 0.2,
+                },
+            )()
+        )
+
+        self.assertTrue(command.changed)
+        self.assertIsNotNone(command.exposure)
+        self.assertLess(command.exposure, 0.5)
+        self.assertIsNotNone(command.gain)
+        self.assertLess(command.gain, 0.25)
+
+    def test_dense_stereo_emits_calibrated_rgb_surface_claims(self):
+        height, width = 48, 72
+        rng = np.random.default_rng(42)
+        left_frame = rng.integers(0, 255, size=(height, width, 3), dtype=np.uint8)
+        right_frame = np.roll(left_frame, -8, axis=1)
+        left = camera("left", -0.25)
+        right = camera("right", 0.25)
+        left = CameraModel("left", left.camera_matrix, left.dist_coeffs, left.world_from_sensor, width, height)
+        right = CameraModel("right", right.camera_matrix, right.dist_coeffs, right.world_from_sensor, width, height)
+
+        points = dense_stereo_points(
+            prefix="dense-test",
+            left_frame_bgr=left_frame,
+            right_frame_bgr=right_frame,
+            left_camera=left,
+            right_camera=right,
+            timestamp_ns=789,
+            config=DenseStereoConfig(
+                sample_step=8,
+                block_radius=2,
+                max_disparity_px=16,
+                min_ncc=0.55,
+                max_reprojection_error_px=200.0,
+            ),
+        )
+
+        self.assertGreater(len(points), 0)
+        self.assertTrue(all(point.stable_key.startswith("dense-test") for point in points))
+        self.assertTrue(all(point.source_timestamp_ns == 789 for point in points))
+        self.assertTrue(any(point.radius_m < 0.01 for point in points))
+
+    def test_live_rgb_sampler_dense_path_uses_camera_pair_before_fallback_surfaces(self):
+        height, width = 48, 72
+        rng = np.random.default_rng(7)
+        primary = rng.integers(0, 255, size=(height, width, 3), dtype=np.uint8)
+        secondary = np.roll(primary, -7, axis=1)
+
+        points = rgb_dense_stereo_splats(primary, secondary, 321, step=8)
+
+        self.assertGreater(len(points), 0)
+        self.assertTrue(all(point.stable_key.startswith("dense-rgb") for point in points))
 
 
 if __name__ == "__main__":

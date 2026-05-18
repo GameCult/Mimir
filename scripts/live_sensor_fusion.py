@@ -12,15 +12,19 @@ if str(ROOT) not in sys.path:
 
 from localcast.sensor_fusion import (
     CameraModel,
+    DenseStereoConfig,
     FusionConfig,
     Observation2D,
     RenderBridgeConfig,
     RenderFramePacket,
     RenderPointPacket,
     SensorRig,
+    dense_stereo_points,
+    measure_frame_quality,
     put_live_render_frame,
     lower_points_to_render_frame,
 )
+from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
 
 
 def acquire_runtime_lock(path: Path) -> BinaryIO | None:
@@ -214,6 +218,9 @@ class RgbSplatSampler:
         height: int,
         sample_step: int,
         room_step: int,
+        dense_step: int,
+        enable_cpu_dense_stereo: bool,
+        adaptive_controls: bool,
         fallback_dir: Path,
     ) -> None:
         self.api = api
@@ -223,9 +230,14 @@ class RgbSplatSampler:
         self.height = height
         self.sample_step = max(4, int(sample_step))
         self.room_step = max(self.sample_step, int(room_step))
+        self.dense_step = max(1, int(dense_step))
+        self.enable_cpu_dense_stereo = enable_cpu_dense_stereo
+        self.adaptive_controls = adaptive_controls
         self.fallback_dir = fallback_dir
         self._captures: dict[int, object] = {}
         self._frames: dict[int, np.ndarray] = {}
+        self._controllers: dict[int, AdaptiveCameraController] = {}
+        self._setting_ports: dict[int, OpenCvCameraSettingPort] = {}
 
     def close(self) -> None:
         for capture in self._captures.values():
@@ -239,12 +251,16 @@ class RgbSplatSampler:
         primary = self._read_frame(self.primary_index)
         secondary = self._read_frame(self.secondary_index)
         points: list[RenderPointPacket] = []
+        if self.enable_cpu_dense_stereo and primary is not None and secondary is not None:
+            points.extend(rgb_dense_stereo_splats(primary, secondary, timestamp_ns, step=self.dense_step))
         if primary is not None:
             points.extend(rgb_room_splats("room-rgb:primary", primary, np.array([-0.42, 0.05, 0.0]), timestamp_ns, step=self.room_step))
-            points.extend(rgb_body_splats("host-rgb", primary, np.array([-0.42, 0.05, 0.0]), now_s, timestamp_ns, side=-1.0, step=self.sample_step))
+            if not points:
+                points.extend(rgb_body_splats("host-rgb", primary, np.array([-0.42, 0.05, 0.0]), now_s, timestamp_ns, side=-1.0, step=self.sample_step))
         if secondary is not None:
             points.extend(rgb_room_splats("room-rgb:secondary", secondary, np.array([0.48, 0.28, 0.0]), timestamp_ns, step=self.room_step))
-            points.extend(rgb_body_splats("deru-rgb", secondary, np.array([0.48, 0.28, 0.0]), now_s + 0.6, timestamp_ns, side=1.0, step=self.sample_step))
+            if not points:
+                points.extend(rgb_body_splats("deru-rgb", secondary, np.array([0.48, 0.28, 0.0]), now_s + 0.6, timestamp_ns, side=1.0, step=self.sample_step))
         return tuple(points)
 
     def _read_frame(self, index: int) -> np.ndarray | None:
@@ -258,6 +274,9 @@ class RgbSplatSampler:
                 capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
                 capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 self._captures[index] = capture
+                if self.adaptive_controls:
+                    self._controllers[index] = AdaptiveCameraController()
+                    self._setting_ports[index] = OpenCvCameraSettingPort(capture)
             else:
                 try:
                     capture.release()
@@ -269,12 +288,21 @@ class RgbSplatSampler:
         for _ in range(2):
             ok, frame = capture.read()
             if ok and frame is not None:
+                self._tune_capture(index, frame)
                 self._frames[index] = frame
                 return frame
         cached = self._frames.get(index)
         if cached is not None:
             return cached
         return self._fallback_frame(index)
+
+    def _tune_capture(self, index: int, frame: np.ndarray) -> None:
+        controller = self._controllers.get(index)
+        port = self._setting_ports.get(index)
+        if controller is None or port is None:
+            return
+        command = controller.update(measure_frame_quality(frame))
+        port.apply(command)
 
     def _fallback_frame(self, index: int) -> np.ndarray | None:
         import cv2
@@ -301,6 +329,59 @@ def cv2_api(name: str) -> int:
         "dshow": cv2.CAP_DSHOW,
         "msmf": cv2.CAP_MSMF,
     }[name]
+
+
+def rgb_dense_stereo_splats(
+    primary_bgr: np.ndarray,
+    secondary_bgr: np.ndarray,
+    timestamp_ns: int,
+    *,
+    step: int,
+) -> tuple[RenderPointPacket, ...]:
+    height, width = primary_bgr.shape[:2]
+    secondary_height, secondary_width = secondary_bgr.shape[:2]
+    width = min(width, secondary_width)
+    height = min(height, secondary_height)
+    left = rgb_dense_camera("kiyo-primary", -0.18, width, height)
+    right = rgb_dense_camera("kiyo-secondary", 0.18, width, height)
+    return dense_stereo_points(
+        prefix="dense-rgb",
+        left_frame_bgr=primary_bgr[:height, :width],
+        right_frame_bgr=secondary_bgr[:height, :width],
+        left_camera=left,
+        right_camera=right,
+        timestamp_ns=timestamp_ns,
+        config=DenseStereoConfig(sample_step=step, block_radius=3, max_disparity_px=max(24, width // 3), radius_m=0.0045),
+    )
+
+
+def rgb_dense_camera(sensor_id: str, x: float, width: int, height: int) -> CameraModel:
+    focal = 0.82 * float(width)
+    return CameraModel(
+        sensor_id=sensor_id,
+        camera_matrix=np.array(
+            [
+                [focal, 0.0, width * 0.5],
+                [0.0, focal, height * 0.5],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        ),
+        dist_coeffs=np.zeros(5),
+        world_from_sensor=np.array(
+            [
+                [1.0, 0.0, 0.0, x],
+                [0.0, 1.0, 0.0, -0.72],
+                [0.0, 0.0, 1.0, 1.28],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        ),
+        width=width,
+        height=height,
+        role="rgb_dense_stereo",
+        latency_ms=45.0,
+    )
 
 
 def rgb_body_splats(
@@ -619,6 +700,9 @@ def main() -> None:
     parser.add_argument("--rgb-height", type=int, default=480)
     parser.add_argument("--rgb-sample-step", type=int, default=10)
     parser.add_argument("--rgb-room-step", type=int, default=28)
+    parser.add_argument("--cpu-dense-stereo", action="store_true", help="Debug-only CPU stereo matcher. Production dense fusion belongs on the GPU.")
+    parser.add_argument("--rgb-dense-step", type=int, default=16)
+    parser.add_argument("--no-adaptive-camera-controls", action="store_true")
     parser.add_argument("--no-leap", action="store_true")
     parser.add_argument("--leap-api", choices=["any", "dshow", "msmf"], default="msmf")
     parser.add_argument("--leap-index", type=int, default=0)
@@ -650,6 +734,9 @@ def main() -> None:
         height=args.rgb_height,
         sample_step=args.rgb_sample_step,
         room_step=args.rgb_room_step,
+        dense_step=args.rgb_dense_step,
+        enable_cpu_dense_stereo=args.cpu_dense_stereo,
+        adaptive_controls=not args.no_adaptive_camera_controls,
         fallback_dir=ROOT / "calibration" / "runs",
     )
     leap_sampler = None if args.no_leap else LeapPackedMotionSampler(
