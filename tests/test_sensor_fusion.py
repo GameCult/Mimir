@@ -10,6 +10,7 @@ from localcast.sensor_fusion import (
     BoardObservation,
     BoardSpec,
     CameraModel,
+    CameraClockSyncModel,
     CameraIntrinsics,
     CameraQualityTarget,
     ClapDetectorConfig,
@@ -23,6 +24,7 @@ from localcast.sensor_fusion import (
     SensorRig,
     SpoutOutputConfig,
     TimestampedFrame,
+    TimestampedFrameHistory,
     TrackCache,
     VirtualCamera,
     detect_clap_events,
@@ -509,6 +511,43 @@ class SensorFusionTests(unittest.TestCase):
 
             self.assertTrue(clap_cache.exists())
             self.assertTrue(any(point.stable_key.startswith("clap-calibration:") for point in points))
+            estimates = {estimate.sensor_id: estimate for estimate in calibrator.sync_model.estimates()}
+            self.assertIn("kiyo-primary", estimates)
+            self.assertIn("kiyo-secondary", estimates)
+            restored = LiveClapCalibrator(
+                audio_cache=audio_cache,
+                clap_cache=clap_cache,
+                camera_width=width,
+                camera_height=height,
+            )
+            restored_estimates = {estimate.sensor_id: estimate for estimate in restored.sync_model.estimates()}
+            self.assertIn("kiyo-primary", restored_estimates)
+            self.assertIn("kiyo-secondary", restored_estimates)
+
+    def test_camera_sync_model_selects_history_frame_at_oracle_time(self):
+        event = type(
+            "Event",
+            (),
+            {
+                "stable_key": "clap:test",
+                "acoustic_oracle_ns": 1_000,
+                "acoustic_confidence": 1.0,
+                "camera_peaks": (
+                    type("Peak", (), {"sensor_id": "cam-a", "timestamp_ns": 900, "score": 0.8})(),
+                ),
+            },
+        )()
+        sync = CameraClockSyncModel(smoothing=1.0)
+        sync.observe_event(event)
+        history = TimestampedFrameHistory(max_frames=4)
+        for timestamp, value in ((880, 0.0), (900, 1.0), (940, 2.0)):
+            history.add(TimestampedFrame("cam-a", timestamp, np.full((2, 2), value, dtype=np.float32)))
+
+        selected = history.nearest("cam-a", sync.raw_time_for_oracle("cam-a", 1_000))
+
+        self.assertIsNotNone(selected)
+        self.assertEqual(900, selected.timestamp_ns)
+        self.assertEqual(100, sync.offset_ns("cam-a"))
 
     def test_audio_source_events_overlay_against_audio_alignment_time(self):
         frame = RenderFramePacket(

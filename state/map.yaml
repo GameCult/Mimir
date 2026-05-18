@@ -168,7 +168,12 @@ research:
       treated as ground truth. Live clap calibration now uses the Kiyo stereo
       pair for the first rough 3D impact solve and includes Leap motion as the
       high-precision visual timing witness; Leap should become a geometric
-      camera authority after shared calibration.
+      camera authority after shared calibration. Clap peaks update per-camera
+      clock offsets, allowing history buffers to be sampled at
+      `oracle_time - camera_offset` for coherent point-cloud construction.
+      Ultrasonic chirp delay estimates from camera microphones are valid
+      camera-body pose evidence and should enter this same map as range/timing
+      constraints, not as a separate audio-only calibration story.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >

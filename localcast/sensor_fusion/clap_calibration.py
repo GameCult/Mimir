@@ -58,6 +58,81 @@ class ClapCalibrationEvent:
     camera_peaks: tuple[CameraMotionPeak, ...]
 
 
+@dataclass(frozen=True)
+class CameraSyncEstimate:
+    sensor_id: str
+    offset_ns: int
+    confidence: float
+    updated_by_event: str
+    observed_timestamp_ns: int
+    oracle_timestamp_ns: int
+
+
+class CameraClockSyncModel:
+    def __init__(self, smoothing: float = 0.35) -> None:
+        self.smoothing = max(0.0, min(1.0, float(smoothing)))
+        self._estimates: dict[str, CameraSyncEstimate] = {}
+
+    def observe_event(self, event: ClapCalibrationEvent) -> None:
+        for peak in event.camera_peaks:
+            raw_offset = int(event.acoustic_oracle_ns - peak.timestamp_ns)
+            confidence = max(0.0, min(1.0, float(peak.score) * float(event.acoustic_confidence)))
+            previous = self._estimates.get(peak.sensor_id)
+            if previous is None:
+                offset = raw_offset
+                confidence = max(confidence, 1.0e-6)
+            else:
+                alpha = self.smoothing * confidence
+                offset = round((1.0 - alpha) * previous.offset_ns + alpha * raw_offset)
+                confidence = max(previous.confidence * 0.96, confidence)
+            self._estimates[peak.sensor_id] = CameraSyncEstimate(
+                sensor_id=peak.sensor_id,
+                offset_ns=int(offset),
+                confidence=float(confidence),
+                updated_by_event=event.stable_key,
+                observed_timestamp_ns=int(peak.timestamp_ns),
+                oracle_timestamp_ns=int(event.acoustic_oracle_ns),
+            )
+
+    def offset_ns(self, sensor_id: str) -> int:
+        estimate = self._estimates.get(sensor_id)
+        return 0 if estimate is None else estimate.offset_ns
+
+    def raw_time_for_oracle(self, sensor_id: str, oracle_time_ns: int) -> int:
+        return int(oracle_time_ns) - self.offset_ns(sensor_id)
+
+    def estimates(self) -> tuple[CameraSyncEstimate, ...]:
+        return tuple(sorted(self._estimates.values(), key=lambda item: item.sensor_id))
+
+
+class TimestampedFrameHistory:
+    def __init__(self, max_frames: int = 120) -> None:
+        self.max_frames = max(2, int(max_frames))
+        self._frames: dict[str, list[TimestampedFrame]] = {}
+
+    def add(self, frame: TimestampedFrame) -> None:
+        bucket = self._frames.setdefault(frame.sensor_id, [])
+        if bucket and bucket[-1].timestamp_ns == frame.timestamp_ns:
+            return
+        bucket.append(frame)
+        bucket.sort(key=lambda item: item.timestamp_ns)
+        del bucket[:-self.max_frames]
+
+    def add_many(self, frames: Mapping[str, TimestampedFrame]) -> None:
+        for frame in frames.values():
+            self.add(frame)
+
+    def frames_by_sensor(self) -> dict[str, list[TimestampedFrame]]:
+        return {sensor_id: list(frames) for sensor_id, frames in self._frames.items()}
+
+    def nearest(self, sensor_id: str, raw_time_ns: int) -> TimestampedFrame | None:
+        frames = self._frames.get(sensor_id, [])
+        if not frames:
+            return None
+        target = int(raw_time_ns)
+        return min(frames, key=lambda frame: abs(frame.timestamp_ns - target))
+
+
 def detect_audio_transients(
     field: np.ndarray,
     sample_rate: int,

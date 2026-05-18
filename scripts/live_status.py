@@ -114,6 +114,10 @@ def msgpack_head(path: Path):
                     "visualObservedNs": payload[3][-1][3],
                     "timingUncertaintyUs": payload[3][-1][4],
                     "cameraCount": len(payload[3][-1][7]) if len(payload[3][-1]) > 7 else 0,
+                    "cameraOffsetsNs": {
+                        str(peak.get("sensorId")): int(payload[3][-1][2]) - int(peak.get("timestampNs", payload[3][-1][2]))
+                        for peak in (payload[3][-1][7] if len(payload[3][-1]) > 7 else [])
+                    },
                 },
             }
         )

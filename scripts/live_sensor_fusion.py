@@ -20,12 +20,17 @@ from localcast.sensor_fusion import (
     RenderPointPacket,
     SensorRig,
     SurfaceFeatureObservation,
+    CameraClockSyncModel,
+    CameraMotionPeak,
+    ClapCalibrationEvent,
     TimestampedFrame,
+    TimestampedFrameHistory,
     ClapDetectorConfig,
     detect_clap_events,
     dense_stereo_points,
     evidence_from_fusion_items,
     evidence_from_render_points,
+    get_live_clap_events,
     make_clap_events_frame,
     measure_frame_quality,
     multilod_cache_from_evidence,
@@ -283,6 +288,7 @@ class RgbSplatSampler:
         self._captures: dict[int, object] = {}
         self._frames: dict[int, np.ndarray] = {}
         self._timestamped_frames: dict[str, TimestampedFrame] = {}
+        self._history = TimestampedFrameHistory(max_frames=96)
         self._controllers: dict[int, AdaptiveCameraController] = {}
         self._setting_ports: dict[int, OpenCvCameraSettingPort] = {}
 
@@ -297,6 +303,34 @@ class RgbSplatSampler:
     def splats(self, now_s: float, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
         primary = self._read_frame(self.primary_index)
         secondary = self._read_frame(self.secondary_index)
+        return self._splats_from_frames(primary, secondary, now_s, timestamp_ns)
+
+    def synced_splats(
+        self,
+        now_s: float,
+        timestamp_ns: int,
+        *,
+        sync_model: CameraClockSyncModel,
+        oracle_time_ns: int,
+    ) -> tuple[RenderPointPacket, ...]:
+        self._read_frame(self.primary_index)
+        self._read_frame(self.secondary_index)
+        primary = self._history.nearest("kiyo-primary", sync_model.raw_time_for_oracle("kiyo-primary", oracle_time_ns))
+        secondary = self._history.nearest("kiyo-secondary", sync_model.raw_time_for_oracle("kiyo-secondary", oracle_time_ns))
+        return self._splats_from_frames(
+            None if primary is None else primary.image,
+            None if secondary is None else secondary.image,
+            now_s,
+            timestamp_ns,
+        )
+
+    def _splats_from_frames(
+        self,
+        primary: np.ndarray | None,
+        secondary: np.ndarray | None,
+        now_s: float,
+        timestamp_ns: int,
+    ) -> tuple[RenderPointPacket, ...]:
         points: list[RenderPointPacket] = []
         if self.enable_cpu_dense_stereo and primary is not None and secondary is not None:
             points.extend(rgb_dense_stereo_splats(primary, secondary, timestamp_ns, step=self.dense_step))
@@ -339,7 +373,9 @@ class RgbSplatSampler:
             ok, frame = capture.read()
             if ok and frame is not None:
                 sensor_id = self._sensor_id(index)
-                self._timestamped_frames[sensor_id] = TimestampedFrame(sensor_id, time.monotonic_ns(), frame.copy())
+                stamped = TimestampedFrame(sensor_id, time.monotonic_ns(), frame.copy())
+                self._timestamped_frames[sensor_id] = stamped
+                self._history.add(stamped)
                 self._tune_capture(index, frame)
                 self._frames[index] = frame
                 return frame
@@ -370,7 +406,9 @@ class RgbSplatSampler:
                 frame = cv2.imread(str(path))
                 if frame is not None:
                     sensor_id = self._sensor_id(index)
-                    self._timestamped_frames[sensor_id] = TimestampedFrame(sensor_id, time.monotonic_ns(), frame.copy())
+                    stamped = TimestampedFrame(sensor_id, time.monotonic_ns(), frame.copy())
+                    self._timestamped_frames[sensor_id] = stamped
+                    self._history.add(stamped)
                     return frame
         return None
 
@@ -458,8 +496,10 @@ class LiveClapCalibrator:
         self.audio_cache = audio_cache
         self.clap_cache = clap_cache
         self.max_frames_per_sensor = max(2, int(max_frames_per_sensor))
-        self.frames_by_sensor: dict[str, list[TimestampedFrame]] = {}
+        self.history = TimestampedFrameHistory(max_frames=self.max_frames_per_sensor)
+        self.sync_model = CameraClockSyncModel()
         self.last_audio_frame_id: int | None = None
+        self.last_audio_time_ns: int | None = None
         self.last_event_key: str | None = None
         left = rgb_dense_camera("kiyo-primary", -0.18, camera_width, camera_height)
         right = rgb_dense_camera("kiyo-secondary", 0.18, camera_width, camera_height)
@@ -478,20 +518,48 @@ class LiveClapCalibrator:
             min_event_spacing_ns=220_000_000,
         )
         self.events = ()
+        self._restore_existing_events()
+
+    def _restore_existing_events(self) -> None:
+        if not self.clap_cache.exists():
+            return
+        frame = get_live_clap_events(self.clap_cache)
+        if frame is None or not frame.events:
+            return
+        events: list[ClapCalibrationEvent] = []
+        for event in frame.events:
+            peaks = tuple(
+                CameraMotionPeak(
+                    sensor_id=str(peak.get("sensorId", "")),
+                    timestamp_ns=int(peak.get("timestampNs", 0)),
+                    uv=np.asarray(peak.get("uv", [0.0, 0.0]), dtype=np.float64),
+                    score=float(peak.get("score", 0.0)),
+                )
+                for peak in event.camera_peaks
+            )
+            restored = ClapCalibrationEvent(
+                stable_key=event.stable_key,
+                position_m=event.position_m,
+                acoustic_oracle_ns=event.acoustic_oracle_ns,
+                visual_observed_ns=event.visual_observed_ns,
+                timing_uncertainty_us=event.timing_uncertainty_us,
+                visual_confidence=event.visual_confidence,
+                acoustic_confidence=event.acoustic_confidence,
+                camera_peaks=peaks,
+            )
+            self.sync_model.observe_event(restored)
+            events.append(restored)
+        self.events = tuple(events)
 
     def observe_frames(self, frames: dict[str, TimestampedFrame]) -> None:
-        for sensor_id, frame in frames.items():
-            bucket = self.frames_by_sensor.setdefault(sensor_id, [])
-            if bucket and bucket[-1].timestamp_ns == frame.timestamp_ns:
-                continue
-            bucket.append(frame)
-            del bucket[:-self.max_frames_per_sensor]
+        self.history.add_many(frames)
 
     def update(self, frame_id: int) -> tuple[RenderPointPacket, ...]:
         audio = self._read_audio()
         if audio is None or audio.frame_id == self.last_audio_frame_id:
             return self._event_points(frame_id)
         self.last_audio_frame_id = audio.frame_id
+        self.last_audio_time_ns = int(audio.audio_time_ns)
         block = frame_to_numpy(audio)
         events = detect_clap_events(
             block,
@@ -505,6 +573,8 @@ class LiveClapCalibrator:
         if events:
             self.events = tuple(events)
             self.last_event_key = events[-1].stable_key
+            for event in events:
+                self.sync_model.observe_event(event)
             put_live_clap_events(self.clap_cache, make_clap_events_frame(frame_id=frame_id, events=events))
         elif not self.events:
             put_live_clap_events(self.clap_cache, make_clap_events_frame(frame_id=frame_id, events=()))
@@ -516,7 +586,10 @@ class LiveClapCalibrator:
         return get_live_spatial_audio_frame(self.audio_cache)
 
     def _frames_for_detection(self) -> dict[str, list[TimestampedFrame]]:
-        return {sensor_id: list(frames) for sensor_id, frames in self.frames_by_sensor.items()}
+        return self.history.frames_by_sensor()
+
+    def oracle_time_ns(self, fallback_ns: int) -> int:
+        return int(self.last_audio_time_ns if self.last_audio_time_ns is not None else fallback_ns)
 
     def _event_points(self, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
         points: list[RenderPointPacket] = []
@@ -559,7 +632,27 @@ class LiveClapCalibrator:
                         int(peak.timestamp_ns),
                     )
                 )
+        for estimate in self.sync_model.estimates():
+            points.append(
+                render_point(
+                    f"camera-sync:{estimate.sensor_id}",
+                    sync_status_position(estimate.sensor_id),
+                    0.035,
+                    (0.45, 0.72, 1.0, 0.58),
+                    estimate.confidence,
+                    estimate.oracle_timestamp_ns,
+                )
+            )
         return tuple(points)
+
+
+def sync_status_position(sensor_id: str) -> np.ndarray:
+    positions = {
+        "kiyo-primary": np.array([-0.18, -0.72, 1.28], dtype=np.float64),
+        "kiyo-secondary": np.array([0.18, -0.72, 1.28], dtype=np.float64),
+        "leap": np.array([0.0, -0.18, 0.76], dtype=np.float64),
+    }
+    return positions.get(sensor_id, np.zeros(3, dtype=np.float64))
 
 
 def pixel_ray_point(camera: CameraModel, uv: np.ndarray, *, distance_m: float) -> np.ndarray:
@@ -995,7 +1088,6 @@ def main() -> None:
                 created_monotonic_ns=time.monotonic_ns(),
             )
             timestamp_ns = frame.source_time_max_ns
-            rgb_points = () if rgb_sampler is None else rgb_sampler.splats(now, timestamp_ns)
             leap_points = () if leap_sampler is None else leap_sampler.motion_splats(timestamp_ns)
             if clap_calibrator is not None:
                 if rgb_sampler is not None:
@@ -1010,6 +1102,17 @@ def main() -> None:
                 else "leap-fallback"
             )
             leap_source_priority = 3.0 if leap_source_kind == "leap-ground-truth" else 1.1
+            rgb_points = ()
+            if rgb_sampler is not None:
+                if clap_calibrator is not None and clap_calibrator.sync_model.estimates():
+                    rgb_points = rgb_sampler.synced_splats(
+                        now,
+                        timestamp_ns,
+                        sync_model=clap_calibrator.sync_model,
+                        oracle_time_ns=clap_calibrator.oracle_time_ns(timestamp_ns),
+                    )
+                else:
+                    rgb_points = rgb_sampler.splats(now, timestamp_ns)
             support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
             stochastic_points = transient_match_render_points(transient_matches, timestamp_ns)
             clap_points = () if clap_calibrator is None else clap_calibrator.update(timestamp_ns)
