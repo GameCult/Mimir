@@ -1,0 +1,1062 @@
+<!doctype html>
+<html class="no-js">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+<link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><link rel="next" title="Leap Concepts" href="leap-concepts.html" /><link rel="prev" title="Using LeapC" href="using-leapc.html" />
+
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"/><meta name="generator" content="sphinx-4.0.3, furo 2022.01.02"/>
+        <title>Images - Ultraleap documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?digest=df49af52631e7917044a9c21a57f7b83170a6dd0" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/panels-main.c949a650a448cc0ae9fd3441c0e17fb0.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/panels-bootstrap.5fd3999ee7762ccc51105388f4a9d115.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/panels-variables.94aca11fb706e2bbdc0f8c4d6e014b22.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?digest=fade93df149f7c5fedb3ff897f799dc7d283b420" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  --color-brand-primary: #00cf75;
+  --color-brand-content: #00cf75;
+  --color-background-secondary: #f2f5f6;
+  --bg-primary-ul: #f2f5f6;
+  --bg-secondary-ul: #f2f5f6;
+  --bg-text-ul: #000000;
+  
+  }
+  body[data-theme="dark"] {
+    --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #00cf75;
+  --color-brand-content: #00cf75;
+  --color-background-secondary: #1a1c1e;
+  --bg-primary-ul: #262626;
+  --bg-secondary-ul: #232425;
+  --bg-text-ul: #ffffff;
+  
+  }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #00cf75;
+  --color-brand-content: #00cf75;
+  --color-background-secondary: #1a1c1e;
+  --bg-primary-ul: #262626;
+  --bg-secondary-ul: #232425;
+  --bg-text-ul: #ffffff;
+  
+    }
+  }
+</style></head>
+  <body>
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path stroke="none" d="M0 0h24v24H0z" />
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="10" y1="12" x2="20" y2="12" />
+      <line x1="6" y1="18" x2="20" y2="18" />
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../globaltoc.html"><div class="brand">Ultraleap  documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../globaltoc.html">
+  
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../../_static/ultraleap.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../../_static/ultraleap-dark.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder=Search name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../hand-tracking/index.html">Hand Tracking Overview</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../hand-tracking/getting-started.html">Getting Started</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../hand-tracking/Hyperion/index.html">Hyperion Overview</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/Hyperion/hintingapi.html">    Hinting API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/Hyperion/trackingmodels.html">Tracking Models</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/Hyperion/performancemodes.html">Performance Modes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/Hyperion/directcameraaccess.html">Direct Camera Access</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/Hyperion/markertracking.html">Marker Tracking</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../hand-tracking/XR-Setup/XR-setup.html">    Camera Set Up for XR Headset</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/XR-Setup/LMC2-to-Pico4.html">Leap Motion Controller 2 Mount for Pico 4</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/XR-Setup/LMC2-to-Pico3.html">    Leap Motion Controller 2 Mount for Pico Neo 3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../hand-tracking/XR-Setup/LMC2-to-Vive3.html">    Leap Motion Controller 2 Mount for Vive Focus 3</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../hand-tracking/desktop-setup.html">    Tabletop Camera Set Up for Mac and PC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../hand-tracking/integration-tips-resources.html">Integration Tips and Resources</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../hand-tracking/gemini-migration.html">    Gemini Migration Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../haptics/index.html">Haptics Overview</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../haptics/sensation-designer.html">Sensation Designer</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../TouchFree/index.html">    TouchFree</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/index.html">TouchFree User Manual</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/setup.html">Getting Started</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/quick-setup.html">Quick Setup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/manual-setup.html">Manual Setup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/large-screens-non121.html">Large Screen Setup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/settings.html">Appearance</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/camera-placement.html">Camera Placement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/3Di-mounting-solutions.html">3Di Mounting Solutions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/cameras-and-masking.html">Camera Feeds and Masking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/testing-hand-tracking.html">Testing Hand Tracking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/interaction-settings.html">Interaction Settings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/advanced-settings.html">Advanced Settings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/technical-glossary.html">Technical Glossary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/tooling-for-unity.html">Tooling for Unity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchfree-user-manual/tooling-for-web.html">Tooling for Web</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../TouchFree/touchless-interfaces/index.html">Touchless Interfaces Guidelines</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchless-interfaces/interactions.html">Interactions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchless-interfaces/ui-components.html">UI Components</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchless-interfaces/guidance.html">Guidance</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchless-interfaces/hover-states.html">Hover States</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../TouchFree/touchless-interfaces/scrolling-panning-rotating.html">Scrolling, Panning and Rotating</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../TouchFree/CameraPositionVisualizer/cpv-manual.html">Camera Position VIsualizer for Kiosks</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../automotive-guidelines/index.html">Automotive HMI Guidelines</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../automotive-guidelines/designing-for-automotive-HMI.html">Designing for Automotive HMI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../automotive-guidelines/interaction-types.html">Interaction Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../ultralab/index.html">Ultralab Blog</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/vr-gaming-accessibility-recommendations.html">VR Accessibility Recommendations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/vr-gaming-controllers-and-hands.html">VR Gaming - Controllers and Hands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/spatial-design-for-2d.html">Spatial Design for 2D Screens</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/Design-guidelines-blog.html">XR Design Guidelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/openxr-blog.html">Focus on OpenXR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/multi-device-blog.html">Multidevice Preview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/far-field-ray-blog.html">Hand-Powered Far Field Interaction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/vr-training-design.html">Inside the Design of Our VR Barista Training Demo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/hand-tracking-vr-game-design-tips.html">Hand tracking: 5 game design tips from VR arcades</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/pose-detection-blog.html">Pose Detection in Unreal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/games-blog.html">Exploring Hand Tracking in Casual VR Gaming</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/hand-tracking-vr-design.html">6 VR Design Principles for Hand Tracking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/hands-module.html">How To Get Started With The Hands Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/xr-keyboard.html">How To Use Our XR Keyboard For Unity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/levitate-project.html">Interactive Floating Displays: The Levitate Project</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/development-and-interaction-design.html">Development &amp; Interaction Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/advanced-hand-tracking-with-tom-carter.html">Advanced Hand Tracking With Tom Carter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/openxr-hand-tracking-in-unity.html">OpenXR Hand Tracking in Unity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/vr-ar-content-browser.html">A Design Concept for a New Kind of VR/AR Content Browser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../ultralab/virtual-elements-in-vr.html">Virtual Elements: The Periodic Table for Augmented and Virtual Reality</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">XR Development, Tools &amp; Plugins</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../xr-and-tabletop/xr/index.html">XR Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../xr-guidelines/index.html">    XR Design Guidelines</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Getting%20started/design-principles.html">    Design principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Getting%20started/DesignConsiderations.html">    Design considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Getting%20started/virtual-hands.html">    Virtual hands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Getting%20started/tutorials_hints_tip.html">    Tutorials hints and help</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Interactions/interactions_overview.html">    Interactions overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Interactions/direct_and_distant_interaction_mode.html">    Direct and distant interaction modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Interactions/locomotion.html">    Locomotion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Interactions/hand_poses.html">    Hand poses</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Interactions/microgestures.html">    Microgestures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Components/components-overview.html">    Components overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Components/virtual-objects.html">    Virtual objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Components/designing-objects-hands.html">    Designing objects for hands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Components/ui-panels.html">    UI panels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Components/ui-components.html">    UI components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Components/handcontrols.html">    Hand controls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-guidelines/Components/keyboards-text.html">    Keyboards and text entry</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/index.html">Unity XR</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/getting-started/index.html">Getting Started</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/getting-started/your-first-project.html">Your First Project</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/index.html">Ultraleap Plugin Features</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/scripting-fundamentals.html">    Scripting Fundamentals</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/3D-ui-interactions.html">3D UI Interactions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/pinch-detector.html">Pinch Detector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/grab-detector.html">Grab Detector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/anchoring-objects.html">Anchoring Objects</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/controller-support.html">Controller Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/rigged-hand-support.html">Custom Hand Visuals</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/hand-recorder.html">    Hand Animation Recorder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/hand-attachments.html">Hand Attachments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/hand-pose-detection.html">Hand Pose Detection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/pose-recording.html">Hand Pose Recording</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/hand-tracking-hinting.html">Hand Tracking Hinting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/modifying-hand-data.html">Modifying Hand Data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/multiple-tracking-devices.html">Multiple Tracking Devices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/networking-hands.html">Networking with Hand Data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/physical-hands.html">Physical Hands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/pinch-to-paint.html">Pinch To Paint</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/turntable-and-pullcord.html">Turntable and Pullcord</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/plugin/features/fiducial-markers.html">Marker Tracking</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/further-guidance/index.html">Further guidance</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/further-guidance/hand-prefab.html">Hand Prefabs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/further-guidance/service-provider-xr.html">XR Service Provider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/further-guidance/upgrading-plugin-version.html">Upgrading Plugin Version</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/further-guidance/using-buttons.html">Using Buttons</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/further-guidance/using-sliders.html">Using Sliders</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/xri-integration.html">XRI Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/mrtk-support.html">MRTK3 Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/xr/unity/faq.html">Frequently Asked Questions</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/index.html">Unreal XR</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/getting-started/index.html">      Getting Started</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/index.html">Ultraleap Plugin Features</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/hands-module.html">Hand Modules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/interaction-engine.html">Interaction Engine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/metahuman-support.html">Metahuman Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/OpenXR.html">OpenXR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/pose-detection.html">Pose Detection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/UI-input-modules.html">UI Input Modules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/mac-support.html">MAC Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/plugin/features/hand-tracking-hinting.html">Hinting API</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/xr/unreal/faq/index.html">Frequently Asked Questions</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../openxr/index.html">OpenXR</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../openxr/installation/index.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../openxr/configuration/index.html">Configuration</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" role="switch" type="checkbox"/><label for="toctree-checkbox-18"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../openxr/configuration/tracker-mounting/index.html">Tracker Mounting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../openxr/configuration/logging/index.html">Logging</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../openxr/configuration/disabling-the-layer/index.html">Disabling the Layer</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../openxr/features/index.html">Features</a><input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" role="switch" type="checkbox"/><label for="toctree-checkbox-19"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../openxr/features/tracking-forearm/index.html">Ultraleap Tracking Forearm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../openxr/features/hand-interaction-profile/index.html">Hand Interaction Profile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../openxr/features/controller-switching/index.html">Controller Switching</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../openxr/features/facebook-aim/index.html">Meta Tracking Aim</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../openxr/changelog/index.html">Changelog</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Tabletop Development, Tools &amp; Plugins</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/index.html">Tabletop Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/unity/index.html">Unity Tabletop</a><input class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" role="switch" type="checkbox"/><label for="toctree-checkbox-20"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/unity/getting-started/index.html">    Getting Started with Unity</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" role="switch" type="checkbox"/><label for="toctree-checkbox-21"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/unity/getting-started/your-first-project.html">Your First Project</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/unity/plugin/index.html">Ultraleap Unity Plugin</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/unreal/index.html">Unreal Tabletop</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" role="switch" type="checkbox"/><label for="toctree-checkbox-22"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/unreal/getting-started/index.html">Getting Started with Unreal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../xr-and-tabletop/tabletop/unreal/plugin/index.html">Ultraleap Plugin Features</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../unity-api/api-reference.html">Unity Plugin API</a><input class="toctree-checkbox" id="toctree-checkbox-23" name="toctree-checkbox-23" role="switch" type="checkbox"/><label for="toctree-checkbox-23"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../unity-api/classlist.html">Classes</a><input class="toctree-checkbox" id="toctree-checkbox-24" name="toctree-checkbox-24" role="switch" type="checkbox"/><label for="toctree-checkbox-24"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/13b525b6ad342dcddf82d588b1bfbf117c554226.html">Class Leap::Unity::MRTK::LeapMRTKSubsystem::LeapHandContainer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/24208ec53902fcf81579e68d39c45c3a973b5b8d.html">Class Leap::Unity::MRTK::LeapMRTKSubsystem::LeapMRTKProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/347e6b5df33f1aed7d859d9f37475dcf8b282169.html">Class Leap::HandsModule::HandModelManager::HandModelPair</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/6a45ec5d72f0f77be3d98a91727583997fa27c53.html">Class Leap::PhysicalHands::HandFadeInAtDistanceFromRealData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/6a92acb2fd60fc004bb1ccf86cc3da56291ce304.html">Class Leap::HandEnableDisable::FadeRendererMaterialColorReferences</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/744d07b2ab17481ed26b74e3cbc7c46734a7f2b8.html">Class Leap::Tracking::OpenXR::HandTrackingFeature::Native</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_hand_pose_validator.html">Class HandPoseValidator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_action_detector.html">Class Leap::ActionDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_anchor.html">Class Leap::Anchor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_anchor_group.html">Class Leap::AnchorGroup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_anchor_set.html">Class Leap::AnchorSet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_anchorable_behaviour.html">Class Leap::AnchorableBehaviour</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_arm.html">Class Leap::Arm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attachments_1_1_attachment_hand.html">Class Leap::Attachments::AttachmentHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attachments_1_1_attachment_hand_enable_disable.html">Class Leap::Attachments::AttachmentHandEnableDisable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attachments_1_1_attachment_hands.html">Class Leap::Attachments::AttachmentHands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attachments_1_1_attachment_point_behaviour.html">Class Leap::Attachments::AttachmentPointBehaviour</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attachments_1_1_attachment_point_flags_extensions.html">Class Leap::Attachments::AttachmentPointFlagsExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_combinable_property_attribute.html">Class Leap::Attributes::CombinablePropertyAttribute</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_disable_attribute.html">Class Leap::Attributes::DisableAttribute</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_disable_if.html">Class Leap::Attributes::DisableIf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_disable_if_all.html">Class Leap::Attributes::DisableIfAll</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_disable_if_any.html">Class Leap::Attributes::DisableIfAny</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_disable_if_base.html">Class Leap::Attributes::DisableIfBase</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_disable_if_equal.html">Class Leap::Attributes::DisableIfEqual</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_disable_if_not_equal.html">Class Leap::Attributes::DisableIfNotEqual</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_edit_time_only.html">Class Leap::Attributes::EditTimeOnly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_enum_flags.html">Class Leap::Attributes::EnumFlags</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_indent_attribute.html">Class Leap::Attributes::IndentAttribute</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_inspector_name_attribute.html">Class Leap::Attributes::InspectorNameAttribute</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_max_value.html">Class Leap::Attributes::MaxValue</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_min_max.html">Class Leap::Attributes::MinMax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_min_value.html">Class Leap::Attributes::MinValue</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_on_editor_change_attribute.html">Class Leap::Attributes::OnEditorChangeAttribute</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_attributes_1_1_units_attribute.html">Class Leap::Attributes::UnitsAttribute</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_bit_converter_non_alloc.html">Class Leap::BitConverterNonAlloc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_bone.html">Class Leap::Bone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_c_sharp_extensions.html">Class Leap::CSharpExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_c_sharp_extensions_1_1_constants.html">Class Leap::CSharpExtensions::Constants</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_capsule_hand.html">Class Leap::CapsuleHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_comment.html">Class Leap::Comment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_config.html">Class Leap::Config</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_config_change_event_args.html">Class Leap::ConfigChangeEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_connection_event_args.html">Class Leap::ConnectionEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_connection_lost_event_args.html">Class Leap::ConnectionLostEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_controller.html">Class Leap::Controller</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_copy_from_other_extensions.html">Class Leap::CopyFromOtherExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_debug_hand.html">Class Leap::DebugHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_device.html">Class Leap::Device</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_device_event_args.html">Class Leap::DeviceEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_device_failure_event_args.html">Class Leap::DeviceFailureEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_device_list.html">Class Leap::DeviceList</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_distortion_data.html">Class Leap::DistortionData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_distortion_event_args.html">Class Leap::DistortionEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_dropped_frame_event_args.html">Class Leap::DroppedFrameEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_enable_depth_buffer.html">Class Leap::EnableDepthBuffer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_encoding_1_1_vector_hand.html">Class Leap::Encoding::VectorHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_encoding_1_1_vector_hand_extensions.html">Class Leap::Encoding::VectorHandExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_enum_event_table.html">Class Leap::EnumEventTable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_enum_event_table_1_1_entry.html">Class Leap::EnumEventTable::Entry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_examples_1_1_ignore_collisions_in_children.html">Class Leap::Examples::IgnoreCollisionsInChildren</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_failed_device.html">Class Leap::FailedDevice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_failed_device_list.html">Class Leap::FailedDeviceList</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_fiducial_pose_event_args.html">Class Leap::FiducialPoseEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_finger.html">Class Leap::Finger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_finger_model.html">Class Leap::FingerModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_frame.html">Class Leap::Frame</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_frame_event_args.html">Class Leap::FrameEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_from_matrix_extension.html">Class Leap::FromMatrixExtension</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_grab_detector.html">Class Leap::GrabDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand.html">Class Leap::Hand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_enable_disable.html">Class Leap::HandEnableDisable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_model.html">Class Leap::HandModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_model_base.html">Class Leap::HandModelBase</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_pose_detector.html">Class Leap::HandPoseDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_pose_editor.html">Class Leap::HandPoseEditor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_pose_recorder.html">Class Leap::HandPoseRecorder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_pose_scriptable_object.html">Class Leap::HandPoseScriptableObject</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_pose_viewer.html">Class Leap::HandPoseViewer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_tracking_hint_manager.html">Class Leap::HandTrackingHintManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_tracking_source_utility.html">Class Leap::HandTrackingSourceUtility</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hand_utils.html">Class Leap::HandUtils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands.html">Class Leap::Hands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_bone_name_definitions.html">Class Leap::HandsModule::BoneNameDefinitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_bound_bone.html">Class Leap::HandsModule::BoundBone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_bound_finger.html">Class Leap::HandsModule::BoundFinger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_bound_hand.html">Class Leap::HandsModule::BoundHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_distort_tracking_data_to_visuals.html">Class Leap::HandsModule::DistortTrackingDataToVisuals</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_hand_binder.html">Class Leap::HandsModule::HandBinder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_hand_binder_auto_binder.html">Class Leap::HandsModule::HandBinderAutoBinder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_hand_binder_utilities.html">Class Leap::HandsModule::HandBinderUtilities</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_hand_model_manager.html">Class Leap::HandsModule::HandModelManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_serialized_transform.html">Class Leap::HandsModule::SerializedTransform</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_show_arm.html">Class Leap::HandsModule::ShowArm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_hands_module_1_1_transform_store.html">Class Leap::HandsModule::TransformStore</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_head_pose_event_args.html">Class Leap::HeadPoseEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_image_event_args.html">Class Leap::ImageEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_input_actions_1_1_leap_hand_input.html">Class Leap::InputActions::LeapHandInput</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_input_actions_1_1_x_r_hands_input_action_updater.html">Class Leap::InputActions::XRHandsInputActionUpdater</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_internal_frame_event_args.html">Class Leap::InternalFrameEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_kabsch_solver.html">Class Leap::KabschSolver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_event_args.html">Class Leap::LeapEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_image_retriever.html">Class Leap::LeapImageRetriever</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_image_retriever_1_1_eye_texture_data.html">Class Leap::LeapImageRetriever::EyeTextureData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_image_retriever_1_1_leap_distortion_data.html">Class Leap::LeapImageRetriever::LeapDistortionData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_image_retriever_1_1_leap_texture_data.html">Class Leap::LeapImageRetriever::LeapTextureData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_provider.html">Class Leap::LeapProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_provider_extensions.html">Class Leap::LeapProviderExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_service_provider.html">Class Leap::LeapServiceProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_service_provider_1_1_leap_f_o_v_info.html">Class Leap::LeapServiceProvider::LeapFOVInfo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_service_provider_1_1_leap_f_o_v_infos.html">Class Leap::LeapServiceProvider::LeapFOVInfos</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_x_r_hand_provider.html">Class Leap::LeapXRHandProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_leap_x_r_service_provider.html">Class Leap::LeapXRServiceProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_log_event_args.html">Class Leap::LogEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_metadata_util.html">Class Leap::MetadataUtil</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_contact_bone.html">Class Leap::PhysicalHands::ContactBone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_contact_hand.html">Class Leap::PhysicalHands::ContactHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_contact_hand_1_1_ignore_data.html">Class Leap::PhysicalHands::ContactHand::IgnoreData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_contact_parent.html">Class Leap::PhysicalHands::ContactParent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_contact_utils.html">Class Leap::PhysicalHands::ContactUtils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_grab_ball.html">Class Leap::PhysicalHands::GrabBall</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_grab_helper.html">Class Leap::PhysicalHands::GrabHelper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_grab_helper_object.html">Class Leap::PhysicalHands::GrabHelperObject</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_grab_helper_object_1_1_grab_values.html">Class Leap::PhysicalHands::GrabHelperObject::GrabValues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_hard_contact_bone.html">Class Leap::PhysicalHands::HardContactBone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_hard_contact_hand.html">Class Leap::PhysicalHands::HardContactHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_hard_contact_parent.html">Class Leap::PhysicalHands::HardContactParent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_ignore_physical_hands.html">Class Leap::PhysicalHands::IgnorePhysicalHands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_no_contact_bone.html">Class Leap::PhysicalHands::NoContactBone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_no_contact_hand.html">Class Leap::PhysicalHands::NoContactHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_no_contact_parent.html">Class Leap::PhysicalHands::NoContactParent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_phys_exts.html">Class Leap::PhysicalHands::PhysExts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hand_events.html">Class Leap::PhysicalHands::PhysicalHandEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hand_utils.html">Class Leap::PhysicalHands::PhysicalHandUtils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hands_button.html">Class Leap::PhysicalHands::PhysicalHandsButton</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hands_button_helper.html">Class Leap::PhysicalHands::PhysicalHandsButtonHelper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hands_button_toggle.html">Class Leap::PhysicalHands::PhysicalHandsButtonToggle</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hands_manager.html">Class Leap::PhysicalHands::PhysicalHandsManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hands_slider.html">Class Leap::PhysicalHands::PhysicalHandsSlider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_physical_hands_slider_helper.html">Class Leap::PhysicalHands::PhysicalHandsSliderHelper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_soft_contact_bone.html">Class Leap::PhysicalHands::SoftContactBone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_soft_contact_hand.html">Class Leap::PhysicalHands::SoftContactHand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_1_1_soft_contact_parent.html">Class Leap::PhysicalHands::SoftContactParent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_physical_hands_anchorable.html">Class Leap::PhysicalHandsAnchorable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_pinch_detector.html">Class Leap::PinchDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_point_mapping_change_event_args.html">Class Leap::PointMappingChangeEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_policy_event_args.html">Class Leap::PolicyEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_pool.html">Class Leap::Pool</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_pose_extensions.html">Class Leap::PoseExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_post_process_provider.html">Class Leap::PostProcessProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_produce_consume_buffer.html">Class Leap::ProduceConsumeBuffer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_readme_1_1_scene_readme_ping.html">Class Leap::Readme::SceneReadmePing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_ring_buffer.html">Class Leap::RingBuffer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_runtime_gizmos_1_1_runtime_gizmo_drawer.html">Class Leap::RuntimeGizmos::RuntimeGizmoDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_runtime_gizmos_1_1_runtime_gizmo_extensions.html">Class Leap::RuntimeGizmos::RuntimeGizmoExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_runtime_gizmos_1_1_runtime_gizmo_manager.html">Class Leap::RuntimeGizmos::RuntimeGizmoManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_runtime_gizmos_1_1_runtime_gizmo_toggle.html">Class Leap::RuntimeGizmos::RuntimeGizmoToggle</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_serializable_hash_set.html">Class Leap::SerializableHashSet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_serializable_hash_set_base.html">Class Leap::SerializableHashSetBase</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_set_config_response_event_args.html">Class Leap::SetConfigResponseEventArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_simple_anchor_feedback.html">Class Leap::SimpleAnchorFeedback</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_simple_facing_camera_callbacks.html">Class Leap::SimpleFacingCameraCallbacks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_smoothed_float.html">Class Leap::SmoothedFloat</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_subsystem_starter.html">Class Leap::SubsystemStarter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_swizzle.html">Class Leap::Swizzle</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_test_hand_factory.html">Class Leap::TestHandFactory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_tracking_1_1_open_x_r_1_1_hand_tracker.html">Class Leap::Tracking::OpenXR::HandTracker</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_tracking_1_1_open_x_r_1_1_hand_tracking_feature.html">Class Leap::Tracking::OpenXR::HandTrackingFeature</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_tracking_1_1_open_x_r_1_1_open_x_r_leap_provider.html">Class Leap::Tracking::OpenXR::OpenXRLeapProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_tracking_1_1_open_x_r_1_1_open_x_r_utility.html">Class Leap::Tracking::OpenXR::OpenXRUtility</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_tracking_marker.html">Class Leap::TrackingMarker</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_tracking_marker_object.html">Class Leap::TrackingMarkerObject</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_transform_extensions.html">Class Leap::TransformExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_transform_history.html">Class Leap::TransformHistory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_ultraleap_settings.html">Class Leap::UltraleapSettings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_unity_1_1_m_r_t_k_1_1_leap_m_r_t_k_subsystem.html">Class Leap::Unity::MRTK::LeapMRTKSubsystem</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_utils.html">Class Leap::Utils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_utils_1_1_math.html">Class Leap::Utils::Math</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_visual_f_o_v.html">Class Leap::VisualFOV</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_x_r_hands_leap_provider.html">Class Leap::XRHandsLeapProvider</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_x_r_hands_utils.html">Class Leap::XRHandsUtils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_x_r_leap_provider_manager.html">Class Leap::XRLeapProviderManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_1_1_x_r_support_util.html">Class Leap::XRSupportUtil</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_hands_subsystem.html">Class LeapHandsSubsystem</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_circular_object_buffer.html">Class LeapInternal::CircularObjectBuffer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_connection.html">Class LeapInternal::Connection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_copy_from_leap_c_extensions.html">Class LeapInternal::CopyFromLeapCExtensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_image.html">Class LeapInternal::Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_image_data.html">Class LeapInternal::ImageData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_leap_c.html">Class LeapInternal::LeapC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_logger.html">Class LeapInternal::Logger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_memory_manager.html">Class LeapInternal::MemoryManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_server_status.html">Class LeapInternal::ServerStatus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_server_status_1_1_server_status_checker.html">Class LeapInternal::ServerStatus::ServerStatusChecker</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_struct_marshal.html">Class LeapInternal::StructMarshal</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/class_leap_internal_1_1_struct_marshal_1_1_struct_container.html">Class LeapInternal::StructMarshal::StructContainer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/class/eb8833db5a66598cd15c0085e43635abcfdb7ef0.html">Class Leap::PhysicalHands::ContactBone::ClosestColliderDirection</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../unity-api/interfacelist.html">Interfaces</a><input class="toctree-checkbox" id="toctree-checkbox-25" name="toctree-checkbox-25" role="switch" type="checkbox"/><label for="toctree-checkbox-25"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_additive_drawer.html">Interface Leap::Attributes::IAdditiveDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_after_field_additive_drawer.html">Interface Leap::Attributes::IAfterFieldAdditiveDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_after_label_additive_drawer.html">Interface Leap::Attributes::IAfterLabelAdditiveDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_before_field_additive_drawer.html">Interface Leap::Attributes::IBeforeFieldAdditiveDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_before_label_additive_drawer.html">Interface Leap::Attributes::IBeforeLabelAdditiveDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_full_property_drawer.html">Interface Leap::Attributes::IFullPropertyDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_property_constrainer.html">Interface Leap::Attributes::IPropertyConstrainer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_property_disabler.html">Interface Leap::Attributes::IPropertyDisabler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_support_drag_and_drop.html">Interface Leap::Attributes::ISupportDragAndDrop</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_attributes_1_1_i_top_panel_drawer.html">Interface Leap::Attributes::ITopPanelDrawer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_encoding_1_1_i_interpolable.html">Interface Leap::Encoding::IInterpolable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_i_can_report_duplicate_information.html">Interface Leap::ICanReportDuplicateInformation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_i_controller.html">Interface Leap::IController</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_i_poolable.html">Interface Leap::IPoolable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_physical_hands_1_1_i_physical_hand_contact.html">Interface Leap::PhysicalHands::IPhysicalHandContact</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_physical_hands_1_1_i_physical_hand_grab.html">Interface Leap::PhysicalHands::IPhysicalHandGrab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_physical_hands_1_1_i_physical_hand_hover.html">Interface Leap::PhysicalHands::IPhysicalHandHover</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_physical_hands_1_1_i_physical_hand_primary_hover.html">Interface Leap::PhysicalHands::IPhysicalHandPrimaryHover</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/interface/interface_leap_1_1_runtime_gizmos_1_1_i_runtime_gizmo_component.html">Interface Leap::RuntimeGizmos::IRuntimeGizmoComponent</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../unity-api/structlist.html">Data Structures</a><input class="toctree-checkbox" id="toctree-checkbox-26" name="toctree-checkbox-26" role="switch" type="checkbox"/><label for="toctree-checkbox-26"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/0d7b075c15ab6b9842fd90c481f2e286457c5226.html">Struct Leap::PhysicalHands::GrabHelperObject::VelocitySample</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/111d6cdf9827987f428b3eff02b77815ba25a586.html">Struct LeapInternal::LEAP_POINT_MAPPING_CHANGE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/118070d2b8c82ebb0ae42e1c006615d1cef79552.html">Struct Leap::HandPoseScriptableObject::FingerJointThresholds</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/1354ad673b9ddb9a3a7087763f5b5cf02fa7f380.html">Struct LeapInternal::LeapC::LEAP_SERVER_STATUS_DEVICE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/141a11ee6eed37a39823a409cb70ead572f1e050.html">Struct LeapInternal::LEAP_NEW_DEVICE_TRANSFORM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/17279e9f6f5203219d322a9acff432f984310b5c.html">Struct LeapInternal::LEAP_CONFIG_CHANGE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/17ec1510ad162e793f0a36ea48f016ec8bb9ffe9.html">Struct LeapInternal::LeapC::LEAP_RECORDING_STATUS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/1e66c7063feab22a60b01bc85ef5129047091793.html">Struct Leap::PhysicalHands::GrabBall::GrabBallRestrictionStatus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/1f3d030f221a5375134a8e9cbc3fe83c3efbbcdb.html">Struct Leap::InputActions::XRHandsInputActionUpdater::LeapHandStateDelegates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/40dd850423b771a1e8cdf8d22b68e4b4b9b0b14f.html">Struct LeapInternal::LEAP_DEVICE_STATUS_CHANGE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/543c18f59a623eb1272df8b2b90a35d8156abd72.html">Struct LeapInternal::LEAP_CONFIG_RESPONSE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/59464bb5ea173e2143fc4b56ee25d478e3a32f46.html">Struct LeapInternal::LEAP_DISCONNECTION_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/60ecd6e19458dff5789e3771129ac4d64f93b646.html">Struct LeapInternal::LEAP_DROPPED_FRAME_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/728ba3c831c595794ab204d88a03ccfbee9be235.html">Struct LeapInternal::LEAP_TRACKING_MODE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/810dfa2bd49d8f4efc0fc30d72e3a6d638353e0f.html">Struct LeapInternal::LEAP_CONNECTION_MESSAGE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/8e6e117ea86619b63f947519b4248f1476c7132d.html">Struct LeapInternal::LeapC::LEAP_RECORDING_PARAMETERS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/91859dc66eb3623da404fa6cf34ab22460b835ac.html">Struct LeapInternal::LEAP_FIDUCIAL_POSE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/a11419f6af8345baa0e0d5040b73928f38c0dba4.html">Struct LeapInternal::LeapC::LEAP_SERVER_STATUS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/a1dc02956e5bb58df7190e5a8ccb34b778940c66.html">Struct Leap::RuntimeGizmos::RuntimeGizmoDrawer::WireSphere</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/a61e7a99aad474ea5bd342f14bef51eda0ea1e43.html">Struct LeapInternal::LEAP_DEVICE_FAILURE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/ac0513286582ccd4c747464c6a9adca817ff1e46.html">Struct LeapInternal::LEAP_VARIANT_VALUE_TYPE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/b2ac842833f9c255d5b154982e00237ddb393098.html">Struct Leap::Attachments::AttachmentHand::AttachmentPointsEnumerator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/e10207c0f2f3293a16eda150846409a1088e97f6.html">Struct LeapInternal::LEAP_CONFIG_RESPONSE_EVENT_WITH_REF_TYPE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/fed8c3895a15f027ec40f90143b83fd558c14050.html">Struct LeapInternal::LEAP_CONNECTION_LOST_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_begin_profiling_block_args.html">Struct Leap::BeginProfilingBlockArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_begin_profiling_for_thread_args.html">Struct Leap::BeginProfilingForThreadArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_bit_converter_non_alloc_1_1_conversion_struct.html">Struct Leap::BitConverterNonAlloc::ConversionStruct</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_end_profiling_block_args.html">Struct Leap::EndProfilingBlockArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_end_profiling_for_thread_args.html">Struct Leap::EndProfilingForThreadArgs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_hand_pose_detector_1_1_pose_rule.html">Struct Leap::HandPoseDetector::PoseRule</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_hand_pose_detector_1_1_pose_rule_cache.html">Struct Leap::HandPoseDetector::PoseRuleCache</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_hand_pose_detector_1_1_rule_direction.html">Struct Leap::HandPoseDetector::RuleDirection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_hand_pose_detector_1_1_validation_data.html">Struct Leap::HandPoseDetector::ValidationData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_input_actions_1_1_leap_hand_state.html">Struct Leap::InputActions::LeapHandState</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_leap_transform.html">Struct Leap::LeapTransform</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_metadata_util_1_1_analytics.html">Struct Leap::MetadataUtil::Analytics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_metadata_util_1_1_telemetry.html">Struct Leap::MetadataUtil::Telemetry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_point_mapping.html">Struct Leap::PointMapping</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_readonly_hash_set.html">Struct Leap::ReadonlyHashSet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_ring_buffer_1_1_ring_buffer_enumerator.html">Struct Leap::RingBuffer::RingBufferEnumerator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_runtime_gizmos_1_1_runtime_gizmo_drawer_1_1_line.html">Struct Leap::RuntimeGizmos::RuntimeGizmoDrawer::Line</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_single_layer.html">Struct Leap::SingleLayer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_tracking_1_1_open_x_r_1_1_hand_joint_location.html">Struct Leap::Tracking::OpenXR::HandJointLocation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_transform_history_1_1_transform_data.html">Struct Leap::TransformHistory::TransformData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_utils_1_1_children_enumerator.html">Struct Leap::Utils::ChildrenEnumerator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_1_1_utils_1_1_horizontal_line_rect_enumerator.html">Struct Leap::Utils::HorizontalLineRectEnumerator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_connection_1_1_key.html">Struct LeapInternal::Connection::Key</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___a_l_l_o_c_a_t_o_r.html">Struct LeapInternal::LEAP_ALLOCATOR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___b_o_n_e.html">Struct LeapInternal::LEAP_BONE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___c_o_n_n_e_c_t_i_o_n___c_o_n_f_i_g.html">Struct LeapInternal::LEAP_CONNECTION_CONFIG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___c_o_n_n_e_c_t_i_o_n___e_v_e_n_t.html">Struct LeapInternal::LEAP_CONNECTION_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___c_o_n_n_e_c_t_i_o_n___i_n_f_o.html">Struct LeapInternal::LEAP_CONNECTION_INFO</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___d_e_v_i_c_e___e_v_e_n_t.html">Struct LeapInternal::LEAP_DEVICE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___d_e_v_i_c_e___i_n_f_o.html">Struct LeapInternal::LEAP_DEVICE_INFO</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___d_e_v_i_c_e___r_e_f.html">Struct LeapInternal::LEAP_DEVICE_REF</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___d_i_g_i_t.html">Struct LeapInternal::LEAP_DIGIT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___e_y_e___e_v_e_n_t.html">Struct LeapInternal::LEAP_EYE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___f_r_a_m_e___h_e_a_d_e_r.html">Struct LeapInternal::LEAP_FRAME_HEADER</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___h_a_n_d.html">Struct LeapInternal::LEAP_HAND</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___h_e_a_d___p_o_s_e___e_v_e_n_t.html">Struct LeapInternal::LEAP_HEAD_POSE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___i_m_a_g_e.html">Struct LeapInternal::LEAP_IMAGE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___i_m_a_g_e___e_v_e_n_t.html">Struct LeapInternal::LEAP_IMAGE_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___i_m_a_g_e___p_r_o_p_e_r_t_i_e_s.html">Struct LeapInternal::LEAP_IMAGE_PROPERTIES</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___l_o_g___e_v_e_n_t.html">Struct LeapInternal::LEAP_LOG_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___m_a_t_r_i_x__3x3.html">Struct LeapInternal::LEAP_MATRIX_3x3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___p_a_l_m.html">Struct LeapInternal::LEAP_PALM</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___p_o_i_n_t___m_a_p_p_i_n_g.html">Struct LeapInternal::LEAP_POINT_MAPPING</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___p_o_l_i_c_y___e_v_e_n_t.html">Struct LeapInternal::LEAP_POLICY_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___q_u_a_t_e_r_n_i_o_n.html">Struct LeapInternal::LEAP_QUATERNION</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___t_e_l_e_m_e_t_r_y___d_a_t_a.html">Struct LeapInternal::LEAP_TELEMETRY_DATA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___t_i_p.html">Struct LeapInternal::LEAP_TIP</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___t_r_a_c_k_i_n_g___e_v_e_n_t.html">Struct LeapInternal::LEAP_TRACKING_EVENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___v_a_r_i_a_n_t___r_e_f___t_y_p_e.html">Struct LeapInternal::LEAP_VARIANT_REF_TYPE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___v_e_c_t_o_r.html">Struct LeapInternal::LEAP_VECTOR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_l_e_a_p___v_e_r_s_i_o_n.html">Struct LeapInternal::LEAP_VERSION</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_memory_manager_1_1_active_memory_info.html">Struct LeapInternal::MemoryManager::ActiveMemoryInfo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/struct/struct_leap_internal_1_1_memory_manager_1_1_pool_key.html">Struct LeapInternal::MemoryManager::PoolKey</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../unity-api/namespacelist.html">Namespaces</a><input class="toctree-checkbox" id="toctree-checkbox-27" name="toctree-checkbox-27" role="switch" type="checkbox"/><label for="toctree-checkbox-27"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_a_o_t.html">Namespace AOT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_bone.html">Namespace Bone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_hand.html">Namespace Hand</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_image.html">Namespace Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_jet_brains_1_1_annotations.html">Namespace JetBrains::Annotations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap.html">Namespace Leap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_attachments.html">Namespace Leap::Attachments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_attributes.html">Namespace Leap::Attributes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_encoding.html">Namespace Leap::Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_examples.html">Namespace Leap::Examples</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_hands_module.html">Namespace Leap::HandsModule</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_input_actions.html">Namespace Leap::InputActions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_physical_hands.html">Namespace Leap::PhysicalHands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_physical_hands_1_1_contact_bone.html">Namespace Leap::PhysicalHands::ContactBone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_readme.html">Namespace Leap::Readme</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_runtime_gizmos.html">Namespace Leap::RuntimeGizmos</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_tracking.html">Namespace Leap::Tracking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_tracking_1_1_open_x_r.html">Namespace Leap::Tracking::OpenXR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_unity.html">Namespace Leap::Unity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_1_1_unity_1_1_m_r_t_k.html">Namespace Leap::Unity::MRTK</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_leap_internal.html">Namespace LeapInternal</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_mixed_reality_1_1_toolkit.html">Namespace MixedReality::Toolkit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_mixed_reality_1_1_toolkit_1_1_input.html">Namespace MixedReality::Toolkit::Input</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_mixed_reality_1_1_toolkit_1_1_subsystems.html">Namespace MixedReality::Toolkit::Subsystems</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system.html">Namespace System</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_collections.html">Namespace System::Collections</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_collections_1_1_concurrent.html">Namespace System::Collections::Concurrent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_collections_1_1_generic.html">Namespace System::Collections::Generic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_component_model.html">Namespace System::ComponentModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_i_o.html">Namespace System::IO</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_linq.html">Namespace System::Linq</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_reflection.html">Namespace System::Reflection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_runtime_1_1_interop_services.html">Namespace System::Runtime::InteropServices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_text_1_1_regular_expressions.html">Namespace System::Text::RegularExpressions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_system_1_1_threading.html">Namespace System::Threading</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_test_hand_pose.html">Namespace TestHandPose</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_1_1_collections.html">Namespace Unity::Collections</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine.html">Namespace UnityEngine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_assertions.html">Namespace UnityEngine::Assertions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_events.html">Namespace UnityEngine::Events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_input_system.html">Namespace UnityEngine::InputSystem</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_input_system_1_1_layouts.html">Namespace UnityEngine::InputSystem::Layouts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_input_system_1_1_low_level.html">Namespace UnityEngine::InputSystem::LowLevel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_input_system_1_1_utilities.html">Namespace UnityEngine::InputSystem::Utilities</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_rendering.html">Namespace UnityEngine::Rendering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_scene_management.html">Namespace UnityEngine::SceneManagement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_scripting.html">Namespace UnityEngine::Scripting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_serialization.html">Namespace UnityEngine::Serialization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_spatial_tracking.html">Namespace UnityEngine::SpatialTracking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_subsystems_implementation_1_1_extensions.html">Namespace UnityEngine::SubsystemsImplementation::Extensions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_x_r.html">Namespace UnityEngine::XR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_x_r_1_1_hands.html">Namespace UnityEngine::XR::Hands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_x_r_1_1_hands_1_1_processing.html">Namespace UnityEngine::XR::Hands::Processing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_x_r_1_1_hands_1_1_provider_implementation.html">Namespace UnityEngine::XR::Hands::ProviderImplementation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_x_r_1_1_management.html">Namespace UnityEngine::XR::Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_x_r_1_1_open_x_r.html">Namespace UnityEngine::XR::OpenXR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_engine_1_1_x_r_1_1_open_x_r_1_1_features.html">Namespace UnityEngine::XR::OpenXR::Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespace_unity_object.html">Namespace UnityObject</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unity-api/namespace/namespacestatic.html">Namespace static</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../unreal-api/api-reference.html">Unreal Plugin API</a><input class="toctree-checkbox" id="toctree-checkbox-28" name="toctree-checkbox-28" role="switch" type="checkbox"/><label for="toctree-checkbox-28"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../unreal-api/classlist.html">Classes</a><input class="toctree-checkbox" id="toctree-checkbox-29" name="toctree-checkbox-29" role="switch" type="checkbox"/><label for="toctree-checkbox-29"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_a_joint_occlusion_actor.html">Class AJointOcclusionActor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_a_leap_hand_actor.html">Class ALeapHandActor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_a_leap_visualizer.html">Class ALeapVisualizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_a_tracking_device_base_actor.html">Class ATrackingDeviceBaseActor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_a_ultraleap_tick_in_editor_base_actor.html">Class AUltraleapTickInEditorBaseActor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_colour_map.html">Class FColourMap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_device_combiner.html">Class FDeviceCombiner</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_hand_confidence_history.html">Class FHandConfidenceHistory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_hand_position_history.html">Class FHandPositionHistory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_joint_confidence_history.html">Class FJointConfidenceHistory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_kabsch_solver.html">Class FKabschSolver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_leap_async.html">Class FLeapAsync</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_leap_device_wrapper.html">Class FLeapDeviceWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_leap_image.html">Class FLeapImage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_leap_live_link_producer.html">Class FLeapLiveLinkProducer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_leap_utility.html">Class FLeapUtility</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_leap_wrapper.html">Class FLeapWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_leap_wrapper_base.html">Class FLeapWrapperBase</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_open_x_r_to_leap_wrapper.html">Class FOpenXRToLeapWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_anim_custom_details_panel.html">Class FUltraleapAnimCustomDetailsPanel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_combined_device.html">Class FUltraleapCombinedDevice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_combined_device_angular.html">Class FUltraleapCombinedDeviceAngular</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_combined_device_confidence.html">Class FUltraleapCombinedDeviceConfidence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_device.html">Class FUltraleapDevice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_leap_custom_details_panel.html">Class FUltraleapLeapCustomDetailsPanel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_tracking_editor_module.html">Class FUltraleapTrackingEditorModule</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_tracking_input_device.html">Class FUltraleapTrackingInputDevice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_f_ultraleap_tracking_plugin.html">Class FUltraleapTrackingPlugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_from_matrix_extension.html">Class FromMatrixExtension</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_i_hand_tracking_device.html">Class IHandTrackingDevice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_i_hand_tracking_wrapper.html">Class IHandTrackingWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_i_leap_connector.html">Class ILeapConnector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_i_leap_connector_callbacks.html">Class ILeapConnectorCallbacks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_i_tracking_device_wrapper.html">Class ITrackingDeviceWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_i_ultraleap_tracking_plugin.html">Class IUltraleapTrackingPlugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_leap_utility_timer.html">Class LeapUtilityTimer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_leap_wrapper_callback_interface.html">Class LeapWrapperCallbackInterface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_anim_graph_node___modify_body_state_mapped_bones.html">Class UAnimGraphNode_ModifyBodyStateMappedBones</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_grab_classifier_probe.html">Class UGrabClassifierProbe</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_i_e_grab_classifier_component.html">Class UIEGrabClassifierComponent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_leap_blueprint_function_library.html">Class ULeapBlueprintFunctionLibrary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_leap_component.html">Class ULeapComponent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_leap_subsystem.html">Class ULeapSubsystem</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_leap_tracking_settings.html">Class ULeapTrackingSettings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_leap_widget_interaction_component.html">Class ULeapWidgetInteractionComponent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_tick_in_editor_static_mesh_component.html">Class UTickInEditorStaticMeshComponent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/class/class_u_ultraleap_i_e_function_library.html">Class UUltraleapIEFunctionLibrary</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../unreal-api/structlist.html">Data Structures</a><input class="toctree-checkbox" id="toctree-checkbox-30" name="toctree-checkbox-30" role="switch" type="checkbox"/><label for="toctree-checkbox-30"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_e_keys_leap.html">Struct EKeysLeap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_analytics.html">Struct FAnalytics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_grab_classifier_params.html">Struct FGrabClassifierParams</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_bone_data.html">Struct FLeapBoneData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_device.html">Struct FLeapDevice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_digit_data.html">Struct FLeapDigitData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_frame_data.html">Struct FLeapFrameData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_hand_data.html">Struct FLeapHandData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_options.html">Struct FLeapOptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_palm_data.html">Struct FLeapPalmData</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_leap_stats.html">Struct FLeapStats</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../unreal-api/struct/struct_f_telemetry.html">Struct FTelemetry</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Native (LeapC) Manual and API</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-31" name="toctree-checkbox-31" role="switch" type="checkbox"/><label for="toctree-checkbox-31"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../leapc-guide.html">LeapC Guide</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-32" name="toctree-checkbox-32" role="switch" type="checkbox"/><label for="toctree-checkbox-32"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="using-leapc.html">Using LeapC</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">Images</a></li>
+<li class="toctree-l3"><a class="reference internal" href="leap-concepts.html">Leap Concepts</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api-reference.html">API Reference</a><input class="toctree-checkbox" id="toctree-checkbox-33" name="toctree-checkbox-33" role="switch" type="checkbox"/><label for="toctree-checkbox-33"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../group/group___structs.html">Data Structures</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../group/group___enum.html">Enumerations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../group/group___hints.html">Hints</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../group/group___functions.html">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../examples.html">Examples</a><input class="toctree-checkbox" id="toctree-checkbox-34" name="toctree-checkbox-34" role="switch" type="checkbox"/><label for="toctree-checkbox-34"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../examples/example-connection.html">Example Connection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../examples/callback-example.html">Callback Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../examples/polling-example.html">Polling Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../examples/interpolated-frames-example.html">Interpolated Frames Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../examples/images-example.html">Images Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../examples/multi-device-example.html">Multi Device Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../examples/recording-playback-example.html">Recording and Playback Example</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Integrations</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../brightsign/index.html">Brightsign</a><input class="toctree-checkbox" id="toctree-checkbox-35" name="toctree-checkbox-35" role="switch" type="checkbox"/><label for="toctree-checkbox-35"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../brightsign/setup.html">Install and Configure TouchFree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../brightsign/create.html">Create a BrightAuthor:connected Presentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../pico/index.html">Pico</a><input class="toctree-checkbox" id="toctree-checkbox-36" name="toctree-checkbox-36" role="switch" type="checkbox"/><label for="toctree-checkbox-36"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../pico/overview.html">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pico/setup-your-headset.html">Prepare the Headset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pico/setup-your-software.html">Install the Software</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pico/troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pico/tips-for-demos.html">Demo Tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pico/developer-resources.html">Developer Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../vive/setup-your-software.html">HTC Vive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quest/setup-your-software.html">Meta Quest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../varjo/index.html">Varjo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../linux/index.html">Linux</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Links</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../useful-links.html">Useful Links</a></li>
+</ul>
+
+</div>
+</div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main">
+          <section id="images">
+<h1>Images<a class="headerlink" href="#images" title="Permalink to this headline">¶</a></h1>
+<p>Ultraleap Hand Tracking Cameras use infrared stereo cameras as tracking sensors. The LeapC API provides an image buffer containing the sensor brightness values and a distortion buffer containing the camera calibration map. The distortion map can be used to correct lens distortion in the image data. The function <a class="reference internal" href="../group/group___functions.html#_CPPv422LeapRectilinearToPixel15LEAP_CONNECTION20eLeapPerspectiveType11LEAP_VECTOR" title="LeapRectilinearToPixel"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapRectilinearToPixel()</span></code></a> can be used to undistort specific pixels in an image and the function <a class="reference internal" href="../group/group___functions.html#_CPPv422LeapPixelToRectilinear15LEAP_CONNECTION20eLeapPerspectiveType11LEAP_VECTOR" title="LeapPixelToRectilinear"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapPixelToRectilinear()</span></code></a> can be used to find the 3D location corresponding to a matched pair of stereo pixels.</p>
+<section id="using-images">
+<h2>Using Images<a class="headerlink" href="#using-images" title="Permalink to this headline">¶</a></h2>
+<p>Images are sent automatically if the policy for images is set.</p>
+<p>When a stereo image pair is available, a <a class="reference internal" href="../group/group___structs.html#_CPPv416LEAP_IMAGE_EVENT" title="LEAP_IMAGE_EVENT"><code class="xref cpp cpp-struct docutils literal notranslate"><span class="pre">LEAP_IMAGE_EVENT()</span></code></a> is added to the event queue and can be accessed via <a class="reference internal" href="../group/group___functions.html#_CPPv418LeapPollConnection15LEAP_CONNECTION8uint32_tP23LEAP_CONNECTION_MESSAGE" title="LeapPollConnection"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapPollConnection()</span></code></a>. The image event contains image properties, distortion correction data, and a pointer to the buffer.</p>
+<p>Both images from the stereo cameras are written to the same buffer; left image first then right image.</p>
+<p>To get an image:</p>
+<ol class="arabic simple">
+<li><p>Open the connection</p></li>
+<li><p>Set image policy</p></li>
+<li><p>Poll for images</p></li>
+<li><p>Continue polling for image frames (optionally also poll for tracking frames and status messages). When an image is available, a <a class="reference internal" href="../group/group___structs.html#_CPPv416LEAP_IMAGE_EVENT" title="LEAP_IMAGE_EVENT"><code class="xref cpp cpp-struct docutils literal notranslate"><span class="pre">LEAP_IMAGE_EVENT()</span></code></a> message is provided by <a class="reference internal" href="../group/group___functions.html#_CPPv418LeapPollConnection15LEAP_CONNECTION8uint32_tP23LEAP_CONNECTION_MESSAGE" title="LeapPollConnection"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapPollConnection()</span></code></a>. The <a class="reference internal" href="../group/group___structs.html#_CPPv416LEAP_IMAGE_EVENT" title="LEAP_IMAGE_EVENT"><code class="xref cpp cpp-struct docutils literal notranslate"><span class="pre">LEAP_IMAGE_EVENT()</span></code></a> struct contains the images, a description of the images, and the distortion map</p></li>
+</ol>
+<section id="image-buffer-size">
+<h3>Image Buffer Size<a class="headerlink" href="#image-buffer-size" title="Permalink to this headline">¶</a></h3>
+<p>The image buffer size depends on the device type as well as the image type and format. The buffer size depends on the width, height, and pixel format (bytes per pixel) of the image. A single buffer must hold stereo images. For example, if the current images produced by an Ultraleap Hand Tracking Camera device 640 x 240, 1-byte pixels, then the buffer size must be: 640 x 240 x 1 x 2 = 307,200 bytes.</p>
+</section>
+</section>
+<section id="image-distortion">
+<h2>Image Distortion<a class="headerlink" href="#image-distortion" title="Permalink to this headline">¶</a></h2>
+<p>When a ray of light enters an Ultraleap Hand Tracking Cameras, the lens bends the ray so that it hits the sensor. The sensor then records a greyscale brightness value at a specific pixel location. No lens is perfect, so a ray of light does not land on the sensor in the optically perfect spot. The distortion map provides data to correct this imperfection, allowing you to calculate the true angle of the original ray of light. You can use the corrected angle to generate a rectified image. Using the angles from both images in the stereo pair, you can triangulate the 3D location of a feature identified in both images.</p>
+<p>For image rectification, the distortion map can be fed to a shader program that can efficiently interpolate the correction applied to rays of light to produce a texture containing the rectified image. For getting the true angle for a small set of points, you can use the <a class="reference internal" href="../group/group___functions.html#_CPPv422LeapPixelToRectilinear15LEAP_CONNECTION20eLeapPerspectiveType11LEAP_VECTOR" title="LeapPixelToRectilinear"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapPixelToRectilinear()</span></code></a> function (but this is not typically efficient enough to transform a full bitmap at a high frame rate).</p>
+<section id="rectifying-image-points">
+<h3>Rectifying Image Points<a class="headerlink" href="#rectifying-image-points" title="Permalink to this headline">¶</a></h3>
+<p>To rectify individual points in an image, you can call the <a class="reference internal" href="../group/group___functions.html#_CPPv422LeapPixelToRectilinear15LEAP_CONNECTION20eLeapPerspectiveType11LEAP_VECTOR" title="LeapPixelToRectilinear"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapPixelToRectilinear()</span></code></a> function. Given a ray from the camera, this function returns the pixel coordinates in the image buffer that contain the light recorded from that direction, corrected for lens distortion.</p>
+<p>The following code takes a target texture size and determines the correct pixel brightness value. For each pixel, the code computes the ray direction to the point in the scene that would illuminate the target pixel given an ideal optical system. The code then corrects for optical distortion by calling <a class="reference internal" href="../group/group___functions.html#_CPPv422LeapRectilinearToPixel15LEAP_CONNECTION20eLeapPerspectiveType11LEAP_VECTOR" title="LeapRectilinearToPixel"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapRectilinearToPixel()</span></code></a>, which provides the pixel coordinates in the image buffer that actually contains the brightness value for the target pixel. The code copies the brightness value to the target texture buffer. The result is a rectified image.</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="w"> </span><span class="c1">//The pixel size of the textures we write the undistorted images to</span>
+<span class="cp">#define TEX_WIDTH 400</span>
+<span class="cp">#define TEX_HEIGHT 400</span>
+<span class="c1">//Max field of view varies by device, use 8 for the peripheral, 22 for Rigel</span>
+<span class="cp">#define MAX_FOV 22</span>
+
+<span class="c1">//image_buffer contains the image data</span>
+<span class="k">for</span><span class="p">(</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="n">row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">row</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">TEX_HEIGHT</span><span class="p">;</span><span class="w"> </span><span class="n">row</span><span class="o">++</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">for</span><span class="p">(</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="n">col</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">col</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">TEX_WIDTH</span><span class="p">;</span><span class="w"> </span><span class="n">col</span><span class="o">++</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">//Normalize from pixel xy to range [0..1]</span>
+<span class="w">    </span><span class="n">LEAP_VECTOR</span><span class="w"> </span><span class="n">input</span><span class="p">;</span>
+<span class="w">    </span><span class="n">input</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col</span><span class="o">/</span><span class="n">TEX_WIDTH</span><span class="p">;</span>
+<span class="w">    </span><span class="n">input</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">row</span><span class="o">/</span><span class="n">TEX_HEIGHT</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">//Convert from normalized [0..1] to ray slopes</span>
+<span class="w">    </span><span class="n">input</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">.5</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">MAX_FOV</span><span class="p">;</span>
+<span class="w">    </span><span class="n">input</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">.5</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">MAX_FOV</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">LEAP_VECTOR</span><span class="w"> </span><span class="n">pixel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">LeapRectilinearToPixel</span><span class="p">(</span><span class="o">*</span><span class="n">connection</span><span class="p">,</span><span class="w"> </span><span class="n">eLeapPerspectiveType_stereo_left</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">dindex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">floor</span><span class="p">(</span><span class="n">row</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">TEX_WIDTH</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">col</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">pindex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">roundf</span><span class="p">(</span><span class="n">pixel</span><span class="p">.</span><span class="n">y</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">image_width</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">roundf</span><span class="p">(</span><span class="n">pixel</span><span class="p">.</span><span class="n">x</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="p">(</span><span class="n">pixel</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">pixel</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">image_width</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">pixel</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">&gt;=</span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">pixel</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">image_height</span><span class="p">){</span>
+<span class="w">    </span><span class="n">undistorted_image_left</span><span class="p">[</span><span class="n">dindex</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">((</span><span class="kt">char</span><span class="o">*</span><span class="p">)</span><span class="n">image_buffer</span><span class="p">)[</span><span class="n">pindex</span><span class="p">];</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">undistorted_image_left</span><span class="p">[</span><span class="n">dindex</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">128</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For the image on the right, remember to offset the index into the image_buffer array since the right image follows the left.</p>
+<p>You can get the actual device field of view from the <a class="reference internal" href="../group/group___structs.html#_CPPv416LEAP_DEVICE_INFO" title="LEAP_DEVICE_INFO"><code class="xref cpp cpp-struct docutils literal notranslate"><span class="pre">LEAP_DEVICE_INFO()</span></code></a>  struct. Use tan(fov/2) in the calculation above instead of MAX_FOV.</p>
+<p>Note that <a class="reference internal" href="../group/group___functions.html#_CPPv422LeapRectilinearToPixel15LEAP_CONNECTION20eLeapPerspectiveType11LEAP_VECTOR" title="LeapRectilinearToPixel"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">LeapRectilinearToPixel()</span></code></a> may not be fast enough to rectify the image to a high resolution texture in real-time. Generally, you should limit its use to individual points, image patches, or low-resolution textures. For better performance for full images, you can use a shader to rectify the image.</p>
+</section>
+<section id="rectifying-with-a-shader">
+<h3>Rectifying with a Shader<a class="headerlink" href="#rectifying-with-a-shader" title="Permalink to this headline">¶</a></h3>
+<p>To rectify an entire image with a shader, create a texture containing the data in the distortion buffer. The distortion buffer is contained in the distortion_matrix field of the <a class="reference internal" href="../group/group___structs.html#_CPPv416LEAP_IMAGE_EVENT" title="LEAP_IMAGE_EVENT"><code class="xref cpp cpp-struct docutils literal notranslate"><span class="pre">LEAP_IMAGE_EVENT()</span></code></a>  struct. This data is set up to use a shader’s normal UV interpolation mechanism. You can use the interpolated UV coordinates to look up the corrected brightness in the image texture, as in the following fragment shader program:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">uniform</span><span class="w"> </span><span class="n">sampler2D</span><span class="w"> </span><span class="n">rawTexture</span><span class="p">;</span>
+<span class="n">uniform</span><span class="w"> </span><span class="n">sampler2D</span><span class="w"> </span><span class="n">distortionTexture</span><span class="p">;</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span>
+<span class="p">{</span>
+<span class="w">  </span><span class="n">vec2</span><span class="w"> </span><span class="n">distortionIndex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">texture2D</span><span class="p">(</span><span class="n">distortionTexture</span><span class="p">,</span><span class="w"> </span><span class="n">gl_TexCoord</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">st</span><span class="p">).</span><span class="n">xy</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">float</span><span class="w"> </span><span class="n">hIndex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">distortionIndex</span><span class="p">.</span><span class="n">r</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">float</span><span class="w"> </span><span class="n">vIndex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">distortionIndex</span><span class="p">.</span><span class="n">g</span><span class="p">;</span>
+
+<span class="w">  </span><span class="k">if</span><span class="p">(</span><span class="n">vIndex</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">vIndex</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">1.0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">hIndex</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">hIndex</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">1.0</span><span class="p">)</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="n">gl_FragColor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vec4</span><span class="p">(</span><span class="n">texture2D</span><span class="p">(</span><span class="n">rawTexture</span><span class="p">,</span><span class="w"> </span><span class="n">distortionIndex</span><span class="p">).</span><span class="n">rrr</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">else</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="n">gl_FragColor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vec4</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>To interpolate correctly, the distortion texture must use the following filter and wrap parameters:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">glTexParameteri</span><span class="p">(</span><span class="n">GL_TEXTURE_2D</span><span class="p">,</span><span class="w"> </span><span class="n">GL_TEXTURE_MIN_FILTER</span><span class="p">,</span><span class="w"> </span><span class="n">GL_LINEAR</span><span class="p">);</span>
+<span class="n">glTexParameteri</span><span class="p">(</span><span class="n">GL_TEXTURE_2D</span><span class="p">,</span><span class="w"> </span><span class="n">GL_TEXTURE_MAG_FILTER</span><span class="p">,</span><span class="w"> </span><span class="n">GL_LINEAR</span><span class="p">);</span>
+<span class="n">glTexParameteri</span><span class="p">(</span><span class="n">GL_TEXTURE_2D</span><span class="p">,</span><span class="w"> </span><span class="n">GL_TEXTURE_WRAP_S</span><span class="p">,</span><span class="w"> </span><span class="n">GL_CLAMP_TO_EDGE</span><span class="p">);</span>
+<span class="n">glTexParameteri</span><span class="p">(</span><span class="n">GL_TEXTURE_2D</span><span class="p">,</span><span class="w"> </span><span class="n">GL_TEXTURE_WRAP_T</span><span class="p">,</span><span class="w"> </span><span class="n">GL_CLAMP_TO_EDGE</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The distortion texture must use two floating point values per texel and contain 64 x 64 texels:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">glTexImage2D</span><span class="p">(</span><span class="n">GL_TEXTURE_2D</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">GL_RG</span><span class="p">,</span><span class="w"> </span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">GL_RG</span><span class="p">,</span><span class="w"> </span><span class="n">GL_FLOAT</span><span class="p">,</span><span class="w"> </span><span class="n">distortion_buffer_left</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The distortion map itself rarely changes – the only time it changes is if the Ultraleap Hand Tracking Camera is swapped with a different device, or if the device is rotated so that the user’s hands enter from the opposite side of the vertical field of view. In this case the Ultraleap Hand Tracking Software inverts the image, and the distortion map, to automatically maintain the proper orientation. (Auto-orientation can be turned off in the Ultraleap Tracking Service configuration.)</p>
+</section>
+<section id="detecting-when-the-distortion-map-changes">
+<h3>Detecting When the Distortion Map Changes<a class="headerlink" href="#detecting-when-the-distortion-map-changes" title="Permalink to this headline">¶</a></h3>
+<p>The distortion map contains a grid of values that can be used to rectify the images. Rectification should be performed if you are aligning 3D objects with pixels in the images or if you are performing stereo triangulation on the image pair.</p>
+<p>Each image complete event contains the distortion map for that image. However, since translating the map to an interpolation array or shader texture can itself be an expensive task, you typically only want to do this when the distortion map actually changes – not once for every image request. The distortion map can only change when the images are flipped due to automatic or manual re-orientation, or if the device itself is changed. You can use the LEAP_IMAGE_EVENT::matrix_version field to detect when the distortion map changes. When the matrix_version changes between images, you know that the distortion map has changed. The matrix version number ALWAYS increases when the distortion map changes and never returns to a prior value.</p>
+<hr class="docutils"/>
+<p><a class="reference external" href="#top">Back to top</a></p>
+</section>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+
+        <div class="related-pages">
+          <a class="next-page" href="leap-concepts.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Leap Concepts</div>
+              </div>
+              <svg><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="using-leapc.html">
+              <svg><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Using LeapC</div>
+                
+              </div>
+            </a>
+        </div>
+
+        <div class="related-information">
+              Copyright &#169; 2025, Ultraleap |
+          Created using <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+          <a href="https://github.com/pradyunsg/furo">Furo theme</a>.
+        </div>
+        
+
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-148219387-1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+
+          gtag('config', 'UA-148219387-1');
+        </script>
+
+
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/scripts/furo.js"></script>
+    </body>
+</html>

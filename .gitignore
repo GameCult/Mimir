@@ -3,4 +3,5 @@ logs/
 *.log
 *.tmp
 __pycache__/
-
+.venv/
+calibration/runs/

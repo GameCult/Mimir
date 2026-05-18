@@ -1,0 +1,11 @@
+{
+  "created_utc": "2026-05-18T12:45:28.818742+00:00",
+  "dictionary": "DICT_4X4_100",
+  "squares_x": 8,
+  "squares_y": 6,
+  "square_length": 0.035,
+  "marker_length": 0.026,
+  "pixels_per_square": 180,
+  "margin": 40,
+  "image": "calibration\\targets\\charuco-8x6-dict4x4-100.png"
+}

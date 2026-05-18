@@ -54,6 +54,56 @@ research:
       feeding a declared ambisonic bus. The existing one-audio-source-per-SRT
       endpoint design remains valid for plain OBS mixing, but it is not the
       authority for synchronized ambisonic DSP.
+  live_adaptive_sync:
+    summary: research/live-adaptive-sync/summary.md
+    bibliography: research/live-adaptive-sync/bibliography.md
+    key_decision: >
+      If independent mic clocks must be used, sync needs two explicit loops:
+      slow sampling-rate-offset estimation driving variable-rate resampling,
+      and faster delay/TDOA tracking for current alignment and localization.
+      Prove this with a two-mic harness before connecting it to Ambisonics.
+  playback_calibration:
+    summary: research/playback-calibration/summary.md
+    bibliography: research/playback-calibration/bibliography.md
+    key_decision: >
+      Speaker output is a layout-specific render stage, not a generic sink.
+      The system needs a playback profile with decoder matrix/layout,
+      output-device latency, channel mapping, per-speaker delay/gain/response
+      correction, and a latency ledger. Keep playback calibration separate from
+      capture-side adaptive sync.
+  feedback_calibration:
+    summary: research/feedback-calibration/summary.md
+    bibliography: research/feedback-calibration/bibliography.md
+    key_decision: >
+      Speaker feedback is also a calibration signal when the outgoing audio is
+      known. Model it with an online speaker-to-mic transfer matrix and expose
+      confidence/convergence state. Keep this estimator separate from clock
+      sync, localization, and Ambisonic decoding.
+  visual_spatial_map:
+    summary: research/visual-spatial-map/summary.md
+    bibliography: research/visual-spatial-map/bibliography.md
+    brushstroke_rendering: research/visual-spatial-map/brushstroke-fusion-rendering.md
+    key_decision: >
+      The visual rig is two PlayStation Eye / PS3 Eye cameras as high-rate
+      low-resolution marker trackers, two Razer Kiyo-class RGB/mic cameras
+      including one Kiyo Pro, and one Leap Motion/LeapUVC stereo IR sensor for
+      near-field fusion. LeapUVC driver mode makes Leap appear as a generic UVC
+      device and should be treated as mutually exclusive with Ultraleap software
+      tracking unless proven otherwise. Build one canonical world coordinate
+      system for all visual sensors, microphones, speakers, props, virtual
+      camera pose, and ambisonic listener pose. Prove sparse calibrated tracking
+      before adding RGB projection or Gaussian splat rendering. For a
+      Dreams-like volumetric brushstroke look, keep the world model as truth and
+      lower semantic scene claims into cached brush/splat packets under budget.
+  gpu_fusion_splatting:
+    summary: research/gpu-fusion-splatting/summary.md
+    bibliography: research/gpu-fusion-splatting/bibliography.md
+    key_decision: >
+      The live visual fusion/render hot path should be GPU-resident: pinned host
+      frame rings, async CUDA uploads, GPU marker/stereo/feature extraction,
+      GPU-shaped observation and brush packet buffers, and CUDA/Vulkan/D3D
+      splat rendering with minimal readback. CPU owns orchestration and
+      semantics; kernels do not own calibration truth.
 
 current_status:
   summary: >
@@ -62,7 +112,11 @@ current_status:
     there, Voicemeeter supplies system-output loopback, Madman's desktop has
     start/stop launchers, the sender script has launcher-safe FFmpeg arguments
     and repo-root logs, desktop launchers use absolute tool paths, and the
-    receiver OBS scene has matching Media Sources.
+    receiver OBS scene has matching Media Sources. Local calibration harness now
+    has first physical-device access: LeapUVC raw IR video, two Razer Kiyo-class
+    RGB cameras, all expected microphones, and Scarlett speaker output are
+    accessible; both PS3 Eye video interfaces are attached but missing their
+    video-side driver.
   next_action: >
-    With OBS open on the receiver, start the sender launcher from Madman's
-    interactive desktop and smoke-test video, Focusrite audio, and system audio.
+    Fix PS3 Eye video driver access, then capture ChArUco intrinsics frames for
+    LeapUVC and both Kiyo cameras before moving to multi-camera extrinsics.
