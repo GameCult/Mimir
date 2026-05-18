@@ -37,7 +37,7 @@ flowchart TD
     F --> G["TrackCache"]
     G --> H["PointCloud PLY"]
     G --> I["RenderFramePacket"]
-    I --> J["Aquarium GPU renderer"]
+    I --> J["Spout sink / Aquarium GPU renderer"]
     J --> K["Spout2 sender texture"]
     K --> L["OBS Spout2 source"]
 ```
@@ -47,7 +47,9 @@ flowchart TD
 - `localcast.sensor_fusion.core` owns calibrated camera models, 2D observations, DLT triangulation, reprojection gating, confidence scoring, point-cloud export, and track cache expiry.
 - `localcast.sensor_fusion.adapters` owns driver-facing frame ingress. Its first concrete adapter is an FFmpeg raw BGR reader for the PS3 Eye DirectShow path.
 - `localcast.sensor_fusion.render_bridge` owns the render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
+- `localcast.sensor_fusion.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
+- `scripts/stream_spout.py` owns the live Spout sender loop for OBS.
 - `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.
 
 ## Cache Discipline
@@ -97,6 +99,17 @@ LocalCastBridge TrackCache
 ```
 
 `RenderFramePacket` is a scaffold ABI, not the final hot path. JSON is useful for inspection, tests, and handoff. Once Aquarium consumes the shape, switch the transport to a binary or shared-memory ring with the same fields. The invariant is the packet contract, not JSON.
+
+The current streamable cut is:
+
+```text
+RenderFramePacket JSON
+-> OpenGL FBO point renderer
+-> SpoutGL sendTexture
+-> OBS Spout2 Capture source
+```
+
+This is deliberately a sink boundary, not a competing world model. Aquarium should replace the renderer body, not the capture/fusion/timing contract.
 
 ## Latency Contract
 

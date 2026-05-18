@@ -49,6 +49,17 @@ class RenderPointPacket:
             "source_timestamp_ns": int(self.source_timestamp_ns),
         }
 
+    @staticmethod
+    def from_dict(data: dict) -> "RenderPointPacket":
+        return RenderPointPacket(
+            stable_key=str(data.get("stable_key", "")),
+            xyz=np.asarray(data["xyz"], dtype=np.float64),
+            radius_m=float(data.get("radius_m", 0.025)),
+            color_rgba=tuple(float(v) for v in data.get("color_rgba", [1.0, 1.0, 1.0, 1.0])),
+            confidence=float(data.get("confidence", 1.0)),
+            source_timestamp_ns=int(data.get("source_timestamp_ns", 0)),
+        )
+
 
 @dataclass(frozen=True)
 class RenderFramePacket:
@@ -82,6 +93,26 @@ class RenderFramePacket:
     def write_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+
+    @staticmethod
+    def from_dict(data: dict) -> "RenderFramePacket":
+        return RenderFramePacket(
+            schema=str(data.get("schema", "")),
+            frame_id=int(data.get("frame_id", 0)),
+            created_monotonic_ns=int(data.get("created_monotonic_ns", 0)),
+            source_time_min_ns=int(data.get("source_time_min_ns", 0)),
+            source_time_max_ns=int(data.get("source_time_max_ns", 0)),
+            present_time_ns=int(data.get("present_time_ns", 0)),
+            audio_alignment_time_ns=int(data.get("audio_alignment_time_ns", 0)),
+            spout_sender_name=str(data.get("spout_sender_name", "LocalCastBridge Point Cloud")),
+            target_width=int(data.get("target_width", 1920)),
+            target_height=int(data.get("target_height", 1080)),
+            points=tuple(RenderPointPacket.from_dict(item) for item in data.get("points", [])),
+        )
+
+
+def load_render_frame(path: Path) -> RenderFramePacket:
+    return RenderFramePacket.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
 def lower_points_to_render_frame(

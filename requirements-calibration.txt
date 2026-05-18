@@ -2,3 +2,5 @@ opencv-contrib-python
 sounddevice
 scipy
 imageio-ffmpeg
+PyOpenGL
+SpoutGL

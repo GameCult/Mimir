@@ -115,6 +115,15 @@ research:
       render-frame packets with source timestamps, intended presentation time,
       audio-alignment time, target size, Spout sender name, and point/brush
       claims. Aquarium owns GPU rendering and Spout publication.
+  live_spout_deadline_sink:
+    summary: docs/obs-spout-streaming.md
+    key_decision: >
+      The deadline OBS surface is a real Spout sender named LocalCastBridge
+      Point Cloud. `scripts/stream_spout.py` consumes render-frame packets,
+      renders points into an OpenGL FBO, publishes the texture through SpoutGL,
+      and writes a heartbeat status file. This is a sink boundary, not a new
+      scene authority; Aquarium should replace the renderer body behind the
+      same RenderFramePacket contract for dense brush/splat rendering.
   sensor_fusion_architecture:
     summary: docs/sensor-fusion-architecture.md
     key_decision: >
@@ -160,7 +169,10 @@ current_status:
     live input while delay/SRO estimates settle, but cache depth must converge
     toward real-time. Core audio modules now expose testable boundaries for
     buffering, latency convergence, injectable capture/alignment/encode/sink
-    ports, and pipeline orchestration. The first visual sensor-fusion sidecar is
+    ports, and pipeline orchestration. Calibration analysis now has a local
+    chirplet refinement pass: coarse sweep match followed by fractional-delay
+    and chirp-rate grid search around the detected arrival. The first visual
+    sensor-fusion sidecar is
     in place: `localcast.sensor_fusion.core` owns calibrated camera models,
     timestamped 2D observations, DLT triangulation, reprojection/confidence
     gating, a TTL track cache, and PLY point-cloud export; adapters own
@@ -169,16 +181,23 @@ current_status:
     points into `localcast.sensor_fusion.render_frame.v1` packets carrying
     source time ranges, intended visual presentation time, audio-alignment
     time, target render size, Spout sender name, and point draw metadata for
-    Aquarium/Spout. Unit tests inject synthetic cameras and frames so the core
-    does not depend on live camera drivers.
+    Aquarium/Spout. A deadline OBS Spout sender is now live-shaped:
+    `scripts/stream_spout.py` reads render-frame JSON, renders points into an
+    OpenGL FBO, publishes Spout sender `LocalCastBridge Point Cloud`, and writes
+    `calibration/runs/stream-spout-status.json`; a smoke run sent real Spout
+    frames, and the detached sender can run demo packets until live fusion writes
+    `calibration/runs/live-render-frame.json`. Unit tests inject synthetic
+    cameras and frames so the core does not depend on live camera drivers.
   next_action: >
     Capture real ChArUco intrinsics/extrinsics for the PS3 Eyes and Kiyos,
     replace `config/sensor-fusion.example.json` placeholder transforms with a
     local `config/sensor-fusion.json`, then add a detector adapter that turns
     FFmpeg PS3 Eye frames into marker `Observation2D` records for the fusion
-    core. Then add an Aquarium Engine consumer for render-frame packets that
-    renders cached points/brushes into a GPU render target and publishes it as
-    Spout sender `LocalCastBridge Point Cloud` for OBS. In parallel, create local
+    core. In parallel, move the render-frame consumer into Aquarium Engine so
+    Aquarium renders cached points/brushes into its GPU render target and
+    publishes or hands off the same Spout sender `LocalCastBridge Point Cloud`
+    for OBS, replacing the deadline OpenGL point sink without changing packet
+    ownership. In parallel, create local
     `config/audio-field.json`, confirm local
     Kiyo/PS Eye/Focusrite device matches, confirm the neighbor Focusrite
     shotgun capture/transport path, replace placeholder mic/speaker geometry

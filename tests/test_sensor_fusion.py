@@ -9,8 +9,11 @@ from localcast.sensor_fusion import (
     Observation2D,
     PointCloud,
     RenderBridgeConfig,
+    RenderFramePacket,
     SensorRig,
+    SpoutOutputConfig,
     TrackCache,
+    frame_to_vertex_array,
     lower_points_to_render_frame,
 )
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
@@ -145,6 +148,17 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(2_100, data["present_time_ns"])
         self.assertEqual(2_200, data["audio_alignment_time_ns"])
         self.assertEqual(0.05, data["points"][0]["radius_m"])
+
+        loaded = RenderFramePacket.from_dict(data)
+        vertices = frame_to_vertex_array(loaded, point_scale=2.0)
+        self.assertEqual((1, 8), vertices.shape)
+        self.assertAlmostEqual(0.10, float(vertices[0, 7]), places=6)
+        self.assertGreater(float(vertices[0, 6]), 0.0)
+
+    def test_spout_output_config_is_importable_without_gpu_context(self):
+        config = SpoutOutputConfig(sender_name="unit-test", width=128, height=72, fps=30)
+        self.assertEqual("unit-test", config.sender_name)
+        self.assertEqual(128, config.width)
 
 
 if __name__ == "__main__":
