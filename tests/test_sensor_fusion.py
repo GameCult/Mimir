@@ -35,6 +35,7 @@ from scripts.live_sensor_fusion import (
     rgb_room_splats,
     unpack_leap_packed_channels,
 )
+from localcast.sensor_fusion.active_illumination import ActiveIlluminationController, IlluminationPulsePlan
 from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
 
@@ -331,6 +332,36 @@ class SensorFusionTests(unittest.TestCase):
         self.assertGreater(len(points), 0)
         self.assertTrue(all(point.stable_key.startswith("leap-motion:green") for point in points))
         self.assertTrue(all(point.source_timestamp_ns == 456 for point in points))
+
+    def test_active_illumination_pulse_plan_emits_timed_brightness_changes(self):
+        class FakeLight:
+            def __init__(self):
+                self.calls = []
+
+            def set_white(self, *, brightness_percent, color_temp_percent):
+                self.calls.append((brightness_percent, color_temp_percent))
+
+        ticks = iter([1_000_000_000, 1_300_000_000])
+        light = FakeLight()
+        controller = ActiveIlluminationController(
+            light,
+            IlluminationPulsePlan(
+                pulse_count=2,
+                bright_ms=10,
+                settle_ms=20,
+                brightness_percent=91,
+                idle_brightness_percent=17,
+                color_temp_percent=44,
+            ),
+        )
+
+        pulses = controller.run(sleep=lambda _: None, clock_ns=lambda: next(ticks))
+
+        self.assertEqual(2, len(pulses))
+        self.assertEqual((91, 44), light.calls[0])
+        self.assertEqual((17, 44), light.calls[1])
+        self.assertEqual((17, 44), light.calls[-1])
+        self.assertEqual(1_010_000_000, pulses[0].bright_until_monotonic_ns)
 
     def test_adaptive_camera_controller_reduces_overexposure(self):
         controller = AdaptiveCameraController(target=CameraQualityTarget(mean_luma=0.5, luma_deadband=0.02))

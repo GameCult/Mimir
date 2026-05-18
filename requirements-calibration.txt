@@ -1,4 +1,5 @@
 opencv-contrib-python
+tinytuya
 sounddevice
 soundcard
 scipy

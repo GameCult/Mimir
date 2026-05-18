@@ -228,7 +228,10 @@ current_status:
     compute rather than Python loops. A separate
     adaptive camera-control policy measures luminance, clipping, contrast, and
     sharpness, then emits normalized exposure/gain/focus commands through the
-    OpenCV capture adapter when the driver accepts them. Unit tests inject
+    OpenCV capture adapter when the driver accepts them. Active illumination now
+    has an optional Tuya local-network pulse hook for deliberately modulating
+    room light as calibration telemetry; pulse timestamps can be aligned against
+    camera brightness/depth response. Unit tests inject
     synthetic cameras and frames so the core does not depend on live camera
     drivers.
   next_action: >
@@ -237,7 +240,9 @@ current_status:
     local `config/sensor-fusion.json`, then move the dense RGB stereo matcher
     to a GPU-resident stereo/flow pass so high-detail surface claims can scale
     toward the million-splat temporal accumulator without Python owning each
-    point. Then replace the synthetic live producer with a detector adapter that
+    point. If a Tuya light is available, run the local-key pulse hook and record
+    its timestamps against camera responses as active illumination evidence.
+    Then replace the synthetic live producer with a detector adapter that
     turns FFmpeg PS3 Eye frames into marker `Observation2D` records for the
     fusion core and publishes the same typed CultCache/CultNet render-frame
     document. In parallel, move the render-frame consumer into Aquarium Engine so

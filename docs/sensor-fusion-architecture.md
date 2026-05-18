@@ -62,6 +62,7 @@ flowchart TD
 - `localcast.sensor_fusion.adapters` owns driver-facing frame ingress. Its first concrete adapter is an FFmpeg raw BGR reader for the PS3 Eye DirectShow path.
 - `localcast.sensor_fusion.camera_control` owns measurement-quality policy: luminance, clipping, contrast, and sharpness in; normalized exposure/gain/focus commands out. Driver adapters own translating those commands to OpenCV, DirectShow, vendor tools, or no-op mocks.
 - `localcast.sensor_fusion.dense_stereo` owns a debug CPU reference for dense calibrated RGB surface claims. It is useful for tests and shader parity, but the live million-splat path belongs to Aquarium/GPU compute.
+- `localcast.sensor_fusion.active_illumination` owns deliberate light pulses as calibration telemetry. A Tuya bulb is an optional local-network actuator, not a rendering authority; its pulse timestamps are evidence for camera exposure/depth response.
 - `localcast.sensor_fusion.render_bridge` owns the in-process render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
 - `localcast.sensor_fusion.cultcache_docs` owns the typed CultCache document boundary for live visual state.
 - `localcast.sensor_fusion.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out.
@@ -147,12 +148,13 @@ That lets the final stream compositor buffer point-cloud visuals until they alig
 
 1. Load real ChArUco intrinsics/extrinsics into `config/sensor-fusion.json`; the current dense Kiyo pair geometry is provisional and should not be mistaken for truth.
 2. Move dense matching from CPU block search to GPU-resident stereo/flow so the million-sample target is not murdered by Python loops.
-3. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
-4. Record an observation run from the two PS3 Eyes into typed CultCache docs.
-5. Feed `RenderFramePacket` into Aquarium Engine.
-6. Add Aquarium-side GPU point/brush rendering to a D3D render target.
-7. Publish the render target as a Spout2 sender and receive it in OBS.
-8. Replace compatibility JSON render-frame paths once no deadline script depends on them.
+3. If a Tuya light is available on the local network, run `scripts/pulse_tuya_light.py` with its local key and align pulse timestamps against camera brightness response.
+4. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
+5. Record an observation run from the two PS3 Eyes into typed CultCache docs.
+6. Feed `RenderFramePacket` into Aquarium Engine.
+7. Add Aquarium-side GPU point/brush rendering to a D3D render target.
+8. Publish the render target as a Spout2 sender and receive it in OBS.
+9. Replace compatibility JSON render-frame paths once no deadline script depends on them.
 
 ## References
 
