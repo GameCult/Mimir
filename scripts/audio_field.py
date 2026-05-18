@@ -1,10 +1,12 @@
 import argparse
 import json
 import math
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import numpy as np
 from scipy.io import wavfile
@@ -36,6 +38,14 @@ def read_json(path: Path):
 
 def write_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def run_checked(command, *, label: str) -> subprocess.CompletedProcess:
+    completed = subprocess.run(command, text=True, capture_output=True)
+    if completed.returncode != 0:
+        details = "\n".join(part for part in [completed.stdout, completed.stderr] if part)
+        raise SystemExit(f"{label} failed with exit {completed.returncode}\n{details}")
+    return completed
 
 
 def load_profile(path: Path):
@@ -536,6 +546,87 @@ def cmd_record_local_calibration(args):
         },
     )
     print(out)
+
+
+def find_profile_mic(profile, mic_id: str):
+    for mic in profile["microphones"]:
+        if mic["id"] == mic_id:
+            return mic
+    raise SystemExit(f"No microphone {mic_id!r} exists in profile")
+
+
+def upsert_manifest_source(run: Path, source: dict) -> None:
+    manifest_path = run / "manifest.json"
+    manifest = read_json(manifest_path)
+    sources = [item for item in manifest.get("sources", []) if item.get("micId") != source["micId"]]
+    sources.append(source)
+    sources.sort(key=lambda item: int(item.get("fieldChannel", 999)))
+    manifest["sources"] = sources
+    write_json(manifest_path, manifest)
+
+
+def sftp_get(ssh_target: str, remote_file: str, local_file: Path) -> None:
+    remote_sftp_path = "/C:/" + remote_file.replace("\\", "/").split("C:/", 1)[-1]
+    batch = f'get "{remote_sftp_path}" "{local_file}"\n'
+    with NamedTemporaryFile("w", encoding="ascii", delete=False, suffix=".sftp") as fh:
+        fh.write(batch)
+        batch_path = fh.name
+    try:
+        run_checked(["sftp", "-b", batch_path, ssh_target], label="SFTP pull")
+    finally:
+        Path(batch_path).unlink(missing_ok=True)
+
+
+def cmd_record_remote_focusrite(args):
+    profile = load_profile(args.profile)
+    run = args.run
+    if not (run / "manifest.json").exists():
+        raise SystemExit(f"Run manifest does not exist: {run / 'manifest.json'}")
+    mic = find_profile_mic(profile, args.mic_id)
+    device_name = args.device or args.dshow_device or "Analogue 1 + 2 (Focusrite USB Audio)"
+    sample_rate = int(args.sample_rate or profile.get("capturePolicy", {}).get("focusriteCalibrationSampleRate") or profile["sampleRate"])
+    seconds = float(args.seconds)
+    remote_dir = args.remote_dir.rstrip("\\/")
+    remote_file = f"{remote_dir}\\{args.mic_id}-{utc_stamp().replace(':', '').replace('.', '')}.wav"
+    local_file = run / "sources" / f"{args.mic_id}.wav"
+    local_file.parent.mkdir(parents=True, exist_ok=True)
+
+    ffmpeg = args.ffmpeg
+    remote_cmd = (
+        f'cmd /c if not exist "{remote_dir}" mkdir "{remote_dir}" && '
+        f'"{ffmpeg}" -y -hide_banner -nostdin -loglevel info '
+        f'-f dshow -t {seconds:.3f} -i audio="{device_name}" '
+        f'-vn -ac {int(args.channels)} -ar {sample_rate} -c:a pcm_f32le "{remote_file}"'
+    )
+    if args.dry_run:
+        print(remote_cmd)
+        return
+
+    print(f"Recording {args.mic_id} on {args.ssh_target} for {seconds:.1f}s...")
+    run_checked(["ssh", args.ssh_target, remote_cmd], label="Remote Focusrite capture")
+    sftp_get(args.ssh_target, remote_file, local_file)
+    if not local_file.exists() or local_file.stat().st_size == 0:
+        raise SystemExit(f"Remote capture did not produce a usable local file: {local_file}")
+
+    upsert_manifest_source(
+        run,
+        {
+            "micId": mic["id"],
+            "fieldChannel": mic_channel(mic),
+            "machine": mic.get("machine"),
+            "clockDomain": mic.get("clockDomain"),
+            "file": f"sources/{mic['id']}.wav",
+            "sampleRate": sample_rate,
+            "capture": {
+                "kind": "ssh-ffmpeg-dshow",
+                "sshTarget": args.ssh_target,
+                "remoteFile": remote_file,
+                "device": device_name,
+                "channels": int(args.channels),
+            },
+        },
+    )
+    print(local_file)
 
 
 def record_loopback(query, seconds, sample_rate, channels=2, play_data=None, play_rate=None, play_device=None):
@@ -1195,6 +1286,21 @@ def main():
     p.add_argument("--loopback-rate", type=int)
     p.add_argument("--loopback-channels", type=int, default=2)
     p.set_defaults(func=cmd_record_local_calibration)
+
+    p = sub.add_parser("record-remote-focusrite", help="Record the neighbor Focusrite to a run source WAV over SSH/SFTP.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--run", type=Path, required=True)
+    p.add_argument("--mic-id", default="mic_focusrite_neighbor")
+    p.add_argument("--ssh-target", default="madman's lullaby@192.168.1.84")
+    p.add_argument("--ffmpeg", default=r"C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe")
+    p.add_argument("--remote-dir", default=r"C:\Meta\LocalCastBridge\calibration\remote-captures")
+    p.add_argument("--device", default="Analogue 1 + 2 (Focusrite USB Audio)")
+    p.add_argument("--dshow-device", help=argparse.SUPPRESS)
+    p.add_argument("--seconds", type=float, default=8.0)
+    p.add_argument("--sample-rate", type=int, default=48000)
+    p.add_argument("--channels", type=int, default=1)
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=cmd_record_remote_focusrite)
 
     p = sub.add_parser("play-record", help="Play each speaker calibration sweep while recording all microphones.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")

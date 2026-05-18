@@ -126,6 +126,14 @@ After dropping the neighbor Focusrite WAV into the run's `sources/` folder, esti
 .\.venv\Scripts\python.exe .\scripts\audio_field.py assemble-aligned --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
 ```
 
+Record the neighbor Focusrite shotgun directly into an existing distributed run over SSH/SFTP:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py record-remote-focusrite --profile .\config\audio-field.json --run .\calibration\runs\<run-folder> --seconds 10 --sample-rate 48000
+```
+
+This records `Analogue 1 + 2 (Focusrite USB Audio)` on `192.168.1.84` with remote FFmpeg, pulls it back as `sources/mic_focusrite_neighbor.wav`, and updates the run manifest. Use this for calibration imports; the existing OBS SRT source is still the live monitoring/streaming path.
+
 `analyze-distributed` now does a deadline-grade chirplet refinement by default: it uses the coarse sweep matched-filter peak as the initial time-of-arrival, then searches a small fractional-delay and chirp-rate neighborhood with chirplet atoms. Tune the local search when needed:
 
 ```powershell
