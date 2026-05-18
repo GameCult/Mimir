@@ -25,12 +25,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - The repo contains scripts and docs, not a native OBS plugin.
 - Neighbor sender is deployed at `C:\Meta\LocalCastBridge` on `192.168.1.84`.
 - Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
+- Receiver OBS scene collection has `Neighbor PC - Video` and `Neighbor PC - Focusrite` Media Sources added.
 
 ## Current Pressure
 
 The useful next work is real hardware validation:
 
-- add OBS listener Media Sources on this workstation
+- open OBS and smoke-test the two configured receiver sources
 - tune latency once streams are live in OBS
 - add a real loopback/virtual audio capture source if system-output audio is required
 

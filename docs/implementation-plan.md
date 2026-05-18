@@ -10,6 +10,7 @@
 - OBS receiver setup notes.
 - Neighbor sender deployment under `C:\Meta\LocalCastBridge`.
 - Madman's desktop start/stop launchers for the sender.
+- Receiver OBS scene has `Neighbor PC - Video` and `Neighbor PC - Focusrite` Media Sources.
 
 ## Temporary
 
@@ -20,10 +21,11 @@
 
 ## Next
 
-1. Add OBS Media Sources on the receiver for ports `5100` and `5101`.
-2. Smoke-test the video endpoint in OBS.
-3. Smoke-test the Focusrite endpoint in OBS.
-4. Choose and validate a real system-output loopback device if desktop/game audio is required separately.
-5. Tune SRT latency and FFmpeg buffering for the local network.
-6. Decide whether a small OBS scene/source generator is worth adding.
-7. Reconsider plugin/fork only if standard OBS Media Source cannot preserve the required behavior.
+1. Open OBS and confirm the `Neighbor PC - Video` and `Neighbor PC - Focusrite` sources load.
+2. Start the sender from Madman's desktop.
+3. Smoke-test the video endpoint in OBS.
+4. Smoke-test the Focusrite endpoint in OBS.
+5. Choose and validate a real system-output loopback device if desktop/game audio is required separately.
+6. Tune SRT latency and FFmpeg buffering for the local network.
+7. Decide whether a small OBS scene/source generator is worth adding.
+8. Reconsider plugin/fork only if standard OBS Media Source cannot preserve the required behavior.

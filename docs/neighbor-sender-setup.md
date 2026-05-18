@@ -41,6 +41,18 @@ video:    srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000
 focusrite srt://0.0.0.0:5101?mode=listener&latency=120000&timeout=5000000
 ```
 
+As of `2026-05-18`, the receiver OBS scene collection at
+`%APPDATA%\obs-studio\basic\scenes\Untitled.json` has these sources added to
+the current scene:
+
+```text
+Neighbor PC - Video
+Neighbor PC - Focusrite
+```
+
+The pre-edit backup is next to the scene file with a
+`Untitled.json.localcast-backup-*` suffix.
+
 ## Desktop Launchers
 
 Madman's desktop has:
@@ -76,4 +88,3 @@ Do not pretend desktop audio exists until a real capture device appears in:
 ```powershell
 ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 ```
-
