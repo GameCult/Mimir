@@ -415,7 +415,7 @@ def cmd_analyze_calibration(args):
             raise SystemExit(f"Sample-rate mismatch in {record['file']}: {rec_rate} != {sample_rate}")
         recorded = as_float_matrix(recorded)
         for mic in profile["microphones"]:
-            channel = int(mic["channel"])
+            channel = mic_channel(mic)
             if channel >= recorded.shape[1]:
                 continue
             delay, peak, polarity = estimate_delay(recorded[:, channel], sweep)
@@ -530,6 +530,7 @@ def cmd_sync_plan(args):
         "profile": str(args.profile),
         "captureMode": profile.get("captureMode", "shared-input-device"),
         "capturePolicy": profile.get("capturePolicy", {}),
+        "clockModel": profile.get("clockModel", {}),
         "referenceMicId": profile.get("clockModel", {}).get("referenceMicId") or profile.get("calibration", {}).get("referenceMicId"),
         "priorityMics": anchors,
         "clockDomains": [{"id": key, "microphones": value} for key, value in sorted(groups.items())],

@@ -14,7 +14,14 @@
     "referenceMicId": "mic_focusrite_local",
     "strategy": "calibration-ping-plus-adaptive-resampling",
     "requiresAlignmentBeforeEncoding": true,
-    "maxExpectedSroPpm": 200
+    "maxExpectedSroPpm": 200,
+    "latencyPolicy": {
+      "mode": "bounded-buffered-realtime",
+      "targetLatencyMs": 750,
+      "maxLatencyMs": 2500,
+      "convergesToRealtime": true,
+      "dropOrStretchWhenBehind": "stretch-first-drop-only-on-overrun"
+    }
   },
   "ambisonicBus": {
     "order": 1,

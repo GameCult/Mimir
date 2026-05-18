@@ -44,7 +44,7 @@ active_subgoals:
   - Smoke-test each audio endpoint in OBS and tune latency.
   - Decide whether an OBS source generator or plugin investigation is justified.
   - Evaluate the Ambisonic AquaSynth path as a separate synchronized multichannel audio pipeline; do not treat heterogeneous mic feeds as raw first-order ambisonic A-format without geometry, calibration, and a shared clock.
-  - Build the six-microphone/two-speaker audio-field sidecar around the actual distributed camera/Focusrite clocks, explicit geometry, speaker calibration, delay/SRO alignment, and FOA AmbiX output.
+  - Build the six-microphone/two-speaker audio-field sidecar around the actual distributed camera/Focusrite clocks, explicit geometry, speaker calibration, bounded buffering, delay/SRO alignment, testable pipeline seams, and FOA AmbiX output.
 
 research:
   ambisonic_aquasynth:
@@ -137,7 +137,12 @@ current_status:
     resampled into one six-channel reference timeline. Local PortAudio/WASAPI
     probe shows the Scarlett input accepts 48 kHz but rejects 96 kHz, while the
     Scarlett output accepts 44.1 kHz and rejects 48/96 kHz on this path; check
-    ASIO/native Focusrite access before relying on high-rate calibration.
+    ASIO/native Focusrite access before relying on high-rate calibration. Audio
+    latency is now an explicit bounded-buffering policy: output may run behind
+    live input while delay/SRO estimates settle, but cache depth must converge
+    toward real-time. Core audio modules now expose testable boundaries for
+    buffering, latency convergence, injectable capture/alignment/encode/sink
+    ports, and pipeline orchestration.
   next_action: >
     Use FFmpeg DirectShow device names `PS3 Eye Universal` and `PS3 Eye
     Universal2` for PS3 Eye tracking capture at 320x240@60, then capture
@@ -147,5 +152,5 @@ current_status:
     config/audio-field.json, confirm local Kiyo/PS Eye/Focusrite device matches,
     confirm the neighbor Focusrite shotgun capture/transport path, replace
     placeholder mic/speaker geometry with measured world coordinates, then build
-    the delay/SRO alignment stage that emits one six-channel WAV for FOA
-    encoding.
+    the delay/SRO alignment stage that feeds the bounded field cache and emits
+    aligned six-channel blocks for FOA encoding.

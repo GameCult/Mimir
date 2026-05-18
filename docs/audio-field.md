@@ -15,6 +15,8 @@ The repo has a profile and tool:
 
 The default profile is `distributed-clocks`. The coherent field is not captured directly. It is assembled after delay and sampling-rate-offset alignment.
 
+Latency is allowed. The live goal is bounded buffered real-time: hold enough audio to estimate delay and slow clock drift, emit blocks behind the live edge, and converge instead of chasing instant output with bad math. The profile owns that latency policy.
+
 ## Pipeline
 
 ```mermaid
@@ -30,9 +32,10 @@ flowchart TD
     D --> K["delay + SRO alignment"]
     F --> K
     H --> K
-    K --> L["aligned six-channel field WAV"]
-    L --> M["FOA encoder"]
-    M --> N["AmbiX ACN/SN3D WAV: W,Y,Z,X"]
+    K --> L["bounded field cache"]
+    L --> M["aligned six-channel blocks"]
+    M --> N["FOA encoder"]
+    N --> O["AmbiX ACN/SN3D output"]
 ```
 
 ## Commands
@@ -95,9 +98,22 @@ The `play-record` and `record-field` commands remain for a `shared-input-device`
 - Focusrite captures should use the best available native/exclusive path and high-rate calibration capture when practical, then resample into the field timeline after alignment.
 - Playback sample rate is its own device fact. Probe it separately; do not assume the Scarlett input and output paths accept the same rates through PortAudio/WASAPI.
 - Distributed-clock microphones must be aligned and resampled into one reference timeline before FOA encoding.
+- Output may run behind live input by the configured latency budget, but it must converge toward real-time instead of letting cache depth grow without bound.
 - FOA output is AmbiX: ACN channel order, SN3D normalization, channels `W,Y,Z,X`.
 - Speaker calibration is a measurement path, not a generic monitor output.
 - Camera fusion may publish listener or source pose later, but it does not own audio channel timing.
+
+## Module Boundaries
+
+The audio code is split so the hard parts can be tested without the room, drivers, or neighbor machine:
+
+- `audio_field.buffering` owns source buffers and ordered field assembly.
+- `audio_field.latency` owns the bounded-delay real-time convergence policy.
+- `audio_field.ports` declares injectable capture, alignment, encoder, and sink protocols.
+- `audio_field.pipeline` wires those ports together without knowing whether the source is a real Focusrite, an SRT receiver, a WAV fixture, or a test double.
+- `scripts/audio_field.py` stays as the operator CLI and hardware probe surface.
+
+This is the portfolio-piece line: each module owns one invariant, and the tests use mocks/fakes instead of asking a driver stack to please be emotionally available.
 
 ## First Cut Limits
 
@@ -110,5 +126,6 @@ Next honest steps:
 3. Probe the local and neighbor Focusrites for 48 kHz and 96 kHz capture support through the best available driver path.
 4. Capture the two Focusrite anchors losslessly during calibration; prefer 96 kHz when driver/device support is real, then resample after sync.
 5. Replace placeholder mic/speaker geometry with measured world coordinates.
-6. Build the delay/SRO alignment stage that emits one six-channel WAV ordered by `fieldChannel`.
-7. Encode the first FOA AmbiX test only after that aligned WAV exists.
+6. Build the delay/SRO alignment stage that feeds `audio_field.buffering.FieldAssemblyCache`.
+7. Emit aligned six-channel blocks under the configured latency policy.
+8. Encode the first FOA AmbiX test only after that aligned WAV/block stream exists.

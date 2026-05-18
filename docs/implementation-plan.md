@@ -19,6 +19,7 @@
 - Audio-field sidecar profile and tool:
   - `config/audio-field.example.json` declares the actual distributed six-mic rig: two Kiyo mics, two PS Eye mics, local Focusrite shielded cardioid, neighbor Focusrite shotgun on the co-streamer, two local speakers, placeholder geometry, clock domains, capture policy, calibration sweep settings, and FOA AmbiX ACN/SN3D output.
   - `scripts/audio_field.py` lists devices, validates shared or distributed profiles, checks local distributed sources, generates calibration sweeps, summarizes clock-domain sync requirements, preserves shared-input capture helpers, and encodes already aligned offline WAVs to FOA.
+  - `audio_field/` contains testable core modules for source buffering, bounded latency convergence, injectable capture/alignment/encoder/sink ports, and pipeline orchestration.
   - `docs/audio-field.md` maps the audio pipeline and its invariants.
 
 ## Temporary
@@ -39,4 +40,4 @@
 7. Decide whether a small OBS scene/source generator is worth adding.
 8. Reconsider plugin/fork only if standard OBS Media Source cannot preserve the required behavior.
 9. Create local `config/audio-field.json`, confirm local Kiyo/PS Eye/Focusrite device matches, and confirm the neighbor Focusrite shotgun capture/transport path.
-10. Replace placeholder mic/speaker geometry with measured world coordinates, then build the delay/SRO alignment stage that emits one six-channel WAV before FOA encoding.
+10. Replace placeholder mic/speaker geometry with measured world coordinates, then build the delay/SRO alignment stage that feeds the bounded field cache and emits aligned six-channel blocks before FOA encoding.
