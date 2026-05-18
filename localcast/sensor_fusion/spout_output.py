@@ -288,19 +288,6 @@ def draw_reconstruction_guides(image: np.ndarray) -> None:
         draw_world_line(image, view_proj, np.array([x, 1.15, 0.0]), np.array([x, 1.15, 2.2]), wall_color, 1)
     for z in np.linspace(0.35, 2.1, 6):
         draw_world_line(image, view_proj, np.array([-1.8, 1.15, z]), np.array([1.8, 1.15, z]), wall_color, 1)
-    sensors = [
-        (np.array([-0.78, -0.82, 1.34]), np.array([0.10, 0.72, 1.05]), (72, 160, 255, 255)),
-        (np.array([0.78, -0.82, 1.34]), np.array([-0.10, 0.72, 1.05]), (72, 160, 255, 255)),
-        (np.array([-0.28, -1.05, 1.62]), np.array([-0.15, 0.45, 1.15]), (255, 160, 72, 255)),
-        (np.array([0.38, -1.02, 1.66]), np.array([0.20, 0.48, 1.18]), (255, 160, 72, 255)),
-        (np.array([0.0, -0.18, 0.76]), np.array([0.0, 0.20, 1.05]), (120, 255, 185, 255)),
-    ]
-    for origin, target, color in sensors:
-        draw_world_line(image, view_proj, origin, target, color, 2)
-        projected = project_world_to_screen(origin, view_proj, width, height)
-        if projected is not None:
-            cv2.circle(image, projected[:2], 5, color, thickness=-1, lineType=cv2.LINE_AA)
-
 
 def draw_floor_shadows(image: np.ndarray, frame: RenderFramePacket, point_scale: float) -> None:
     import cv2

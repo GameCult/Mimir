@@ -186,12 +186,222 @@ def render_point(
     )
 
 
+def dim_fusion_points(points: tuple[RenderPointPacket, ...]) -> tuple[RenderPointPacket, ...]:
+    muted: list[RenderPointPacket] = []
+    for point in points:
+        confidence = max(0.0, min(1.0, float(point.confidence)))
+        muted.append(
+            RenderPointPacket(
+                stable_key=point.stable_key,
+                xyz=point.xyz,
+                radius_m=point.radius_m * 0.72,
+                color_rgba=(0.46, 0.58, 0.72, 0.18 * confidence),
+                confidence=confidence * 0.72,
+                source_timestamp_ns=point.source_timestamp_ns,
+            )
+        )
+    return tuple(muted)
+
+
+class RgbSplatSampler:
+    def __init__(
+        self,
+        *,
+        api: str,
+        primary_index: int,
+        secondary_index: int,
+        width: int,
+        height: int,
+        sample_step: int,
+        fallback_dir: Path,
+    ) -> None:
+        self.api = api
+        self.primary_index = primary_index
+        self.secondary_index = secondary_index
+        self.width = width
+        self.height = height
+        self.sample_step = max(4, int(sample_step))
+        self.fallback_dir = fallback_dir
+        self._captures: dict[int, object] = {}
+        self._frames: dict[int, np.ndarray] = {}
+
+    def close(self) -> None:
+        for capture in self._captures.values():
+            try:
+                capture.release()
+            except Exception:
+                pass
+        self._captures.clear()
+
+    def splats(self, now_s: float, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
+        primary = self._read_frame(self.primary_index)
+        secondary = self._read_frame(self.secondary_index)
+        points: list[RenderPointPacket] = []
+        if primary is not None:
+            points.extend(rgb_body_splats("host-rgb", primary, np.array([-0.42, 0.05, 0.0]), now_s, timestamp_ns, side=-1.0, step=self.sample_step))
+        if secondary is not None:
+            points.extend(rgb_body_splats("deru-rgb", secondary, np.array([0.48, 0.28, 0.0]), now_s + 0.6, timestamp_ns, side=1.0, step=self.sample_step))
+        return tuple(points)
+
+    def _read_frame(self, index: int) -> np.ndarray | None:
+        import cv2
+
+        capture = self._captures.get(index)
+        if capture is None:
+            capture = cv2.VideoCapture(index, cv2_api(self.api))
+            if capture.isOpened():
+                capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                self._captures[index] = capture
+            else:
+                try:
+                    capture.release()
+                except Exception:
+                    pass
+                return self._fallback_frame(index)
+        ok = False
+        frame = None
+        for _ in range(2):
+            ok, frame = capture.read()
+            if ok and frame is not None:
+                self._frames[index] = frame
+                return frame
+        cached = self._frames.get(index)
+        if cached is not None:
+            return cached
+        return self._fallback_frame(index)
+
+    def _fallback_frame(self, index: int) -> np.ndarray | None:
+        import cv2
+
+        candidates = [
+            self.fallback_dir / f"rgb-probe-{self.api}-{index}.png",
+            self.fallback_dir / f"rgb-probe-dshow-{index}.png",
+            self.fallback_dir / f"rgb-probe-any-{index}.png",
+            self.fallback_dir / f"rgb-probe-msmf-{index}.png",
+        ]
+        for path in candidates:
+            if path.exists():
+                frame = cv2.imread(str(path))
+                if frame is not None:
+                    return frame
+        return None
+
+
+def cv2_api(name: str) -> int:
+    import cv2
+
+    return {
+        "any": 0,
+        "dshow": cv2.CAP_DSHOW,
+        "msmf": cv2.CAP_MSMF,
+    }[name]
+
+
+def rgb_body_splats(
+    prefix: str,
+    frame_bgr: np.ndarray,
+    origin: np.ndarray,
+    now_s: float,
+    timestamp_ns: int,
+    *,
+    side: float,
+    step: int,
+) -> list[RenderPointPacket]:
+    height, width = frame_bgr.shape[:2]
+    crop = person_crop(frame_bgr, side)
+    y0, y1, x0, x1 = crop
+    crop_pixels = frame_bgr[y0:y1, x0:x1].astype(np.float32) / 255.0
+    exposure = max(0.18, float(np.percentile(crop_pixels, 92))) if crop_pixels.size else 1.0
+    points: list[RenderPointPacket] = []
+    for row in range(y0, y1, step):
+        for col in range(x0, x1, step):
+            pixel = frame_bgr[row, col].astype(np.float32) / 255.0
+            pixel = np.clip(np.power(np.clip(pixel / exposure, 0.0, 2.2), 0.72), 0.0, 1.0)
+            luminance = float(0.0722 * pixel[0] + 0.7152 * pixel[1] + 0.2126 * pixel[2])
+            saturation = float(np.max(pixel) - np.min(pixel))
+            if luminance < 0.045 and saturation < 0.08:
+                continue
+            u = (col - x0) / max(1, x1 - x0 - 1)
+            v = (row - y0) / max(1, y1 - y0 - 1)
+            body = body_surface_point(u, v, side, now_s)
+            thickness = 0.045 * np.sin((u * 11.0) + (v * 7.0) + now_s) + 0.030 * (luminance - 0.35)
+            xyz = origin + body + np.array([0.0, thickness, 0.0])
+            b, g, r = pixel
+            alpha = max(0.34, min(0.92, 0.28 + luminance * 0.72 + saturation * 0.22))
+            confidence = max(0.45, min(1.0, 0.55 + luminance * 0.35 + saturation * 0.25))
+            radius = 0.014 + 0.020 * max(0.0, 1.0 - abs(v - 0.48) * 1.4)
+            points.append(
+                render_point(
+                    f"{prefix}:{row}:{col}",
+                    xyz,
+                    radius,
+                    (float(r), float(g), float(b), alpha),
+                    confidence,
+                    timestamp_ns,
+                )
+            )
+    return points
+
+
+def person_crop(frame_bgr: np.ndarray, side: float) -> tuple[int, int, int, int]:
+    height, width = frame_bgr.shape[:2]
+    gray = np.max(frame_bgr, axis=2)
+    threshold = max(18.0, float(np.percentile(gray, 63)))
+    mask = gray > threshold
+    if mask.any():
+        ys, xs = np.nonzero(mask)
+        x0 = max(0, int(np.percentile(xs, 8)) - width // 20)
+        x1 = min(width, int(np.percentile(xs, 94)) + width // 20)
+        y0 = max(0, int(np.percentile(ys, 4)) - height // 24)
+        y1 = min(height, int(np.percentile(ys, 96)) + height // 24)
+    else:
+        x0, x1 = int(width * 0.18), int(width * 0.82)
+        y0, y1 = int(height * 0.05), int(height * 0.95)
+    if x1 - x0 < width * 0.25:
+        center = int(width * (0.42 if side < 0 else 0.58))
+        half = int(width * 0.24)
+        x0, x1 = max(0, center - half), min(width, center + half)
+    return y0, y1, x0, x1
+
+
+def body_surface_point(u: float, v: float, side: float, now_s: float) -> np.ndarray:
+    theta = (u - 0.5) * np.pi * 1.15
+    if v < 0.24:
+        vv = v / 0.24
+        radius_x = 0.18 * np.sin(max(0.03, vv) * np.pi)
+        z = 1.42 + vv * 0.34
+        x = radius_x * np.sin(theta) + 0.025 * np.sin(now_s)
+        y = 0.02 * np.cos(theta)
+    elif v < 0.78:
+        vv = (v - 0.24) / 0.54
+        width = 0.24 * (1.0 - abs(vv - 0.48) * 0.42)
+        z = 0.74 + (1.0 - vv) * 0.68
+        x = width * np.sin(theta)
+        y = 0.055 * np.cos(theta)
+    else:
+        vv = (v - 0.78) / 0.22
+        arm = side * (0.20 + 0.26 * abs(u - 0.5) * 2.0)
+        x = arm * vv + 0.06 * np.sin(theta)
+        y = 0.045 * np.cos(theta)
+        z = 1.02 - 0.34 * vv
+    return np.array([x, y, z], dtype=np.float64)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Write live sensor-fusion render frames into typed CultCache state.")
     parser.add_argument("--cache", default=str(ROOT / "calibration" / "runs" / "visual-state.msgpack"))
     parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--points", type=int, default=256)
     parser.add_argument("--duration", type=float)
+    parser.add_argument("--no-rgb", action="store_true")
+    parser.add_argument("--rgb-api", choices=["any", "dshow", "msmf"], default="dshow")
+    parser.add_argument("--rgb-primary-index", type=int, default=1)
+    parser.add_argument("--rgb-secondary-index", type=int, default=3)
+    parser.add_argument("--rgb-width", type=int, default=640)
+    parser.add_argument("--rgb-height", type=int, default=480)
+    parser.add_argument("--rgb-sample-step", type=int, default=10)
     args = parser.parse_args()
 
     left = camera("ps3eye_left", -0.25)
@@ -208,37 +418,52 @@ def main() -> None:
     lock = acquire_runtime_lock(cache_path.with_suffix(".producer.lock"))
     if lock is None:
         return
-    while True:
-        now = time.monotonic()
-        if args.duration is not None and now - start >= args.duration:
-            break
-        observations = synthetic_observations(rig, now, args.points)
-        result = rig.fuse(observations)
-        frame = lower_points_to_render_frame(
-            result.points,
-            render_config,
-            frame_id=frame_id,
-            created_monotonic_ns=time.monotonic_ns(),
-        )
-        timestamp_ns = frame.source_time_max_ns
-        frame = RenderFramePacket(
-            schema=frame.schema,
-            frame_id=frame.frame_id,
-            created_monotonic_ns=frame.created_monotonic_ns,
-            source_time_min_ns=frame.source_time_min_ns,
-            source_time_max_ns=frame.source_time_max_ns,
-            present_time_ns=frame.present_time_ns,
-            audio_alignment_time_ns=frame.audio_alignment_time_ns,
-            spout_sender_name=frame.spout_sender_name,
-            target_width=frame.target_width,
-            target_height=frame.target_height,
-            points=tuple(frame.points) + reconstruction_context_points(now, timestamp_ns),
-        )
-        put_live_render_frame(cache_path, frame)
-        frame_id += 1
-        sleep_for = interval - (time.monotonic() - now)
-        if sleep_for > 0:
-            time.sleep(sleep_for)
+    rgb_sampler = None if args.no_rgb else RgbSplatSampler(
+        api=args.rgb_api,
+        primary_index=args.rgb_primary_index,
+        secondary_index=args.rgb_secondary_index,
+        width=args.rgb_width,
+        height=args.rgb_height,
+        sample_step=args.rgb_sample_step,
+        fallback_dir=ROOT / "calibration" / "runs",
+    )
+    try:
+        while True:
+            now = time.monotonic()
+            if args.duration is not None and now - start >= args.duration:
+                break
+            observations = synthetic_observations(rig, now, args.points)
+            result = rig.fuse(observations)
+            frame = lower_points_to_render_frame(
+                result.points,
+                render_config,
+                frame_id=frame_id,
+                created_monotonic_ns=time.monotonic_ns(),
+            )
+            timestamp_ns = frame.source_time_max_ns
+            rgb_points = () if rgb_sampler is None else rgb_sampler.splats(now, timestamp_ns)
+            support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
+            frame = RenderFramePacket(
+                schema=frame.schema,
+                frame_id=frame.frame_id,
+                created_monotonic_ns=frame.created_monotonic_ns,
+                source_time_min_ns=frame.source_time_min_ns,
+                source_time_max_ns=frame.source_time_max_ns,
+                present_time_ns=frame.present_time_ns,
+                audio_alignment_time_ns=frame.audio_alignment_time_ns,
+                spout_sender_name=frame.spout_sender_name,
+                target_width=frame.target_width,
+                target_height=frame.target_height,
+                points=rgb_points + support_points,
+            )
+            put_live_render_frame(cache_path, frame)
+            frame_id += 1
+            sleep_for = interval - (time.monotonic() - now)
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+    finally:
+        if rgb_sampler is not None:
+            rgb_sampler.close()
 
 
 if __name__ == "__main__":

@@ -105,7 +105,29 @@ def main() -> None:
             now = time.monotonic()
             if args.duration is not None and now - start >= args.duration:
                 break
-            frame = source.current_frame(now, config)
+            try:
+                frame = source.current_frame(now, config)
+            except FileNotFoundError:
+                if now - last_status >= 1.0:
+                    write_status(
+                        status_path,
+                        sender_name=config.sender_name,
+                        frames_sent=renderer.frames_sent,
+                        point_count=0,
+                        frame_path=Path(frame_source_name),
+                        last_error="waiting for visual frame cache",
+                    )
+                    write_cult_status(
+                        status_cache_path,
+                        sender_name=config.sender_name,
+                        frames_sent=renderer.frames_sent,
+                        point_count=0,
+                        frame_source=frame_source_name,
+                        last_error="waiting for visual frame cache",
+                    )
+                    last_status = now
+                time.sleep(frame_interval)
+                continue
             ok = renderer.render(frame)
             if now - last_status >= 1.0:
                 write_status(
