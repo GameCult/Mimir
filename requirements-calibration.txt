@@ -1,5 +1,6 @@
 opencv-contrib-python
 sounddevice
+soundcard
 scipy
 imageio-ffmpeg
 PyOpenGL

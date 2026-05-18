@@ -433,6 +433,8 @@ def cmd_record_local_calibration(args):
         )
 
     stimulus_file = None
+    loopback_file = None
+    loopback_rate = None
     output_device = None
     output_rate = None
     if args.play_sweep:
@@ -448,7 +450,20 @@ def cmd_record_local_calibration(args):
     try:
         for stream in streams:
             stream.start()
-        if args.play_sweep:
+        if args.record_loopback:
+            loopback_rate = int(args.loopback_rate or input_rate)
+            loopback = record_loopback(
+                query=args.loopback_query,
+                seconds=seconds,
+                sample_rate=loopback_rate,
+                channels=args.loopback_channels,
+                play_data=playback if args.play_sweep else None,
+                play_rate=output_rate,
+                play_device=output_device["index"] if output_device else None,
+            )
+            loopback_file = "ground_truth_loopback.wav"
+            wavfile.write(out / loopback_file, loopback_rate, loopback.astype(np.float32))
+        elif args.play_sweep:
             sd.play(playback, samplerate=output_rate, device=output_device["index"], blocking=True)
             remaining = max(0.0, seconds - len(playback) / output_rate)
             time.sleep(remaining)
@@ -512,9 +527,42 @@ def cmd_record_local_calibration(args):
                 "outputDevice": summarize_device(output_device) if output_device else None,
                 "outputSampleRate": output_rate,
             },
+            "reference": {
+                "kind": "wasapi-loopback",
+                "file": loopback_file,
+                "sampleRate": loopback_rate,
+                "query": args.loopback_query if loopback_file else None,
+            },
         },
     )
     print(out)
+
+
+def record_loopback(query, seconds, sample_rate, channels=2, play_data=None, play_rate=None, play_device=None):
+    try:
+        import soundcard as sc
+    except Exception as exc:
+        raise SystemExit(f"soundcard loopback capture unavailable: {exc!r}") from exc
+    matches = [
+        mic
+        for mic in sc.all_microphones(include_loopback=True)
+        if "loopback" in repr(mic).lower() and query.lower() in mic.name.lower()
+    ]
+    if not matches:
+        raise SystemExit(f"No loopback device matching {query!r}")
+    loopback = matches[0]
+    frame_count = int(seconds * sample_rate)
+    if play_data is not None:
+        sd = sounddevice_module()
+        sd.play(play_data, samplerate=play_rate, device=play_device, blocking=False)
+    with loopback.recorder(samplerate=sample_rate, channels=channels) as recorder:
+        data = recorder.record(numframes=frame_count)
+    if play_data is not None:
+        try:
+            sounddevice_module().stop()
+        except Exception:
+            pass
+    return np.asarray(data, dtype=np.float32)
 
 
 def make_sweep_at_rate(profile, sample_rate):
@@ -764,6 +812,116 @@ def cmd_assemble_aligned(args):
     result = {"output": str(output), "sampleRate": field_rate, "shape": list(field.shape), "sources": report}
     write_json(run / "aligned-field-manifest.json", result)
     print(json.dumps(result, indent=2))
+
+
+def cmd_analyze_reference_sync(args):
+    profile = load_profile(args.profile)
+    run = args.run
+    manifest = read_json(run / "manifest.json")
+    reference_info = manifest.get("reference") or {}
+    reference_file = args.reference or (run / reference_info.get("file", ""))
+    if not reference_file.exists():
+        raise SystemExit(f"Reference loopback WAV not found: {reference_file}")
+    ref_rate, reference = wavfile.read(reference_file)
+    reference = mono(as_float_matrix(reference))
+    reference = resample_if_needed(reference, int(ref_rate), int(profile["sampleRate"]))
+    field_rate = int(profile["sampleRate"])
+    window = int(args.window_seconds * field_rate)
+    hop = int(args.hop_seconds * field_rate)
+    max_lag = int(args.max_lag_ms * field_rate / 1000.0)
+    results = {
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "sourceRun": str(run),
+        "reference": str(reference_file),
+        "sampleRate": field_rate,
+        "windowSeconds": args.window_seconds,
+        "hopSeconds": args.hop_seconds,
+        "sources": [],
+    }
+    for source in manifest.get("sources", []):
+        file_name = source.get("file")
+        if not file_name or not (run / file_name).exists():
+            continue
+        rec_rate, data = wavfile.read(run / file_name)
+        mic = resample_if_needed(mono(as_float_matrix(data)), int(rec_rate), field_rate)
+        delays = []
+        scores = []
+        for start in range(0, min(len(reference), len(mic)) - window + 1, hop):
+            ref_win = reference[start : start + window]
+            mic_win = mic[start : start + window]
+            if float(np.std(ref_win)) < args.min_reference_std or float(np.std(mic_win)) < args.min_mic_std:
+                continue
+            if args.method == "gcc-phat":
+                delay, score = gcc_phat_delay(mic_win, ref_win, max_lag=max_lag)
+            else:
+                delay, score = normalized_delay(mic_win, ref_win, max_lag=max_lag)
+            if score < args.min_score or abs(delay) < int(args.min_abs_lag_ms * field_rate / 1000.0):
+                continue
+            delays.append(delay)
+            scores.append(score)
+        if not delays:
+            continue
+        delays = np.asarray(delays, dtype=np.float64)
+        scores = np.asarray(scores, dtype=np.float64)
+        median = float(np.median(delays))
+        mad = float(np.median(np.abs(delays - median)))
+        results["sources"].append(
+            {
+                "micId": source["micId"],
+                "fieldChannel": source.get("fieldChannel"),
+                "windows": int(len(delays)),
+                "medianDelaySamples": median,
+                "medianDelayMs": 1000.0 * median / field_rate,
+                "madSamples": mad,
+                "madMs": 1000.0 * mad / field_rate,
+                "meanScore": float(np.mean(scores)),
+                "maxScore": float(np.max(scores)),
+                "method": args.method,
+            }
+        )
+    write_json(run / "reference-sync-analysis.json", results)
+    print(json.dumps(results, indent=2))
+
+
+def mono(matrix):
+    if matrix.ndim == 1 or matrix.shape[1] == 1:
+        return matrix.reshape(-1).astype(np.float32)
+    return np.mean(matrix, axis=1).astype(np.float32)
+
+
+def gcc_phat_delay(signal_a, signal_b, max_lag):
+    a = np.asarray(signal_a, dtype=np.float32)
+    b = np.asarray(signal_b, dtype=np.float32)
+    a = a - float(np.mean(a))
+    b = b - float(np.mean(b))
+    n = 1
+    while n < len(a) + len(b):
+        n *= 2
+    A = np.fft.rfft(a, n=n)
+    B = np.fft.rfft(b, n=n)
+    R = A * np.conj(B)
+    denom = np.abs(R)
+    R = np.divide(R, denom, out=np.zeros_like(R), where=denom > 1e-12)
+    corr = np.fft.irfft(R, n=n)
+    corr = np.concatenate((corr[-max_lag:], corr[: max_lag + 1]))
+    index = int(np.argmax(np.abs(corr)))
+    lag = index - max_lag
+    score = float(abs(corr[index]))
+    return lag, score
+
+
+def normalized_delay(signal_a, signal_b, max_lag):
+    a = np.asarray(signal_a, dtype=np.float32)
+    b = np.asarray(signal_b, dtype=np.float32)
+    a = (a - float(np.mean(a))) / (float(np.std(a)) + 1e-9)
+    b = (b - float(np.mean(b))) / (float(np.std(b)) + 1e-9)
+    corr = signal.correlate(a, b, mode="full", method="fft")
+    mid = len(b) - 1
+    segment = corr[mid - max_lag : mid + max_lag + 1]
+    index = int(np.argmax(np.abs(segment)))
+    lag = index - max_lag
+    score = float(abs(segment[index]) / max(1, len(a)))
+    return lag, score
 
 
 def as_float_matrix(data):
@@ -1032,6 +1190,10 @@ def main():
     p.add_argument("--play-sweep", action="store_true")
     p.add_argument("--speaker-channel", type=int, default=0)
     p.add_argument("--output-rate", type=int)
+    p.add_argument("--record-loopback", action="store_true")
+    p.add_argument("--loopback-query", default="Scarlett")
+    p.add_argument("--loopback-rate", type=int)
+    p.add_argument("--loopback-channels", type=int, default=2)
     p.set_defaults(func=cmd_record_local_calibration)
 
     p = sub.add_parser("play-record", help="Play each speaker calibration sweep while recording all microphones.")
@@ -1065,6 +1227,20 @@ def main():
     p.add_argument("--output", type=Path)
     p.add_argument("--seconds", type=float)
     p.set_defaults(func=cmd_assemble_aligned)
+
+    p = sub.add_parser("analyze-reference-sync", help="Estimate live mic delay stability against captured output loopback ground truth.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--run", type=Path, required=True)
+    p.add_argument("--reference", type=Path)
+    p.add_argument("--window-seconds", type=float, default=2.0)
+    p.add_argument("--hop-seconds", type=float, default=1.0)
+    p.add_argument("--max-lag-ms", type=float, default=500.0)
+    p.add_argument("--method", choices=["normalized", "gcc-phat"], default="normalized")
+    p.add_argument("--min-score", type=float, default=0.08)
+    p.add_argument("--min-reference-std", type=float, default=1e-4)
+    p.add_argument("--min-mic-std", type=float, default=1e-5)
+    p.add_argument("--min-abs-lag-ms", type=float, default=0.5)
+    p.set_defaults(func=cmd_analyze_reference_sync)
 
     p = sub.add_parser("record-field", help="Record the raw synchronized six-channel microphone field.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")

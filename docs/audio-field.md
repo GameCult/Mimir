@@ -104,6 +104,15 @@ Record all locally visible distributed mics for a deadline calibration pass:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py record-local-calibration --profile .\config\audio-field.json --seconds 10
 ```
 
+For passive runtime sync against ground-truth program output, capture the Scarlett loopback with the local mics:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py record-local-calibration --profile .\config\audio-field.json --seconds 20 --record-loopback --loopback-query Scarlett --loopback-rate 48000
+.\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-reference-sync --profile .\config\audio-field.json --run .\calibration\runs\<run-folder> --window-seconds 4 --hop-seconds 1 --method normalized --min-score 0.08
+```
+
+The loopback path is ground-truth content, but not automatically a perfect ground-truth clock. If WASAPI loopback reports discontinuities, use the stable windows and treat the rest as suspect.
+
 Record local mics while playing one speaker sweep. Use the output rate that the device probe says is real:
 
 ```powershell
