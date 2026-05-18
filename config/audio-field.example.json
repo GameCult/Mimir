@@ -21,6 +21,31 @@
       "maxLatencyMs": 2500,
       "convergesToRealtime": true,
       "dropOrStretchWhenBehind": "stretch-first-drop-only-on-overrun"
+    },
+    "runtimeSync": {
+      "enabled": true,
+      "speakerChirpletsAsTelemetry": true,
+      "updateEveryBlock": true,
+      "phaseFieldUpdate": "per-frame",
+      "confidenceGate": {
+        "minChirpletScore": 0.18,
+        "freezeOnLowConfidence": true
+      },
+      "estimates": [
+        "delay",
+        "samplingRateOffset",
+        "polarity",
+        "phase"
+      ],
+      "activeProbeOptimization": {
+        "enabled": true,
+        "minIntervalMs": 1500,
+        "maxProbeLevelDbfs": -18,
+        "targetConfidence": 0.65,
+        "probeWhenAnyAnchorBelow": 0.35,
+        "preferMaskedWindows": true,
+        "objective": "maximize sync confidence gain per audible intrusion"
+      }
     }
   },
   "ambisonicBus": {

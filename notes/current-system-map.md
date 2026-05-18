@@ -49,9 +49,12 @@ flowchart TD
     J --> D
     J --> F
     J --> H
-    D --> K["delay + SRO alignment"]
-    F --> K
-    H --> K
+    R["confidence probe optimizer"] --> P["known speaker chirplets"]
+    P --> Q["runtime delay/SRO/phase estimator"]
+    D --> Q
+    F --> Q
+    H --> Q
+    Q --> K["delay + SRO alignment"]
     K --> L["bounded field cache"]
     L --> M["aligned six-channel blocks"]
     M --> N["FOA encoder"]
@@ -63,7 +66,9 @@ Ownership:
 - `config/audio-field.json` owns mic/speaker identity, machine/device mapping, clock domains, field channel order, geometry, gain, delay, polarity, role/quality priority, capture policy, and Ambisonic bus format.
 - `scripts/audio_field.py` owns profile validation, local device checks, calibration stimulus generation, clock-domain planning, shared-input capture helpers, and FOA encoding of already aligned six-channel WAVs.
 - `audio_field/` owns unit-testable buffering, bounded-latency convergence, injectable port protocols, and pipeline orchestration.
+- Runtime sync owns per-block chirplet observations from known speaker output and updates delay/SRO/phase estimates with confidence gates before alignment.
+- Active probe optimization owns extra chirplet emission when confidence drops, bounded by level/spacing/audibility budget.
 - The camera/sensor-fusion pipeline may publish world poses later; it does not own audio clocks or channel timing.
 - OBS may ingest rendered output later; it is not the authority for the Ambisonic field.
 
-Invariant: distributed camera/Focusrite microphones must be aligned and resampled into one reference timeline before FOA encoding. Latency is allowed as bounded buffering, but cache depth must converge toward real-time. The local shielded cardioid and neighbor shotgun are the high-quality dialogue anchors; camera mics provide spatial/context evidence.
+Invariant: distributed camera/Focusrite microphones must be aligned and resampled into one reference timeline before FOA encoding. Latency is allowed as bounded buffering, but cache depth must converge toward real-time. Speaker output chirplets are live telemetry; delay/SRO/phase state must update during runtime, not only during setup. Extra chirplets may be emitted automatically when confidence drops, but only under the active probe optimizer's budget. The local shielded cardioid and neighbor shotgun are the high-quality dialogue anchors; camera mics provide spatial/context evidence.

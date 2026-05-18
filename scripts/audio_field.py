@@ -665,6 +665,16 @@ def cmd_analyze_distributed(args):
         recorded = as_float_matrix(recorded).reshape(-1)
         stim_for_rate = resample_if_needed(stimulus, int(stim_rate), int(rec_rate))
         delay, peak, polarity = estimate_delay(recorded, stim_for_rate)
+        refined = None
+        if args.chirplet_refine:
+            refined = refine_chirplet_delay(
+                recorded,
+                stim_for_rate,
+                delay,
+                search_samples=args.search_samples,
+                fractional_steps=args.fractional_steps,
+                rate_ppm=args.rate_ppm,
+            )
         rms = float(np.sqrt(np.mean(recorded * recorded))) if recorded.size else 0.0
         item = {
             "micId": source["micId"],
@@ -678,16 +688,23 @@ def cmd_analyze_distributed(args):
             "polarity": int(polarity),
             "rms": rms,
         }
+        if refined:
+            item["chirpletDelaySamples"] = refined["delaySamples"]
+            item["chirpletDelayMs"] = 1000.0 * refined["delaySamples"] / rec_rate
+            item["chirpletScore"] = refined["score"]
+            item["chirpletRateScale"] = refined["rateScale"]
         results["sources"].append(item)
         detections[source["micId"]] = item
 
     reference = detections.get(results["referenceMicId"])
     if reference:
-        ref_time = reference["sweepStartSample"] / reference["sampleRate"]
+        ref_delay = reference.get("chirpletDelaySamples", reference["sweepStartSample"])
+        ref_time = ref_delay / reference["sampleRate"]
         for item in results["sources"]:
             if item.get("status") != "ok":
                 continue
-            item_time = item["sweepStartSample"] / item["sampleRate"]
+            item_delay = item.get("chirpletDelaySamples", item["sweepStartSample"])
+            item_time = item_delay / item["sampleRate"]
             item["relativeDelaySeconds"] = item_time - ref_time
             item["relativeDelaySamplesAtFieldRate"] = int(round((item_time - ref_time) * int(profile["sampleRate"])))
 
@@ -776,6 +793,61 @@ def estimate_delay(recorded, sweep):
     peak = float(corr[peak_index])
     polarity = 1 if peak >= 0 else -1
     return delay, peak, polarity
+
+
+def refine_chirplet_delay(recorded, sweep, coarse_delay, search_samples=3, fractional_steps=8, rate_ppm=150):
+    recorded = np.asarray(recorded, dtype=np.float32).reshape(-1)
+    sweep = np.asarray(sweep, dtype=np.float32).reshape(-1)
+    if recorded.size == 0 or sweep.size == 0:
+        return None
+
+    rate_scales = [1.0]
+    if rate_ppm:
+        delta = float(rate_ppm) / 1_000_000.0
+        rate_scales = [1.0 - delta, 1.0, 1.0 + delta]
+
+    best = None
+    start = int(round(coarse_delay)) - int(search_samples)
+    stop = int(round(coarse_delay)) + int(search_samples)
+    fractions = np.arange(max(1, int(fractional_steps)), dtype=np.float64) / max(1, int(fractional_steps))
+    for rate_scale in rate_scales:
+        atom = chirplet_atom(sweep, rate_scale)
+        atom_norm = float(np.linalg.norm(atom))
+        if atom_norm <= 0:
+            continue
+        for integer_delay in range(start, stop + 1):
+            for frac in fractions:
+                delay = float(integer_delay) + float(frac)
+                segment = sample_fractional_window(recorded, delay, len(atom))
+                segment_norm = float(np.linalg.norm(segment))
+                if segment_norm <= 0:
+                    continue
+                score_signed = float(np.dot(segment, atom) / (segment_norm * atom_norm))
+                score = abs(score_signed)
+                if best is None or score > best["score"]:
+                    best = {
+                        "delaySamples": delay,
+                        "score": score,
+                        "signedScore": score_signed,
+                        "rateScale": rate_scale,
+                    }
+    return best
+
+
+def chirplet_atom(sweep, rate_scale):
+    if rate_scale == 1.0:
+        atom = sweep.astype(np.float32)
+    else:
+        x = np.arange(len(sweep), dtype=np.float64) * rate_scale
+        atom = np.interp(x, np.arange(len(sweep), dtype=np.float64), sweep, left=0.0, right=0.0).astype(np.float32)
+    atom = atom - float(np.mean(atom))
+    norm = float(np.linalg.norm(atom))
+    return atom / norm if norm > 0 else atom
+
+
+def sample_fractional_window(samples, start, frame_count):
+    x = start + np.arange(frame_count, dtype=np.float64)
+    return np.interp(x, np.arange(len(samples), dtype=np.float64), samples, left=0.0, right=0.0).astype(np.float32)
 
 
 def cmd_record_field(args):
@@ -980,6 +1052,10 @@ def main():
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
     p.add_argument("--run", type=Path, required=True)
     p.add_argument("--reference-mic")
+    p.add_argument("--chirplet-refine", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--search-samples", type=int, default=3)
+    p.add_argument("--fractional-steps", type=int, default=8)
+    p.add_argument("--rate-ppm", type=int, default=150)
     p.set_defaults(func=cmd_analyze_distributed)
 
     p = sub.add_parser("assemble-aligned", help="Assemble a distributed run into one aligned six-channel WAV.")

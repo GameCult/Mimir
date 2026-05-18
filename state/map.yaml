@@ -171,7 +171,12 @@ current_status:
     buffering, latency convergence, injectable capture/alignment/encode/sink
     ports, and pipeline orchestration. Calibration analysis now has a local
     chirplet refinement pass: coarse sweep match followed by fractional-delay
-    and chirp-rate grid search around the detected arrival. The first visual
+    and chirp-rate grid search around the detected arrival. Runtime sync is now
+    modeled as per-block known-speaker chirplet telemetry updating delay, SRO,
+    phase, and confidence state; low-confidence observations freeze rather than
+    poisoning alignment. Active probe optimization owns extra chirplet emission
+    when sync confidence drops, bounded by spacing, level, and audibility budget.
+    The first visual
     sensor-fusion sidecar is
     in place: `localcast.sensor_fusion.core` owns calibrated camera models,
     timestamped 2D observations, DLT triangulation, reprojection/confidence

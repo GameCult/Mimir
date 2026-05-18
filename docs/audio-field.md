@@ -17,6 +17,10 @@ The default profile is `distributed-clocks`. The coherent field is not captured 
 
 Latency is allowed. The live goal is bounded buffered real-time: hold enough audio to estimate delay and slow clock drift, emit blocks behind the live edge, and converge instead of chasing instant output with bad math. The profile owns that latency policy.
 
+Runtime sync is not optional for the real show. Static sweep calibration gives the first estimate; the live system must keep updating delay, sampling-rate offset, polarity, and phase confidence as devices drift. Known speaker output is telemetry: every calibration chirplet or intentionally embedded probe gives the estimator a fresh phase-field observation.
+
+If passive telemetry is not enough, the system should emit extra chirplets automatically. That is an optimization loop: spend the smallest audible probe budget that raises sync confidence enough to protect the field.
+
 ## Pipeline
 
 ```mermaid
@@ -33,6 +37,12 @@ flowchart TD
     F --> K
     H --> K
     K --> L["bounded field cache"]
+    P["known speaker chirplets"] --> Q["runtime delay/SRO/phase estimator"]
+    R["confidence probe optimizer"] --> P
+    D --> Q
+    F --> Q
+    H --> Q
+    Q --> K
     L --> M["aligned six-channel blocks"]
     M --> N["FOA encoder"]
     N --> O["AmbiX ACN/SN3D output"]
@@ -107,6 +117,14 @@ After dropping the neighbor Focusrite WAV into the run's `sources/` folder, esti
 .\.venv\Scripts\python.exe .\scripts\audio_field.py assemble-aligned --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
 ```
 
+`analyze-distributed` now does a deadline-grade chirplet refinement by default: it uses the coarse sweep matched-filter peak as the initial time-of-arrival, then searches a small fractional-delay and chirp-rate neighborhood with chirplet atoms. Tune the local search when needed:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-distributed --profile .\config\audio-field.json --run .\calibration\runs\<run-folder> --chirplet-refine --search-samples 3 --fractional-steps 8 --rate-ppm 150
+```
+
+This is not a full adaptive chirplet decomposition engine. It is the stream-day version: enough chirplet parameter search to get sub-sample timing refinement without turning calibration into a thesis defense in the middle of setup.
+
 Encode an offline aligned six-channel WAV to FOA AmbiX:
 
 ```powershell
@@ -124,6 +142,9 @@ The `play-record` and `record-field` commands remain for a `shared-input-device`
 - Playback sample rate is its own device fact. Probe it separately; do not assume the Scarlett input and output paths accept the same rates through PortAudio/WASAPI.
 - Distributed-clock microphones must be aligned and resampled into one reference timeline before FOA encoding.
 - Output may run behind live input by the configured latency budget, but it must converge toward real-time instead of letting cache depth grow without bound.
+- Sweep arrival estimates should use chirplet refinement when calibration signal quality allows it; plain matched-filter peaks are a fallback, not the precision path.
+- Runtime sync updates delay/SRO/phase estimates from known speaker chirplets every block/frame, gated by confidence so a bad observation freezes rather than poisons the field.
+- Active chirplet probes are scheduled by an optimization loop, not by panic. It should prefer masked windows, respect minimum spacing and level caps, and maximize expected confidence gain per audible intrusion.
 - FOA output is AmbiX: ACN channel order, SN3D normalization, channels `W,Y,Z,X`.
 - Speaker calibration is a measurement path, not a generic monitor output.
 - Camera fusion may publish listener or source pose later, but it does not own audio channel timing.
@@ -136,6 +157,8 @@ The audio code is split so the hard parts can be tested without the room, driver
 - `audio_field.latency` owns the bounded-delay real-time convergence policy.
 - `audio_field.ports` declares injectable capture, alignment, encoder, and sink protocols.
 - `audio_field.pipeline` wires those ports together without knowing whether the source is a real Focusrite, an SRT receiver, a WAV fixture, or a test double.
+- The next runtime estimator module should own chirplet observations, delay/SRO/phase state, confidence gates, and phase-field updates. It should feed the aligner; it should not be hidden inside the FOA encoder.
+- The active probe optimizer owns whether to emit extra chirplets. It reads sync confidence and probe budget, then decides when and where an intentional chirplet is worth the cost.
 - `scripts/audio_field.py` stays as the operator CLI and hardware probe surface.
 
 This is the portfolio-piece line: each module owns one invariant, and the tests use mocks/fakes instead of asking a driver stack to please be emotionally available.
