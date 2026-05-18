@@ -98,11 +98,11 @@ Analogue 1 + 2 (Focusrite USB Audio)
 
 The sender FFmpeg build does not expose a native `wasapi` input device, so it
 cannot directly capture primary playback by itself. `scripts\wasapi-loopback-capture.ps1`
-is the direct Core Audio loopback attempt. As of 2026-05-18, the Focusrite
-render endpoint reports a 48 kHz stereo mix format but rejects loopback
-initialization with `0x88890008`, so co-streamer loopback is not yet a usable
-timing witness. Co-streamer Focusrite program bleed remains the temporary
-alignment witness.
+is the direct Core Audio loopback path. It works when launched in the logged-in
+console session and audio is actually rendering; SSH-only launches can open the
+endpoint but receive no render packets. `scripts\capture_co_streamer_surfaces.py`
+therefore schedules the WASAPI loopback leg into the interactive session and
+pulls the resulting raw float PCM back for alignment.
 
 Do not rename the loopback in config unless the replacement appears in:
 
@@ -110,10 +110,8 @@ Do not rename the loopback in config unless the replacement appears in:
 ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 ```
 
-If loopback is required, change the neighbor primary playback device to a
-render endpoint that accepts WASAPI loopback or install/use a sender FFmpeg
-build with a working WASAPI input. Do not widen OBS to unsynchronized raw audio
-as a workaround.
+If the loopback file is zero bytes, no app audio rendered during the capture
+window. Do not widen OBS to unsynchronized raw audio as a workaround.
 
 ## SSH Testing Trap
 

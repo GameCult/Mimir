@@ -31,9 +31,10 @@ def main() -> int:
     parser.add_argument("--ffmpeg", default=r"C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe")
     parser.add_argument("--remote-dir", default=r"C:\Meta\LocalCastBridge\calibration\remote-captures")
     parser.add_argument("--focusrite-device", default="Analogue 1 + 2 (Focusrite USB Audio)")
-    parser.add_argument("--loopback-device", default="Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)")
+    parser.add_argument("--loopback-device", default="")
     parser.add_argument("--loopback-capture", choices=("wasapi", "dshow"), default="wasapi")
     parser.add_argument("--remote-wasapi-script", default=r"C:\Meta\LocalCastBridge\scripts\wasapi-loopback-capture.ps1")
+    parser.add_argument("--remote-wasapi-role", choices=("Console", "Multimedia", "Communications"), default="Console")
     parser.add_argument("--local-loopback-query", default="Scarlett")
     parser.add_argument("--max-lag-ms", type=float, default=3000.0)
     parser.add_argument("--min-loopback-rms", type=float, default=1e-4)
@@ -47,9 +48,10 @@ def main() -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
     remote_focusrite = f"{args.remote_dir.rstrip('\\\\/')}\\co_streamer_focusrite-{stamp}.wav"
-    remote_loopback = f"{args.remote_dir.rstrip('\\\\/')}\\co_streamer_loopback-{stamp}.wav"
+    remote_loopback_ext = "f32" if args.loopback_capture == "wasapi" else "wav"
+    remote_loopback = f"{args.remote_dir.rstrip('\\\\/')}\\co_streamer_loopback-{stamp}.{remote_loopback_ext}"
     local_focusrite = surface_dir / "raw_focusrite.wav"
-    local_remote_loopback = surface_dir / "raw_loopback.wav"
+    local_remote_loopback = surface_dir / f"raw_loopback.{remote_loopback_ext}"
     local_reference = surface_dir / "local_loopback_reference.wav"
 
     commands = [
@@ -86,7 +88,7 @@ def main() -> int:
     sample_rate = int(args.sample_rate)
     _, reference = read_wav_float(local_reference, sample_rate)
     _, focusrite = read_wav_float(local_focusrite, sample_rate)
-    _, remote_loop = read_wav_float(local_remote_loopback, sample_rate)
+    remote_loop = read_loopback_capture(local_remote_loopback, sample_rate, args.loopback_capture)
     reference_mono = mono(reference)
     remote_loop_mono = mono(remote_loop)
     max_lag = int(float(args.max_lag_ms) * sample_rate / 1000.0)
@@ -159,12 +161,45 @@ def remote_ffmpeg_command(args: argparse.Namespace, device: str, output: str, *,
 
 def remote_loopback_command(args: argparse.Namespace, output: str) -> str:
     if args.loopback_capture == "dshow":
+        if not args.loopback_device:
+            raise SystemExit("--loopback-device is required when --loopback-capture dshow")
         return remote_ffmpeg_command(args, args.loopback_device, output, channels=2)
+    log = output.rsplit(".", 1)[0] + ".log"
+    task = "LocalCastWasapiLoopbackCapture"
     return (
-        f'powershell -NoProfile -ExecutionPolicy Bypass -File "{args.remote_wasapi_script}" '
-        f'-Output "{output}" -Seconds {float(args.seconds):.3f} '
-        f'-SampleRate {int(args.sample_rate)} -Channels 2'
+        "powershell -NoProfile -ExecutionPolicy Bypass -Command "
+        + quote_for_cmd(
+            "$ErrorActionPreference='Stop'; "
+            f"$out='{escape_ps(output)}'; $log='{escape_ps(log)}'; "
+            "Remove-Item -LiteralPath $out,$log -ErrorAction SilentlyContinue; "
+            f"$cmd='powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{escape_ps(args.remote_wasapi_script)}\" "
+            f"-Output \"{escape_ps(output)}\" -Seconds {float(args.seconds):.3f} "
+            f"-SampleRate {int(args.sample_rate)} -Channels 2 -Role {args.remote_wasapi_role} *> \"{escape_ps(log)}\"'; "
+            "$bat=[IO.Path]::ChangeExtension($out,'.cmd'); "
+            "Set-Content -LiteralPath $bat -Encoding ASCII -Value ('@echo off' + [Environment]::NewLine + $cmd + [Environment]::NewLine); "
+            "$action=New-ScheduledTaskAction -Execute $bat; "
+            "$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(10); "
+            "$principal=New-ScheduledTaskPrincipal -UserId ($env:COMPUTERNAME + '\\' + $env:USERNAME) -LogonType Interactive -RunLevel Limited; "
+            f"Register-ScheduledTask -TaskName '{task}' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null; "
+            f"Start-ScheduledTask -TaskName '{task}'; "
+            f"$deadline=(Get-Date).AddSeconds({float(args.seconds) + 12.0:.3f}); "
+            "while((Get-Date) -lt $deadline){ "
+            "  $info=Get-ScheduledTaskInfo -TaskName '" + task + "'; "
+            "  if((Test-Path -LiteralPath $out) -and ((Get-Item -LiteralPath $out).Length -gt 0) -and $info.LastTaskResult -eq 0){ break } "
+            "  Start-Sleep -Milliseconds 250 "
+            "}; "
+            "if(-not (Test-Path -LiteralPath $out)){ if(Test-Path -LiteralPath $log){Get-Content $log -Tail 40}; throw 'WASAPI loopback capture did not create output' }; "
+            "Write-Host ('wasapiLoopbackBytes=' + (Get-Item -LiteralPath $out).Length)"
+        )
     )
+
+
+def quote_for_cmd(command: str) -> str:
+    return '"' + command.replace('"', '\\"') + '"'
+
+
+def escape_ps(value: str) -> str:
+    return value.replace("'", "''")
 
 
 def sftp_get(ssh_target: str, remote_file: str, local_file: Path) -> None:
@@ -207,6 +242,16 @@ def read_wav_float(path: Path, target_rate: int) -> tuple[int, np.ndarray]:
     return int(rate), ensure_2d(samples)
 
 
+def read_loopback_capture(path: Path, target_rate: int, capture_kind: str) -> np.ndarray:
+    if capture_kind == "wasapi":
+        samples = np.fromfile(path, dtype=np.float32)
+        if samples.size % 2:
+            samples = samples[:-1]
+        return samples.reshape(-1, 2).astype(np.float32)
+    _, samples = read_wav_float(path, target_rate)
+    return samples
+
+
 def pcm_to_float(samples: np.ndarray) -> np.ndarray:
     array = np.asarray(samples)
     if array.ndim == 1:
@@ -230,8 +275,12 @@ def mono(samples: np.ndarray) -> np.ndarray:
 
 def normalized_delay(signal_a: np.ndarray, signal_b: np.ndarray, max_lag: int) -> tuple[int, float]:
     count = min(len(signal_a), len(signal_b))
+    if count <= 0:
+        return 0, 0.0
     a = signal_a[:count].astype(np.float32)
     b = signal_b[:count].astype(np.float32)
+    if float(np.std(a)) <= 1e-12 or float(np.std(b)) <= 1e-12:
+        return 0, 0.0
     a = (a - float(np.mean(a))) / (float(np.std(a)) + 1e-9)
     b = (b - float(np.mean(b))) / (float(np.std(b)) + 1e-9)
     corr = signal.correlate(a, b, mode="full", method="fft")

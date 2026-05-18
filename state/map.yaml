@@ -147,7 +147,7 @@ current_status:
   summary: >
     First repo scaffold is in place and deployed to the neighbor sender at
     C:\Meta\LocalCastBridge. FFmpeg 8.1.1 with SRT and h264_nvenc is installed
-    there, Voicemeeter supplies system-output loopback, Madman's desktop has
+    there, direct WASAPI console-session capture now owns system-output loopback, Madman's desktop has
     start/stop launchers, the sender script has launcher-safe FFmpeg arguments
     and repo-root logs, desktop launchers use absolute tool paths, and the
     receiver OBS scene has matching Media Sources. Local calibration harness now

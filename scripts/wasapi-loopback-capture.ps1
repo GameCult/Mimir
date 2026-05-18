@@ -2,7 +2,9 @@ param(
     [string]$Output = "-",
     [double]$Seconds = 0,
     [int]$SampleRate = 48000,
-    [int]$Channels = 2
+    [int]$Channels = 2,
+    [ValidateSet("Console", "Multimedia", "Communications")]
+    [string]$Role = "Console"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +19,8 @@ namespace LocalCastBridge {
     public static class WasapiLoopbackCapture {
         const int eRender = 0;
         const int eConsole = 0;
+        const int eMultimedia = 1;
+        const int eCommunications = 2;
         const int CLSCTX_ALL = 23;
         const uint AUDCLNT_SHAREMODE_SHARED = 0;
         const uint AUDCLNT_STREAMFLAGS_LOOPBACK = 0x00020000;
@@ -107,12 +111,13 @@ namespace LocalCastBridge {
             int GetNextPacketSize(out uint frames);
         }
 
-        public static void Capture(string outputPath, double seconds, int targetRate, int targetChannels) {
+        public static void Capture(string outputPath, double seconds, int targetRate, int targetChannels, string roleName) {
             Stream output = outputPath == "-" ? Console.OpenStandardOutput() : new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.Read);
             try {
                 IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumerator());
                 IMMDevice device;
-                Check(enumerator.GetDefaultAudioEndpoint(eRender, eConsole, out device), "GetDefaultAudioEndpoint");
+                int role = RoleFromName(roleName);
+                Check(enumerator.GetDefaultAudioEndpoint(eRender, role, out device), "GetDefaultAudioEndpoint");
                 IAudioClient audioClient;
                 Guid audioClientId = IID_IAudioClient;
                 Check(device.Activate(ref audioClientId, CLSCTX_ALL, IntPtr.Zero, out audioClient), "Activate IAudioClient");
@@ -122,12 +127,30 @@ namespace LocalCastBridge {
                 Console.Error.WriteLine("MixFormat tag={0} channels={1} rate={2} bits={3} blockAlign={4} cbSize={5}", fmt.wFormatTag, fmt.nChannels, fmt.nSamplesPerSec, fmt.wBitsPerSample, fmt.nBlockAlign, fmt.cbSize);
                 IntPtr activeFormatPtr = mixFormatPtr;
                 IntPtr fallbackFormatPtr = IntPtr.Zero;
+                IntPtr closest = IntPtr.Zero;
+                int support = audioClient.IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, activeFormatPtr, out closest);
+                Console.Error.WriteLine("MixFormatSupport hr=0x{0:X8} closest={1}", support, closest != IntPtr.Zero);
+                if (support != 0 && closest != IntPtr.Zero) {
+                    activeFormatPtr = closest;
+                    fmt = Marshal.PtrToStructure<WAVEFORMATEX>(activeFormatPtr);
+                    Console.Error.WriteLine("ClosestFormat tag={0} channels={1} rate={2} bits={3} blockAlign={4} cbSize={5}", fmt.wFormatTag, fmt.nChannels, fmt.nSamplesPerSec, fmt.wBitsPerSample, fmt.nBlockAlign, fmt.cbSize);
+                }
                 int init = audioClient.Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 0, 0, activeFormatPtr, IntPtr.Zero);
                 if (init < 0) {
                     fallbackFormatPtr = MakeWaveFormatPcm((ushort)targetChannels, (uint)targetRate, 16);
                     activeFormatPtr = fallbackFormatPtr;
                     fmt = Marshal.PtrToStructure<WAVEFORMATEX>(activeFormatPtr);
                     Console.Error.WriteLine("RetryFormat tag={0} channels={1} rate={2} bits={3} blockAlign={4} cbSize={5}", fmt.wFormatTag, fmt.nChannels, fmt.nSamplesPerSec, fmt.wBitsPerSample, fmt.nBlockAlign, fmt.cbSize);
+                    IntPtr retryClosest = IntPtr.Zero;
+                    int retrySupport = audioClient.IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, activeFormatPtr, out retryClosest);
+                    Console.Error.WriteLine("RetryFormatSupport hr=0x{0:X8} closest={1}", retrySupport, retryClosest != IntPtr.Zero);
+                    if (retrySupport != 0 && retryClosest != IntPtr.Zero) {
+                        Marshal.FreeHGlobal(fallbackFormatPtr);
+                        fallbackFormatPtr = IntPtr.Zero;
+                        activeFormatPtr = retryClosest;
+                        fmt = Marshal.PtrToStructure<WAVEFORMATEX>(activeFormatPtr);
+                        Console.Error.WriteLine("RetryClosestFormat tag={0} channels={1} rate={2} bits={3} blockAlign={4} cbSize={5}", fmt.wFormatTag, fmt.nChannels, fmt.nSamplesPerSec, fmt.wBitsPerSample, fmt.nBlockAlign, fmt.cbSize);
+                    }
                     init = audioClient.Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 0, 0, activeFormatPtr, IntPtr.Zero);
                 }
                 Check(init, "Initialize loopback");
@@ -185,6 +208,7 @@ namespace LocalCastBridge {
                     audioClient.Stop();
                     Marshal.FreeCoTaskMem(mixFormatPtr);
                     if (fallbackFormatPtr != IntPtr.Zero) Marshal.FreeHGlobal(fallbackFormatPtr);
+                    if (closest != IntPtr.Zero) Marshal.FreeCoTaskMem(closest);
                     Marshal.ReleaseComObject(captureClient);
                     Marshal.ReleaseComObject(audioClient);
                     Marshal.ReleaseComObject(device);
@@ -201,6 +225,12 @@ namespace LocalCastBridge {
                 Exception inner = Marshal.GetExceptionForHR(hr);
                 throw new InvalidOperationException(stage + " failed: 0x" + hr.ToString("X8") + " " + (inner == null ? "" : inner.Message), inner);
             }
+        }
+
+        static int RoleFromName(string roleName) {
+            if (String.Equals(roleName, "Multimedia", StringComparison.OrdinalIgnoreCase)) return eMultimedia;
+            if (String.Equals(roleName, "Communications", StringComparison.OrdinalIgnoreCase)) return eCommunications;
+            return eConsole;
         }
 
         static IntPtr MakeWaveFormatPcm(ushort channels, uint sampleRate, ushort bits) {
@@ -247,4 +277,4 @@ namespace LocalCastBridge {
 "@
 
 Add-Type -TypeDefinition $source
-[LocalCastBridge.WasapiLoopbackCapture]::Capture($Output, $Seconds, $SampleRate, $Channels)
+[LocalCastBridge.WasapiLoopbackCapture]::Capture($Output, $Seconds, $SampleRate, $Channels, $Role)

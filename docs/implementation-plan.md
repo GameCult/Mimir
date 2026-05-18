@@ -11,7 +11,7 @@
 - Neighbor sender deployment under `C:\Meta\LocalCastBridge`.
 - Madman's desktop start/stop launchers for the sender.
 - Receiver OBS scene has `Neighbor PC - Video` and `Neighbor PC - Focusrite` Media Sources.
-- Voicemeeter loopback installed on the sender.
+- Direct co-streamer loopback capture is now attempted with the repo WASAPI shim instead of Voicemeeter.
 - Receiver OBS scene has `Neighbor PC - System Audio` on SRT port `5102`.
 - Sender script uses `-nostdin` and repo-root logs so desktop launchers stay alive and diagnostics land in `C:\Meta\LocalCastBridge\logs`.
 - Sender video config is `1920x1080` for the interactive desktop. The `1024x768` SSH session size is not the streaming target.
@@ -32,7 +32,7 @@
 - OBS synchronized program surface:
   - `scripts/setup_obs_synced_program.py` derives OBS-controllable stems from an aligned program audio timeline: host voice, co-streamer voice, ambient, transients, co-streamer loopback, and local loopback.
   - `scripts/capture_co_streamer_surfaces.py` captures neighbor Focusrite and neighbor loopback with local loopback ground truth, estimates the late remote-family offset, and writes aligned co-streamer surfaces for the stem packer.
-  - `scripts/wasapi-loopback-capture.ps1` is the direct primary-playback loopback path. The current neighbor Focusrite render endpoint rejects WASAPI loopback initialization, so loopback remains unavailable until the render endpoint/driver path is changed or the sender FFmpeg build gains a working WASAPI input.
+  - `scripts/wasapi-loopback-capture.ps1` is the direct primary-playback loopback path. It must run in the neighbor's interactive console session; SSH-only capture sees the device but receives no render packets.
   - The tool creates/updates local OBS Media Sources for those stems and mutes/disables raw unsynchronized inputs.
   - Strict mode disables every scene item except the synchronized LocalCastBridge program video and stem controls.
 
@@ -57,5 +57,5 @@
 10. Replace placeholder mic/speaker geometry with measured world coordinates, then build the delay/SRO alignment stage that feeds the bounded field cache and emits aligned six-channel blocks before FOA encoding.
 11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
 12. Replace synthetic live-fusion observations with PS3 Eye detector observations.
-13. Fix the neighbor direct loopback route: the sender FFmpeg build has no WASAPI input and the current Focusrite render endpoint rejects direct WASAPI loopback from `scripts/wasapi-loopback-capture.ps1`.
+13. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
 14. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
