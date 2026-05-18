@@ -28,6 +28,7 @@
   - `localcast.sensor_fusion.cultcache_docs` stores live visual state as typed CultCache MessagePack documents.
   - `localcast.sensor_fusion.spout_output` renders render-frame packets into a GPU texture and publishes it as a named Spout sender for OBS.
   - `scripts/live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`.
+  - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
   - `scripts/stream_spout.py` runs the deadline Spout sender loop from the typed cache with typed and JSON heartbeat status.
   - `docs/obs-spout-streaming.md` documents OBS setup and the Aquarium replacement boundary.
   - `docs/typed-visual-state.md` documents the CultCache/CultNet visual boundary.
@@ -70,6 +71,7 @@
 11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
 12. Capture fixed-board ChArUco observations for every camera, solve `config/sensor-fusion.json`, and verify cross-view feature triangulation with `scripts/triangulate_surface_features.py`.
 13. Replace synthetic live-fusion observations with PS3 Eye detector observations and calibrated surface-feature tracks.
-14. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
-15. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
-16. Wire `stream_phase_field.py` and `stream_faust_mic_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.
+14. Fix the live Leap capture backend so actual Leap frames, not fallback frames, populate `leap-ground-truth` cells in the multi-LOD cache.
+15. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
+16. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
+17. Wire `stream_phase_field.py` and `stream_faust_mic_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.

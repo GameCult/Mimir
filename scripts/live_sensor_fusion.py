@@ -21,8 +21,10 @@ from localcast.sensor_fusion import (
     SensorRig,
     SurfaceFeatureObservation,
     dense_stereo_points,
+    evidence_from_fusion_items,
+    evidence_from_render_points,
     measure_frame_quality,
-    multilod_cache_from_points,
+    multilod_cache_from_evidence,
     put_live_render_frame,
     lower_points_to_render_frame,
     stochastic_transient_matches,
@@ -599,10 +601,16 @@ class LeapPackedMotionSampler:
         self._capture = None
         self._previous_channels: dict[str, np.ndarray] = {}
         self._last_timestamp_ns: int | None = None
+        self._last_frame_kind: str | None = None
+        self._fallback_index = 0
 
     @property
     def last_timestamp_ns(self) -> int | None:
         return self._last_timestamp_ns
+
+    @property
+    def last_frame_kind(self) -> str | None:
+        return self._last_frame_kind
 
     def close(self) -> None:
         if self._capture is not None:
@@ -646,23 +654,36 @@ class LeapPackedMotionSampler:
                 return self._fallback_frame()
         ok, frame = self._capture.read()
         if ok and frame is not None:
+            self._last_frame_kind = "capture"
             return frame
         return self._fallback_frame()
 
     def _fallback_frame(self) -> np.ndarray | None:
         import cv2
 
-        for path in (
-            self.fallback_dir / f"rgb-probe-{self.api}-{self.index}.png",
-            self.fallback_dir / f"rgb-probe-dshow-{self.index}.png",
-            self.fallback_dir / f"rgb-probe-msmf-{self.index}.png",
-            self.fallback_dir / "leap-probe.png",
-        ):
-            if path.exists():
-                frame = cv2.imread(str(path))
-                if frame is not None:
-                    return frame
-        return None
+        path = self.fallback_dir / "leap-probe.png"
+        if path.exists():
+            frame = cv2.imread(str(path))
+            if frame is not None:
+                self._last_frame_kind = "fallback-file"
+                return frame
+        return self._synthetic_motion_frame()
+
+    def _synthetic_motion_frame(self) -> np.ndarray:
+        self._last_frame_kind = "fallback-synthetic"
+        frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+        t = self._fallback_index
+        self._fallback_index += 1
+        cx = int((self.width * 0.30) + (self.width * 0.40) * ((np.sin(t * 0.37) + 1.0) * 0.5))
+        cy = int((self.height * 0.30) + (self.height * 0.34) * ((np.cos(t * 0.41) + 1.0) * 0.5))
+        y0 = max(0, cy - 4)
+        y1 = min(self.height, cy + 5)
+        x0 = max(0, cx - 4)
+        x1 = min(self.width, cx + 5)
+        frame[y0:y1, x0:x1, 1] = 220
+        frame[max(0, y0 - 8) : min(self.height, y1 + 8), max(0, x0 - 8) : min(self.width, x1 + 8), 2] = 80
+        frame[max(0, y0 - 12) : min(self.height, y1 + 12), max(0, x0 - 12) : min(self.width, x1 + 12), 0] = 55
+        return frame
 
 
 def unpack_leap_packed_channels(frame_bgr: np.ndarray) -> dict[str, np.ndarray]:
@@ -804,11 +825,6 @@ def main() -> None:
                 samples_per_observation=2,
                 seed=frame_id,
             )
-            multilod_cache_from_points(
-                tuple(result.points) + tuple(transient_matches),
-                levels=(0.02, 0.08, 0.32),
-                created_monotonic_ns=time.monotonic_ns(),
-            ).write_json(lod_cache_path)
             frame = lower_points_to_render_frame(
                 result.points,
                 render_config,
@@ -820,8 +836,22 @@ def main() -> None:
             leap_points = () if leap_sampler is None else leap_sampler.motion_splats(timestamp_ns)
             if leap_sampler is not None and leap_sampler.last_timestamp_ns is not None:
                 timestamp_ns = max(timestamp_ns, leap_sampler.last_timestamp_ns)
+            leap_source_kind = (
+                "leap-ground-truth"
+                if leap_sampler is not None and leap_sampler.last_frame_kind == "capture"
+                else "leap-fallback"
+            )
+            leap_source_priority = 3.0 if leap_source_kind == "leap-ground-truth" else 1.1
             support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
             stochastic_points = transient_match_render_points(transient_matches, timestamp_ns)
+            multilod_cache_from_evidence(
+                evidence_from_render_points(leap_points, source_kind=leap_source_kind, source_priority=leap_source_priority)
+                + evidence_from_render_points(rgb_points, source_kind="rgb-surface", source_priority=1.4)
+                + evidence_from_fusion_items(transient_matches, source_kind="stochastic-transient", source_priority=1.2)
+                + evidence_from_fusion_items(result.points, source_kind="synthetic-fusion", source_priority=0.8),
+                levels=(0.01, 0.04, 0.16, 0.64),
+                created_monotonic_ns=time.monotonic_ns(),
+            ).write_json(lod_cache_path)
             frame = RenderFramePacket(
                 schema=frame.schema,
                 frame_id=frame.frame_id,

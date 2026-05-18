@@ -7,7 +7,9 @@ import numpy as np
 from localcast.sensor_fusion.core import CameraModel, SensorRig, Observation2D
 from localcast.sensor_fusion.stochastic_mapping import (
     ImageRayBiasMap,
+    LODEvidencePoint,
     RayBiasSample,
+    multilod_cache_from_evidence,
     multilod_cache_from_points,
     pixel_scene_ray,
     stochastic_transient_matches,
@@ -94,6 +96,19 @@ class StochasticMappingTests(unittest.TestCase):
             path = Path(tmp) / "lod.json"
             cache.write_json(path)
             self.assertIn("multilod_scene_cache", path.read_text(encoding="utf-8"))
+
+    def test_multilod_evidence_prefers_leap_priority(self):
+        evidence = [
+            LODEvidencePoint("rgb", np.array([0.01, 0.0, 1.0]), 0.7, 100, 1.0, "rgb"),
+            LODEvidencePoint("leap", np.array([0.03, 0.0, 1.0]), 0.8, 120, 3.0, "leap-ground-truth"),
+        ]
+
+        cache = multilod_cache_from_evidence(evidence, levels=(0.10,), created_monotonic_ns=5)
+        cell = cache.cells[0]
+
+        self.assertEqual("leap-ground-truth", cell.source_kind)
+        self.assertEqual(3.0, cell.source_priority)
+        self.assertGreater(cell.center[0], 0.02)
 
 
 if __name__ == "__main__":

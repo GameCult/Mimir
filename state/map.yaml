@@ -158,7 +158,10 @@ research:
       cache rule: semantic claims first, cached backend lowerings second.
       Stochastic transient matching now lowers descriptor-consistent image
       observations into scene-ray hypotheses and a multi-LOD world-space cache
-      for Aquarium compute-shader reconciliation.
+      for Aquarium compute-shader reconciliation. Leap evidence is the
+      highest-priority temporal/spatial source when live Leap frames are present;
+      fallback Leap frames stay tagged as fallback evidence and must not be
+      treated as ground truth.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >
@@ -267,7 +270,10 @@ current_status:
     observations can be descriptor-matched and triangulated into world-space
     tracks. Unit tests inject
     synthetic cameras and frames so the core does not depend on live camera
-    drivers.
+    drivers. The multi-LOD visual cache now carries source kind and source
+    priority so Aquarium can prefer real Leap evidence over RGB surfaces,
+    stochastic transient hypotheses, and synthetic fusion support while still
+    seeing lower-priority fallback diagnostics when the Leap capture path stalls.
   next_action: >
     Capture real ChArUco intrinsics for the PS3 Eyes and Kiyos, capture
     fixed-board observations from every camera, solve a local
@@ -280,7 +286,9 @@ current_status:
     Then replace the synthetic live producer with a detector adapter that
     turns FFmpeg PS3 Eye frames into marker `Observation2D` records for the
     fusion core and publishes the same typed CultCache/CultNet render-frame
-    document. In parallel, move the render-frame consumer into Aquarium Engine so
+    document. Also fix the live Leap capture backend so the cache emits
+    `leap-ground-truth` rather than `leap-fallback`; current MSMF probing can
+    still stall on frame reads. In parallel, move the render-frame consumer into Aquarium Engine so
     Aquarium renders cached points/brushes into its GPU render target and
     publishes or hands off the same Spout sender `LocalCastBridge Point Cloud`
     for OBS, replacing the deadline OpenGL point sink without changing packet

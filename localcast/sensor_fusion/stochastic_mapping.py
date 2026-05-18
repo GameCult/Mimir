@@ -95,6 +95,8 @@ class LODCell:
     count: int
     source_time_min_ns: int
     source_time_max_ns: int
+    source_priority: float = 1.0
+    source_kind: str = "generic"
 
 
 @dataclass(frozen=True)
@@ -119,6 +121,8 @@ class MultiLODSceneCache:
                     "count": cell.count,
                     "sourceTimeMinNs": cell.source_time_min_ns,
                     "sourceTimeMaxNs": cell.source_time_max_ns,
+                    "sourcePriority": cell.source_priority,
+                    "sourceKind": cell.source_kind,
                 }
                 for cell in self.cells
             ],
@@ -302,6 +306,94 @@ def multilod_cache_from_points(
         levels=tuple(float(level) for level in levels),
         cells=tuple(cells),
     )
+
+
+@dataclass(frozen=True)
+class LODEvidencePoint:
+    stable_key: str
+    xyz: np.ndarray
+    confidence: float
+    timestamp_ns: int
+    source_priority: float
+    source_kind: str
+
+
+def multilod_cache_from_evidence(
+    evidence: Iterable[LODEvidencePoint],
+    *,
+    levels: tuple[float, ...] = (0.02, 0.08, 0.32),
+    created_monotonic_ns: int = 0,
+) -> MultiLODSceneCache:
+    items = list(evidence)
+    cells: list[LODCell] = []
+    for level_index, cell_size in enumerate(levels):
+        buckets: dict[tuple[int, int, int], list[LODEvidencePoint]] = {}
+        for item in items:
+            key = tuple(int(np.floor(float(value) / float(cell_size))) for value in np.asarray(item.xyz, dtype=np.float64))
+            buckets.setdefault(key, []).append(item)
+        for key, bucket in buckets.items():
+            weights = np.asarray([max(1.0e-6, item.confidence * item.source_priority) for item in bucket], dtype=np.float64)
+            positions = np.asarray([np.asarray(item.xyz, dtype=np.float64) for item in bucket], dtype=np.float64)
+            center = np.average(positions, axis=0, weights=weights)
+            priority = float(max(item.source_priority for item in bucket))
+            source_kind = max(bucket, key=lambda item: item.source_priority).source_kind
+            cells.append(
+                LODCell(
+                    level=level_index,
+                    cell=key,
+                    center=tuple(float(value) for value in center),
+                    radius_m=float(cell_size) * 0.5,
+                    confidence=float(min(1.0, np.mean(weights))),
+                    count=len(bucket),
+                    source_time_min_ns=min(item.timestamp_ns for item in bucket),
+                    source_time_max_ns=max(item.timestamp_ns for item in bucket),
+                    source_priority=priority,
+                    source_kind=source_kind,
+                )
+            )
+    return MultiLODSceneCache(
+        schema="localcast.sensor_fusion.multilod_scene_cache.v1",
+        created_monotonic_ns=int(created_monotonic_ns),
+        levels=tuple(float(level) for level in levels),
+        cells=tuple(cells),
+    )
+
+
+def evidence_from_render_points(points: Iterable, *, source_kind: str, source_priority: float) -> tuple[LODEvidencePoint, ...]:
+    rows: list[LODEvidencePoint] = []
+    for point in points:
+        rows.append(
+            LODEvidencePoint(
+                stable_key=str(point.stable_key),
+                xyz=np.asarray(point.xyz, dtype=np.float64),
+                confidence=float(point.confidence),
+                timestamp_ns=int(point.source_timestamp_ns),
+                source_priority=float(source_priority),
+                source_kind=str(source_kind),
+            )
+        )
+    return tuple(rows)
+
+
+def evidence_from_fusion_items(
+    items: Iterable[TriangulatedPoint | TransientMatchHypothesis],
+    *,
+    source_kind: str,
+    source_priority: float,
+) -> tuple[LODEvidencePoint, ...]:
+    rows: list[LODEvidencePoint] = []
+    for item in items:
+        rows.append(
+            LODEvidencePoint(
+                stable_key=str(getattr(item, "marker_id", getattr(item, "stable_key", "scene-claim"))),
+                xyz=np.asarray(item.xyz, dtype=np.float64),
+                confidence=float(item.confidence),
+                timestamp_ns=item_timestamp_ns(item),
+                source_priority=float(source_priority),
+                source_kind=str(source_kind),
+            )
+        )
+    return tuple(rows)
 
 
 def item_timestamp_ns(item: TriangulatedPoint | TransientMatchHypothesis) -> int:
