@@ -18,6 +18,8 @@
 - FFmpeg reports:
   - `srt` input/output protocol
   - `h264_nvenc` encoder
+- Voicemeeter installed through winget as `VB-Audio.Voicemeeter`.
+- SoundVolumeView installed through winget as `NirSoft.SoundVolumeView`.
 
 ## Sender Config
 
@@ -32,6 +34,7 @@ Current endpoints:
 ```text
 video:    srt://192.168.1.66:5100?mode=caller&latency=120000
 focusrite srt://192.168.1.66:5101?mode=caller&latency=120000
+system    srt://192.168.1.66:5102?mode=caller&latency=120000
 ```
 
 OBS on the receiver should add listener-mode Media Sources:
@@ -39,6 +42,7 @@ OBS on the receiver should add listener-mode Media Sources:
 ```text
 video:    srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000
 focusrite srt://0.0.0.0:5101?mode=listener&latency=120000&timeout=5000000
+system    srt://0.0.0.0:5102?mode=listener&latency=120000&timeout=5000000
 ```
 
 As of `2026-05-18`, the receiver OBS scene collection at
@@ -48,6 +52,7 @@ the current scene:
 ```text
 Neighbor PC - Video
 Neighbor PC - Focusrite
+Neighbor PC - System Audio
 ```
 
 The pre-edit backup is next to the scene file with a
@@ -67,24 +72,39 @@ Start launcher:
 - runs `scripts\sender-start.ps1`
 - uses `config\localcast.json`
 - passes the winget FFmpeg alias path explicitly
+- starts Voicemeeter
+- sets Windows default render to `Voicemeeter VAIO3 Input`
+- sets Windows default capture to `Voicemeeter Out B3`
 
 Stop launcher:
 
 - runs `scripts\sender-stop.ps1`
 - stops FFmpeg processes whose command line contains `srt://`
+- restores Windows default render to `Focusrite USB Audio\Device\Speakers\Render`
+- closes `voicemeeter_x64.exe`
 
 ## Audio Reality
 
-FFmpeg DirectShow discovery currently exposes one audio input:
+FFmpeg DirectShow discovery originally exposed one hardware audio input:
 
 ```text
 Analogue 1 + 2 (Focusrite USB Audio)
 ```
 
-This is a real audio source, but it is not the same thing as system-output loopback. The installed FFmpeg build exposes `dshow` and `gdigrab`, not `wasapi`, so capturing game/desktop output as its own source still needs a virtual or hardware loopback device such as a mixer/interface loopback, Stereo Mix if available, VB-Cable, or Voicemeeter.
+After Voicemeeter install, FFmpeg exposes virtual loopback inputs including:
 
-Do not pretend desktop audio exists until a real capture device appears in:
+```text
+Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)
+```
+
+LocalCastBridge uses that device as `system-loopback`.
+
+Do not rename the loopback in config unless the replacement appears in:
 
 ```powershell
 ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 ```
+
+If Madman cannot hear local audio while LocalCast is running, open Voicemeeter
+and set hardware output `A1` to the intended physical device, probably
+Focusrite speakers/headphones. The stream capture itself is independent of OBS.
