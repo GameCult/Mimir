@@ -33,6 +33,20 @@ SmoothPhaseField = _phase_fit.SmoothPhaseField
 estimate_phase_delay = _phase_fit.estimate_phase_delay
 
 
+def load_room_suppression_module():
+    spec = importlib.util.spec_from_file_location("localcast_room_suppression", ROOT / "audio_field" / "room_suppression.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_room_suppression = load_room_suppression_module()
+RoomSuppressionConfig = _room_suppression.RoomSuppressionConfig
+suppress_room_field = _room_suppression.suppress_room_field
+
+
 def utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
 
@@ -1708,6 +1722,57 @@ def cmd_encode_foa(args):
     print(json.dumps({"output": str(args.output), "sampleRate": int(sample_rate), "channels": ["W", "Y", "Z", "X"], "peakBeforeLimit": peak}, indent=2))
 
 
+def cmd_suppress_room(args):
+    profile = load_profile(args.profile)
+    sample_rate, data = wavfile.read(args.input)
+    field = as_float_matrix(data)
+    anchors = infer_anchor_channels(profile) if not args.anchor_channel else [int(value) for value in args.anchor_channel]
+    witnesses = infer_witness_channels(profile, anchors) if not args.witness_channel else [int(value) for value in args.witness_channel]
+    config = RoomSuppressionConfig(
+        block_size=int(args.block_size),
+        hop_size=int(args.hop_size),
+        transient_ratio=float(args.transient_ratio),
+        max_witness_attenuation_db=float(args.max_witness_attenuation_db),
+        anchor_transient_attenuation_db=float(args.anchor_transient_attenuation_db),
+        room_subtraction=float(args.room_subtraction),
+        envelope_floor=float(args.envelope_floor),
+    )
+    cleaned, report = suppress_room_field(field, anchors, witnesses, config)
+    output = args.output or args.input.with_name(args.input.stem + "-room-suppressed.wav")
+    peak = float(np.max(np.abs(cleaned))) if cleaned.size else 0.0
+    if args.limit_peak and peak > float(args.limit_peak):
+        cleaned = cleaned * (float(args.limit_peak) / peak)
+    wavfile.write(output, int(sample_rate), cleaned.astype(np.float32))
+    result = {
+        "output": str(output),
+        "sampleRate": int(sample_rate),
+        "shape": list(cleaned.shape),
+        "anchors": anchors,
+        "witnesses": witnesses,
+        "transientBlocks": report.transient_blocks,
+        "meanWitnessGain": report.mean_witness_gain,
+        "meanAnchorGain": report.mean_anchor_gain,
+        "peakBeforeLimit": peak,
+    }
+    report_path = args.report or output.with_suffix(".room-suppression.json")
+    write_json(report_path, result)
+    print(json.dumps(result, indent=2))
+
+
+def infer_anchor_channels(profile):
+    anchors = []
+    for mic in profile["microphones"]:
+        role = str(mic.get("role", ""))
+        if "dialogue-anchor" in role or int(mic.get("qualityPriority", 0)) >= 100:
+            anchors.append(mic_channel(mic))
+    return sorted(set(anchors))
+
+
+def infer_witness_channels(profile, anchors):
+    anchor_set = set(int(channel) for channel in anchors)
+    return [mic_channel(mic) for mic in sorted(profile["microphones"], key=mic_channel) if mic_channel(mic) not in anchor_set]
+
+
 def cmd_sync_plan(args):
     profile = load_profile(args.profile)
     groups = {}
@@ -1955,6 +2020,23 @@ def main():
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     p.set_defaults(func=cmd_encode_foa)
+
+    p = sub.add_parser("suppress-room", help="Suppress room/transient witness energy before FOA encoding.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--input", type=Path, required=True)
+    p.add_argument("--output", type=Path)
+    p.add_argument("--report", type=Path)
+    p.add_argument("--anchor-channel", type=int, action="append")
+    p.add_argument("--witness-channel", type=int, action="append")
+    p.add_argument("--block-size", type=int, default=1024)
+    p.add_argument("--hop-size", type=int, default=512)
+    p.add_argument("--transient-ratio", type=float, default=2.5)
+    p.add_argument("--max-witness-attenuation-db", type=float, default=-18.0)
+    p.add_argument("--anchor-transient-attenuation-db", type=float, default=-6.0)
+    p.add_argument("--room-subtraction", type=float, default=0.15)
+    p.add_argument("--envelope-floor", type=float, default=1e-5)
+    p.add_argument("--limit-peak", type=float, default=0.98)
+    p.set_defaults(func=cmd_suppress_room)
 
     args = parser.parse_args()
     args.func(args)

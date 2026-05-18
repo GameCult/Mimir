@@ -165,6 +165,15 @@ Encode an offline aligned six-channel WAV to FOA AmbiX:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py encode-foa --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-aligned.wav --output .\calibration\runs\<run-folder>\field-foa-ambix.wav
 ```
 
+Suppress room/transient witness energy before FOA encoding:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py suppress-room --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-aligned.wav --output .\calibration\runs\<run-folder>\field-cleaned.wav
+.\.venv\Scripts\python.exe .\scripts\audio_field.py encode-foa --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-cleaned.wav --output .\calibration\runs\<run-folder>\field-cleaned-foa-ambix.wav
+```
+
+This first suppression pass treats the Focusrite dialogue anchors as wanted direct sources and the camera mics as room/transient witnesses. It attenuates witness-heavy broadband transients, lightly subtracts witness room energy from anchors, and writes a JSON report. It is deliberately a stream-side cleanup stage, not physical cancellation in the room.
+
 The `play-record` and `record-field` commands remain for a `shared-input-device` profile only. They deliberately refuse the distributed rig until an alignment stage emits one coherent six-channel WAV.
 
 ## Invariants
@@ -193,6 +202,7 @@ The audio code is split so the hard parts can be tested without the room, driver
 - `audio_field.pipeline` wires those ports together without knowing whether the source is a real Focusrite, an SRT receiver, a WAV fixture, or a test double.
 - The next runtime estimator module should own chirplet observations, delay/SRO/phase state, confidence gates, and phase-field updates. It should feed the aligner; it should not be hidden inside the FOA encoder.
 - The active probe optimizer owns whether to emit extra chirplets. It reads sync confidence and probe budget, then decides when and where an intentional chirplet is worth the cost.
+- Room suppression owns stream-side cleanup: dialogue anchors define desired direct energy, spatial/context mics act as witnesses for room and transient clutter, and the cleaned aligned field feeds FOA/Aquarium/Faust.
 - `scripts/audio_field.py` stays as the operator CLI and hardware probe surface.
 
 This is the portfolio-piece line: each module owns one invariant, and the tests use mocks/fakes instead of asking a driver stack to please be emotionally available.
