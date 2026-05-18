@@ -43,12 +43,18 @@ def msgpack_head(path: Path):
         return summary
     summary["schema"] = payload[0] if payload else None
     if summary["type"] == "localcast.visual.render_frame":
+        points = payload[10] if len(payload) > 10 else []
+        point_prefix_counts = {}
+        for point in points:
+            prefix = str(point[0]).split(":", 1)[0]
+            point_prefix_counts[prefix] = point_prefix_counts.get(prefix, 0) + 1
         summary.update(
             {
                 "frameId": payload[1],
                 "presentTimeNs": payload[5],
                 "audioAlignmentTimeNs": payload[6],
-                "pointCount": len(payload[10]) if len(payload) > 10 else 0,
+                "pointCount": len(points),
+                "pointPrefixCounts": dict(sorted(point_prefix_counts.items())),
             }
         )
     elif summary["type"] == "localcast.audio.spatial_frame":

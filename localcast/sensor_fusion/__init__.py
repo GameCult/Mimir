@@ -67,6 +67,14 @@ from .clap_calibration import (
     detect_camera_motion_peaks,
     detect_clap_events,
 )
+from .chirp_pose import (
+    CameraChirpPoseConstraint,
+    CameraMicGeometry,
+    SpeakerGeometry,
+    constraints_from_phase_sources,
+    default_camera_mic_geometry,
+    default_speaker_geometry,
+)
 from .cultcache_docs import (
     CLAP_EVENTS_KEY,
     LIVE_RENDER_FRAME_KEY,
@@ -127,6 +135,9 @@ __all__ = [
     "CameraMotionPeak",
     "CameraClockSyncModel",
     "CameraSyncEstimate",
+    "CameraChirpPoseConstraint",
+    "CameraMicGeometry",
+    "SpeakerGeometry",
     "ClapCalibrationEvent",
     "ClapDetectorConfig",
     "TimestampedFrame",
@@ -164,6 +175,9 @@ __all__ = [
     "detect_audio_transients",
     "detect_camera_motion_peaks",
     "detect_clap_events",
+    "constraints_from_phase_sources",
+    "default_camera_mic_geometry",
+    "default_speaker_geometry",
     "remote_video_artifact_for_present_time",
     "put_live_clap_events",
     "put_live_render_frame",

@@ -171,9 +171,11 @@ research:
       camera authority after shared calibration. Clap peaks update per-camera
       clock offsets, allowing history buffers to be sampled at
       `oracle_time - camera_offset` for coherent point-cloud construction.
-      Ultrasonic chirp delay estimates from camera microphones are valid
-      camera-body pose evidence and should enter this same map as range/timing
-      constraints, not as a separate audio-only calibration story.
+      `localcast.sensor_fusion.chirp_pose` converts live phase-field delay
+      meaning for Kiyo/PS Eye microphone sources into camera-body range
+      constraints, which the live producer emits as `camera-chirp:*` render
+      points and `chirp-camera-pose` LOD evidence. These constraints augment
+      visual calibration; they do not own image geometry.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >

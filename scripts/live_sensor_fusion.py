@@ -21,11 +21,13 @@ from localcast.sensor_fusion import (
     SensorRig,
     SurfaceFeatureObservation,
     CameraClockSyncModel,
+    CameraChirpPoseConstraint,
     CameraMotionPeak,
     ClapCalibrationEvent,
     TimestampedFrame,
     TimestampedFrameHistory,
     ClapDetectorConfig,
+    constraints_from_phase_sources,
     detect_clap_events,
     dense_stereo_points,
     evidence_from_fusion_items,
@@ -40,7 +42,7 @@ from localcast.sensor_fusion import (
     stochastic_transient_matches,
 )
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
-from audio_field.cultcache_audio import frame_to_numpy, get_live_spatial_audio_frame
+from audio_field.cultcache_audio import frame_to_numpy, get_live_audio_phase_field, get_live_spatial_audio_frame
 
 
 def acquire_runtime_lock(path: Path) -> BinaryIO | None:
@@ -655,6 +657,70 @@ def sync_status_position(sensor_id: str) -> np.ndarray:
     return positions.get(sensor_id, np.zeros(3, dtype=np.float64))
 
 
+class LiveChirpPoseMapper:
+    def __init__(self, *, phase_cache: Path) -> None:
+        self.phase_cache = phase_cache
+        self.last_frame_id: int | None = None
+        self.constraints: tuple[CameraChirpPoseConstraint, ...] = ()
+
+    def update(self, fallback_timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
+        if not self.phase_cache.exists():
+            return self._constraint_points(fallback_timestamp_ns)
+        field = get_live_audio_phase_field(self.phase_cache)
+        if field is None:
+            return self._constraint_points(fallback_timestamp_ns)
+        if field.frame_id != self.last_frame_id:
+            self.last_frame_id = field.frame_id
+            self.constraints = constraints_from_phase_sources(
+                field.sources,
+                audio_time_ns=field.audio_time_ns,
+            )
+        return self._constraint_points(field.audio_time_ns)
+
+    def _constraint_points(self, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
+        points: list[RenderPointPacket] = []
+        for constraint in self.constraints:
+            points.extend(chirp_pose_constraint_points(constraint, timestamp_ns))
+        return tuple(points)
+
+
+def chirp_pose_constraint_points(
+    constraint: CameraChirpPoseConstraint,
+    timestamp_ns: int,
+) -> tuple[RenderPointPacket, ...]:
+    residual = float(constraint.range_residual_m)
+    confidence = max(0.0, min(1.0, float(constraint.confidence)))
+    camera = np.asarray(constraint.camera_position_m, dtype=np.float64)
+    speaker = np.asarray(constraint.speaker_position_m, dtype=np.float64)
+    direction = camera - speaker
+    norm = float(np.linalg.norm(direction))
+    if norm <= 1.0e-9:
+        direction = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        norm = 1.0
+    unit = direction / norm
+    corrected = speaker + unit * float(constraint.observed_range_m)
+    midpoint = speaker + unit * (0.5 * (float(constraint.nominal_range_m) + float(constraint.observed_range_m)))
+    residual_strength = min(1.0, abs(residual) / 0.25)
+    return (
+        render_point(
+            f"{constraint.stable_key}:body",
+            corrected,
+            0.030 + 0.045 * residual_strength,
+            (0.95, 0.78, 0.24, 0.38 + 0.42 * confidence),
+            confidence,
+            timestamp_ns,
+        ),
+        render_point(
+            f"{constraint.stable_key}:range",
+            midpoint,
+            0.012 + 0.030 * residual_strength,
+            (1.0, 0.55, 0.18, 0.22 + 0.36 * confidence),
+            confidence * 0.85,
+            timestamp_ns,
+        ),
+    )
+
+
 def pixel_ray_point(camera: CameraModel, uv: np.ndarray, *, distance_m: float) -> np.ndarray:
     point = np.asarray([float(uv[0]), float(uv[1]), 1.0], dtype=np.float64)
     direction_sensor = np.linalg.inv(camera.camera_matrix) @ point
@@ -1018,8 +1084,10 @@ def main() -> None:
     parser.add_argument("--leap-step", type=int, default=12)
     parser.add_argument("--lod-cache", default=str(ROOT / "calibration" / "runs" / "visual-lod-cache.json"))
     parser.add_argument("--audio-cache", default=str(ROOT / "calibration" / "runs" / "audio-state.msgpack"))
+    parser.add_argument("--phase-cache", default=str(ROOT / "calibration" / "runs" / "audio-phase-field.msgpack"))
     parser.add_argument("--clap-cache", default=str(ROOT / "calibration" / "runs" / "clap-events.msgpack"))
     parser.add_argument("--no-clap-calibration", action="store_true")
+    parser.add_argument("--no-chirp-pose", action="store_true")
     parser.add_argument("--no-stochastic-transients", action="store_true")
     args = parser.parse_args()
 
@@ -1066,6 +1134,7 @@ def main() -> None:
         camera_width=args.rgb_width,
         camera_height=args.rgb_height,
     )
+    chirp_pose_mapper = None if args.no_chirp_pose else LiveChirpPoseMapper(phase_cache=Path(args.phase_cache))
     try:
         while True:
             now = time.monotonic()
@@ -1116,10 +1185,12 @@ def main() -> None:
             support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
             stochastic_points = transient_match_render_points(transient_matches, timestamp_ns)
             clap_points = () if clap_calibrator is None else clap_calibrator.update(timestamp_ns)
+            chirp_pose_points = () if chirp_pose_mapper is None else chirp_pose_mapper.update(timestamp_ns)
             multilod_cache_from_evidence(
                 evidence_from_render_points(leap_points, source_kind=leap_source_kind, source_priority=leap_source_priority)
                 + evidence_from_render_points(rgb_points, source_kind="rgb-surface", source_priority=1.4)
                 + evidence_from_render_points(clap_points, source_kind="clap-calibration", source_priority=2.4)
+                + evidence_from_render_points(chirp_pose_points, source_kind="chirp-camera-pose", source_priority=1.8)
                 + evidence_from_fusion_items(transient_matches, source_kind="stochastic-transient", source_priority=1.2)
                 + evidence_from_fusion_items(result.points, source_kind="synthetic-fusion", source_priority=0.8),
                 levels=(0.01, 0.04, 0.16, 0.64),
@@ -1136,7 +1207,7 @@ def main() -> None:
                 spout_sender_name=frame.spout_sender_name,
                 target_width=frame.target_width,
                 target_height=frame.target_height,
-                points=clap_points + leap_points + rgb_points + stochastic_points + support_points,
+                points=clap_points + chirp_pose_points + leap_points + rgb_points + stochastic_points + support_points,
             )
             put_live_render_frame(cache_path, frame)
             frame_id += 1

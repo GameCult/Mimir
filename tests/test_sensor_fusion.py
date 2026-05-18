@@ -9,6 +9,7 @@ from localcast.sensor_fusion import (
     AdaptiveCameraController,
     BoardObservation,
     BoardSpec,
+    CameraMicGeometry,
     CameraModel,
     CameraClockSyncModel,
     CameraIntrinsics,
@@ -22,11 +23,13 @@ from localcast.sensor_fusion import (
     RenderFramePacket,
     RenderPointPacket,
     SensorRig,
+    SpeakerGeometry,
     SpoutOutputConfig,
     TimestampedFrame,
     TimestampedFrameHistory,
     TrackCache,
     VirtualCamera,
+    constraints_from_phase_sources,
     detect_clap_events,
     frame_to_vertex_array,
     frame_with_point_budget,
@@ -548,6 +551,31 @@ class SensorFusionTests(unittest.TestCase):
         self.assertIsNotNone(selected)
         self.assertEqual(900, selected.timestamp_ns)
         self.assertEqual(100, sync.offset_ns("cam-a"))
+
+    def test_chirp_pose_constraints_map_camera_mics_to_range_residuals(self):
+        constraints = constraints_from_phase_sources(
+            (
+                {"sourceId": "kiyo-0", "distanceDeltaMeters": 0.12, "confidence": 0.8},
+                {"sourceId": "host-focusrite", "distanceDeltaMeters": 0.40, "confidence": 1.0},
+            ),
+            audio_time_ns=12_345,
+            camera_mics=(
+                CameraMicGeometry("kiyo-primary", "kiyo-0", np.array([1.0, 0.0, 0.0], dtype=np.float64)),
+            ),
+            speakers=(
+                SpeakerGeometry("speaker-left", np.array([0.0, 0.0, 0.0], dtype=np.float64)),
+            ),
+        )
+
+        self.assertEqual(1, len(constraints))
+        constraint = constraints[0]
+        self.assertEqual("kiyo-primary", constraint.sensor_id)
+        self.assertEqual("kiyo-0", constraint.source_id)
+        self.assertEqual("speaker-left", constraint.speaker_id)
+        self.assertAlmostEqual(1.0, constraint.nominal_range_m)
+        self.assertAlmostEqual(1.12, constraint.observed_range_m)
+        self.assertAlmostEqual(0.12, constraint.range_residual_m)
+        self.assertEqual(12_345, constraint.timestamp_ns)
 
     def test_audio_source_events_overlay_against_audio_alignment_time(self):
         frame = RenderFramePacket(

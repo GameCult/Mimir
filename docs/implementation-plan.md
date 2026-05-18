@@ -31,6 +31,7 @@
   - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
   - Live clap calibration is wired into the visual producer. It keeps a rolling frame window from the Kiyo pair plus Leap, reads the live spatial audio frame for transient candidates, publishes `clap-events.msgpack`, injects clap calibration markers into the render frame, and writes clap evidence into the LOD cache. Kiyo stereo owns the current rough 3D solve; Leap owns the best visual timing witness until its geometric model is calibrated.
   - Clap peaks now update a per-camera clock sync model. The point-cloud builder can sample camera history buffers at `oracle_time - camera_offset` instead of using whichever frame arrived last.
+  - `localcast.sensor_fusion.chirp_pose` converts live phase-field delay meaning for Kiyo/PS Eye microphone sources into camera-body range constraints. `scripts/live_sensor_fusion.py` injects those constraints as `camera-chirp:*` render points and `chirp-camera-pose` LOD evidence.
   - `scripts/stream_spout.py` runs the deadline Spout sender loop from the typed cache with typed and JSON heartbeat status.
   - The deadline Spout renderer has a named `kiyo-mid-deru` virtual camera preset: eye at the midpoint between the two Kiyo-class cameras and target on the co-streamer body volume. It also applies a renderer-owned point budget with stable high-confidence anchors plus frame-varying remainder samples so downstream TAA/supersampling can accumulate detail without forcing every source claim into every OBS frame.
   - `docs/obs-spout-streaming.md` documents OBS setup and the Aquarium replacement boundary.
@@ -74,7 +75,7 @@
 11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
 12. Capture fixed-board ChArUco observations for every camera, solve `config/sensor-fusion.json`, and verify cross-view feature triangulation with `scripts/triangulate_surface_features.py`.
 13. Replace synthetic live-fusion observations with PS3 Eye detector observations and calibrated surface-feature tracks.
-14. Feed ultrasonic chirp delay estimates from Kiyo/PS Eye microphones into the shared scene map as camera-body pose constraints. The mics do not replace camera calibration; they add range/timing evidence for the physical camera bodies.
+14. Replace the placeholder speaker/camera-mic geometry used by `chirp_pose` with measured rig coordinates, then let the common-space optimizer consume range residuals instead of only visualizing them.
 15. Calibrate Leap as a geometric camera in the shared rig so the timing authority can also contribute direct 3D rays instead of only visual timing peaks.
 16. Fix the live Leap capture backend so actual Leap frames, not fallback frames, populate `leap-ground-truth` cells in the multi-LOD cache.
 17. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
