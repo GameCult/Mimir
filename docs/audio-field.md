@@ -113,6 +113,15 @@ For passive runtime sync against ground-truth program output, capture the Scarle
 
 The loopback path is ground-truth content, but not automatically a perfect ground-truth clock. If WASAPI loopback reports discontinuities, use the stable windows and treat the rest as suspect.
 
+For dense runtime calibration, emit a low-level multiband chirplet texture instead of one big sweep:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py record-probe-train --profile .\config\audio-field.json --seconds 8 --chirp-seconds 0.03 --chirps-per-second 16 --probe-band 180:500 --probe-band 600:1200 --probe-band 1500:3000 --probe-band 3500:7000 --probe-band 8000:14000 --probe-level-offset-db -18 --output-rate 44100 --loopback-rate 48000
+.\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-probe-train --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
+```
+
+`analyze-probe-train` is the live-fit evidence path: it uses each event's band-specific chirplet, gates weak loopback/mic detections, estimates phase-derived delay deltas across frequency bands, and updates a smoothed phase/frequency mapping. Coarse delays still include device latency; the volumetric room solve must fit latency, drift, phase response, and acoustic path jointly.
+
 Record local mics while playing one speaker sweep. Use the output rate that the device probe says is real:
 
 ```powershell

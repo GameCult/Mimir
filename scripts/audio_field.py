@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import json
 import math
 import subprocess
@@ -15,6 +16,21 @@ from scipy import signal
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "calibration" / "runs"
+
+
+def load_phase_fit_module():
+    spec = importlib.util.spec_from_file_location("localcast_phase_fit", ROOT / "audio_field" / "phase_fit.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_phase_fit = load_phase_fit_module()
+IterativeFrequencyPhaseMapper = _phase_fit.IterativeFrequencyPhaseMapper
+SmoothPhaseField = _phase_fit.SmoothPhaseField
+estimate_phase_delay = _phase_fit.estimate_phase_delay
 
 
 def utc_stamp() -> str:
@@ -548,6 +564,151 @@ def cmd_record_local_calibration(args):
     print(out)
 
 
+def cmd_record_probe_train(args):
+    profile = load_profile(args.profile)
+    sd = sounddevice_module()
+    out = args.output or run_dir("audio-probe-train")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "sources").mkdir(exist_ok=True)
+
+    input_rate = int(args.input_rate or profile["sampleRate"])
+    output_device = match_device(sd, profile["outputDevice"], "output")
+    output_rate = int(args.output_rate or output_device["default_samplerate"] or profile["sampleRate"])
+    playback, chirp, events = make_probe_train(
+        profile,
+        output_rate,
+        seconds=float(args.seconds),
+        chirp_seconds=float(args.chirp_seconds),
+        interval_seconds=float(args.interval_seconds),
+        channels=int(profile["outputDevice"]["channels"]),
+        start_padding_seconds=float(args.start_padding_seconds),
+        chirps_per_second=int(args.chirps_per_second),
+        bands=parse_probe_bands(args.probe_band),
+        level_db_offset=float(args.probe_level_offset_db),
+    )
+    wavfile.write(out / "probe-train-played.wav", output_rate, playback.astype(np.float32))
+    wavfile.write(out / "probe-chirplet.wav", output_rate, chirp.astype(np.float32))
+
+    frames = int(input_rate * float(args.seconds))
+    local_mics = [mic for mic in profile["microphones"] if mic.get("machine") == args.machine]
+    grouped = local_device_groups(sd, local_mics)
+    captures = {
+        key: np.zeros((frames, group["channels"]), dtype=np.float32)
+        for key, group in grouped.items()
+        if key != "_missing"
+    }
+    positions = {key: 0 for key in captures}
+
+    def make_callback(key):
+        def callback(indata, frame_count, time_info, status):
+            pos = positions[key]
+            end = min(pos + frame_count, frames)
+            if end > pos:
+                captures[key][pos:end, :] = indata[: end - pos, :]
+            positions[key] = end
+
+        return callback
+
+    streams = []
+    for key, group in grouped.items():
+        if key == "_missing":
+            continue
+        streams.append(
+            sd.InputStream(
+                device=group["device"]["index"],
+                channels=group["channels"],
+                samplerate=input_rate,
+                dtype="float32",
+                callback=make_callback(key),
+            )
+        )
+
+    loopback_file = None
+    try:
+        for stream in streams:
+            stream.start()
+        loopback = record_loopback(
+            query=args.loopback_query,
+            seconds=float(args.seconds),
+            sample_rate=int(args.loopback_rate or output_rate),
+            channels=args.loopback_channels,
+            play_data=playback,
+            play_rate=output_rate,
+            play_device=output_device["index"],
+        )
+        loopback_file = "ground_truth_loopback.wav"
+        wavfile.write(out / loopback_file, int(args.loopback_rate or output_rate), loopback.astype(np.float32))
+    finally:
+        for stream in streams:
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
+
+    sources = []
+    for missing in grouped.get("_missing", []):
+        sources.append(
+            {
+                "micId": missing["micId"],
+                "fieldChannel": missing["fieldChannel"],
+                "machine": args.machine,
+                "status": "missing-device",
+                "error": missing["error"],
+            }
+        )
+    for mic in sorted(local_mics, key=mic_channel):
+        if any(missing["micId"] == mic["id"] for missing in grouped.get("_missing", [])):
+            continue
+        group_key = device_group_key(grouped, mic)
+        data = captures[group_key][:, int(mic.get("device", {}).get("channel", 0))]
+        file_name = f"sources/{mic['id']}.wav"
+        wavfile.write(out / file_name, input_rate, data.astype(np.float32))
+        sources.append(
+            {
+                "micId": mic["id"],
+                "fieldChannel": mic_channel(mic),
+                "machine": mic.get("machine"),
+                "clockDomain": mic.get("clockDomain"),
+                "file": file_name,
+                "sampleRate": input_rate,
+            }
+        )
+
+    write_json(
+        out / "manifest.json",
+        {
+            "kind": "distributed-audio-probe-train",
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "profile": str(args.profile),
+            "sampleRate": int(profile["sampleRate"]),
+            "inputSampleRate": input_rate,
+            "stimulus": "probe-chirplet.wav",
+            "playback": {
+                "played": True,
+                "file": "probe-train-played.wav",
+                "outputDevice": summarize_device(output_device),
+                "outputSampleRate": output_rate,
+                "seconds": float(args.seconds),
+            },
+            "reference": {
+                "kind": "wasapi-loopback",
+                "file": loopback_file,
+                "sampleRate": int(args.loopback_rate or output_rate),
+                "query": args.loopback_query,
+            },
+            "probeTrain": {
+                "chirpSeconds": float(args.chirp_seconds),
+                "intervalSeconds": float(args.interval_seconds),
+                "startPaddingSeconds": float(args.start_padding_seconds),
+                "events": events,
+            },
+            "sources": sources,
+        },
+    )
+    print(out)
+
+
 def find_profile_mic(profile, mic_id: str):
     for mic in profile["microphones"]:
         if mic["id"] == mic_id:
@@ -660,6 +821,82 @@ def make_sweep_at_rate(profile, sample_rate):
     clone = dict(profile)
     clone["sampleRate"] = int(sample_rate)
     return make_sweep(clone)
+
+
+def make_probe_train(
+    profile,
+    sample_rate,
+    *,
+    seconds,
+    chirp_seconds,
+    interval_seconds,
+    channels,
+    start_padding_seconds=1.0,
+    chirps_per_second=1,
+    bands=None,
+    level_db_offset=-18.0,
+):
+    chirp_profile = dict(profile)
+    chirp_profile["sampleRate"] = int(sample_rate)
+    chirp_profile["calibration"] = dict(profile["calibration"])
+    chirp_profile["calibration"]["sweepSeconds"] = float(chirp_seconds)
+    chirp = make_sweep(chirp_profile) * db_to_amp(float(level_db_offset))
+    total_frames = int(float(seconds) * sample_rate)
+    train = np.zeros((total_frames, int(channels)), dtype=np.float32)
+    events = []
+    rng = np.random.default_rng(1337)
+    base_interval = 1.0 / max(1.0, float(chirps_per_second))
+    effective_interval = min(float(interval_seconds), base_interval)
+    time_s = float(start_padding_seconds)
+    index = 0
+    speaker_channels = [int(speaker["channel"]) for speaker in sorted(profile["speakers"], key=lambda item: int(item["channel"]))]
+    if not speaker_channels:
+        raise SystemExit("Probe train needs at least one speaker in the profile")
+    while time_s + float(chirp_seconds) <= float(seconds):
+        channel = speaker_channels[index % len(speaker_channels)]
+        if bands:
+            band = bands[index % len(bands)]
+            chirp_profile["calibration"]["sweepStartHz"] = float(band[0])
+            chirp_profile["calibration"]["sweepEndHz"] = float(band[1])
+            chirp = make_sweep(chirp_profile) * db_to_amp(float(level_db_offset))
+        jitter = 0.15 * effective_interval * float(rng.uniform(-1.0, 1.0))
+        event_time = max(float(start_padding_seconds), time_s + jitter)
+        start = int(round(time_s * sample_rate))
+        start = int(round(event_time * sample_rate))
+        end = min(total_frames, start + len(chirp))
+        if 0 <= channel < int(channels) and end > start:
+            train[start:end, channel] += chirp[: end - start]
+        speaker = next((item for item in profile["speakers"] if int(item["channel"]) == channel), {})
+        events.append(
+            {
+                "eventIndex": index,
+                "speakerId": speaker.get("id", f"speaker_channel_{channel}"),
+                "speakerChannel": channel,
+                "scheduledStartSeconds": event_time,
+                "scheduledStartSample": start,
+                "chirpSeconds": float(chirp_seconds),
+                "sweepStartHz": float(chirp_profile["calibration"].get("sweepStartHz")),
+                "sweepEndHz": float(chirp_profile["calibration"].get("sweepEndHz")),
+            }
+        )
+        index += 1
+        time_s += effective_interval
+    peak = float(np.max(np.abs(train))) if train.size else 0.0
+    if peak > 0.95:
+        train *= 0.95 / peak
+    return train, chirp, events
+
+
+def parse_probe_bands(values):
+    if not values:
+        return None
+    bands = []
+    for value in values:
+        if ":" not in value:
+            raise SystemExit(f"Probe band must be start:end Hz, got {value!r}")
+        start, end = value.split(":", 1)
+        bands.append((float(start), float(end)))
+    return bands
 
 
 def local_device_groups(sd, mics):
@@ -997,6 +1234,202 @@ def cmd_analyze_reference_sync(args):
         )
     write_json(run / "reference-sync-analysis.json", results)
     print(json.dumps(results, indent=2))
+
+
+def cmd_analyze_probe_train(args):
+    profile = load_profile(args.profile)
+    run = args.run
+    manifest = read_json(run / "manifest.json")
+    train = manifest.get("probeTrain") or {}
+    events = train.get("events") or []
+    if not events:
+        raise SystemExit("Probe-train manifest has no events")
+    reference_info = manifest.get("reference") or {}
+    reference_file = run / reference_info.get("file", "")
+    if not reference_file.exists():
+        raise SystemExit(f"Loopback reference missing: {reference_file}")
+
+    field_rate = int(profile["sampleRate"])
+    stim_rate, chirp = wavfile.read(run / manifest["stimulus"])
+    chirp = resample_if_needed(mono(as_float_matrix(chirp)), int(stim_rate), field_rate)
+    ref_rate, reference = wavfile.read(reference_file)
+    reference = resample_if_needed(mono(as_float_matrix(reference)), int(ref_rate), field_rate)
+    event_search = int(float(args.loopback_search_ms) * field_rate / 1000.0)
+    mic_search = int(float(args.mic_search_ms) * field_rate / 1000.0)
+    phase_frequencies = [float(value) for value in args.phase_frequency]
+
+    loopback_events = []
+    for event in events:
+        event_chirp = make_event_chirp(profile, field_rate, event)
+        scheduled = int(round(float(event["scheduledStartSeconds"]) * field_rate))
+        detected, peak, polarity = detect_chirp_near(reference, event_chirp, scheduled, event_search)
+        loopback_score = normalized_chirp_score(reference, event_chirp, detected)
+        loopback_events.append(
+            {
+                **event,
+                "loopbackStartSample": int(detected),
+                "loopbackStartSeconds": detected / field_rate,
+                "loopbackScore": loopback_score,
+                "loopbackPeak": float(abs(peak)),
+                "loopbackPolarity": int(polarity),
+                "usable": bool(loopback_score >= float(args.min_loopback_score)),
+            }
+        )
+
+    results = {
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "sourceRun": str(run),
+        "sampleRate": field_rate,
+        "speedOfSoundMetersPerSecond": float(args.speed_of_sound),
+        "events": loopback_events,
+        "sources": [],
+        "notes": "Delay-to-distance values still include device latency unless solved against multiple speakers and clock offsets.",
+    }
+    for source in manifest.get("sources", []):
+        file_name = source.get("file")
+        if not file_name or not (run / file_name).exists():
+            continue
+        rec_rate, data = wavfile.read(run / file_name)
+        mic = resample_if_needed(mono(as_float_matrix(data)), int(rec_rate), field_rate)
+        observations = []
+        phase_field = SmoothPhaseField(smoothing=float(args.phase_smoothing), max_step_samples=float(args.max_phase_step_samples))
+        mapper = IterativeFrequencyPhaseMapper(
+            phase_frequencies,
+            field_rate,
+            learning_rate=float(args.mapping_learning_rate),
+            max_phase_step_radians=float(args.max_mapping_phase_step),
+        )
+        for event in loopback_events:
+            if not event.get("usable"):
+                continue
+            event_chirp = make_event_chirp(profile, field_rate, event)
+            detected, peak, polarity = detect_chirp_near(mic, event_chirp, int(event["loopbackStartSample"]), mic_search)
+            delay = detected - int(event["loopbackStartSample"])
+            score = normalized_chirp_score(mic, event_chirp, detected)
+            if score < float(args.min_mic_score):
+                continue
+            loopback_segment = extract_window(reference, int(event["loopbackStartSample"]), len(event_chirp))
+            mic_segment = extract_window(mic, detected, len(event_chirp))
+            phase_estimate = estimate_phase_delay(
+                loopback_segment,
+                mic_segment,
+                field_rate,
+                phase_frequencies,
+                max_abs_delay_ms=float(args.max_phase_delta_ms),
+            )
+            confidence = min(1.0, max(0.0, score))
+            smooth_phase_delta = phase_field.update(source["micId"], phase_estimate.delay_samples, confidence)
+            mapping_phase = mapper.update(source["micId"], phase_estimate, confidence)
+            observations.append(
+                {
+                    "eventIndex": event["eventIndex"],
+                    "speakerId": event["speakerId"],
+                    "speakerChannel": event["speakerChannel"],
+                    "startSample": int(detected),
+                    "delaySamplesFromLoopback": int(delay),
+                    "phaseDeltaSamples": phase_estimate.delay_samples,
+                    "phaseDeltaMs": phase_estimate.delay_ms,
+                    "smoothedPhaseDeltaSamples": smooth_phase_delta,
+                    "phaseFitErrorRadians": phase_estimate.fit_error_radians,
+                    "phaseRefinedDelaySamplesFromLoopback": float(delay) + phase_estimate.delay_samples,
+                    "phaseBands": [
+                        {
+                            "frequencyHz": band.frequency_hz,
+                            "phaseDeltaRadians": band.phase_delta_radians,
+                            "coherence": band.coherence,
+                        }
+                        for band in phase_estimate.bands
+                    ],
+                    "delayMsFromLoopback": 1000.0 * delay / field_rate,
+                    "distanceEquivalentMeters": float(args.speed_of_sound) * delay / field_rate,
+                    "score": score,
+                    "peak": float(abs(peak)),
+                    "polarity": int(polarity),
+                }
+            )
+        results["sources"].append(
+            {
+                "micId": source["micId"],
+                "fieldChannel": source.get("fieldChannel"),
+                "observations": observations,
+                "summaryBySpeaker": summarize_probe_observations(observations, field_rate, float(args.speed_of_sound)),
+                "learnedPhaseFrequencyMapping": [
+                    {"frequencyHz": frequency, "phaseCorrectionRadians": float(phase)}
+                    for frequency, phase in zip(phase_frequencies, mapper.correction_for(source["micId"]))
+                ],
+                "smoothedPhaseField": phase_field.state(),
+            }
+        )
+    write_json(run / "probe-train-analysis.json", results)
+    print(json.dumps(results, indent=2))
+
+
+def detect_chirp_near(samples, chirp, center_sample, radius_samples):
+    start = max(0, int(center_sample) - int(radius_samples))
+    end = min(len(samples), int(center_sample) + int(radius_samples) + len(chirp))
+    segment = samples[start:end]
+    if len(segment) < max(8, len(chirp) // 4):
+        return int(center_sample), 0.0, 1
+    delay, peak, polarity = estimate_delay(segment, chirp)
+    return start + delay, peak, polarity
+
+
+def make_event_chirp(profile, sample_rate, event):
+    clone = dict(profile)
+    clone["sampleRate"] = int(sample_rate)
+    clone["calibration"] = dict(profile["calibration"])
+    clone["calibration"]["sweepSeconds"] = float(event.get("chirpSeconds", clone["calibration"].get("sweepSeconds", 0.03)))
+    if "sweepStartHz" in event:
+        clone["calibration"]["sweepStartHz"] = float(event["sweepStartHz"])
+    if "sweepEndHz" in event:
+        clone["calibration"]["sweepEndHz"] = float(event["sweepEndHz"])
+    return make_sweep(clone)
+
+
+def normalized_chirp_score(samples, chirp, start_sample):
+    segment = extract_window(samples, int(start_sample), len(chirp))
+    denom = float(np.linalg.norm(segment) * np.linalg.norm(chirp))
+    if denom <= 1e-12:
+        return 0.0
+    return float(abs(np.dot(segment.astype(np.float32), chirp.astype(np.float32))) / denom)
+
+
+def summarize_probe_observations(observations, sample_rate, speed_of_sound):
+    by_speaker = {}
+    for obs in observations:
+        by_speaker.setdefault(obs["speakerId"], []).append(obs)
+    summaries = []
+    for speaker_id, rows in sorted(by_speaker.items()):
+        delays = np.asarray([row["delaySamplesFromLoopback"] for row in rows], dtype=np.float64)
+        refined = np.asarray([row.get("phaseRefinedDelaySamplesFromLoopback", row["delaySamplesFromLoopback"]) for row in rows], dtype=np.float64)
+        scores = np.asarray([row["score"] for row in rows], dtype=np.float64)
+        event_indexes = np.asarray([row["eventIndex"] for row in rows], dtype=np.float64)
+        median = float(np.median(delays))
+        refined_median = float(np.median(refined))
+        mad = float(np.median(np.abs(delays - median)))
+        refined_mad = float(np.median(np.abs(refined - refined_median)))
+        slope = 0.0
+        if len(delays) >= 2 and float(np.ptp(event_indexes)) > 0.0:
+            slope = float(np.polyfit(event_indexes, refined, 1)[0])
+        summaries.append(
+            {
+                "speakerId": speaker_id,
+                "observations": int(len(rows)),
+                "medianDelaySamples": median,
+                "medianDelayMs": 1000.0 * median / sample_rate,
+                "madSamples": mad,
+                "madMs": 1000.0 * mad / sample_rate,
+                "distanceEquivalentMeters": speed_of_sound * median / sample_rate,
+                "phaseRefinedMedianDelaySamples": refined_median,
+                "phaseRefinedMedianDelayMs": 1000.0 * refined_median / sample_rate,
+                "phaseRefinedMadSamples": refined_mad,
+                "phaseRefinedMadMs": 1000.0 * refined_mad / sample_rate,
+                "phaseRefinedDistanceEquivalentMeters": speed_of_sound * refined_median / sample_rate,
+                "meanScore": float(np.mean(scores)) if len(scores) else 0.0,
+                "delaySlopeSamplesPerEvent": slope,
+            }
+        )
+    return summaries
 
 
 def mono(matrix):
@@ -1412,6 +1845,24 @@ def main():
     p.add_argument("--loopback-channels", type=int, default=2)
     p.set_defaults(func=cmd_record_local_calibration)
 
+    p = sub.add_parser("record-probe-train", help="Record local mics while emitting repeated left/right chirplets with loopback ground truth.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--output", type=Path)
+    p.add_argument("--machine", default="local")
+    p.add_argument("--seconds", type=float, default=12.0)
+    p.add_argument("--input-rate", type=int)
+    p.add_argument("--output-rate", type=int)
+    p.add_argument("--chirp-seconds", type=float, default=0.35)
+    p.add_argument("--interval-seconds", type=float, default=1.0)
+    p.add_argument("--chirps-per-second", type=int, default=1)
+    p.add_argument("--probe-band", action="append", help="Layer probe texture bands as start:end Hz, repeatable.")
+    p.add_argument("--probe-level-offset-db", type=float, default=-18.0)
+    p.add_argument("--start-padding-seconds", type=float, default=1.0)
+    p.add_argument("--loopback-query", default="Scarlett")
+    p.add_argument("--loopback-rate", type=int)
+    p.add_argument("--loopback-channels", type=int, default=2)
+    p.set_defaults(func=cmd_record_probe_train)
+
     p = sub.add_parser("record-remote-focusrite", help="Record the neighbor Focusrite to a run source WAV over SSH/SFTP.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
     p.add_argument("--run", type=Path, required=True)
@@ -1476,6 +1927,22 @@ def main():
     p.add_argument("--min-mic-std", type=float, default=1e-5)
     p.add_argument("--min-abs-lag-ms", type=float, default=0.5)
     p.set_defaults(func=cmd_analyze_reference_sync)
+
+    p = sub.add_parser("analyze-probe-train", help="Analyze repeated chirplet probes against output loopback for delay/jitter/drift evidence.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.add_argument("--run", type=Path, required=True)
+    p.add_argument("--loopback-search-ms", type=float, default=80.0)
+    p.add_argument("--mic-search-ms", type=float, default=250.0)
+    p.add_argument("--min-loopback-score", type=float, default=0.12)
+    p.add_argument("--min-mic-score", type=float, default=0.08)
+    p.add_argument("--speed-of-sound", type=float, default=343.0)
+    p.add_argument("--phase-frequency", type=float, action="append", default=[250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 12000.0])
+    p.add_argument("--max-phase-delta-ms", type=float, default=3.0)
+    p.add_argument("--phase-smoothing", type=float, default=0.25)
+    p.add_argument("--max-phase-step-samples", type=float, default=32.0)
+    p.add_argument("--mapping-learning-rate", type=float, default=0.2)
+    p.add_argument("--max-mapping-phase-step", type=float, default=0.2)
+    p.set_defaults(func=cmd_analyze_probe_train)
 
     p = sub.add_parser("record-field", help="Record the raw synchronized six-channel microphone field.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
