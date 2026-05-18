@@ -468,12 +468,12 @@ class LiveClapCalibrator:
             config=FusionConfig(max_pair_dt_ns=80_000_000, max_reprojection_error_px=80.0, cache_ttl_ns=1_000_000_000),
         )
         self.config = ClapDetectorConfig(
-            audio_window_samples=192,
-            audio_hop_samples=48,
-            audio_onset_ratio=4.0,
-            min_audio_energy=1.0e-6,
-            min_camera_motion_score=0.025,
-            camera_window_ns=90_000_000,
+            audio_window_samples=96,
+            audio_hop_samples=24,
+            audio_onset_ratio=2.0,
+            min_audio_energy=1.0e-8,
+            min_camera_motion_score=0.010,
+            camera_window_ns=2_500_000_000,
             min_camera_count=2,
             min_event_spacing_ns=220_000_000,
         )
