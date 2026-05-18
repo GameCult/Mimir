@@ -93,6 +93,10 @@ flowchart TD
     G --> H["OBS Spout2 Capture"]
     I["Leap motion evidence"] --> J["multi-LOD scene cache"]
     K["RGB/stochastic/synthetic evidence"] --> J
+    M["live clap audio transient"] --> N["Leap-timed clap calibration"]
+    O["Kiyo stereo motion window"] --> N
+    N --> C
+    N --> J
     J --> L["Aquarium compute reconciliation"]
 ```
 
@@ -100,6 +104,7 @@ Ownership:
 
 - `localcast.sensor_fusion.cultcache_docs` owns typed visual state documents.
 - `scripts/live_sensor_fusion.py` currently owns the live producer and writes `localcast.visual.render_frame` into CultCache.
+- The live producer now keeps a rolling RGB/Leap frame window for clap calibration. Kiyo stereo motion gives the first rough 3D clap position; Leap participates as the high-precision visual timing witness until a calibrated Leap geometric model joins the rig.
 - The live producer also writes a multi-LOD scene cache with source kind and priority. Real Leap frames are the highest-priority timing/spatial evidence; Leap fallback frames are tagged as fallback and do not become ground truth.
 - `scripts/stream_spout.py` consumes typed CultCache state and publishes Spout. Its presentation camera defaults to `kiyo-mid-deru`: the virtual eye sits halfway between the two Kiyo-class cameras and aims at the co-streamer body target. Its render budget is temporal: high-confidence anchors stay stable while the remaining samples rotate by frame id for TAA/supersampling reconciliation.
 - CultNet document replication is the intended API boundary for other producers/consumers.

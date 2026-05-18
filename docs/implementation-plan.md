@@ -29,6 +29,7 @@
   - `localcast.sensor_fusion.spout_output` renders render-frame packets into a GPU texture and publishes it as a named Spout sender for OBS.
   - `scripts/live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`.
   - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
+  - Live clap calibration is wired into the visual producer. It keeps a rolling frame window from the Kiyo pair plus Leap, reads the live spatial audio frame for transient candidates, publishes `clap-events.msgpack`, injects clap calibration markers into the render frame, and writes clap evidence into the LOD cache. Kiyo stereo owns the current rough 3D solve; Leap owns the best visual timing witness until its geometric model is calibrated.
   - `scripts/stream_spout.py` runs the deadline Spout sender loop from the typed cache with typed and JSON heartbeat status.
   - The deadline Spout renderer has a named `kiyo-mid-deru` virtual camera preset: eye at the midpoint between the two Kiyo-class cameras and target on the co-streamer body volume. It also applies a renderer-owned point budget with stable high-confidence anchors plus frame-varying remainder samples so downstream TAA/supersampling can accumulate detail without forcing every source claim into every OBS frame.
   - `docs/obs-spout-streaming.md` documents OBS setup and the Aquarium replacement boundary.
@@ -72,7 +73,8 @@
 11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
 12. Capture fixed-board ChArUco observations for every camera, solve `config/sensor-fusion.json`, and verify cross-view feature triangulation with `scripts/triangulate_surface_features.py`.
 13. Replace synthetic live-fusion observations with PS3 Eye detector observations and calibrated surface-feature tracks.
-14. Fix the live Leap capture backend so actual Leap frames, not fallback frames, populate `leap-ground-truth` cells in the multi-LOD cache.
-15. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
-16. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
-17. Wire `stream_phase_field.py` and `stream_faust_mic_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.
+14. Calibrate Leap as a geometric camera in the shared rig so the timing authority can also contribute direct 3D rays instead of only visual timing peaks.
+15. Fix the live Leap capture backend so actual Leap frames, not fallback frames, populate `leap-ground-truth` cells in the multi-LOD cache.
+16. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
+17. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
+18. Wire `stream_phase_field.py` and `stream_faust_mic_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.

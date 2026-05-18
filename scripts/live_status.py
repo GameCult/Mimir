@@ -100,6 +100,23 @@ def msgpack_head(path: Path):
         )
     elif summary["type"] in ("localcast.visual.stream_status", "localcast.audio.stream_status"):
         summary["payloadHead"] = head
+    elif summary["type"] == "localcast.calibration.clap_events":
+        summary.update(
+            {
+                "frameId": payload[1],
+                "eventCount": len(payload[3]) if len(payload) > 3 else 0,
+                "latestEvent": None
+                if len(payload) <= 3 or not payload[3]
+                else {
+                    "stableKey": payload[3][-1][0],
+                    "positionM": payload[3][-1][1],
+                    "acousticOracleNs": payload[3][-1][2],
+                    "visualObservedNs": payload[3][-1][3],
+                    "timingUncertaintyUs": payload[3][-1][4],
+                    "cameraCount": len(payload[3][-1][7]) if len(payload[3][-1]) > 7 else 0,
+                },
+            }
+        )
     return summary
 
 
@@ -123,6 +140,7 @@ def main() -> None:
             "audio-stream-status.msgpack",
             "audio-phase-field.msgpack",
             "audio-mic-field.msgpack",
+            "clap-events.msgpack",
             "active-probes/active-probes.jsonl",
             "visual-lod-cache.json",
             "stream-spout-status.json",
@@ -139,6 +157,7 @@ def main() -> None:
         "eventsHead": msgpack_head(runs / "audio-events.msgpack"),
         "phaseFieldHead": msgpack_head(runs / "audio-phase-field.msgpack"),
         "micFieldHead": msgpack_head(runs / "audio-mic-field.msgpack"),
+        "clapHead": msgpack_head(runs / "clap-events.msgpack"),
         "lastActiveProbe": read_last_jsonl(runs / "active-probes" / "active-probes.jsonl"),
     }
     print(json.dumps(payload, indent=2, default=str))

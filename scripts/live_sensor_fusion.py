@@ -20,16 +20,22 @@ from localcast.sensor_fusion import (
     RenderPointPacket,
     SensorRig,
     SurfaceFeatureObservation,
+    TimestampedFrame,
+    ClapDetectorConfig,
+    detect_clap_events,
     dense_stereo_points,
     evidence_from_fusion_items,
     evidence_from_render_points,
+    make_clap_events_frame,
     measure_frame_quality,
     multilod_cache_from_evidence,
+    put_live_clap_events,
     put_live_render_frame,
     lower_points_to_render_frame,
     stochastic_transient_matches,
 )
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
+from audio_field.cultcache_audio import frame_to_numpy, get_live_spatial_audio_frame
 
 
 def acquire_runtime_lock(path: Path) -> BinaryIO | None:
@@ -276,6 +282,7 @@ class RgbSplatSampler:
         self.fallback_dir = fallback_dir
         self._captures: dict[int, object] = {}
         self._frames: dict[int, np.ndarray] = {}
+        self._timestamped_frames: dict[str, TimestampedFrame] = {}
         self._controllers: dict[int, AdaptiveCameraController] = {}
         self._setting_ports: dict[int, OpenCvCameraSettingPort] = {}
 
@@ -303,6 +310,9 @@ class RgbSplatSampler:
                 points.extend(rgb_body_splats("deru-rgb", secondary, np.array([0.48, 0.28, 0.0]), now_s + 0.6, timestamp_ns, side=1.0, step=self.sample_step))
         return tuple(points)
 
+    def latest_timestamped_frames(self) -> dict[str, TimestampedFrame]:
+        return dict(self._timestamped_frames)
+
     def _read_frame(self, index: int) -> np.ndarray | None:
         import cv2
 
@@ -328,6 +338,8 @@ class RgbSplatSampler:
         for _ in range(2):
             ok, frame = capture.read()
             if ok and frame is not None:
+                sensor_id = self._sensor_id(index)
+                self._timestamped_frames[sensor_id] = TimestampedFrame(sensor_id, time.monotonic_ns(), frame.copy())
                 self._tune_capture(index, frame)
                 self._frames[index] = frame
                 return frame
@@ -357,8 +369,17 @@ class RgbSplatSampler:
             if path.exists():
                 frame = cv2.imread(str(path))
                 if frame is not None:
+                    sensor_id = self._sensor_id(index)
+                    self._timestamped_frames[sensor_id] = TimestampedFrame(sensor_id, time.monotonic_ns(), frame.copy())
                     return frame
         return None
+
+    def _sensor_id(self, index: int) -> str:
+        if index == self.primary_index:
+            return "kiyo-primary"
+        if index == self.secondary_index:
+            return "kiyo-secondary"
+        return f"rgb-{index}"
 
 
 def cv2_api(name: str) -> int:
@@ -422,6 +443,132 @@ def rgb_dense_camera(sensor_id: str, x: float, width: int, height: int) -> Camer
         role="rgb_dense_stereo",
         latency_ms=45.0,
     )
+
+
+class LiveClapCalibrator:
+    def __init__(
+        self,
+        *,
+        audio_cache: Path,
+        clap_cache: Path,
+        camera_width: int,
+        camera_height: int,
+        max_frames_per_sensor: int = 24,
+    ) -> None:
+        self.audio_cache = audio_cache
+        self.clap_cache = clap_cache
+        self.max_frames_per_sensor = max(2, int(max_frames_per_sensor))
+        self.frames_by_sensor: dict[str, list[TimestampedFrame]] = {}
+        self.last_audio_frame_id: int | None = None
+        self.last_event_key: str | None = None
+        left = rgb_dense_camera("kiyo-primary", -0.18, camera_width, camera_height)
+        right = rgb_dense_camera("kiyo-secondary", 0.18, camera_width, camera_height)
+        self.rig = SensorRig(
+            cameras={left.sensor_id: left, right.sensor_id: right},
+            config=FusionConfig(max_pair_dt_ns=80_000_000, max_reprojection_error_px=80.0, cache_ttl_ns=1_000_000_000),
+        )
+        self.config = ClapDetectorConfig(
+            audio_window_samples=192,
+            audio_hop_samples=48,
+            audio_onset_ratio=4.0,
+            min_audio_energy=1.0e-6,
+            min_camera_motion_score=0.025,
+            camera_window_ns=90_000_000,
+            min_camera_count=2,
+            min_event_spacing_ns=220_000_000,
+        )
+        self.events = ()
+
+    def observe_frames(self, frames: dict[str, TimestampedFrame]) -> None:
+        for sensor_id, frame in frames.items():
+            bucket = self.frames_by_sensor.setdefault(sensor_id, [])
+            if bucket and bucket[-1].timestamp_ns == frame.timestamp_ns:
+                continue
+            bucket.append(frame)
+            del bucket[:-self.max_frames_per_sensor]
+
+    def update(self, frame_id: int) -> tuple[RenderPointPacket, ...]:
+        audio = self._read_audio()
+        if audio is None or audio.frame_id == self.last_audio_frame_id:
+            return self._event_points(frame_id)
+        self.last_audio_frame_id = audio.frame_id
+        block = frame_to_numpy(audio)
+        events = detect_clap_events(
+            block,
+            audio.sample_rate,
+            self._frames_for_detection(),
+            audio_time_ns=audio.audio_time_ns,
+            start_sample=audio.start_sample,
+            rig=self.rig,
+            config=self.config,
+        )
+        if events:
+            self.events = tuple(events)
+            self.last_event_key = events[-1].stable_key
+            put_live_clap_events(self.clap_cache, make_clap_events_frame(frame_id=frame_id, events=events))
+        elif not self.events:
+            put_live_clap_events(self.clap_cache, make_clap_events_frame(frame_id=frame_id, events=()))
+        return self._event_points(frame_id)
+
+    def _read_audio(self):
+        if not self.audio_cache.exists():
+            return None
+        return get_live_spatial_audio_frame(self.audio_cache)
+
+    def _frames_for_detection(self) -> dict[str, list[TimestampedFrame]]:
+        return {sensor_id: list(frames) for sensor_id, frames in self.frames_by_sensor.items()}
+
+    def _event_points(self, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
+        points: list[RenderPointPacket] = []
+        for event in self.events[-4:]:
+            confidence = max(0.0, min(1.0, event.visual_confidence * event.acoustic_confidence))
+            points.append(
+                render_point(
+                    f"clap-calibration:{event.stable_key}",
+                    np.asarray(event.position_m, dtype=np.float64),
+                    0.075,
+                    (0.15, 0.95, 1.0, 0.72),
+                    confidence,
+                    timestamp_ns,
+                )
+            )
+            for peak in event.camera_peaks:
+                camera = self.rig.cameras.get(peak.sensor_id)
+                if peak.sensor_id == "leap":
+                    points.append(
+                        render_point(
+                            f"clap-timing:{event.stable_key}:leap",
+                            np.asarray(event.position_m, dtype=np.float64) + np.array([0.0, -0.035, 0.12], dtype=np.float64),
+                            0.04,
+                            (0.45, 1.0, 0.72, 0.82),
+                            max(0.0, min(1.0, peak.score)),
+                            int(peak.timestamp_ns),
+                        )
+                    )
+                    continue
+                if camera is None:
+                    continue
+                ray = pixel_ray_point(camera, peak.uv, distance_m=1.2)
+                points.append(
+                    render_point(
+                        f"clap-ray:{event.stable_key}:{peak.sensor_id}",
+                        ray,
+                        0.026,
+                        (0.2, 0.85, 1.0, 0.42),
+                        max(0.0, min(1.0, peak.score)),
+                        int(peak.timestamp_ns),
+                    )
+                )
+        return tuple(points)
+
+
+def pixel_ray_point(camera: CameraModel, uv: np.ndarray, *, distance_m: float) -> np.ndarray:
+    point = np.asarray([float(uv[0]), float(uv[1]), 1.0], dtype=np.float64)
+    direction_sensor = np.linalg.inv(camera.camera_matrix) @ point
+    direction_sensor = direction_sensor / max(1.0e-12, np.linalg.norm(direction_sensor))
+    direction_world = camera.world_from_sensor[:3, :3] @ direction_sensor
+    direction_world = direction_world / max(1.0e-12, np.linalg.norm(direction_world))
+    return camera.position_world + direction_world * float(distance_m)
 
 
 def rgb_body_splats(
@@ -602,6 +749,7 @@ class LeapPackedMotionSampler:
         self._previous_channels: dict[str, np.ndarray] = {}
         self._last_timestamp_ns: int | None = None
         self._last_frame_kind: str | None = None
+        self._latest_timestamped_frame: TimestampedFrame | None = None
         self._fallback_index = 0
 
     @property
@@ -611,6 +759,11 @@ class LeapPackedMotionSampler:
     @property
     def last_frame_kind(self) -> str | None:
         return self._last_frame_kind
+
+    def latest_timestamped_frames(self) -> dict[str, TimestampedFrame]:
+        if self._latest_timestamped_frame is None:
+            return {}
+        return {self._latest_timestamped_frame.sensor_id: self._latest_timestamped_frame}
 
     def close(self) -> None:
         if self._capture is not None:
@@ -625,6 +778,7 @@ class LeapPackedMotionSampler:
         if frame is None:
             return ()
         self._last_timestamp_ns = time.monotonic_ns()
+        self._latest_timestamped_frame = TimestampedFrame("leap", self._last_timestamp_ns, frame.copy())
         channels = unpack_leap_packed_channels(frame)
         points: list[RenderPointPacket] = []
         for channel_name, channel in channels.items():
@@ -770,6 +924,9 @@ def main() -> None:
     parser.add_argument("--leap-fps", type=float, default=120.0)
     parser.add_argument("--leap-step", type=int, default=12)
     parser.add_argument("--lod-cache", default=str(ROOT / "calibration" / "runs" / "visual-lod-cache.json"))
+    parser.add_argument("--audio-cache", default=str(ROOT / "calibration" / "runs" / "audio-state.msgpack"))
+    parser.add_argument("--clap-cache", default=str(ROOT / "calibration" / "runs" / "clap-events.msgpack"))
+    parser.add_argument("--no-clap-calibration", action="store_true")
     parser.add_argument("--no-stochastic-transients", action="store_true")
     args = parser.parse_args()
 
@@ -810,6 +967,12 @@ def main() -> None:
         step=args.leap_step,
         fallback_dir=ROOT / "calibration" / "runs",
     )
+    clap_calibrator = None if args.no_clap_calibration else LiveClapCalibrator(
+        audio_cache=Path(args.audio_cache),
+        clap_cache=Path(args.clap_cache),
+        camera_width=args.rgb_width,
+        camera_height=args.rgb_height,
+    )
     try:
         while True:
             now = time.monotonic()
@@ -834,6 +997,11 @@ def main() -> None:
             timestamp_ns = frame.source_time_max_ns
             rgb_points = () if rgb_sampler is None else rgb_sampler.splats(now, timestamp_ns)
             leap_points = () if leap_sampler is None else leap_sampler.motion_splats(timestamp_ns)
+            if clap_calibrator is not None:
+                if rgb_sampler is not None:
+                    clap_calibrator.observe_frames(rgb_sampler.latest_timestamped_frames())
+                if leap_sampler is not None:
+                    clap_calibrator.observe_frames(leap_sampler.latest_timestamped_frames())
             if leap_sampler is not None and leap_sampler.last_timestamp_ns is not None:
                 timestamp_ns = max(timestamp_ns, leap_sampler.last_timestamp_ns)
             leap_source_kind = (
@@ -844,9 +1012,11 @@ def main() -> None:
             leap_source_priority = 3.0 if leap_source_kind == "leap-ground-truth" else 1.1
             support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
             stochastic_points = transient_match_render_points(transient_matches, timestamp_ns)
+            clap_points = () if clap_calibrator is None else clap_calibrator.update(timestamp_ns)
             multilod_cache_from_evidence(
                 evidence_from_render_points(leap_points, source_kind=leap_source_kind, source_priority=leap_source_priority)
                 + evidence_from_render_points(rgb_points, source_kind="rgb-surface", source_priority=1.4)
+                + evidence_from_render_points(clap_points, source_kind="clap-calibration", source_priority=2.4)
                 + evidence_from_fusion_items(transient_matches, source_kind="stochastic-transient", source_priority=1.2)
                 + evidence_from_fusion_items(result.points, source_kind="synthetic-fusion", source_priority=0.8),
                 levels=(0.01, 0.04, 0.16, 0.64),
@@ -863,7 +1033,7 @@ def main() -> None:
                 spout_sender_name=frame.spout_sender_name,
                 target_width=frame.target_width,
                 target_height=frame.target_height,
-                points=leap_points + rgb_points + stochastic_points + support_points,
+                points=clap_points + leap_points + rgb_points + stochastic_points + support_points,
             )
             put_live_render_frame(cache_path, frame)
             frame_id += 1

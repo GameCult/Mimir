@@ -45,13 +45,15 @@ from localcast.sensor_fusion import (
 )
 from localcast.sensor_fusion.spout_output import rasterize_frame_rgba
 from scripts.live_sensor_fusion import (
+    LiveClapCalibrator,
     leap_channel_motion_points,
+    rgb_dense_camera,
     rgb_dense_stereo_splats,
     rgb_room_splats,
     unpack_leap_packed_channels,
 )
 from localcast.sensor_fusion.active_illumination import ActiveIlluminationController, IlluminationPulsePlan
-from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame
+from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame, put_live_spatial_audio_frame
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
 
 
@@ -456,6 +458,57 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(12, loaded.frame_id)
         self.assertEqual(1, len(loaded.events))
         self.assertEqual(events[0].acoustic_oracle_ns, loaded.events[0].acoustic_oracle_ns)
+
+    def test_live_clap_calibrator_uses_audio_and_kiyo_motion(self):
+        width, height = 320, 240
+        target = np.array([0.0, -0.5, 2.0])
+        sample_rate = 48_000
+        audio_time_ns = 4_000_000_000
+        clap_sample = 960
+        clap_time_ns = audio_time_ns + round(clap_sample * 1_000_000_000 / sample_rate)
+        block = np.zeros((2048, 4), dtype=np.float32)
+        block[clap_sample] = np.array([1.0, -0.8, 0.6, -0.4], dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            audio_cache = tmp_path / "audio-state.msgpack"
+            clap_cache = tmp_path / "clap-events.msgpack"
+            put_live_spatial_audio_frame(
+                audio_cache,
+                make_spatial_audio_frame(
+                    block,
+                    frame_id=1,
+                    sample_rate=sample_rate,
+                    start_sample=0,
+                    audio_time_ns=audio_time_ns,
+                ),
+            )
+            calibrator = LiveClapCalibrator(
+                audio_cache=audio_cache,
+                clap_cache=clap_cache,
+                camera_width=width,
+                camera_height=height,
+            )
+            frames = {}
+            for sensor_id, x in (("kiyo-primary", -0.18), ("kiyo-secondary", 0.18)):
+                cam = rgb_dense_camera(sensor_id, x, width, height)
+                uv = cam.project_world(target)
+                previous = np.zeros((height, width, 3), dtype=np.uint8)
+                current = previous.copy()
+                col, row = int(round(uv[0])), int(round(uv[1]))
+                current[row - 3 : row + 4, col - 3 : col + 4, :] = 255
+                calibrator.observe_frames(
+                    {
+                        sensor_id: TimestampedFrame(sensor_id, clap_time_ns - 8_000_000, previous),
+                    }
+                )
+                frames[sensor_id] = TimestampedFrame(sensor_id, clap_time_ns + 8_000_000, current)
+            calibrator.observe_frames(frames)
+
+            points = calibrator.update(frame_id=12)
+
+            self.assertTrue(clap_cache.exists())
+            self.assertTrue(any(point.stable_key.startswith("clap-calibration:") for point in points))
 
     def test_audio_source_events_overlay_against_audio_alignment_time(self):
         frame = RenderFramePacket(

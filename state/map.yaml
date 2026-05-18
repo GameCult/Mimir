@@ -165,7 +165,10 @@ research:
       for Aquarium compute-shader reconciliation. Leap evidence is the
       highest-priority temporal/spatial source when live Leap frames are present;
       fallback Leap frames stay tagged as fallback evidence and must not be
-      treated as ground truth.
+      treated as ground truth. Live clap calibration now uses the Kiyo stereo
+      pair for the first rough 3D impact solve and includes Leap motion as the
+      high-precision visual timing witness; Leap should become a geometric
+      camera authority after shared calibration.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >
@@ -290,7 +293,8 @@ current_status:
     Then replace the synthetic live producer with a detector adapter that
     turns FFmpeg PS3 Eye frames into marker `Observation2D` records for the
     fusion core and publishes the same typed CultCache/CultNet render-frame
-    document. Also fix the live Leap capture backend so the cache emits
+    document. Calibrate Leap as a geometric camera model so clap timing peaks
+    can become direct 3D rays instead of timing-only evidence. Also fix the live Leap capture backend so the cache emits
     `leap-ground-truth` rather than `leap-fallback`; current MSMF probing can
     still stall on frame reads. In parallel, move the render-frame consumer into Aquarium Engine so
     Aquarium renders cached points/brushes into its GPU render target and
