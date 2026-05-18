@@ -231,7 +231,7 @@ class SensorFusionTests(unittest.TestCase):
         self.assertAlmostEqual(160, brushes[0].center_px[0], delta=8)
         self.assertAlmostEqual(90, brushes[0].center_px[1], delta=8)
 
-    def test_render_point_budget_preserves_high_confidence_claims_and_rotates_remainder(self):
+    def test_render_point_budget_prefers_focus_surface_claims_and_rotates_remainder(self):
         def make_frame(frame_id):
             return RenderFramePacket(
                 schema="localcast.sensor_fusion.render_frame.v1",
@@ -246,24 +246,37 @@ class SensorFusionTests(unittest.TestCase):
                 target_height=180,
                 points=tuple(
                     RenderPointPacket(
-                        stable_key=f"point-{index}",
-                        xyz=np.array([0.0, 0.0, 1.0 + index * 0.01]),
+                        stable_key=f"room-rgb:deru:{index}",
+                        xyz=np.array([0.48 + index * 0.005, 0.28, 1.1 + index * 0.01]),
                         radius_m=0.02,
                         color_rgba=(1.0, 1.0, 1.0, 1.0),
-                        confidence=index / 10.0,
+                        confidence=0.55,
                         source_timestamp_ns=1,
                     )
-                    for index in range(10)
+                    for index in range(8)
+                )
+                + tuple(
+                    RenderPointPacket(
+                        stable_key=f"stochastic:debug:{index}",
+                        xyz=np.array([-1.0 + index * 0.05, -0.8, 1.0]),
+                        radius_m=0.04,
+                        color_rgba=(1.0, 0.88, 0.32, 1.0),
+                        confidence=0.95,
+                        source_timestamp_ns=1,
+                    )
+                    for index in range(8)
                 ),
             )
 
-        first = frame_with_point_budget(make_frame(1), 4)
-        second = frame_with_point_budget(make_frame(2), 4)
+        first = frame_with_point_budget(make_frame(1), 6, "kiyo-mid-deru")
+        second = frame_with_point_budget(make_frame(2), 6, "kiyo-mid-deru")
 
-        self.assertEqual(4, len(first.points))
-        self.assertEqual(4, len(second.points))
-        self.assertTrue({"point-8", "point-9"}.issubset({point.stable_key for point in first.points}))
-        self.assertTrue({"point-8", "point-9"}.issubset({point.stable_key for point in second.points}))
+        self.assertEqual(6, len(first.points))
+        self.assertEqual(6, len(second.points))
+        self.assertGreater(
+            sum(point.stable_key.startswith("room-rgb:deru:") for point in first.points),
+            sum(point.stable_key.startswith("stochastic:debug:") for point in first.points),
+        )
         self.assertNotEqual(
             {point.stable_key for point in first.points},
             {point.stable_key for point in second.points},

@@ -225,20 +225,24 @@ def frame_to_vertex_array(frame: RenderFramePacket, point_scale: float = 1.0) ->
     return vertices
 
 
-def frame_with_point_budget(frame: RenderFramePacket, max_points: int) -> RenderFramePacket:
+def frame_with_point_budget(
+    frame: RenderFramePacket,
+    max_points: int,
+    camera_preset_name: str = "kiyo-mid-deru",
+) -> RenderFramePacket:
     if max_points <= 0 or len(frame.points) <= max_points:
         return frame
     priority_count = max(1, int(max_points * 0.55))
     temporal_count = max(0, max_points - priority_count)
     priority = sorted(
         frame.points,
-        key=lambda point: (-float(point.confidence), stable_hash(point.stable_key, 0)),
+        key=lambda point: (-render_priority(point, camera_preset_name), stable_hash(point.stable_key, 0)),
     )[:priority_count]
     selected_keys = {point.stable_key for point in priority}
     remainder = [point for point in frame.points if point.stable_key not in selected_keys]
     temporal = sorted(
         remainder,
-        key=lambda point: stable_hash(point.stable_key, frame.frame_id),
+        key=lambda point: stable_hash(point.stable_key, frame.frame_id) / max(0.05, render_priority(point, camera_preset_name)),
     )[:temporal_count]
     points = priority + temporal
     points = sorted(points, key=lambda point: point.stable_key)
@@ -262,6 +266,35 @@ def stable_hash(key: str, salt: int) -> int:
     return int.from_bytes(digest, "little")
 
 
+def render_priority(point: RenderPointPacket, camera_preset_name: str) -> float:
+    key = point.stable_key
+    confidence = max(0.0, min(1.0, float(point.confidence)))
+    semantic = 1.0
+    if key.startswith("dense-rgb:"):
+        semantic = 2.0
+    elif key.startswith("room-rgb:"):
+        semantic = 1.15
+    elif key.startswith("leap-motion:"):
+        semantic = 1.0
+    elif key.startswith("stochastic:"):
+        semantic = 0.36
+    elif key.startswith("audio-event-"):
+        semantic = 0.24
+    elif key.startswith(("sensor:", "frustum:")):
+        semantic = 0.12
+    focus = render_focus_weight(point, camera_preset_name)
+    return max(0.001, confidence * semantic * focus)
+
+
+def render_focus_weight(point: RenderPointPacket, camera_preset_name: str) -> float:
+    if camera_preset_name != "kiyo-mid-deru":
+        return 1.0
+    xyz = np.asarray(point.xyz, dtype=np.float64)
+    deru = np.array([0.48, 0.28, 1.24], dtype=np.float64)
+    distance = float(np.linalg.norm((xyz - deru) * np.array([1.0, 1.0, 0.75], dtype=np.float64)))
+    return 0.22 + 1.78 / (1.0 + distance * 1.85)
+
+
 def lower_frame_to_screen_brushes(
     frame: RenderFramePacket,
     width: int,
@@ -276,7 +309,8 @@ def lower_frame_to_screen_brushes(
         if projected is None:
             continue
         px, py, depth, clip_w = projected
-        radius = max(2, int(round(float(point.radius_m) * point_scale * height * 1.45 / max(0.42, clip_w))))
+        radius_scale = semantic_radius_scale(point.stable_key)
+        radius = max(2, int(round(float(point.radius_m) * point_scale * height * 1.45 * radius_scale / max(0.42, clip_w))))
         if px < -radius * 3 or px >= width + radius * 3 or py < -radius * 3 or py >= height + radius * 3:
             continue
         stable = hashlib.blake2s(point.stable_key.encode("utf-8"), digest_size=4).digest()
@@ -286,9 +320,26 @@ def lower_frame_to_screen_brushes(
         radii = (max(2, int(round(radius * stretch))), radius)
         rgba = np.clip(np.asarray(point.color_rgba, dtype=np.float32), 0.0, 1.0)
         rgba[3] *= max(0.0, min(1.0, float(point.confidence)))
+        rgba[3] *= semantic_alpha_scale(point.stable_key)
         color = tuple(int(v) for v in (rgba * 255.0)[:4])
         brushes.append(ScreenBrushPacket((px, py), radii, angle, color, depth))
     return tuple(sorted(brushes, key=lambda brush: brush.depth, reverse=True))
+
+
+def semantic_radius_scale(stable_key: str) -> float:
+    if stable_key.startswith("audio-event-"):
+        return 0.42
+    if stable_key.startswith("stochastic:"):
+        return 0.50
+    return 1.0
+
+
+def semantic_alpha_scale(stable_key: str) -> float:
+    if stable_key.startswith("audio-event-"):
+        return 0.36
+    if stable_key.startswith("stochastic:"):
+        return 0.46
+    return 1.0
 
 
 def rasterize_frame_rgba(
@@ -639,7 +690,7 @@ class OpenGLSpoutPointRenderer:
         assert self.vbo is not None
         assert self.vao is not None
 
-        render_frame = frame_with_point_budget(frame, self.config.max_render_points)
+        render_frame = frame_with_point_budget(frame, self.config.max_render_points, self.config.camera_preset)
         self.last_render_point_count = len(render_frame.points)
         vertices = frame_to_vertex_array(render_frame, self.config.point_scale)
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
