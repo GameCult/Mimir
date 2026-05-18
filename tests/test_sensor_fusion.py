@@ -12,6 +12,7 @@ from localcast.sensor_fusion import (
     PointCloud,
     RenderBridgeConfig,
     RenderFramePacket,
+    RenderPointPacket,
     SensorRig,
     SpoutOutputConfig,
     TrackCache,
@@ -22,6 +23,12 @@ from localcast.sensor_fusion import (
     overlay_audio_events,
     put_live_render_frame,
     remote_video_artifact_for_present_time,
+)
+from localcast.sensor_fusion.spout_output import rasterize_frame_rgba
+from scripts.live_sensor_fusion import (
+    leap_channel_motion_points,
+    rgb_room_splats,
+    unpack_leap_packed_channels,
 )
 from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
@@ -171,6 +178,39 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual("unit-test", config.sender_name)
         self.assertEqual(128, config.width)
 
+    def test_rasterizer_uses_gaussian_envelope_not_solid_ellipse(self):
+        frame = RenderFramePacket(
+            schema="localcast.sensor_fusion.render_frame.v1",
+            frame_id=1,
+            created_monotonic_ns=1,
+            source_time_min_ns=1,
+            source_time_max_ns=1,
+            present_time_ns=1,
+            audio_alignment_time_ns=1,
+            spout_sender_name="test",
+            target_width=320,
+            target_height=180,
+            points=(
+                RenderPointPacket(
+                    stable_key="rgb-splat",
+                    xyz=np.array([0.0, 0.0, 1.2]),
+                    radius_m=0.08,
+                    color_rgba=(1.0, 0.0, 0.0, 1.0),
+                    confidence=1.0,
+                    source_timestamp_ns=1,
+                ),
+            ),
+        )
+
+        image = rasterize_frame_rgba(frame, 320, 180, point_scale=1.0)
+        red = image[:, :, 0]
+        hot = red[red > 24]
+
+        self.assertGreater(len(hot), 20)
+        self.assertGreater(int(hot.max()), 180)
+        self.assertGreater(len(np.unique(hot)), 8)
+        self.assertTrue(np.any((hot > 40) & (hot < 160)))
+
     def test_render_frame_round_trips_through_typed_cultcache_doc(self):
         left = camera("left", -0.25)
         right = camera("right", 0.25)
@@ -245,6 +285,47 @@ class SensorFusionTests(unittest.TestCase):
 
         self.assertEqual(30_000_000, artifact.delta_ns)
         self.assertTrue(artifact.synchronized)
+
+    def test_rgb_room_splats_emit_camera_resolved_background(self):
+        frame = np.zeros((48, 64, 3), dtype=np.uint8)
+        frame[:, :, :] = np.array([48, 72, 96], dtype=np.uint8)
+        frame[16:34, 24:40, :] = np.array([240, 240, 240], dtype=np.uint8)
+
+        points = rgb_room_splats(
+            "room-rgb:test",
+            frame,
+            np.array([0.0, -1.0, 1.5]),
+            123,
+            step=12,
+        )
+
+        self.assertGreater(len(points), 0)
+        self.assertTrue(all(point.stable_key.startswith("room-rgb:test") for point in points))
+        self.assertTrue(any(point.xyz[2] < 0.2 for point in points))
+        self.assertTrue(any(point.xyz[1] > 0.7 for point in points))
+
+    def test_leap_packed_map_channels_are_mapped_individually(self):
+        packed = np.zeros((12, 12, 3), dtype=np.uint8)
+        packed[:, :, 0] = 20
+        packed[:, :, 1] = 80
+        packed[:, :, 2] = 160
+
+        channels = unpack_leap_packed_channels(packed)
+
+        self.assertAlmostEqual(80 / 255.0, float(channels["green"][0, 0]), places=6)
+        self.assertAlmostEqual(160 / 255.0, float(channels["magenta"][0, 0]), places=6)
+        self.assertAlmostEqual(20 / 255.0, float(channels["blue"][0, 0]), places=6)
+
+    def test_leap_motion_points_use_channel_identity(self):
+        previous = np.zeros((24, 24), dtype=np.float32)
+        current = previous.copy()
+        current[12, 12] = 1.0
+
+        points = leap_channel_motion_points("green", current, previous, 456, step=12)
+
+        self.assertGreater(len(points), 0)
+        self.assertTrue(all(point.stable_key.startswith("leap-motion:green") for point in points))
+        self.assertTrue(all(point.source_timestamp_ns == 456 for point in points))
 
 
 if __name__ == "__main__":

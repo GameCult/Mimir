@@ -230,8 +230,6 @@ def lower_frame_to_screen_brushes(
 
 
 def rasterize_frame_rgba(frame: RenderFramePacket, width: int, height: int, point_scale: float = 1.0) -> np.ndarray:
-    import cv2
-
     image = np.zeros((height, width, 4), dtype=np.uint8)
     image[:, :, 0] = 7
     image[:, :, 1] = 10
@@ -239,19 +237,51 @@ def rasterize_frame_rgba(frame: RenderFramePacket, width: int, height: int, poin
     image[:, :, 3] = 255
     draw_reconstruction_guides(image)
     draw_floor_shadows(image, frame, point_scale)
+    canvas = image.astype(np.float32) / 255.0
     for brush in lower_frame_to_screen_brushes(frame, width, height, point_scale):
-        cv2.ellipse(
-            image,
-            brush.center_px,
-            brush.radii_px,
-            brush.rotation_deg,
-            0.0,
-            360.0,
-            brush.color_rgba,
-            thickness=-1,
-            lineType=cv2.LINE_AA,
-        )
-    return image
+        composite_gaussian_brush(canvas, brush)
+    return np.clip(canvas * 255.0, 0.0, 255.0).astype(np.uint8)
+
+
+def composite_gaussian_brush(canvas: np.ndarray, brush: ScreenBrushPacket) -> None:
+    height, width = canvas.shape[:2]
+    cx, cy = brush.center_px
+    rx, ry = max(1, brush.radii_px[0]), max(1, brush.radii_px[1])
+    bound = int(math.ceil(max(rx, ry) * 1.35))
+    x0 = max(0, cx - bound)
+    x1 = min(width, cx + bound + 1)
+    y0 = max(0, cy - bound)
+    y1 = min(height, cy + bound + 1)
+    if x0 >= x1 or y0 >= y1:
+        return
+
+    yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float32)
+    dx = xx - float(cx)
+    dy = yy - float(cy)
+    angle = math.radians(float(brush.rotation_deg))
+    ca = math.cos(angle)
+    sa = math.sin(angle)
+    local_x = dx * ca + dy * sa
+    local_y = -dx * sa + dy * ca
+    q = (local_x / float(rx)) ** 2 + (local_y / float(ry)) ** 2
+    mask = q < 1.0
+    if not np.any(mask):
+        return
+
+    # Compact Gaussian envelope: smooth center, finite edge, no solid paint bucket.
+    falloff = 4.4
+    edge = math.exp(-falloff)
+    gaussian = np.exp(-falloff * q)
+    envelope = np.clip((gaussian - edge) / max(1.0 - edge, 1e-6), 0.0, 1.0) ** 1.35
+    envelope *= mask
+
+    src = np.asarray(brush.color_rgba, dtype=np.float32) / 255.0
+    alpha = np.clip(envelope * src[3], 0.0, 0.96)
+    if float(alpha.max()) <= 0.0:
+        return
+    target = canvas[y0:y1, x0:x1, :]
+    target[:, :, :3] = src[:3] * alpha[:, :, None] + target[:, :, :3] * (1.0 - alpha[:, :, None])
+    target[:, :, 3] = np.maximum(target[:, :, 3], alpha)
 
 
 def project_world_to_screen(

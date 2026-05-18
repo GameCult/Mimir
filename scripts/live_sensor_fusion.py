@@ -213,6 +213,7 @@ class RgbSplatSampler:
         width: int,
         height: int,
         sample_step: int,
+        room_step: int,
         fallback_dir: Path,
     ) -> None:
         self.api = api
@@ -221,6 +222,7 @@ class RgbSplatSampler:
         self.width = width
         self.height = height
         self.sample_step = max(4, int(sample_step))
+        self.room_step = max(self.sample_step, int(room_step))
         self.fallback_dir = fallback_dir
         self._captures: dict[int, object] = {}
         self._frames: dict[int, np.ndarray] = {}
@@ -238,8 +240,10 @@ class RgbSplatSampler:
         secondary = self._read_frame(self.secondary_index)
         points: list[RenderPointPacket] = []
         if primary is not None:
+            points.extend(rgb_room_splats("room-rgb:primary", primary, np.array([-0.42, 0.05, 0.0]), timestamp_ns, step=self.room_step))
             points.extend(rgb_body_splats("host-rgb", primary, np.array([-0.42, 0.05, 0.0]), now_s, timestamp_ns, side=-1.0, step=self.sample_step))
         if secondary is not None:
+            points.extend(rgb_room_splats("room-rgb:secondary", secondary, np.array([0.48, 0.28, 0.0]), timestamp_ns, step=self.room_step))
             points.extend(rgb_body_splats("deru-rgb", secondary, np.array([0.48, 0.28, 0.0]), now_s + 0.6, timestamp_ns, side=1.0, step=self.sample_step))
         return tuple(points)
 
@@ -345,6 +349,71 @@ def rgb_body_splats(
     return points
 
 
+def rgb_room_splats(
+    prefix: str,
+    frame_bgr: np.ndarray,
+    camera_origin: np.ndarray,
+    timestamp_ns: int,
+    *,
+    step: int,
+) -> list[RenderPointPacket]:
+    height, width = frame_bgr.shape[:2]
+    points: list[RenderPointPacket] = []
+    body_crop = person_crop(frame_bgr, -1.0)
+    for row in range(0, height, step):
+        for col in range(0, width, step):
+            if inside_person_crop(row, col, body_crop):
+                continue
+            pixel = frame_bgr[row, col].astype(np.float32) / 255.0
+            luminance = float(0.0722 * pixel[0] + 0.7152 * pixel[1] + 0.2126 * pixel[2])
+            saturation = float(np.max(pixel) - np.min(pixel))
+            if luminance < 0.030 and saturation < 0.06:
+                continue
+            u = col / max(1, width - 1)
+            v = row / max(1, height - 1)
+            xyz = room_surface_point(u, v, camera_origin)
+            b, g, r = np.clip(np.power(pixel, 0.78), 0.0, 1.0)
+            alpha = max(0.16, min(0.58, 0.12 + luminance * 0.48 + saturation * 0.16))
+            confidence = max(0.30, min(0.82, 0.38 + luminance * 0.32 + saturation * 0.18))
+            points.append(
+                render_point(
+                    f"{prefix}:{row}:{col}",
+                    xyz,
+                    0.024 + 0.018 * confidence,
+                    (float(r), float(g), float(b), alpha),
+                    confidence,
+                    timestamp_ns,
+                )
+            )
+    return points
+
+
+def inside_person_crop(row: int, col: int, crop: tuple[int, int, int, int]) -> bool:
+    y0, y1, x0, x1 = crop
+    pad_y = max(6, (y1 - y0) // 18)
+    pad_x = max(6, (x1 - x0) // 18)
+    return y0 - pad_y <= row <= y1 + pad_y and x0 - pad_x <= col <= x1 + pad_x
+
+
+def room_surface_point(u: float, v: float, camera_origin: np.ndarray) -> np.ndarray:
+    # Coarse calibrated-room proxy until real depth/SLAM owns this surface.
+    x = -1.75 + 3.5 * u
+    if v > 0.70:
+        floor_v = (v - 0.70) / 0.30
+        y = -0.95 + 1.85 * (1.0 - floor_v)
+        z = 0.018 + 0.05 * (1.0 - floor_v)
+    elif v < 0.26:
+        wall_v = v / 0.26
+        y = 1.12
+        z = 1.15 + 0.90 * (1.0 - wall_v)
+    else:
+        mid_v = (v - 0.26) / 0.44
+        y = 1.05 - 0.55 * mid_v
+        z = 1.12 - 0.55 * mid_v
+    parallax = 0.10 * np.array([camera_origin[0], camera_origin[1], 0.0], dtype=np.float64)
+    return np.array([x, y, z], dtype=np.float64) + parallax
+
+
 def person_crop(frame_bgr: np.ndarray, side: float) -> tuple[int, int, int, int]:
     height, width = frame_bgr.shape[:2]
     gray = np.max(frame_bgr, axis=2)
@@ -389,6 +458,153 @@ def body_surface_point(u: float, v: float, side: float, now_s: float) -> np.ndar
     return np.array([x, y, z], dtype=np.float64)
 
 
+class LeapPackedMotionSampler:
+    def __init__(
+        self,
+        *,
+        api: str,
+        index: int,
+        width: int,
+        height: int,
+        fps: float,
+        step: int,
+        fallback_dir: Path,
+    ) -> None:
+        self.api = api
+        self.index = index
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.step = max(4, int(step))
+        self.fallback_dir = fallback_dir
+        self._capture = None
+        self._previous_channels: dict[str, np.ndarray] = {}
+        self._last_timestamp_ns: int | None = None
+
+    @property
+    def last_timestamp_ns(self) -> int | None:
+        return self._last_timestamp_ns
+
+    def close(self) -> None:
+        if self._capture is not None:
+            try:
+                self._capture.release()
+            except Exception:
+                pass
+            self._capture = None
+
+    def motion_splats(self, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
+        frame = self._read_frame()
+        if frame is None:
+            return ()
+        self._last_timestamp_ns = time.monotonic_ns()
+        channels = unpack_leap_packed_channels(frame)
+        points: list[RenderPointPacket] = []
+        for channel_name, channel in channels.items():
+            previous = self._previous_channels.get(channel_name)
+            self._previous_channels[channel_name] = channel
+            if previous is None or previous.shape != channel.shape:
+                continue
+            points.extend(leap_channel_motion_points(channel_name, channel, previous, self._last_timestamp_ns or timestamp_ns, step=self.step))
+        return tuple(points)
+
+    def _read_frame(self) -> np.ndarray | None:
+        import cv2
+
+        if self._capture is None:
+            capture = cv2.VideoCapture(self.index, cv2_api(self.api))
+            if capture.isOpened():
+                capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+                capture.set(cv2.CAP_PROP_FPS, self.fps)
+                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                self._capture = capture
+            else:
+                try:
+                    capture.release()
+                except Exception:
+                    pass
+                return self._fallback_frame()
+        ok, frame = self._capture.read()
+        if ok and frame is not None:
+            return frame
+        return self._fallback_frame()
+
+    def _fallback_frame(self) -> np.ndarray | None:
+        import cv2
+
+        for path in (
+            self.fallback_dir / f"rgb-probe-{self.api}-{self.index}.png",
+            self.fallback_dir / f"rgb-probe-dshow-{self.index}.png",
+            self.fallback_dir / f"rgb-probe-msmf-{self.index}.png",
+            self.fallback_dir / "leap-probe.png",
+        ):
+            if path.exists():
+                frame = cv2.imread(str(path))
+                if frame is not None:
+                    return frame
+        return None
+
+
+def unpack_leap_packed_channels(frame_bgr: np.ndarray) -> dict[str, np.ndarray]:
+    frame = frame_bgr.astype(np.float32) / 255.0
+    blue = frame[:, :, 0]
+    green = frame[:, :, 1]
+    red = frame[:, :, 2]
+    magenta = np.maximum(red, blue)
+    return {
+        "green": green,
+        "magenta": magenta,
+        "red": red,
+        "blue": blue,
+    }
+
+
+def leap_channel_motion_points(
+    channel_name: str,
+    current: np.ndarray,
+    previous: np.ndarray,
+    timestamp_ns: int,
+    *,
+    step: int,
+) -> list[RenderPointPacket]:
+    height, width = current.shape[:2]
+    motion = np.abs(current - previous)
+    threshold = max(0.035, float(np.percentile(motion, 94)))
+    points: list[RenderPointPacket] = []
+    for row in range(0, height, step):
+        for col in range(0, width, step):
+            value = float(motion[row, col])
+            intensity = float(current[row, col])
+            if value < threshold and intensity < 0.10:
+                continue
+            u = col / max(1, width - 1)
+            v = row / max(1, height - 1)
+            x = -0.46 + 0.92 * u
+            y = -0.16 + 0.68 * (1.0 - v)
+            z = 0.74 + 0.58 * (1.0 - v) + 0.12 * intensity
+            confidence = max(0.28, min(1.0, value * 3.8 + intensity * 0.42))
+            if channel_name == "green":
+                color = (0.28, 1.0, 0.62, 0.86)
+            elif channel_name == "magenta":
+                color = (1.0, 0.26, 0.92, 0.80)
+            elif channel_name == "red":
+                color = (1.0, 0.22, 0.18, 0.42)
+            else:
+                color = (0.20, 0.42, 1.0, 0.42)
+            points.append(
+                render_point(
+                    f"leap-motion:{channel_name}:{row}:{col}",
+                    np.array([x, y, z], dtype=np.float64),
+                    0.012 + 0.026 * confidence,
+                    color,
+                    confidence,
+                    timestamp_ns,
+                )
+            )
+    return points
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Write live sensor-fusion render frames into typed CultCache state.")
     parser.add_argument("--cache", default=str(ROOT / "calibration" / "runs" / "visual-state.msgpack"))
@@ -402,6 +618,14 @@ def main() -> None:
     parser.add_argument("--rgb-width", type=int, default=640)
     parser.add_argument("--rgb-height", type=int, default=480)
     parser.add_argument("--rgb-sample-step", type=int, default=10)
+    parser.add_argument("--rgb-room-step", type=int, default=28)
+    parser.add_argument("--no-leap", action="store_true")
+    parser.add_argument("--leap-api", choices=["any", "dshow", "msmf"], default="msmf")
+    parser.add_argument("--leap-index", type=int, default=0)
+    parser.add_argument("--leap-width", type=int, default=320)
+    parser.add_argument("--leap-height", type=int, default=240)
+    parser.add_argument("--leap-fps", type=float, default=120.0)
+    parser.add_argument("--leap-step", type=int, default=12)
     args = parser.parse_args()
 
     left = camera("ps3eye_left", -0.25)
@@ -425,6 +649,16 @@ def main() -> None:
         width=args.rgb_width,
         height=args.rgb_height,
         sample_step=args.rgb_sample_step,
+        room_step=args.rgb_room_step,
+        fallback_dir=ROOT / "calibration" / "runs",
+    )
+    leap_sampler = None if args.no_leap else LeapPackedMotionSampler(
+        api=args.leap_api,
+        index=args.leap_index,
+        width=args.leap_width,
+        height=args.leap_height,
+        fps=args.leap_fps,
+        step=args.leap_step,
         fallback_dir=ROOT / "calibration" / "runs",
     )
     try:
@@ -442,19 +676,22 @@ def main() -> None:
             )
             timestamp_ns = frame.source_time_max_ns
             rgb_points = () if rgb_sampler is None else rgb_sampler.splats(now, timestamp_ns)
+            leap_points = () if leap_sampler is None else leap_sampler.motion_splats(timestamp_ns)
+            if leap_sampler is not None and leap_sampler.last_timestamp_ns is not None:
+                timestamp_ns = max(timestamp_ns, leap_sampler.last_timestamp_ns)
             support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
             frame = RenderFramePacket(
                 schema=frame.schema,
                 frame_id=frame.frame_id,
                 created_monotonic_ns=frame.created_monotonic_ns,
                 source_time_min_ns=frame.source_time_min_ns,
-                source_time_max_ns=frame.source_time_max_ns,
-                present_time_ns=frame.present_time_ns,
-                audio_alignment_time_ns=frame.audio_alignment_time_ns,
+                source_time_max_ns=timestamp_ns,
+                present_time_ns=timestamp_ns + render_config.visual_delay_ns,
+                audio_alignment_time_ns=timestamp_ns + render_config.audio_alignment_delay_ns,
                 spout_sender_name=frame.spout_sender_name,
                 target_width=frame.target_width,
                 target_height=frame.target_height,
-                points=rgb_points + support_points,
+                points=leap_points + rgb_points + support_points,
             )
             put_live_render_frame(cache_path, frame)
             frame_id += 1
@@ -464,6 +701,8 @@ def main() -> None:
     finally:
         if rgb_sampler is not None:
             rgb_sampler.close()
+        if leap_sampler is not None:
+            leap_sampler.close()
 
 
 if __name__ == "__main__":

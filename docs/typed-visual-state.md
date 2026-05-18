@@ -58,6 +58,19 @@ CultNetDocumentPut(localcast.visual.render_frame)
 
 For the deadline rig, both producer and renderer share the local CultCache file. The boundary is still the document contract: a future camera process, Aquarium process, or remote sensor node should publish the same document through CultNet `document_put` messages rather than inventing another transport shape.
 
+The live visual frame may contain multiple claim families. `room-rgb:*` claims
+are camera-resolved room/background surface samples, `host-rgb:*` and
+`deru-rgb:*` claims are RGB body/object surface samples, and `leap-motion:*`
+claims are high-rate LeapUVC packed-channel motion samples. Leap packed maps are
+split into explicit green, magenta, red, and blue channels before publication so
+the downstream accumulator can use Leap as the strongest timing/motion witness
+without pretending the packed image is one ordinary RGB camera.
+
+LocalCastBridge does not own the final splat budget. It publishes dense typed
+claims with stable keys and timestamps; Aquarium owns temporal accumulation,
+renderer residency, and any GPU-side reduction needed to make million-splat
+frames presentable.
+
 ## Audio Synchronization
 
 `stream_spout.py` can now read `calibration/runs/audio-state.msgpack` and `calibration/runs/audio-events.msgpack` while it renders the visual frame. It selects source events against `RenderFramePacket.audio_alignment_time_ns`, adds synchronized audio-event points to the render packet, and writes `calibration/runs/av-sync-status.json` with the active visual frame id, audio frame id, audio delta, event count, overlay count, and remote video sync status.
