@@ -37,6 +37,10 @@
   - `scripts/wasapi-loopback-capture.ps1` is the direct primary-playback loopback path. It must run in the neighbor's interactive console session; SSH-only capture sees the device but receives no render packets.
   - The tool creates/updates local OBS Media Sources for those stems and mutes/disables raw unsynchronized inputs.
   - Strict mode disables every scene item except the synchronized LocalCastBridge program video and stem controls.
+- Live phase-field meaning:
+  - `audio_field.phase_meaning` extracts actionable delay, coherence, confidence, suppression, correction-energy, and active-probe need from internal phase/chirplet evidence.
+  - `localcast.audio.phase_field` is a typed CultCache document at `calibration/runs/audio-phase-field.msgpack`.
+  - `scripts/stream_phase_field.py` publishes the live meaning document from an aligned mic field plus known program/loopback reference without exposing raw phase bands as the renderer API.
 
 ## Temporary
 
@@ -62,3 +66,4 @@
 13. Replace synthetic live-fusion observations with PS3 Eye detector observations and calibrated surface-feature tracks.
 14. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
 15. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
+16. Wire `stream_phase_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed its low-confidence state into the active chirplet probe optimizer.

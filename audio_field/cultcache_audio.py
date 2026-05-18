@@ -23,6 +23,8 @@ AUDIO_STREAM_STATUS_KEY = "localcast.audio.stream-status.live"
 AUDIO_STREAM_STATUS_SCHEMA_ID = "gamecult.localcast.audio.stream_status.v1"
 LIVE_SOURCE_EVENTS_KEY = "localcast.audio.source-events.live"
 SOURCE_EVENTS_SCHEMA_ID = "gamecult.localcast.audio.source_events.v1"
+LIVE_PHASE_FIELD_KEY = "localcast.audio.phase-field.live"
+PHASE_FIELD_SCHEMA_ID = "gamecult.localcast.audio.phase_field.v1"
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,21 @@ class CultAudioSourceEvents:
     frame_count: int
     events: tuple[dict[str, Any], ...]
     voice_focus: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class CultAudioPhaseField:
+    schema_version: str
+    frame_id: int
+    audio_time_ns: int
+    sample_rate: int
+    start_sample: int
+    frame_count: int
+    reference_id: str
+    sources: tuple[dict[str, Any], ...]
+    global_confidence: float
+    needs_active_probe: bool
+    active_probe_reason: str
 
 
 def _pack(value: Any) -> bytes:
@@ -163,6 +180,38 @@ def _decode_source_events(raw: Any) -> CultAudioSourceEvents:
     )
 
 
+def _encode_phase_field(field: CultAudioPhaseField) -> list[Any]:
+    return [
+        field.schema_version,
+        field.frame_id,
+        field.audio_time_ns,
+        field.sample_rate,
+        field.start_sample,
+        field.frame_count,
+        field.reference_id,
+        list(field.sources),
+        field.global_confidence,
+        field.needs_active_probe,
+        field.active_probe_reason,
+    ]
+
+
+def _decode_phase_field(raw: Any) -> CultAudioPhaseField:
+    return CultAudioPhaseField(
+        schema_version=str(raw[0]),
+        frame_id=int(raw[1]),
+        audio_time_ns=int(raw[2]),
+        sample_rate=int(raw[3]),
+        start_sample=int(raw[4]),
+        frame_count=int(raw[5]),
+        reference_id=str(raw[6]),
+        sources=tuple(dict(item) for item in raw[7]),
+        global_confidence=float(raw[8]),
+        needs_active_probe=bool(raw[9]),
+        active_probe_reason=str(raw[10]),
+    )
+
+
 SPATIAL_AUDIO_FRAME_DOCUMENT = define_document_type(
     "localcast.audio.spatial_frame",
     encode=_encode_audio_frame,
@@ -190,6 +239,15 @@ SOURCE_EVENTS_DOCUMENT = define_document_type(
     payload_decoder=_unpack,
 )
 
+PHASE_FIELD_DOCUMENT = define_document_type(
+    "localcast.audio.phase_field",
+    encode=_encode_phase_field,
+    decode=_decode_phase_field,
+    name=lambda field: LIVE_PHASE_FIELD_KEY if isinstance(field, CultAudioPhaseField) else None,
+    payload_encoder=_pack,
+    payload_decoder=_unpack,
+)
+
 
 def _retry_cache_io(operation):
     last_error: Exception | None = None
@@ -209,6 +267,7 @@ def _open_audio_cache_once(path: Path) -> CultCache:
         .register_document_type(SPATIAL_AUDIO_FRAME_DOCUMENT)
         .register_document_type(AUDIO_STREAM_STATUS_DOCUMENT)
         .register_document_type(SOURCE_EVENTS_DOCUMENT)
+        .register_document_type(PHASE_FIELD_DOCUMENT)
         .add_generic_store(SingleFileMessagePackBackingStore(path))
         .build()
     )
@@ -317,5 +376,49 @@ def get_live_audio_source_events(path: Path) -> CultAudioSourceEvents | None:
     def operation() -> CultAudioSourceEvents | None:
         cache = open_audio_cache(path)
         return cache.get(SOURCE_EVENTS_DOCUMENT, LIVE_SOURCE_EVENTS_KEY)
+
+    return _retry_cache_io(operation)
+
+
+def make_audio_phase_field(
+    *,
+    frame_id: int,
+    sample_rate: int,
+    start_sample: int,
+    frame_count: int,
+    audio_time_ns: int,
+    reference_id: str,
+    sources: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    global_confidence: float,
+    needs_active_probe: bool,
+    active_probe_reason: str = "",
+) -> CultAudioPhaseField:
+    return CultAudioPhaseField(
+        schema_version=PHASE_FIELD_SCHEMA_ID,
+        frame_id=int(frame_id),
+        audio_time_ns=int(audio_time_ns),
+        sample_rate=int(sample_rate),
+        start_sample=int(start_sample),
+        frame_count=int(frame_count),
+        reference_id=str(reference_id),
+        sources=tuple(dict(item) for item in sources),
+        global_confidence=float(global_confidence),
+        needs_active_probe=bool(needs_active_probe),
+        active_probe_reason=str(active_probe_reason),
+    )
+
+
+def put_live_audio_phase_field(path: Path, field: CultAudioPhaseField) -> None:
+    def operation() -> None:
+        cache = open_audio_cache(path)
+        cache.put(PHASE_FIELD_DOCUMENT, LIVE_PHASE_FIELD_KEY, field)
+
+    _retry_cache_io(operation)
+
+
+def get_live_audio_phase_field(path: Path) -> CultAudioPhaseField | None:
+    def operation() -> CultAudioPhaseField | None:
+        cache = open_audio_cache(path)
+        return cache.get(PHASE_FIELD_DOCUMENT, LIVE_PHASE_FIELD_KEY)
 
     return _retry_cache_io(operation)

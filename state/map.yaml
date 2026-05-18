@@ -125,6 +125,15 @@ research:
       writes a heartbeat status file. This is a sink boundary, not a new scene
       authority; Aquarium should replace the renderer body behind the same
       RenderFramePacket contract for dense brush/splat rendering.
+  live_audio_phase_meaning:
+    summary: docs/audio-field.md
+    key_decision: >
+      Phase/chirplet evidence now has a live semantic boundary:
+      `audio_field.phase_meaning` keeps raw phase internal and publishes
+      `localcast.audio.phase_field` with delay correction, coherence,
+      confidence, distance-equivalent delta, reference-bleed/suppression
+      weights, correction energy, and active-probe need. This is learned
+      audio-field state, not a phase display.
   sensor_fusion_architecture:
     summary: docs/sensor-fusion-architecture.md
     key_decision: >
@@ -212,7 +221,11 @@ current_status:
     except synchronized LocalCastBridge program surfaces. Co-streamer surface
     capture now records neighbor Focusrite and neighbor loopback while recording
     local loopback ground truth, then writes aligned co-streamer surface WAVs
-    for the stem packer. The neighbor desktop launcher no longer uses
+    for the stem packer. Live phase-field meaning now writes
+    `localcast.audio.phase_field` to `calibration/runs/audio-phase-field.msgpack`
+    from internal chirplet/phase evidence so downstream code sees delay,
+    coherence, confidence, suppression, correction, and probe-control state
+    instead of raw phases. The neighbor desktop launcher no longer uses
     Voicemeeter; it restores the Focusrite speakers as the primary playback
     device and the Focusrite analogue input as the default capture device. A
     direct Core Audio WASAPI loopback shim now works when launched in the

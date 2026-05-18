@@ -64,6 +64,19 @@ def msgpack_head(path: Path):
                 "focusCount": len(payload[7]) if len(payload) > 7 else 0,
             }
         )
+    elif summary["type"] == "localcast.audio.phase_field":
+        summary.update(
+            {
+                "frameId": payload[1],
+                "sampleRate": payload[3],
+                "startSample": payload[4],
+                "frameCount": payload[5],
+                "referenceId": payload[6],
+                "sourceCount": len(payload[7]) if len(payload) > 7 else 0,
+                "globalConfidence": payload[8] if len(payload) > 8 else 0.0,
+                "needsActiveProbe": payload[9] if len(payload) > 9 else True,
+            }
+        )
     elif summary["type"] in ("localcast.visual.stream_status", "localcast.audio.stream_status"):
         summary["payloadHead"] = head
     return summary
@@ -87,6 +100,7 @@ def main() -> None:
             "audio-events.msgpack",
             "visual-stream-status.msgpack",
             "audio-stream-status.msgpack",
+            "audio-phase-field.msgpack",
             "stream-spout-status.json",
             "av-sync-status.json",
         ]
@@ -99,6 +113,7 @@ def main() -> None:
         "visualHead": msgpack_head(runs / "visual-state.msgpack"),
         "audioHead": msgpack_head(runs / "audio-state.msgpack"),
         "eventsHead": msgpack_head(runs / "audio-events.msgpack"),
+        "phaseFieldHead": msgpack_head(runs / "audio-phase-field.msgpack"),
     }
     print(json.dumps(payload, indent=2, default=str))
 

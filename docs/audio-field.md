@@ -42,7 +42,9 @@ flowchart TD
     D --> Q
     F --> Q
     H --> Q
-    Q --> K
+    Q --> S["live phase-meaning extractor"]
+    S --> T["phase-field meaning cache"]
+    S --> K
     L --> M["aligned six-channel blocks"]
     M --> N["FOA encoder"]
     N --> O["AmbiX ACN/SN3D output"]
@@ -120,7 +122,15 @@ For dense runtime calibration, emit a low-level multiband chirplet texture inste
 .\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-probe-train --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
 ```
 
-`analyze-probe-train` is the live-fit evidence path: it uses each event's band-specific chirplet, gates weak loopback/mic detections, estimates phase-derived delay deltas across frequency bands, and updates a smoothed phase/frequency mapping. Coarse delays still include device latency; the volumetric room solve must fit latency, drift, phase response, and acoustic path jointly.
+`analyze-probe-train` is the offline live-fit evidence path: it uses each event's band-specific chirplet, gates weak loopback/mic detections, estimates phase-derived delay deltas across frequency bands, and updates a smoothed phase/frequency mapping. Coarse delays still include device latency; the volumetric room solve must fit latency, drift, phase response, and acoustic path jointly.
+
+Publish live extracted phase-field meaning from an aligned field and known program/loopback reference:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\stream_phase_field.py --field .\calibration\runs\<run-folder>\field-program-cleaned.wav --reference .\calibration\runs\<run-folder>\ground_truth_loopback.wav --cache .\calibration\runs\audio-phase-field.msgpack
+```
+
+This is not a phase oscilloscope. Raw phase bands stay internal. The live cache publishes consequences: per-source delay correction, distance-equivalent delta, coherence, fit error, confidence, reference-bleed estimate, suppression weight, correction energy, and whether the active probe optimizer should spend chirps.
 
 Record local mics while playing one speaker sweep. Use the output rate that the device probe says is real:
 
@@ -207,6 +217,7 @@ The `play-record` and `record-field` commands remain for a `shared-input-device`
 - FOA output is AmbiX: ACN channel order, SN3D normalization, channels `W,Y,Z,X`.
 - Speaker calibration is a measurement path, not a generic monitor output.
 - Source-event geometry is published beside the AmbiX bed; render effects do not have to infer transient positions from mixed audio.
+- Phase/chirplet evidence is reduced into alignment, correction, suppression, and probe-control meaning before it crosses the live cache boundary. Raw phase is an estimator detail, not a renderer API.
 - Camera fusion may publish listener or source pose later, but it does not own audio channel timing.
 
 ## Module Boundaries
@@ -219,6 +230,7 @@ The audio code is split so the hard parts can be tested without the room, driver
 - `audio_field.pipeline` wires those ports together without knowing whether the source is a real Focusrite, an SRT receiver, a WAV fixture, or a test double.
 - The next runtime estimator module should own chirplet observations, delay/SRO/phase state, confidence gates, and phase-field updates. It should feed the aligner; it should not be hidden inside the FOA encoder.
 - The active probe optimizer owns whether to emit extra chirplets. It reads sync confidence and probe budget, then decides when and where an intentional chirplet is worth the cost.
+- `audio_field.phase_meaning` owns live extraction of meaning from phase/chirplet evidence. It consumes known reference audio plus aligned mic windows, keeps the smoothed phase/frequency state internal, and emits only actionable state for alignment, suppression, and probe control.
 - Room suppression owns stream-side cleanup: dialogue anchors define desired direct energy, spatial/context mics act as witnesses for room and transient clutter, and the cleaned aligned field feeds FOA/Aquarium/Faust.
 - Source-event analysis owns non-vocal spatial facts: dialogue focus weights and localized transient vectors are published beside the AmbiX bed, not hidden inside it.
 - `scripts/audio_field.py` stays as the operator CLI and hardware probe surface.

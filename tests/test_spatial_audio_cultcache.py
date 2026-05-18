@@ -7,10 +7,13 @@ import numpy as np
 from audio_field.cultcache_audio import (
     SPATIAL_AUDIO_SCHEMA_ID,
     frame_to_numpy,
+    get_live_audio_phase_field,
     get_live_audio_source_events,
     get_live_spatial_audio_frame,
+    make_audio_phase_field,
     make_audio_source_events,
     make_spatial_audio_frame,
+    put_live_audio_phase_field,
     put_live_audio_source_events,
     put_live_spatial_audio_frame,
 )
@@ -67,6 +70,36 @@ class SpatialAudioCultCacheTests(unittest.TestCase):
         self.assertEqual(48000, loaded.sample_rate)
         self.assertEqual(1, loaded.events[0]["eventId"])
         self.assertEqual(4, loaded.voice_focus[0]["anchorChannel"])
+
+    def test_live_phase_field_round_trip_through_cultcache(self):
+        field = make_audio_phase_field(
+            frame_id=8,
+            sample_rate=48000,
+            start_sample=8192,
+            frame_count=4096,
+            audio_time_ns=456,
+            reference_id="local-loopback",
+            sources=[
+                {
+                    "sourceId": "host-focusrite",
+                    "delaySamples": 12.5,
+                    "confidence": 0.92,
+                    "suppressionWeight": 0.6,
+                }
+            ],
+            global_confidence=0.72,
+            needs_active_probe=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "audio-phase-field.msgpack"
+            put_live_audio_phase_field(path, field)
+            loaded = get_live_audio_phase_field(path)
+
+        self.assertIsNotNone(loaded)
+        self.assertEqual("local-loopback", loaded.reference_id)
+        self.assertEqual(12.5, loaded.sources[0]["delaySamples"])
+        self.assertFalse(loaded.needs_active_probe)
 
 
 if __name__ == "__main__":
