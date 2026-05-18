@@ -37,10 +37,9 @@ focusrite srt://192.168.1.66:5101?mode=caller&latency=120000
 system    srt://192.168.1.66:5102?mode=caller&latency=120000
 ```
 
-Current video capture size is `1024x768`, matching the live `WinDisc` display
-reported by the sender. Do not force `1920x1080` unless Windows reports a real
-desktop of that size; `gdigrab` exits when the requested capture rectangle is
-larger than the current desktop.
+Current video capture size is `1920x1080` for the interactive desktop. Do not
+trust the `1024x768` size reported from SSH; that is the remote session display,
+and using it captures only a slice of the actual desktop.
 
 OBS on the receiver should add listener-mode Media Sources:
 
@@ -78,6 +77,8 @@ Start launcher:
 - uses `config\localcast.json`
 - passes the winget FFmpeg alias path explicitly
 - starts Voicemeeter
+- calls `SoundVolumeView.exe` by absolute path because the winget alias is not
+  reliably available in interactive `cmd.exe`
 - sets Windows default render to `Voicemeeter VAIO3 Input`
 - sets Windows default capture to `Voicemeeter Out B3`
 - writes FFmpeg logs under `C:\Meta\LocalCastBridge\logs`

@@ -43,6 +43,17 @@ active_subgoals:
   - Smoke-test the video endpoint in OBS.
   - Smoke-test each audio endpoint in OBS and tune latency.
   - Decide whether an OBS source generator or plugin investigation is justified.
+  - Evaluate the Ambisonic AquaSynth path as a separate synchronized multichannel audio pipeline; do not treat heterogeneous mic feeds as raw first-order ambisonic A-format without geometry, calibration, and a shared clock.
+
+research:
+  ambisonic_aquasynth:
+    summary: research/ambisonic-aquasynth/summary.md
+    bibliography: research/ambisonic-aquasynth/bibliography.md
+    key_decision: >
+      A spatial field must be built from one clocked multichannel capture path
+      feeding a declared ambisonic bus. The existing one-audio-source-per-SRT
+      endpoint design remains valid for plain OBS mixing, but it is not the
+      authority for synchronized ambisonic DSP.
 
 current_status:
   summary: >
@@ -50,7 +61,8 @@ current_status:
     C:\Meta\LocalCastBridge. FFmpeg 8.1.1 with SRT and h264_nvenc is installed
     there, Voicemeeter supplies system-output loopback, Madman's desktop has
     start/stop launchers, the sender script has launcher-safe FFmpeg arguments
-    and repo-root logs, and the receiver OBS scene has matching Media Sources.
+    and repo-root logs, desktop launchers use absolute tool paths, and the
+    receiver OBS scene has matching Media Sources.
   next_action: >
     With OBS open on the receiver, start the sender launcher from Madman's
     interactive desktop and smoke-test video, Focusrite audio, and system audio.

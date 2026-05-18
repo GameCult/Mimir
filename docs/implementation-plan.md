@@ -14,7 +14,8 @@
 - Voicemeeter loopback installed on the sender.
 - Receiver OBS scene has `Neighbor PC - System Audio` on SRT port `5102`.
 - Sender script uses `-nostdin` and repo-root logs so desktop launchers stay alive and diagnostics land in `C:\Meta\LocalCastBridge\logs`.
-- Sender video config currently matches the live `1024x768` desktop.
+- Sender video config is `1920x1080` for the interactive desktop. The `1024x768` SSH session size is not the streaming target.
+- Desktop launchers use absolute paths for winget-installed tools because interactive `cmd.exe` did not resolve `SoundVolumeView`.
 
 ## Temporary
 
