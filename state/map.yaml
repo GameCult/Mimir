@@ -212,8 +212,11 @@ current_status:
     except synchronized LocalCastBridge program surfaces. Co-streamer surface
     capture now records neighbor Focusrite and neighbor loopback while recording
     local loopback ground truth, then writes aligned co-streamer surface WAVs
-    for the stem packer. The neighbor desktop launcher now runs Voicemeeter
-    Remote routing so virtual inputs are sent to B3 before sender FFmpeg starts.
+    for the stem packer. The neighbor desktop launcher no longer uses
+    Voicemeeter; it restores the Focusrite speakers as the primary playback
+    device and the Focusrite analogue input as the default capture device. A
+    direct Core Audio WASAPI loopback shim exists, but the current Focusrite
+    render endpoint rejects loopback initialization with 0x88890008.
     Missing synchronized neighbor feeds are explicit
     silent placeholders, not raw unsynchronized substitutes. The live producer currently uses synthetic calibrated
     observations through the real `SensorRig.fuse` path until camera detector
@@ -236,6 +239,7 @@ current_status:
     shotgun capture/transport path, replace placeholder mic/speaker geometry
     with measured world coordinates, then build the delay/SRO alignment stage
     that feeds the bounded field cache and emits aligned six-channel blocks for
-    FOA encoding. Verify remote loopback again when actual neighbor app audio is
-    playing; if B3 remains silent with real app audio, replace the loopback
-    capture endpoint instead of widening OBS to unsynchronized raw sources.
+    FOA encoding. Fix neighbor loopback by using a render endpoint/driver that
+    accepts WASAPI loopback or a sender FFmpeg build with native WASAPI input;
+    do not reintroduce a virtual mixer unless direct loopback fails a concrete
+    invariant that the mixer actually satisfies.

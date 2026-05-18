@@ -32,6 +32,8 @@ def main() -> int:
     parser.add_argument("--remote-dir", default=r"C:\Meta\LocalCastBridge\calibration\remote-captures")
     parser.add_argument("--focusrite-device", default="Analogue 1 + 2 (Focusrite USB Audio)")
     parser.add_argument("--loopback-device", default="Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)")
+    parser.add_argument("--loopback-capture", choices=("wasapi", "dshow"), default="wasapi")
+    parser.add_argument("--remote-wasapi-script", default=r"C:\Meta\LocalCastBridge\scripts\wasapi-loopback-capture.ps1")
     parser.add_argument("--local-loopback-query", default="Scarlett")
     parser.add_argument("--max-lag-ms", type=float, default=3000.0)
     parser.add_argument("--min-loopback-rms", type=float, default=1e-4)
@@ -52,7 +54,7 @@ def main() -> int:
 
     commands = [
         remote_ffmpeg_command(args, args.focusrite_device, remote_focusrite, channels=1),
-        remote_ffmpeg_command(args, args.loopback_device, remote_loopback, channels=2),
+        remote_loopback_command(args, remote_loopback),
     ]
     if args.dry_run:
         for command in commands:
@@ -152,6 +154,16 @@ def remote_ffmpeg_command(args: argparse.Namespace, device: str, output: str, *,
         f'"{args.ffmpeg}" -y -hide_banner -nostdin -loglevel warning '
         f'-f dshow -t {float(args.seconds):.3f} -i audio="{device}" '
         f'-vn -ac {channels} -ar {int(args.sample_rate)} -c:a pcm_f32le "{output}"'
+    )
+
+
+def remote_loopback_command(args: argparse.Namespace, output: str) -> str:
+    if args.loopback_capture == "dshow":
+        return remote_ffmpeg_command(args, args.loopback_device, output, channels=2)
+    return (
+        f'powershell -NoProfile -ExecutionPolicy Bypass -File "{args.remote_wasapi_script}" '
+        f'-Output "{output}" -Seconds {float(args.seconds):.3f} '
+        f'-SampleRate {int(args.sample_rate)} -Channels 2'
     )
 
 

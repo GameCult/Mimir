@@ -32,7 +32,7 @@
 - OBS synchronized program surface:
   - `scripts/setup_obs_synced_program.py` derives OBS-controllable stems from an aligned program audio timeline: host voice, co-streamer voice, ambient, transients, co-streamer loopback, and local loopback.
   - `scripts/capture_co_streamer_surfaces.py` captures neighbor Focusrite and neighbor loopback with local loopback ground truth, estimates the late remote-family offset, and writes aligned co-streamer surfaces for the stem packer.
-  - `scripts/configure-voicemeeter-routing.ps1` is called by the neighbor desktop launcher to route Voicemeeter virtual inputs to B3 before FFmpeg starts.
+  - `scripts/wasapi-loopback-capture.ps1` is the direct primary-playback loopback path. The current neighbor Focusrite render endpoint rejects WASAPI loopback initialization, so loopback remains unavailable until the render endpoint/driver path is changed or the sender FFmpeg build gains a working WASAPI input.
   - The tool creates/updates local OBS Media Sources for those stems and mutes/disables raw unsynchronized inputs.
   - Strict mode disables every scene item except the synchronized LocalCastBridge program video and stem controls.
 
@@ -57,5 +57,5 @@
 10. Replace placeholder mic/speaker geometry with measured world coordinates, then build the delay/SRO alignment stage that feeds the bounded field cache and emits aligned six-channel blocks before FOA encoding.
 11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
 12. Replace synthetic live-fusion observations with PS3 Eye detector observations.
-13. Fix the neighbor loopback route so `Voicemeeter Out B3` carries real program audio; current remote loopback captures are near-silent and cannot serve as the timing witness.
+13. Fix the neighbor direct loopback route: the sender FFmpeg build has no WASAPI input and the current Focusrite render endpoint rejects direct WASAPI loopback from `scripts/wasapi-loopback-capture.ps1`.
 14. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.

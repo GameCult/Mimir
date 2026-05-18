@@ -18,7 +18,6 @@
 - FFmpeg reports:
   - `srt` input/output protocol
   - `h264_nvenc` encoder
-- Voicemeeter installed through winget as `VB-Audio.Voicemeeter`.
 - SoundVolumeView installed through winget as `NirSoft.SoundVolumeView`.
 
 ## Sender Config
@@ -76,23 +75,18 @@ Start launcher:
 - runs `scripts\start-localcast-desktop.ps1`
 - uses `config\localcast.json`
 - passes the winget FFmpeg alias path explicitly
-- starts Voicemeeter
 - calls `SoundVolumeView.exe` by absolute path inside PowerShell because the
   winget alias is not reliably available in interactive `cmd.exe`
-- sets Windows default render to `Voicemeeter VAIO3 Input`
-- sets Windows default capture to `Voicemeeter Out B3`
-- runs `scripts\configure-voicemeeter-routing.ps1` to route Voicemeeter virtual
-  inputs to B3 and unmute output buses before FFmpeg starts
+- sets Windows default render to `Focusrite USB Audio\Device\Speakers\Render`
+- sets Windows default capture to `Focusrite USB Audio\Device\Analogue 1 + 2\Capture`
 - writes FFmpeg logs under `C:\Meta\LocalCastBridge\logs`
-  - Voicemeeter routing details are written to
-    `C:\Meta\LocalCastBridge\logs\voicemeeter-routing.log`
 
 Stop launcher:
 
 - runs `scripts\stop-localcast-desktop.ps1`
 - stops FFmpeg processes whose command line contains `srt://`
 - restores Windows default render to `Focusrite USB Audio\Device\Speakers\Render`
-- closes `voicemeeter_x64.exe`
+- restores Windows default render to `Focusrite USB Audio\Device\Speakers\Render`
 
 ## Audio Reality
 
@@ -102,18 +96,13 @@ FFmpeg DirectShow discovery originally exposed one hardware audio input:
 Analogue 1 + 2 (Focusrite USB Audio)
 ```
 
-After Voicemeeter install, FFmpeg exposes virtual loopback inputs including:
-
-```text
-Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)
-```
-
-LocalCastBridge uses that device as `system-loopback`.
-
-The routing script can prove that Voicemeeter accepted the B3 route, but B3
-will still be silent when no app audio is actually playing into the default
-render device. In that case the co-streamer Focusrite bleed remains the
-alignment witness until real loopback audio appears.
+The sender FFmpeg build does not expose a native `wasapi` input device, so it
+cannot directly capture primary playback by itself. `scripts\wasapi-loopback-capture.ps1`
+is the direct Core Audio loopback attempt. As of 2026-05-18, the Focusrite
+render endpoint reports a 48 kHz stereo mix format but rejects loopback
+initialization with `0x88890008`, so co-streamer loopback is not yet a usable
+timing witness. Co-streamer Focusrite program bleed remains the temporary
+alignment witness.
 
 Do not rename the loopback in config unless the replacement appears in:
 
@@ -121,9 +110,10 @@ Do not rename the loopback in config unless the replacement appears in:
 ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 ```
 
-If Madman cannot hear local audio while LocalCast is running, open Voicemeeter
-and set hardware output `A1` to the intended physical device, probably
-Focusrite speakers/headphones. The stream capture itself is independent of OBS.
+If loopback is required, change the neighbor primary playback device to a
+render endpoint that accepts WASAPI loopback or install/use a sender FFmpeg
+build with a working WASAPI input. Do not widen OBS to unsynchronized raw audio
+as a workaround.
 
 ## SSH Testing Trap
 
