@@ -116,7 +116,9 @@ current_status:
     has first physical-device access: LeapUVC raw IR video, two Razer Kiyo-class
     RGB cameras, all expected microphones, and Scarlett speaker output are
     accessible; both PS3 Eye video interfaces are attached but missing their
-    video-side driver.
+    video-side driver. LeapUVC MSMF mode probing accepts a 320x240x120 request
+    and reports about 115 fps, though measured OpenCV throughput is lower in the
+    first rough probe.
   next_action: >
     Fix PS3 Eye video driver access, then capture ChArUco intrinsics frames for
     LeapUVC and both Kiyo cameras before moving to multi-camera extrinsics.

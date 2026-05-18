@@ -2,6 +2,7 @@ import argparse
 import json
 import subprocess
 import sys
+import multiprocessing as mp
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -75,11 +76,7 @@ def camera_probe(max_index: int, apis: list[str], read_frames: int = 1):
     except Exception as exc:
         return [{"error": f"cv2 unavailable: {exc!r}"}]
 
-    api_map = {
-        "any": 0,
-        "dshow": cv2.CAP_DSHOW,
-        "msmf": cv2.CAP_MSMF,
-    }
+    api_map = cv2_api_map()
     results = []
     for api_name in apis:
         api = api_map[api_name]
@@ -106,6 +103,20 @@ def camera_probe(max_index: int, apis: list[str], read_frames: int = 1):
             cap.release()
             results.append(entry)
     return results
+
+
+def cv2_api_map():
+    import cv2
+
+    return {
+        "any": 0,
+        "dshow": cv2.CAP_DSHOW,
+        "msmf": cv2.CAP_MSMF,
+    }
+
+
+def api_value(name: str):
+    return cv2_api_map()[name]
 
 
 def discover(args):
@@ -148,6 +159,103 @@ def snapshot(args):
     for item in manifest["snapshots"]:
         if item.get("snapshot"):
             print(f"{item['api']}:{item['index']} -> {item['snapshot']}")
+
+
+def mode_probe(args):
+    out = run_dir(f"mode-probe-{args.api}{args.index}")
+    result = {
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "camera": {"api": args.api, "index": args.index},
+        "profiles": [],
+    }
+
+    profiles = []
+    requested_profiles = args.profile or [
+        "640x480x30",
+        "640x480x60",
+        "320x240x60",
+        "320x240x120",
+    ]
+    for item in requested_profiles:
+        parts = item.lower().split("x")
+        if len(parts) != 3:
+            raise SystemExit(f"Profile must be WIDTHxHEIGHTxFPS, got {item}")
+        profiles.append(tuple(int(part) for part in parts))
+
+    for width, height, fps in profiles:
+        entry = run_profile_probe(args.api, args.index, width, height, fps, args.duration, args.profile_timeout)
+        result["profiles"].append(entry)
+
+    write_json(out / "manifest.json", result)
+    print(out)
+    print(json.dumps(result["profiles"], indent=2))
+
+
+def _profile_probe_worker(queue, api, index, width, height, fps, duration):
+    import cv2
+    import time
+
+    cap = cv2.VideoCapture(index, api_value(api))
+    if not cap.isOpened():
+        queue.put(
+            {
+                "requested": {"width": width, "height": height, "fps": fps},
+                "opened": False,
+            }
+        )
+        return
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FPS, fps)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    start = time.perf_counter()
+    count = 0
+    shape = None
+    first_ok = False
+    while (time.perf_counter() - start) < duration:
+        ok, frame = cap.read()
+        if ok and frame is not None:
+            count += 1
+            first_ok = True
+            shape = list(frame.shape)
+    elapsed = time.perf_counter() - start
+    entry = {
+        "requested": {"width": width, "height": height, "fps": fps},
+        "opened": True,
+        "read_ok": first_ok,
+        "frames": count,
+        "measured_fps": count / elapsed if elapsed else 0.0,
+        "reported_width": cap.get(cv2.CAP_PROP_FRAME_WIDTH),
+        "reported_height": cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
+        "reported_fps": cap.get(cv2.CAP_PROP_FPS),
+        "fourcc": int(cap.get(cv2.CAP_PROP_FOURCC)),
+        "shape": shape,
+        "backend": cap.getBackendName(),
+    }
+    cap.release()
+    queue.put(entry)
+
+
+def run_profile_probe(api, index, width, height, fps, duration, timeout):
+    queue = mp.Queue()
+    proc = mp.Process(target=_profile_probe_worker, args=(queue, api, index, width, height, fps, duration))
+    proc.start()
+    proc.join(timeout)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(2)
+        return {
+            "requested": {"width": width, "height": height, "fps": fps},
+            "opened": None,
+            "timeout": True,
+        }
+    if not queue.empty():
+        return queue.get()
+    return {
+        "requested": {"width": width, "height": height, "fps": fps},
+        "opened": None,
+        "error": f"worker exited with code {proc.exitcode}",
+    }
 
 
 def audio_smoke(args):
@@ -220,6 +328,19 @@ def main():
     p.add_argument("--max-index", type=int, default=10)
     p.add_argument("--api", action="append", choices=["any", "dshow", "msmf"], default=["dshow", "msmf"])
     p.set_defaults(func=snapshot)
+
+    p = sub.add_parser("mode-probe")
+    p.add_argument("--api", choices=["any", "dshow", "msmf"], default="dshow")
+    p.add_argument("--index", type=int, required=True)
+    p.add_argument("--duration", type=float, default=1.0)
+    p.add_argument("--profile-timeout", type=float, default=6.0)
+    p.add_argument(
+        "--profile",
+        action="append",
+        default=None,
+        help="WIDTHxHEIGHTxFPS, repeatable. Example: --profile 320x240x120",
+    )
+    p.set_defaults(func=mode_probe)
 
     p = sub.add_parser("audio-smoke")
     p.add_argument("--duration", type=float, default=1.0)

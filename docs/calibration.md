@@ -27,6 +27,12 @@ Capture camera snapshots:
 .\.venv\Scripts\python.exe .\scripts\calibration_probe.py snapshot --max-index 10
 ```
 
+Probe camera mode behavior:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\calibration_probe.py mode-probe --api msmf --index 0 --profile 320x240x120
+```
+
 Smoke-test input devices:
 
 ```powershell
@@ -67,6 +73,12 @@ Observed video access:
 - `dshow:1` / `msmf:1`: Razer Kiyo-class RGB camera.
 - `dshow:2`: second Razer Kiyo-class RGB camera, likely Kiyo Pro.
 - PS3 Eye video interfaces are attached but not usable yet. Both `USB\VID_1415&PID_2000&MI_00` devices report Windows problem code `28`, meaning the video-side driver is missing. Their audio interfaces are working through generic USB audio.
+
+Mode probe notes:
+
+- `msmf:0` LeapUVC accepts a `320x240x120` request and reports about 115 fps, with rough OpenCV measured capture around 52 fps in the first short probe. Treat that as "tracking mode is plausible," not calibrated throughput.
+- Kiyo RGB devices produce snapshots, but initial isolated mode probes against Kiyo indices timed out. Do not trust FPS configuration for Kiyos until a backend-specific capture path is chosen.
+- PS3 Eye tracking modes cannot be tested until the open driver is installed for `MI_00`.
 
 Observed audio access over WASAPI at 48 kHz:
 
