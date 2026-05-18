@@ -1,95 +1,178 @@
 {
   "sampleRate": 48000,
   "blockSize": 1024,
+  "captureMode": "distributed-clocks",
+  "capturePolicy": {
+    "fieldSampleRate": 48000,
+    "focusriteCalibrationSampleRate": 96000,
+    "sampleFormat": "float32",
+    "losslessCalibrationTransport": true,
+    "preferredFocusriteHostApis": ["ASIO", "WASAPI exclusive", "WASAPI"],
+    "note": "Focusrite ADCs are the high-quality dialogue anchors. Use the best available driver path for calibration and downsample/resample into the field timeline only after clock alignment."
+  },
+  "clockModel": {
+    "referenceMicId": "mic_focusrite_local",
+    "strategy": "calibration-ping-plus-adaptive-resampling",
+    "requiresAlignmentBeforeEncoding": true,
+    "maxExpectedSroPpm": 200
+  },
   "ambisonicBus": {
     "order": 1,
     "channelOrder": "ACN",
     "normalization": "SN3D",
     "channels": ["W", "Y", "Z", "X"]
   },
-  "inputDevice": {
-    "query": "Scarlett",
-    "hostApi": "WASAPI",
-    "channels": 6
-  },
-  "outputDevice": {
-    "query": "Scarlett",
-    "hostApi": "WASAPI",
-    "channels": 2
-  },
+  "machines": [
+    {
+      "id": "local",
+      "label": "OBS / calibration machine",
+      "role": "receiver-calibration-host"
+    },
+    {
+      "id": "neighbor",
+      "label": "neighbor sender machine",
+      "role": "remote-capture-host",
+      "address": "192.168.1.84"
+    }
+  ],
   "microphones": [
     {
-      "id": "mic_front",
-      "channel": 0,
-      "label": "front",
-      "positionMeters": [0.0, 1.0, 1.3],
+      "id": "mic_kiyo_left",
+      "fieldChannel": 0,
+      "label": "left Kiyo camera mic",
+      "role": "spatial-context",
+      "qualityPriority": 30,
+      "machine": "local",
+      "device": {"query": "Kiyo", "hostApi": "WASAPI", "channel": 0},
+      "clockDomain": "kiyo_left_usb",
+      "positionMeters": [-0.65, 0.8, 1.35],
       "orientationDeg": {"azimuth": 180.0, "elevation": 0.0},
-      "directivity": "cardioid",
+      "directivity": "camera-mic",
       "gainDb": 0.0,
       "delaySamples": 0,
       "polarity": 1
     },
     {
-      "id": "mic_front_left",
-      "channel": 1,
-      "label": "front-left",
-      "positionMeters": [-0.87, 0.5, 1.3],
-      "orientationDeg": {"azimuth": -120.0, "elevation": 0.0},
-      "directivity": "cardioid",
+      "id": "mic_kiyo_right",
+      "fieldChannel": 1,
+      "label": "right Kiyo camera mic",
+      "role": "spatial-context",
+      "qualityPriority": 30,
+      "machine": "local",
+      "device": {"query": "Kiyo", "hostApi": "WASAPI", "channel": 0},
+      "clockDomain": "kiyo_right_usb",
+      "positionMeters": [0.65, 0.8, 1.35],
+      "orientationDeg": {"azimuth": 180.0, "elevation": 0.0},
+      "directivity": "camera-mic",
       "gainDb": 0.0,
       "delaySamples": 0,
       "polarity": 1
     },
     {
-      "id": "mic_back_left",
-      "channel": 2,
-      "label": "back-left",
-      "positionMeters": [-0.87, -0.5, 1.3],
-      "orientationDeg": {"azimuth": -60.0, "elevation": 0.0},
-      "directivity": "cardioid",
+      "id": "mic_ps_eye_left",
+      "fieldChannel": 2,
+      "label": "left PS Eye mic",
+      "role": "spatial-context",
+      "qualityPriority": 20,
+      "machine": "local",
+      "device": {"query": "USB Camera-B4.09.24.1", "hostApi": "WASAPI", "channel": 0},
+      "clockDomain": "ps_eye_left_usb",
+      "positionMeters": [-0.9, -0.2, 1.25],
+      "orientationDeg": {"azimuth": 90.0, "elevation": 0.0},
+      "directivity": "camera-mic",
       "gainDb": 0.0,
       "delaySamples": 0,
       "polarity": 1
     },
     {
-      "id": "mic_back",
-      "channel": 3,
-      "label": "back",
-      "positionMeters": [0.0, -1.0, 1.3],
+      "id": "mic_ps_eye_right",
+      "fieldChannel": 3,
+      "label": "right PS Eye mic",
+      "role": "spatial-context",
+      "qualityPriority": 20,
+      "machine": "local",
+      "device": {"query": "USB Camera-B4.09.24.1", "hostApi": "WASAPI", "channel": 0},
+      "clockDomain": "ps_eye_right_usb",
+      "positionMeters": [0.9, -0.2, 1.25],
+      "orientationDeg": {"azimuth": -90.0, "elevation": 0.0},
+      "directivity": "camera-mic",
+      "gainDb": 0.0,
+      "delaySamples": 0,
+      "polarity": 1
+    },
+    {
+      "id": "mic_focusrite_local",
+      "fieldChannel": 4,
+      "label": "local Focusrite shielded cardioid",
+      "role": "primary-dialogue-anchor",
+      "qualityPriority": 100,
+      "machine": "local",
+      "device": {
+        "query": "Scarlett",
+        "hostApi": "WASAPI",
+        "preferredHostApis": ["ASIO", "WASAPI"],
+        "channel": 0,
+        "preferredSampleRates": [96000, 48000]
+      },
+      "clockDomain": "focusrite_local_usb",
+      "positionMeters": [0.0, 0.0, 1.2],
       "orientationDeg": {"azimuth": 0.0, "elevation": 0.0},
+      "attachedMic": {
+        "kind": "shielded cardioid",
+        "target": "local host face"
+      },
       "directivity": "cardioid",
       "gainDb": 0.0,
       "delaySamples": 0,
       "polarity": 1
     },
     {
-      "id": "mic_back_right",
-      "channel": 4,
-      "label": "back-right",
-      "positionMeters": [0.87, -0.5, 1.3],
-      "orientationDeg": {"azimuth": 60.0, "elevation": 0.0},
-      "directivity": "cardioid",
-      "gainDb": 0.0,
-      "delaySamples": 0,
-      "polarity": 1
-    },
-    {
-      "id": "mic_front_right",
-      "channel": 5,
-      "label": "front-right",
-      "positionMeters": [0.87, 0.5, 1.3],
-      "orientationDeg": {"azimuth": 120.0, "elevation": 0.0},
-      "directivity": "cardioid",
+      "id": "mic_focusrite_neighbor",
+      "fieldChannel": 5,
+      "label": "neighbor Focusrite shotgun on co-streamer",
+      "role": "co-streamer-dialogue-anchor",
+      "qualityPriority": 100,
+      "machine": "neighbor",
+      "device": {
+        "query": "Scarlett",
+        "hostApi": "WASAPI",
+        "preferredHostApis": ["ASIO", "WASAPI"],
+        "channel": 0,
+        "preferredSampleRates": [96000, 48000]
+      },
+      "transport": {
+        "kind": "SRT",
+        "portOffset": 3,
+        "codec": "flac_or_pcm_for_calibration",
+        "role": "remote-dialogue-anchor"
+      },
+      "clockDomain": "focusrite_neighbor_usb",
+      "positionMeters": [0.0, 2.0, 1.2],
+      "orientationDeg": {"azimuth": 180.0, "elevation": 0.0},
+      "attachedMic": {
+        "kind": "shotgun",
+        "target": "co-streamer / star"
+      },
+      "directivity": "shotgun",
       "gainDb": 0.0,
       "delaySamples": 0,
       "polarity": 1
     }
   ],
+  "outputDevice": {
+    "query": "Scarlett",
+    "hostApi": "WASAPI",
+    "preferredHostApis": ["ASIO", "WASAPI"],
+    "preferredSampleRates": [48000, 44100],
+    "channels": 2,
+    "machine": "local"
+  },
   "speakers": [
     {
       "id": "speaker_left",
       "channel": 0,
-      "label": "left",
+      "label": "left calibration speaker",
+      "machine": "local",
       "positionMeters": [-0.75, 1.2, 1.2],
       "gainDb": 0.0,
       "delaySamples": 0,
@@ -98,7 +181,8 @@
     {
       "id": "speaker_right",
       "channel": 1,
-      "label": "right",
+      "label": "right calibration speaker",
+      "machine": "local",
       "positionMeters": [0.75, 1.2, 1.2],
       "gainDb": 0.0,
       "delaySamples": 0,
@@ -111,6 +195,6 @@
     "sweepStartHz": 80.0,
     "sweepEndHz": 18000.0,
     "levelDbfs": -18.0,
-    "referenceMicId": "mic_front"
+    "referenceMicId": "mic_focusrite_local"
   }
 }

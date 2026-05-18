@@ -134,7 +134,10 @@ current_status:
     speakers. The Focusrite mics are high-quality dialogue anchors; camera mics
     provide spatial/context evidence. The tool refuses to treat independent
     USB/network clocks as an Ambisonic field until they have been aligned and
-    resampled into one six-channel reference timeline.
+    resampled into one six-channel reference timeline. Local PortAudio/WASAPI
+    probe shows the Scarlett input accepts 48 kHz but rejects 96 kHz, while the
+    Scarlett output accepts 44.1 kHz and rejects 48/96 kHz on this path; check
+    ASIO/native Focusrite access before relying on high-rate calibration.
   next_action: >
     Use FFmpeg DirectShow device names `PS3 Eye Universal` and `PS3 Eye
     Universal2` for PS3 Eye tracking capture at 320x240@60, then capture

@@ -42,20 +42,26 @@ The six-microphone Ambisonic path is separate from the OBS endpoint path.
 ```mermaid
 flowchart TD
     A["config/audio-field.json"] --> B["scripts/audio_field.py"]
-    C["6 mic channels from one clocked input device"] --> D["raw field recording"]
-    E["2 speaker outputs"] --> F["calibration sweeps"]
-    F --> G["speaker-to-mic return recordings"]
-    G --> H["delay/gain/polarity analysis"]
-    H --> A
-    D --> I["FOA encoder"]
-    I --> J["AmbiX ACN/SN3D bus: W,Y,Z,X"]
+    C["local Focusrite shielded cardioid"] --> D["local reference timeline"]
+    E["neighbor Focusrite shotgun"] --> F["remote dialogue capture"]
+    G["Kiyo + PS Eye camera mics"] --> H["spatial/context captures"]
+    I["2 speaker outputs"] --> J["calibration sweep"]
+    J --> D
+    J --> F
+    J --> H
+    D --> K["delay + SRO alignment"]
+    F --> K
+    H --> K
+    K --> L["aligned six-channel field"]
+    L --> M["FOA encoder"]
+    M --> N["AmbiX ACN/SN3D bus: W,Y,Z,X"]
 ```
 
 Ownership:
 
-- `config/audio-field.json` owns mic/speaker identity, channel mapping, geometry, gain, delay, polarity, and Ambisonic bus format.
-- `scripts/audio_field.py` owns hardware validation, calibration stimulus/return capture, offline calibration analysis, raw field recording, and FOA encoding.
+- `config/audio-field.json` owns mic/speaker identity, machine/device mapping, clock domains, field channel order, geometry, gain, delay, polarity, role/quality priority, capture policy, and Ambisonic bus format.
+- `scripts/audio_field.py` owns profile validation, local device checks, calibration stimulus generation, clock-domain planning, shared-input capture helpers, and FOA encoding of already aligned six-channel WAVs.
 - The camera/sensor-fusion pipeline may publish world poses later; it does not own audio clocks or channel timing.
 - OBS may ingest rendered output later; it is not the authority for the Ambisonic field.
 
-Invariant: the six field microphones must enter through one synchronized capture path before FOA encoding. If the actual rig uses independent USB microphone clocks, prove the adaptive sync path first; do not treat separate endpoints as raw Ambisonics.
+Invariant: distributed camera/Focusrite microphones must be aligned and resampled into one reference timeline before FOA encoding. The local shielded cardioid and neighbor shotgun are the high-quality dialogue anchors; camera mics provide spatial/context evidence.

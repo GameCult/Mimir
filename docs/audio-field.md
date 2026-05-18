@@ -2,32 +2,37 @@
 
 ## Objective
 
-Build the audio side as one synchronized six-microphone capture path, a declared first-order Ambisonic field, and a two-speaker calibration/feedback path.
+Build the audio side around the real six-microphone rig: two Kiyo camera mics, two PS Eye camera mics, the local Focusrite ADC with a shielded cardioid near the host's face, and the neighbor Focusrite ADC with a shotgun mic pointed at the co-streamer.
 
-This is not the old OBS endpoint model. OBS can still receive rendered stems later, but microphones that participate in the field belong to the audio-field pipeline first. The six channels need one clock, one profile, and one calibration ledger. Otherwise the system is just six microphones telling six slightly different lies at once.
+The Focusrite channels are the dialogue anchors. The camera mics are spatial context, calibration evidence, and fallback texture. Treating all six as equal would be tidy on paper and stupid in the room, which is the classic way paper gets someone fired by physics.
 
 ## Current Mechanism
 
-The repo now has a profile and tool:
+The repo has a profile and tool:
 
-- `config/audio-field.example.json` declares the six microphone channels, two speaker channels, geometry, calibration sweep settings, and FOA AmbiX bus format.
-- `scripts/audio_field.py` validates the profile, lists PortAudio devices, records six-channel fields, plays speaker calibration sweeps, analyzes speaker-to-mic returns, and encodes a recorded six-channel WAV into first-order AmbiX.
+- `config/audio-field.example.json` declares each mic source, machine, device query, clock domain, field channel, quality priority, placeholder geometry, two local speaker channels, calibration sweep settings, and FOA AmbiX bus format.
+- `scripts/audio_field.py` validates shared or distributed profiles, lists PortAudio devices, checks local distributed sources, generates calibration sweeps, summarizes the sync plan, preserves shared-input capture helpers, and encodes an already aligned six-channel WAV into first-order AmbiX.
 
-The profile assumes one input device exposes at least six synchronized input channels and one output device exposes at least two output channels. If the mics are split across separate USB clocks, stop there. Do not pretend that drift is ambience with better branding.
+The default profile is `distributed-clocks`. The coherent field is not captured directly. It is assembled after delay and sampling-rate-offset alignment.
 
 ## Pipeline
 
 ```mermaid
 flowchart TD
     A["config/audio-field.json"] --> B["audio_field.py validate"]
-    C["6 mic channels, one clock"] --> D["raw field WAV"]
-    E["2 speaker outputs"] --> F["calibration sweeps"]
-    F --> G["speaker-to-mic returns"]
-    G --> H["delay / gain / polarity analysis"]
-    H --> A
-    D --> I["calibration: delay / gain / polarity"]
-    I --> J["FOA encoder"]
-    J --> K["AmbiX ACN/SN3D WAV: W,Y,Z,X"]
+    C["local Focusrite shielded cardioid"] --> D["local reference timeline"]
+    E["neighbor Focusrite shotgun"] --> F["remote high-quality dialogue capture"]
+    G["Kiyo + PS Eye camera mics"] --> H["spatial/context captures"]
+    I["2 local speakers"] --> J["calibration sweep / pulse"]
+    J --> D
+    J --> F
+    J --> H
+    D --> K["delay + SRO alignment"]
+    F --> K
+    H --> K
+    K --> L["aligned six-channel field WAV"]
+    L --> M["FOA encoder"]
+    M --> N["AmbiX ACN/SN3D WAV: W,Y,Z,X"]
 ```
 
 ## Commands
@@ -44,10 +49,28 @@ List audio devices:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py devices
 ```
 
-Validate the profile and device match:
+Probe whether a Focusrite path accepts high-rate capture:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py probe-rates --device-query Scarlett --hostapi WASAPI --direction input --channels 1 --rate 48000 --rate 96000
+```
+
+Probe the speaker output path separately:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py probe-rates --device-query Scarlett --hostapi WASAPI --direction output --channels 2 --rate 44100 --rate 48000 --rate 96000
+```
+
+Validate the profile and local device matches:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\audio_field.py validate --profile .\config\audio-field.json --check-devices
+```
+
+Summarize the clock domains and required alignment path:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\audio_field.py sync-plan --profile .\config\audio-field.json
 ```
 
 Generate a calibration sweep without touching hardware:
@@ -56,47 +79,36 @@ Generate a calibration sweep without touching hardware:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py make-stimulus --profile .\config\audio-field.json
 ```
 
-Play each speaker and record all six microphones:
+Encode an offline aligned six-channel WAV to FOA AmbiX:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\audio_field.py play-record --profile .\config\audio-field.json
+.\.venv\Scripts\python.exe .\scripts\audio_field.py encode-foa --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-aligned.wav --output .\calibration\runs\<run-folder>\field-foa-ambix.wav
 ```
 
-Analyze the calibration run:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\audio_field.py analyze-calibration --profile .\config\audio-field.json --run .\calibration\runs\<run-folder>
-```
-
-Record the raw field:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\audio_field.py record-field --profile .\config\audio-field.json --seconds 30
-```
-
-Encode an offline raw field WAV to FOA AmbiX:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\audio_field.py encode-foa --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-raw.wav --output .\calibration\runs\<run-folder>\field-foa-ambix.wav
-```
+The `play-record` and `record-field` commands remain for a `shared-input-device` profile only. They deliberately refuse the distributed rig until an alignment stage emits one coherent six-channel WAV.
 
 ## Invariants
 
-- One synchronized capture device owns the six microphone channels.
-- `audio-field.json` owns channel identity, geometry, gain, delay, polarity, and bus format.
+- Each physical microphone declares its machine, device query, clock domain, field channel, geometry, gain, delay, polarity, directivity, and role.
+- The local Focusrite shielded cardioid is the default reference mic.
+- The neighbor Focusrite shotgun is the co-streamer dialogue anchor and should be captured losslessly for calibration.
+- Focusrite captures should use the best available native/exclusive path and high-rate calibration capture when practical, then resample into the field timeline after alignment.
+- Playback sample rate is its own device fact. Probe it separately; do not assume the Scarlett input and output paths accept the same rates through PortAudio/WASAPI.
+- Distributed-clock microphones must be aligned and resampled into one reference timeline before FOA encoding.
 - FOA output is AmbiX: ACN channel order, SN3D normalization, channels `W,Y,Z,X`.
 - Speaker calibration is a measurement path, not a generic monitor output.
-- Speaker-to-mic feedback belongs to calibration/echo-path estimation before it is used for live correction.
 - Camera fusion may publish listener or source pose later, but it does not own audio channel timing.
 
 ## First Cut Limits
 
-The current encoder is a source-style FOA mix from calibrated microphone channels and declared orientations. It is useful for proving the wiring, timing, and interchange format. It is not a full arbitrary-array sound-field reconstruction.
+The current encoder is a source-style FOA mix from calibrated microphone channels and declared orientations. It accepts an already aligned six-channel WAV. It does not capture or align independent USB/network clocks by itself, and it is not a full arbitrary-array sound-field reconstruction.
 
-The next honest steps are:
+Next honest steps:
 
-1. Confirm one device exposes all six mic channels at 48 kHz.
-2. Replace placeholder geometry with measured positions in the shared world coordinate system.
-3. Run speaker sweeps and copy measured delay/gain/polarity back into `config/audio-field.json`.
-4. Record a six-channel field and encode a first FOA WAV.
-5. Only after that, decide whether the field needs a measured arbitrary-array encoder instead of the source-style FOA mix.
+1. Confirm local Kiyo, PS Eye, local Focusrite, and local speaker device matches.
+2. Confirm the neighbor Focusrite capture path, preferably native/exclusive or the best FFmpeg/driver route available on that machine.
+3. Probe the local and neighbor Focusrites for 48 kHz and 96 kHz capture support through the best available driver path.
+4. Capture the two Focusrite anchors losslessly during calibration; prefer 96 kHz when driver/device support is real, then resample after sync.
+5. Replace placeholder mic/speaker geometry with measured world coordinates.
+6. Build the delay/SRO alignment stage that emits one six-channel WAV ordered by `fieldChannel`.
+7. Encode the first FOA AmbiX test only after that aligned WAV exists.

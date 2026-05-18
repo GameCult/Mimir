@@ -47,6 +47,16 @@ def validate_profile_shape(profile) -> None:
     errors = []
     if int(profile.get("sampleRate", 0)) <= 0:
         errors.append("sampleRate must be a positive integer")
+    capture_mode = profile.get("captureMode", "shared-input-device")
+    if capture_mode not in ("shared-input-device", "distributed-clocks"):
+        errors.append("captureMode must be 'shared-input-device' or 'distributed-clocks'")
+    if capture_mode == "distributed-clocks":
+        clock_model = profile.get("clockModel", {})
+        if clock_model.get("requiresAlignmentBeforeEncoding") is not True:
+            errors.append("distributed-clocks profiles must set clockModel.requiresAlignmentBeforeEncoding=true")
+        capture_policy = profile.get("capturePolicy", {})
+        if int(capture_policy.get("fieldSampleRate", profile.get("sampleRate", 0))) != int(profile.get("sampleRate", 0)):
+            errors.append("capturePolicy.fieldSampleRate must match sampleRate for the aligned field")
     bus = profile.get("ambisonicBus", {})
     if bus.get("order") != 1 or bus.get("channelOrder") != "ACN" or bus.get("normalization") != "SN3D":
         errors.append("ambisonicBus must declare first-order ACN/SN3D for this tool")
@@ -60,14 +70,30 @@ def validate_profile_shape(profile) -> None:
     if len(speakers) != 2:
         errors.append("profile must declare exactly 2 speakers")
 
+    machine_ids = {machine.get("id") for machine in profile.get("machines", [])}
+    if capture_mode == "distributed-clocks" and not machine_ids:
+        errors.append("distributed-clocks profiles must declare machines")
+
     seen_mic_channels = set()
+    seen_clock_domains = set()
     for mic in mics:
-        channel = mic.get("channel")
+        channel = mic_channel(mic)
         if not isinstance(channel, int) or channel < 0:
-            errors.append(f"microphone {mic.get('id', '<missing>')} has invalid channel")
+            errors.append(f"microphone {mic.get('id', '<missing>')} has invalid fieldChannel/channel")
         if channel in seen_mic_channels:
-            errors.append(f"duplicate microphone channel {channel}")
+            errors.append(f"duplicate microphone field channel {channel}")
         seen_mic_channels.add(channel)
+        if capture_mode == "distributed-clocks":
+            if mic.get("machine") not in machine_ids:
+                errors.append(f"microphone {mic.get('id', '<missing>')} references unknown machine")
+            if not isinstance(mic.get("device"), dict):
+                errors.append(f"microphone {mic.get('id', '<missing>')} needs device query/hostApi/channel")
+            clock_domain = mic.get("clockDomain")
+            if not clock_domain:
+                errors.append(f"microphone {mic.get('id', '<missing>')} needs clockDomain")
+            if clock_domain in seen_clock_domains:
+                errors.append(f"duplicate microphone clockDomain {clock_domain}")
+            seen_clock_domains.add(clock_domain)
         if len(mic.get("positionMeters", [])) != 3:
             errors.append(f"microphone {mic.get('id', '<missing>')} needs positionMeters [x,y,z]")
         orientation = mic.get("orientationDeg", {})
@@ -75,6 +101,8 @@ def validate_profile_shape(profile) -> None:
             errors.append(f"microphone {mic.get('id', '<missing>')} needs orientationDeg azimuth/elevation")
         if mic.get("polarity", 1) not in (-1, 1):
             errors.append(f"microphone {mic.get('id', '<missing>')} polarity must be 1 or -1")
+        if "qualityPriority" in mic and not isinstance(mic.get("qualityPriority"), int):
+            errors.append(f"microphone {mic.get('id', '<missing>')} qualityPriority must be an integer")
 
     seen_speaker_channels = set()
     for speaker in speakers:
@@ -91,13 +119,17 @@ def validate_profile_shape(profile) -> None:
 
     input_channels = int(profile.get("inputDevice", {}).get("channels", 0))
     output_channels = int(profile.get("outputDevice", {}).get("channels", 0))
-    if input_channels < 6:
+    if capture_mode == "shared-input-device" and input_channels < 6:
         errors.append("inputDevice.channels must be at least 6")
     if output_channels < 2:
         errors.append("outputDevice.channels must be at least 2")
 
     if errors:
         raise SystemExit("Invalid audio profile:\n- " + "\n- ".join(errors))
+
+
+def mic_channel(mic) -> int:
+    return int(mic.get("fieldChannel", mic.get("channel", -1)))
 
 
 def sounddevice_module():
@@ -130,6 +162,26 @@ def match_device(sd, spec, direction: str):
     return matches[0]
 
 
+def find_devices(sd, spec, direction: str):
+    hostapis = sd.query_hostapis()
+    devices = sd.query_devices()
+    query = (spec.get("query") or "").lower()
+    hostapi_name = (spec.get("hostApi") or "").lower()
+    needed_channels = int(spec.get("channels") or 1)
+    matches = []
+    for device in devices:
+        hostapi = hostapis[device["hostapi"]]["name"]
+        channel_key = "max_input_channels" if direction == "input" else "max_output_channels"
+        if device[channel_key] < needed_channels:
+            continue
+        if query and query not in device["name"].lower():
+            continue
+        if hostapi_name and hostapi_name not in hostapi.lower():
+            continue
+        matches.append({**device, "hostapi_name": hostapi})
+    return matches
+
+
 def cmd_devices(args):
     sd = sounddevice_module()
     hostapis = sd.query_hostapis()
@@ -148,11 +200,47 @@ def cmd_devices(args):
     print(json.dumps(rows, indent=2))
 
 
+def cmd_probe_rates(args):
+    sd = sounddevice_module()
+    spec = {
+        "query": args.device_query,
+        "hostApi": args.hostapi,
+        "channels": args.channels,
+    }
+    matches = find_devices(sd, spec, args.direction)
+    results = []
+    for device in matches:
+        rate_results = []
+        for rate in sorted(set(args.rate or [48000, 96000])):
+            try:
+                if args.direction == "input":
+                    sd.check_input_settings(
+                        device=device["index"],
+                        channels=args.channels,
+                        samplerate=rate,
+                        dtype=args.dtype,
+                    )
+                else:
+                    sd.check_output_settings(
+                        device=device["index"],
+                        channels=args.channels,
+                        samplerate=rate,
+                        dtype=args.dtype,
+                    )
+                rate_results.append({"sampleRate": rate, "ok": True})
+            except Exception as exc:
+                rate_results.append({"sampleRate": rate, "ok": False, "error": repr(exc)})
+        results.append({"device": summarize_device(device), "rates": rate_results})
+    print(json.dumps({"query": spec, "direction": args.direction, "dtype": args.dtype, "results": results}, indent=2))
+
+
 def cmd_validate(args):
     profile = load_profile(args.profile)
     result = {
         "profile": str(args.profile),
         "sampleRate": profile["sampleRate"],
+        "captureMode": profile.get("captureMode", "shared-input-device"),
+        "capturePolicy": profile.get("capturePolicy"),
         "microphones": [mic["id"] for mic in profile["microphones"]],
         "speakers": [speaker["id"] for speaker in profile["speakers"]],
         "ambisonicBus": profile["ambisonicBus"],
@@ -160,13 +248,47 @@ def cmd_validate(args):
     }
     if args.check_devices:
         sd = sounddevice_module()
-        input_device = match_device(sd, profile["inputDevice"], "input")
         output_device = match_device(sd, profile["outputDevice"], "output")
-        result["deviceCheck"] = {
-            "input": summarize_device(input_device),
-            "output": summarize_device(output_device),
-        }
+        if profile.get("captureMode", "shared-input-device") == "shared-input-device":
+            input_device = match_device(sd, profile["inputDevice"], "input")
+            result["deviceCheck"] = {
+                "input": summarize_device(input_device),
+                "output": summarize_device(output_device),
+            }
+        else:
+            result["deviceCheck"] = distributed_device_check(sd, profile, output_device)
     print(json.dumps(result, indent=2))
+
+
+def distributed_device_check(sd, profile, output_device):
+    local_machine = profile.get("localMachine", "local")
+    checks = []
+    for mic in profile["microphones"]:
+        if mic.get("machine") != local_machine:
+            checks.append(
+                {
+                    "micId": mic["id"],
+                    "machine": mic.get("machine"),
+                    "status": "remote-unchecked",
+                    "device": mic.get("device"),
+                }
+            )
+            continue
+        matches = find_devices(sd, mic.get("device", {}), "input")
+        checks.append(
+            {
+                "micId": mic["id"],
+                "machine": mic.get("machine"),
+                "clockDomain": mic.get("clockDomain"),
+                "status": "ok" if matches else "missing",
+                "matches": [summarize_device(match) for match in matches],
+            }
+        )
+    return {
+        "distributedInputs": checks,
+        "output": summarize_device(output_device),
+        "alignmentRequiredBeforeFoa": bool(profile.get("clockModel", {}).get("requiresAlignmentBeforeEncoding")),
+    }
 
 
 def summarize_device(device):
@@ -225,6 +347,12 @@ def cmd_make_stimulus(args):
 
 def cmd_play_record(args):
     profile = load_profile(args.profile)
+    if profile.get("captureMode", "shared-input-device") == "distributed-clocks":
+        raise SystemExit(
+            "play-record only works for shared-input-device profiles. "
+            "For distributed clocks, play the shared calibration stimulus and record each mic source "
+            "with its own capture process, then align the takes before FOA encoding."
+        )
     sd = sounddevice_module()
     input_device = match_device(sd, profile["inputDevice"], "input")
     output_device = match_device(sd, profile["outputDevice"], "output")
@@ -327,6 +455,12 @@ def estimate_delay(recorded, sweep):
 
 def cmd_record_field(args):
     profile = load_profile(args.profile)
+    if profile.get("captureMode", "shared-input-device") == "distributed-clocks":
+        raise SystemExit(
+            "record-field only works for shared-input-device profiles. "
+            "Distributed camera/Focusrite microphones must be captured per clock domain, "
+            "aligned/resampled into a six-channel WAV, then passed to encode-foa."
+        )
     sd = sounddevice_module()
     input_device = match_device(sd, profile["inputDevice"], "input")
     sample_rate = int(profile["sampleRate"])
@@ -370,12 +504,54 @@ def cmd_encode_foa(args):
     print(json.dumps({"output": str(args.output), "sampleRate": int(sample_rate), "channels": ["W", "Y", "Z", "X"], "peakBeforeLimit": peak}, indent=2))
 
 
+def cmd_sync_plan(args):
+    profile = load_profile(args.profile)
+    groups = {}
+    for mic in profile["microphones"]:
+        groups.setdefault(mic.get("clockDomain", "shared"), []).append(mic["id"])
+    anchors = sorted(
+        [
+            {
+                "micId": mic["id"],
+                "label": mic.get("label"),
+                "role": mic.get("role"),
+                "qualityPriority": mic.get("qualityPriority", 0),
+                "machine": mic.get("machine"),
+                "clockDomain": mic.get("clockDomain"),
+                "attachedMic": mic.get("attachedMic"),
+                "preferredSampleRates": mic.get("device", {}).get("preferredSampleRates"),
+            }
+            for mic in profile["microphones"]
+        ],
+        key=lambda item: item["qualityPriority"],
+        reverse=True,
+    )
+    plan = {
+        "profile": str(args.profile),
+        "captureMode": profile.get("captureMode", "shared-input-device"),
+        "capturePolicy": profile.get("capturePolicy", {}),
+        "referenceMicId": profile.get("clockModel", {}).get("referenceMicId") or profile.get("calibration", {}).get("referenceMicId"),
+        "priorityMics": anchors,
+        "clockDomains": [{"id": key, "microphones": value} for key, value in sorted(groups.items())],
+        "requiredBeforeFoa": [
+            "drive each Focusrite through the best available native/exclusive driver path and capture lossless float/PCM for calibration",
+            "capture each clock domain with source timestamps and nominal sample rate",
+            "estimate initial delay from speaker calibration pulse/sweep against the reference mic",
+            "estimate sampling-rate offset over time against the reference domain",
+            "resample each non-reference stream into the reference timeline",
+            "write one aligned six-channel WAV ordered by microphone fieldChannel",
+            "run encode-foa only on that aligned WAV",
+        ],
+    }
+    print(json.dumps(plan, indent=2))
+
+
 def encode_foa(profile, data):
     frames = data.shape[0]
     corrected = []
     weights = []
-    for mic in sorted(profile["microphones"], key=lambda item: item["channel"]):
-        channel = int(mic["channel"])
+    for mic in sorted(profile["microphones"], key=mic_channel):
+        channel = mic_channel(mic)
         if channel >= data.shape[1]:
             raise SystemExit(f"Input has {data.shape[1]} channels, missing microphone channel {channel}")
         x = data[:, channel].copy()
@@ -425,6 +601,15 @@ def main():
     p = sub.add_parser("devices", help="List PortAudio devices as JSON.")
     p.set_defaults(func=cmd_devices)
 
+    p = sub.add_parser("probe-rates", help="Check whether matching devices accept selected sample rates.")
+    p.add_argument("--device-query", required=True)
+    p.add_argument("--hostapi", default="")
+    p.add_argument("--direction", choices=["input", "output"], default="input")
+    p.add_argument("--channels", type=int, default=1)
+    p.add_argument("--dtype", default="float32")
+    p.add_argument("--rate", type=int, action="append")
+    p.set_defaults(func=cmd_probe_rates)
+
     p = sub.add_parser("validate", help="Validate an audio field profile.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
     p.add_argument("--check-devices", action="store_true")
@@ -439,6 +624,10 @@ def main():
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
     p.add_argument("--output", type=Path)
     p.set_defaults(func=cmd_play_record)
+
+    p = sub.add_parser("sync-plan", help="Summarize clock domains and the required alignment path before FOA encoding.")
+    p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
+    p.set_defaults(func=cmd_sync_plan)
 
     p = sub.add_parser("analyze-calibration", help="Estimate speaker-to-mic delay/gain/polarity from a calibration run.")
     p.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
