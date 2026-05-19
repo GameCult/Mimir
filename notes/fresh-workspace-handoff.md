@@ -39,6 +39,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Aquarium-Engine commit `8798908` makes `LocalCastRuntime` consume an injected
   `ILocalCastVisualFrameSource`; the remaining Aquarium cut is a native source
   implementation over the binding.
+- Aquarium-Engine commit `687845c` adds that native frame source. It still needs
+  the real payload decoder/runtime creation path before file polling can be
+  removed from the default runtime.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been
