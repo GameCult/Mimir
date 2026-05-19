@@ -35,6 +35,7 @@ class PerfectMachineContractTests(unittest.TestCase):
         header = (ROOT / "native" / "reservoir" / "include" / "localcast_reservoir.h").read_text(encoding="utf-8")
 
         self.assertIn("typedef struct LocalcastReservoir LocalcastReservoir;", header)
+        self.assertIn("typedef struct LocalcastProducer LocalcastProducer;", header)
         self.assertIn("typedef struct LocalcastSampleHandle", header)
         self.assertIn("uint64_t payload_handle;", header)
         self.assertIn("uint32_t flags;", header)
@@ -77,6 +78,10 @@ class PerfectMachineContractTests(unittest.TestCase):
             "localcast_runtime_sample_at",
             "localcast_runtime_view_sample_at",
             "localcast_runtime_latest_for_sensor",
+            "localcast_producer_create",
+            "localcast_producer_destroy",
+            "localcast_producer_next_sequence",
+            "localcast_producer_push",
         ]:
             self.assertIn(function, header)
 

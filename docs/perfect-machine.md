@@ -94,6 +94,11 @@ append into one shared five-second window without crossing a Python file cache.
 It also exposes total and typed-view reads so Aquarium/Faust can consume that
 same window without building private histories.
 
+`LocalcastProducer` is the first native capture-worker boundary. It owns sample
+kind, source identity, and sequence assignment before appending live handles into
+`LocalcastRuntime`; hardware adapters should provide timestamps and payload
+handles, not reservoir authority.
+
 ## Visual Fusion
 
 Camera fusion is feature matching across the reservoir, not a latest-frame
@@ -181,6 +186,8 @@ in `native/reservoir/include/localcast_reservoir.h`:
 - reject diagnostic/probe/fallback and unknown-flagged samples at the live
   reservoir boundary via sample provenance flags.
 - create/destroy an opaque `LocalcastRuntime`;
+- create/destroy opaque `LocalcastProducer` ingress helpers;
+- push live producer samples while the producer owns sequence/source metadata;
 - append typed camera/audio/phase/event/render handles through producer calls;
 - query a native runtime status struct with shared edge, window start, total
   count, and typed-view counts;

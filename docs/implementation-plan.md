@@ -28,6 +28,8 @@ shape removes independent per-kind storage from the live foundation.
   - `LocalcastRuntime` wraps the current reservoir with typed native producer
     calls and total/typed read functions. It is the intended live spine for
     Aquarium/Faust bindings.
+  - `LocalcastProducer` owns native ingress source identity and sequence
+    assignment before appending live handles into `LocalcastRuntime`.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.
@@ -112,8 +114,8 @@ shape removes independent per-kind storage from the live foundation.
    diagnostic JSON render-frame adapters, diagnostic JSON LOD adapters, and
    Python reservoir-window clipping.
 2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.
-3. Move camera/mic/loopback ingest into native capture workers that append
-   typed sample handles.
+3. Move camera/mic/loopback ingest into native capture workers that use
+   `LocalcastProducer` to append typed sample handles.
 4. Move feature extraction, flow, cross-view matching, LOD reconciliation,
    material fitting, brush/splat rendering, and Spout2 publication into
    Aquarium GPU compute.

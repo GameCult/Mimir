@@ -45,6 +45,13 @@ runtime path:
 - it exposes total and typed-view sample reads so Aquarium/Faust can consume the
   same rolling window producers append to.
 
+`LocalcastProducer` is the native ingress helper for capture workers:
+
+- it owns sample kind, source hash, and monotonically increasing sequence;
+- it creates live sample handles with `flags == 0`;
+- it appends into `LocalcastRuntime` without letting hardware adapters invent
+  reservoir metadata.
+
 Payload handles are owned by the caller. Aquarium should treat them as handles
 to GPU/native visual memory; Faust/native DSP should treat them as handles to
 audio buffers. This crate does not interpret those bytes. It is the clocked

@@ -22,6 +22,7 @@ enum LocalcastSampleKind {
 
 typedef struct LocalcastReservoir LocalcastReservoir;
 typedef struct LocalcastRuntime LocalcastRuntime;
+typedef struct LocalcastProducer LocalcastProducer;
 
 typedef struct LocalcastSampleHandle {
     uint64_t sensor_id_hash;
@@ -122,6 +123,23 @@ bool localcast_runtime_latest_for_sensor(
     const LocalcastRuntime *runtime,
     uint32_t sample_kind,
     uint64_t sensor_id_hash,
+    LocalcastSampleHandle *out_sample
+);
+
+LocalcastProducer *localcast_producer_create(
+    uint32_t sample_kind,
+    uint64_t sensor_id_hash,
+    uint64_t initial_sequence
+);
+void localcast_producer_destroy(LocalcastProducer *producer);
+uint64_t localcast_producer_next_sequence(const LocalcastProducer *producer);
+
+bool localcast_producer_push(
+    LocalcastProducer *producer,
+    LocalcastRuntime *runtime,
+    uint64_t timestamp_ns,
+    uint64_t arrival_ns,
+    uint64_t payload_handle,
     LocalcastSampleHandle *out_sample
 );
 

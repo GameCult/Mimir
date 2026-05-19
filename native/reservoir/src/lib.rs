@@ -191,6 +191,12 @@ pub struct LocalcastRuntime {
     reservoir: RollingReservoir<LocalcastSampleHandle>,
 }
 
+pub struct LocalcastProducer {
+    kind: SampleKind,
+    sensor_id_hash: u64,
+    next_sequence: u64,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LocalcastRuntimeStatus {
@@ -256,6 +262,35 @@ impl LocalcastRuntime {
             phase_claim_count: self.view_len(SampleKind::PhaseClaim),
             event_claim_count: self.view_len(SampleKind::EventClaim),
             render_packet_count: self.view_len(SampleKind::RenderPacket),
+        }
+    }
+}
+
+impl LocalcastProducer {
+    fn new(kind: SampleKind, sensor_id_hash: u64, initial_sequence: u64) -> Self {
+        Self {
+            kind,
+            sensor_id_hash,
+            next_sequence: initial_sequence,
+        }
+    }
+
+    fn sample(
+        &mut self,
+        timestamp_ns: u64,
+        arrival_ns: u64,
+        payload_handle: u64,
+    ) -> LocalcastSampleHandle {
+        let sequence = self.next_sequence;
+        self.next_sequence = self.next_sequence.saturating_add(1);
+        LocalcastSampleHandle {
+            sensor_id_hash: self.sensor_id_hash,
+            timestamp_ns,
+            arrival_ns,
+            sequence,
+            payload_handle,
+            flags: 0,
+            reserved: 0,
         }
     }
 }
@@ -624,6 +659,66 @@ pub extern "C" fn localcast_runtime_latest_for_sensor(
         return false;
     };
     *sample_out = sample.payload;
+    true
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_create(
+    sample_kind: u32,
+    sensor_id_hash: u64,
+    initial_sequence: u64,
+) -> *mut LocalcastProducer {
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
+        return std::ptr::null_mut();
+    };
+    if sensor_id_hash == 0 {
+        return std::ptr::null_mut();
+    }
+    Box::into_raw(Box::new(LocalcastProducer::new(
+        kind,
+        sensor_id_hash,
+        initial_sequence,
+    )))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_destroy(ptr: *mut LocalcastProducer) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(ptr));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_next_sequence(ptr: *const LocalcastProducer) -> u64 {
+    let Some(producer) = (unsafe { ptr.as_ref() }) else {
+        return 0;
+    };
+    producer.next_sequence
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_push(
+    producer_ptr: *mut LocalcastProducer,
+    runtime_ptr: *mut LocalcastRuntime,
+    timestamp_ns: u64,
+    arrival_ns: u64,
+    payload_handle: u64,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(producer) = (unsafe { producer_ptr.as_mut() }) else {
+        return false;
+    };
+    let Some(runtime) = (unsafe { runtime_ptr.as_mut() }) else {
+        return false;
+    };
+    let sample = producer.sample(timestamp_ns, arrival_ns, payload_handle);
+    runtime.push(producer.kind, sample);
+    if let Some(out) = unsafe { out_sample.as_mut() } {
+        *out = sample;
+    }
     true
 }
 
@@ -1048,6 +1143,82 @@ mod tests {
         ));
         assert_eq!(300, sample.payload_handle);
 
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn producer_owns_source_identity_sequence_and_live_flags() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let producer = localcast_producer_create(0, 77, 41);
+        let mut sample = handle(0, 0, 0, 0, 0);
+
+        assert!(!producer.is_null());
+        assert_eq!(41, localcast_producer_next_sequence(producer));
+        assert!(localcast_producer_push(
+            producer,
+            runtime,
+            1_000,
+            1_010,
+            900,
+            &mut sample,
+        ));
+        assert_eq!(77, sample.sensor_id_hash);
+        assert_eq!(41, sample.sequence);
+        assert_eq!(0, sample.flags);
+        assert_eq!(42, localcast_producer_next_sequence(producer));
+
+        assert!(localcast_producer_push(
+            producer,
+            runtime,
+            1_100,
+            1_110,
+            901,
+            std::ptr::null_mut(),
+        ));
+        assert_eq!(43, localcast_producer_next_sequence(producer));
+        assert_eq!(2, localcast_runtime_view_len(runtime, 0));
+
+        assert!(localcast_runtime_latest_for_sensor(
+            runtime,
+            0,
+            77,
+            &mut sample,
+        ));
+        assert_eq!(42, sample.sequence);
+        assert_eq!(901, sample.payload_handle);
+
+        localcast_producer_destroy(producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn producer_rejects_unknown_kind_null_runtime_and_empty_source() {
+        assert!(localcast_producer_create(99, 1, 0).is_null());
+        assert!(localcast_producer_create(0, 0, 0).is_null());
+        assert_eq!(0, localcast_producer_next_sequence(std::ptr::null()));
+
+        let producer = localcast_producer_create(0, 1, 0);
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+
+        assert!(!localcast_producer_push(
+            std::ptr::null_mut(),
+            runtime,
+            1,
+            1,
+            1,
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_producer_push(
+            producer,
+            std::ptr::null_mut(),
+            1,
+            1,
+            1,
+            std::ptr::null_mut(),
+        ));
+        assert_eq!(0, localcast_producer_next_sequence(producer));
+
+        localcast_producer_destroy(producer);
         localcast_runtime_destroy(runtime);
     }
 
