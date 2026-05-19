@@ -75,7 +75,7 @@ flowchart TD
 - `localcast.sensor_fusion.cultcache_docs` owns the typed CultCache document boundary for live visual state.
 - `localcast.diagnostics.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out. It is diagnostic/migration code, not the production visual authority.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
-- `scripts/stream_spout.py` owns the live Spout sender loop for OBS.
+- `scripts/diagnostic_stream_spout.py` owns the diagnostic Spout sender loop for OBS.
 - `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.
 
 ## Cache Discipline

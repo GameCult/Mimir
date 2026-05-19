@@ -17,7 +17,7 @@ flowchart TD
     Z["audio-events.msgpack"] --> Y
     D --> Y
     Y --> E["CultCache MessagePack store"]
-    E --> F["stream_spout.py"]
+    E --> F["diagnostic_stream_spout.py"]
     F --> G["ScreenBrushPacket lowering"]
     G --> H["Spout sender"]
     H --> I["OBS Spout2 Capture"]
@@ -84,14 +84,14 @@ frames presentable.
 
 ## Audio Synchronization
 
-`stream_spout.py` can now read `calibration/runs/audio-state.msgpack` and `calibration/runs/audio-events.msgpack` while it renders the visual frame. It selects source events against `RenderFramePacket.audio_alignment_time_ns`, adds synchronized audio-event points to the render packet, and writes `calibration/runs/av-sync-status.json` with the active visual frame id, audio frame id, audio delta, event count, overlay count, and remote video sync status.
+`diagnostic_stream_spout.py` can read `calibration/runs/audio-state.msgpack` and `calibration/runs/audio-events.msgpack` while it renders the diagnostic visual frame. It selects source events against `RenderFramePacket.audio_alignment_time_ns`, adds synchronized audio-event points to the render packet, and writes `calibration/runs/av-sync-status.json` with the active visual frame id, audio frame id, audio delta, event count, overlay count, and remote video sync status.
 
 The audio bed still travels as `localcast.audio.spatial_frame`; the visual render packet only receives renderer-visible transient geometry. That keeps the machine legible: audio owns sound, source-event analysis owns acoustic facts, Aquarium owns the final pixel/audio package for OBS.
 
-The neighbor SRT video feed is also a timed media artifact. For the deadline path, `stream_spout.py` records its URL and expected SRT latency in the sync status:
+The neighbor SRT video feed is also a timed media artifact. For the diagnostic deadline path, `diagnostic_stream_spout.py` records its URL and expected SRT latency in the sync status:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_spout.py `
+.\.venv\Scripts\python.exe .\scripts\diagnostic_stream_spout.py `
   --source cultcache `
   --frame-cache .\calibration\runs\visual-state.msgpack `
   --audio-cache .\calibration\runs\audio-state.msgpack `

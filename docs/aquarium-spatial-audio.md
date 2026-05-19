@@ -83,7 +83,7 @@ Source-event analysis command:
 Synchronized Aquarium/Spout publisher command:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_spout.py --source cultcache --frame-cache .\calibration\runs\visual-state.msgpack --audio-cache .\calibration\runs\audio-state.msgpack --audio-events-cache .\calibration\runs\audio-events.msgpack --sync-status .\calibration\runs\av-sync-status.json
+.\.venv\Scripts\python.exe .\scripts\diagnostic_stream_spout.py --source cultcache --frame-cache .\calibration\runs\visual-state.msgpack --audio-cache .\calibration\runs\audio-state.msgpack --audio-events-cache .\calibration\runs\av-sync-status.json
 ```
 
 ## Invariants

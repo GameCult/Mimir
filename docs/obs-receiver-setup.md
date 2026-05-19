@@ -30,10 +30,10 @@ OBS should be open before the sender starts if OBS is the SRT listener. If a sou
 
 ## Synchronization
 
-The video SRT source is a timed media artifact in the Aquarium path, not just scenery in OBS. Keep the listener URL and latency aligned with `stream_spout.py`:
+The video SRT source is a timed media artifact in the Aquarium path, not just scenery in OBS. Keep the listener URL and latency aligned with `diagnostic_stream_spout.py` while the diagnostic bridge still exists:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_spout.py `
+.\.venv\Scripts\python.exe .\scripts\diagnostic_stream_spout.py `
   --remote-video-url "srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000" `
   --remote-video-latency-ms 250
 ```

@@ -11,7 +11,7 @@ This is the deadline stream surface. It is not a preview window and it is not a 
 ```mermaid
 flowchart TD
     A["Sensor fusion producer"] --> B["CultCache render-frame doc"]
-    B --> C["scripts/stream_spout.py"]
+    B --> C["scripts/diagnostic_stream_spout.py"]
     C --> D["ScreenBrushPacket lowering"]
     D --> E["OpenGL texture/FBO"]
     E --> F["Spout sender texture"]
@@ -33,7 +33,7 @@ Install calibration/runtime dependencies once:
 Start the Spout sender:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_spout.py `
+.\.venv\Scripts\python.exe .\scripts\diagnostic_stream_spout.py `
   --source cultcache `
   --frame-cache .\calibration\runs\visual-state.msgpack `
   --demo-if-missing `

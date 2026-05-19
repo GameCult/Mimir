@@ -149,7 +149,7 @@ research:
     summary: docs/obs-spout-streaming.md
     key_decision: >
       The deadline OBS surface proved the need for a named Spout sender, but it
-      is not a foundation. `scripts/stream_spout.py`, SpoutGL/OpenGL rendering,
+      is not a foundation. `scripts/diagnostic_stream_spout.py`, SpoutGL/OpenGL rendering,
       Python render-frame production, and JSON heartbeat stores are diagnostics
       or migration fossils only. Production Spout publication belongs in
       Aquarium, fed by the native rolling reservoir and typed CultNet documents.
@@ -299,7 +299,7 @@ current_status:
     time, target render size, Spout sender name, and point draw metadata for
     Aquarium/Spout. A deadline OBS Spout sender is now live-shaped:
     `scripts/diagnostic_live_sensor_fusion.py` now writes fused render frames into typed
-    CultCache state at `calibration/runs/visual-state.msgpack`. `scripts/stream_spout.py`
+    CultCache state at `calibration/runs/visual-state.msgpack`. `scripts/diagnostic_stream_spout.py`
     consumes that CultCache document, lowers points into compact anisotropic
     screen brush packets, uploads an OpenGL texture, publishes Spout sender
     `LocalCastBridge Point Cloud`, and writes both typed status
