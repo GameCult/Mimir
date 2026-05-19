@@ -15,7 +15,7 @@ tests, and offline analysis. It does not own dense live fusion or DSP.
 
 ## Reservoir ABI
 
-The ABI is intentionally small:
+The reservoir ABI is intentionally small:
 
 - `LocalcastReservoir` is opaque.
 - `LocalcastSampleHandle` is sample metadata plus a `payload_handle`.
@@ -24,6 +24,19 @@ The ABI is intentionally small:
   block, phase claim, event claim, and render packet.
 - The reservoir can create/destroy, push, set/query edge, query window start,
   count a ring, and fetch the latest sample for a sensor hash.
+
+## Runtime ABI
+
+`LocalcastRuntime` is the live spine that should replace the Python file-cache
+runtime path:
+
+- it owns one native reservoir;
+- it exposes typed producer functions for camera frames, camera features, scene
+  rays, surface claims, material claims, audio blocks, phase claims, event
+  claims, and render packets;
+- it exposes `LocalcastRuntimeStatus` so Aquarium/Faust can inspect the shared
+  edge, window start, and per-ring sample counts without polling JSON or
+  MessagePack files.
 
 Payload handles are owned by the caller. Aquarium should treat them as handles
 to GPU/native visual memory; Faust/native DSP should treat them as handles to

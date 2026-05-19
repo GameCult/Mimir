@@ -15,13 +15,15 @@ The repo currently proves the contracts:
 
 ```mermaid
 flowchart TD
-    A["sensor samples"] --> B["typed CultCache docs"]
-    B --> C["Python deadline producers"]
-    C --> D["deadline Spout texture"]
-    D --> E["OBS"]
+    A["camera/audio/phase/render producers"] --> B["LocalcastRuntime C ABI"]
+    B --> C["5s native reservoir"]
+    C --> D["Aquarium GPU + Faust DSP"]
+    D --> E["Spout/audio stems"]
+    E --> F["OBS"]
 ```
 
-That was useful. It is not the final machine.
+The old CultCache/Python/Spout path remains a compatibility diagnostic. It is
+not the runtime API.
 
 ## Invariants
 
@@ -82,6 +84,11 @@ Required rings:
 
 The reservoir owns retention. Producers append. Optimizers refine. Renderers
 sample. No stage owns a private history that can outlive the reservoir.
+
+`LocalcastRuntime` is the first native owner above the raw reservoir. It exposes
+typed producer calls for each ring so camera capture, audio capture, phase
+estimation, material fitting, event detection, and render planning all append
+into one shared five-second window without crossing a Python file cache.
 
 ## Visual Fusion
 
@@ -165,6 +172,10 @@ in `native/reservoir/include/localcast_reservoir.h`:
 - advance/query the shared edge and window start;
 - query ring length;
 - query the latest sample for a sensor hash.
+- create/destroy an opaque `LocalcastRuntime`;
+- append typed camera/audio/phase/event/render handles through producer calls;
+- query a native runtime status struct with shared edge, window start, and ring
+  counts.
 
 The ABI carries `payload_handle`, not payload bytes. Aquarium owns image,
 feature, surface, material, and GPU memory interpretation. Faust/native DSP owns

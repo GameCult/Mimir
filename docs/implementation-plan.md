@@ -7,6 +7,7 @@
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir rings, native authorities, outputs, and the demotion of bridge scripts to tooling.
   - `native/reservoir` is the first native Rust crate. It implements shared-edge five-second reservoir rings and proves that all rings expire against the newest sample, not private per-source clocks.
   - `native/reservoir/include/localcast_reservoir.h` exposes the Aquarium/Faust C ABI: opaque reservoir create/destroy, sample-handle push, edge/window queries, ring counts, and latest sample lookup by sensor hash. Payload memory remains owned by Aquarium/GPU/Faust; the reservoir owns timing and retention.
+  - `LocalcastRuntime` now wraps the reservoir with typed native producer calls for camera frames/features, scene rays, surface/material claims, audio blocks, phase claims, events, and render packets. It also exposes native status with shared edge/window and ring counts, replacing the Python file-cache path as the intended live spine.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.
@@ -73,15 +74,17 @@
 - Audio defaults to AAC inside MPEG-TS for compatibility; test Opus later only if there is a concrete reason.
 - Desktop capture uses `gdigrab` first because it is broadly available. `ddagrab` is a candidate once the installed FFmpeg build is confirmed.
 - The scripts assume Windows sender and OBS receiver on the same LAN.
+- The Python live producers/renderers are compatibility diagnostics. They are no longer the intended runtime API.
 
 ## Next
 
-1. Add the Aquarium-side binding that loads `localcast_reservoir` and maps GPU/audio buffer handles to `LocalcastSampleHandle`.
-2. Move camera ingest into native capture workers that append `camera_frame` samples to the reservoir.
-3. Move feature extraction, flow, cross-view matching, LOD reconciliation, and material fitting into Aquarium GPU compute.
-4. Move mic alignment, voice separation, room suppression, Ambisonic/HOA spatialization, and stem generation into Faust/native DSP.
-5. Replace the deadline Spout sink with Aquarium-owned Spout publication from the native render target.
-6. Feed the neighbor Focusrite shotgun and neighbor loopback into the reservoir as live synchronized audio inputs.
-7. Replace placeholder mic/speaker/camera geometry with measured `config/audio-field.json` and `config/sensor-fusion.json` coordinates.
-8. Calibrate Leap as a geometric camera so Leap contributes direct 3D rays, not only timing evidence.
-9. Keep the Python bridge only for calibration, contract tests, device discovery, status, and offline analysis.
+1. Add the Aquarium-side binding that loads `localcast_reservoir`, creates `LocalcastRuntime`, and maps GPU/audio buffer handles to `LocalcastSampleHandle`.
+2. Move camera ingest into native capture workers that call `localcast_runtime_push_camera_frame`.
+3. Move mic/loopback ingest into native capture workers that call `localcast_runtime_push_audio_block`.
+4. Move feature extraction, flow, cross-view matching, LOD reconciliation, and material fitting into Aquarium GPU compute.
+5. Move mic alignment, voice separation, room suppression, Ambisonic/HOA spatialization, and stem generation into Faust/native DSP.
+6. Replace the deadline Spout sink with Aquarium-owned Spout publication from the native render target.
+7. Feed the neighbor Focusrite shotgun and neighbor loopback into the reservoir as live synchronized audio inputs.
+8. Replace placeholder mic/speaker/camera geometry with measured `config/audio-field.json` and `config/sensor-fusion.json` coordinates.
+9. Calibrate Leap as a geometric camera so Leap contributes direct 3D rays, not only timing evidence.
+10. Keep the Python bridge only for calibration, contract tests, device discovery, status, and offline analysis.

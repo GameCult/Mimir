@@ -190,6 +190,90 @@ pub struct LocalcastReservoir {
     inner: Reservoir<LocalcastSampleHandle>,
 }
 
+pub struct LocalcastRuntime {
+    reservoir: Reservoir<LocalcastSampleHandle>,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalcastRuntimeStatus {
+    pub edge_ns: u64,
+    pub window_start_ns: u64,
+    pub camera_frame_count: usize,
+    pub camera_feature_count: usize,
+    pub scene_ray_count: usize,
+    pub surface_claim_count: usize,
+    pub material_claim_count: usize,
+    pub audio_block_count: usize,
+    pub phase_claim_count: usize,
+    pub event_claim_count: usize,
+    pub render_packet_count: usize,
+}
+
+impl Default for LocalcastRuntimeStatus {
+    fn default() -> Self {
+        Self {
+            edge_ns: 0,
+            window_start_ns: 0,
+            camera_frame_count: 0,
+            camera_feature_count: 0,
+            scene_ray_count: 0,
+            surface_claim_count: 0,
+            material_claim_count: 0,
+            audio_block_count: 0,
+            phase_claim_count: 0,
+            event_claim_count: 0,
+            render_packet_count: 0,
+        }
+    }
+}
+
+impl LocalcastRuntime {
+    fn new(duration_ns: u64) -> Self {
+        let duration = if duration_ns == 0 {
+            DEFAULT_RESERVOIR_NS
+        } else {
+            duration_ns
+        };
+        Self {
+            reservoir: Reservoir::new(duration),
+        }
+    }
+
+    fn push(&mut self, kind: RingKind, sample: LocalcastSampleHandle) {
+        self.reservoir.push(
+            kind,
+            Sample::new(
+                sample.sensor_id_hash.to_string(),
+                sample.timestamp_ns,
+                sample.arrival_ns,
+                sample.sequence,
+                sample,
+            ),
+        );
+    }
+
+    fn ring_len(&self, kind: RingKind) -> usize {
+        self.reservoir.ring(kind).map_or(0, ReservoirRing::len)
+    }
+
+    fn status(&self) -> LocalcastRuntimeStatus {
+        LocalcastRuntimeStatus {
+            edge_ns: self.reservoir.edge_ns(),
+            window_start_ns: self.reservoir.window_start_ns(),
+            camera_frame_count: self.ring_len(RingKind::CameraFrame),
+            camera_feature_count: self.ring_len(RingKind::CameraFeature),
+            scene_ray_count: self.ring_len(RingKind::SceneRay),
+            surface_claim_count: self.ring_len(RingKind::SurfaceClaim),
+            material_claim_count: self.ring_len(RingKind::MaterialClaim),
+            audio_block_count: self.ring_len(RingKind::AudioBlock),
+            phase_claim_count: self.ring_len(RingKind::PhaseClaim),
+            event_claim_count: self.ring_len(RingKind::EventClaim),
+            render_packet_count: self.ring_len(RingKind::RenderPacket),
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn localcast_reservoir_create(duration_ns: u64) -> *mut LocalcastReservoir {
     let duration = if duration_ns == 0 {
@@ -300,6 +384,120 @@ pub extern "C" fn localcast_reservoir_latest_for_sensor(
         return false;
     };
     *out = sample.payload;
+    true
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_create(duration_ns: u64) -> *mut LocalcastRuntime {
+    Box::into_raw(Box::new(LocalcastRuntime::new(duration_ns)))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_destroy(ptr: *mut LocalcastRuntime) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(ptr));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_camera_frame(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::CameraFrame, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_camera_feature(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::CameraFeature, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_scene_ray(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::SceneRay, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_surface_claim(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::SurfaceClaim, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_material_claim(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::MaterialClaim, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_audio_block(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::AudioBlock, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_phase_claim(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::PhaseClaim, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_event_claim(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::EventClaim, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_render_packet(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, RingKind::RenderPacket, sample)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_status(
+    ptr: *const LocalcastRuntime,
+    out_status: *mut LocalcastRuntimeStatus,
+) -> bool {
+    let Some(runtime) = (unsafe { ptr.as_ref() }) else {
+        return false;
+    };
+    let Some(out) = (unsafe { out_status.as_mut() }) else {
+        return false;
+    };
+    *out = runtime.status();
+    true
+}
+
+fn localcast_runtime_push_typed(
+    ptr: *mut LocalcastRuntime,
+    kind: RingKind,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    let Some(runtime) = (unsafe { ptr.as_mut() }) else {
+        return false;
+    };
+    runtime.push(kind, sample);
     true
 }
 
@@ -417,5 +615,66 @@ mod tests {
             std::ptr::null_mut(),
         ));
         localcast_reservoir_destroy(reservoir);
+    }
+
+    #[test]
+    fn runtime_spine_routes_typed_producers_into_one_reservoir() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let camera = LocalcastSampleHandle {
+            sensor_id_hash: 10,
+            timestamp_ns: 1_000_000_000,
+            arrival_ns: 1_000_000_001,
+            sequence: 1,
+            payload_handle: 100,
+        };
+        let audio = LocalcastSampleHandle {
+            sensor_id_hash: 20,
+            timestamp_ns: 7_000_000_001,
+            arrival_ns: 7_000_000_010,
+            sequence: 2,
+            payload_handle: 200,
+        };
+        let phase = LocalcastSampleHandle {
+            sensor_id_hash: 30,
+            timestamp_ns: 7_000_000_010,
+            arrival_ns: 7_000_000_020,
+            sequence: 3,
+            payload_handle: 300,
+        };
+
+        assert!(localcast_runtime_push_camera_frame(runtime, camera));
+        assert!(localcast_runtime_push_audio_block(runtime, audio));
+        assert!(localcast_runtime_push_phase_claim(runtime, phase));
+
+        let mut status = LocalcastRuntimeStatus::default();
+        assert!(localcast_runtime_status(runtime, &mut status));
+        assert_eq!(7_000_000_010, status.edge_ns);
+        assert_eq!(2_000_000_010, status.window_start_ns);
+        assert_eq!(0, status.camera_frame_count);
+        assert_eq!(1, status.audio_block_count);
+        assert_eq!(1, status.phase_claim_count);
+
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn runtime_spine_rejects_nulls() {
+        let sample = LocalcastSampleHandle {
+            sensor_id_hash: 1,
+            timestamp_ns: 2,
+            arrival_ns: 3,
+            sequence: 4,
+            payload_handle: 5,
+        };
+        let mut status = LocalcastRuntimeStatus::default();
+
+        assert!(!localcast_runtime_push_camera_frame(
+            std::ptr::null_mut(),
+            sample,
+        ));
+        assert!(!localcast_runtime_status(std::ptr::null(), &mut status));
+        let runtime = localcast_runtime_create(0);
+        assert!(!localcast_runtime_status(runtime, std::ptr::null_mut()));
+        localcast_runtime_destroy(runtime);
     }
 }

@@ -44,6 +44,29 @@ class PerfectMachineContractTests(unittest.TestCase):
         self.assertIn("size_t localcast_reservoir_ring_len", header)
         self.assertIn("bool localcast_reservoir_latest_for_sensor", header)
 
+    def test_native_runtime_header_exposes_typed_producer_spine(self):
+        header = (ROOT / "native" / "reservoir" / "include" / "localcast_reservoir.h").read_text(encoding="utf-8")
+
+        self.assertIn("typedef struct LocalcastRuntime LocalcastRuntime;", header)
+        self.assertIn("typedef struct LocalcastRuntimeStatus", header)
+        self.assertIn("uint64_t edge_ns;", header)
+        self.assertIn("size_t camera_frame_count;", header)
+        self.assertIn("LocalcastRuntime *localcast_runtime_create", header)
+        self.assertIn("void localcast_runtime_destroy", header)
+        for function in [
+            "localcast_runtime_push_camera_frame",
+            "localcast_runtime_push_camera_feature",
+            "localcast_runtime_push_scene_ray",
+            "localcast_runtime_push_surface_claim",
+            "localcast_runtime_push_material_claim",
+            "localcast_runtime_push_audio_block",
+            "localcast_runtime_push_phase_claim",
+            "localcast_runtime_push_event_claim",
+            "localcast_runtime_push_render_packet",
+            "localcast_runtime_status",
+        ]:
+            self.assertIn(function, header)
+
 
 if __name__ == "__main__":
     unittest.main()

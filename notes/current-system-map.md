@@ -27,9 +27,9 @@ Ownership:
 - Faust owns hot audio DSP and program stem generation.
 - OBS owns broadcast controls.
 - Python remains tooling, not the stream hot path.
-- `native/reservoir` is the first native crate. It owns shared-edge five-second sample retention for typed rings and exposes the small C ABI in `native/reservoir/include/localcast_reservoir.h`: opaque reservoir lifetime, sample-handle push, edge/window queries, ring counts, and latest-by-sensor lookup.
+- `native/reservoir` is the first native crate. It owns shared-edge five-second sample retention for typed rings and exposes the C ABI in `native/reservoir/include/localcast_reservoir.h`: opaque reservoir lifetime, sample-handle push, edge/window queries, ring counts, latest-by-sensor lookup, and the `LocalcastRuntime` spine for typed producer appends plus native status.
 
-Invariant: the five-second spatiotemporal reservoir is the live authority. Producers append sample handles, optimizers refine, Aquarium/Faust sample and interpret the pointed-to payloads. No private history outlives the reservoir, and the reservoir does not pretend to own GPU image memory or Faust audio buffers.
+Invariant: the five-second spatiotemporal reservoir is the live authority. Producers append sample handles through typed native calls, optimizers refine, Aquarium/Faust sample and interpret the pointed-to payloads. No private history outlives the reservoir, and the reservoir does not pretend to own GPU image memory or Faust audio buffers. Python scripts are compatibility diagnostics and calibration tools, not the live API.
 
 ```mermaid
 flowchart TD
