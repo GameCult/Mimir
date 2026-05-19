@@ -3,11 +3,11 @@
 This is the cut line after the architectural teardown.
 
 The live system must be rebuilt around one native rolling reservoir. Python and
-OpenGL are no longer acceptable live foundations. They may remain as offline
+OpenGL are no longer acceptable live foundations. Python may remain as offline
 calibration, schema tests, device discovery, migration probes, and forensic
-tools only. If a future change needs Python or the current OpenGL Spout sink in
-the live path, treat that as evidence the native boundary is missing, not as
-permission to extend the deadline bridge.
+tools only. If a future change needs Python or an OpenGL Spout sink in the live
+path, treat that as evidence the native boundary is missing, not as permission
+to extend the deadline bridge.
 
 ## Objective
 

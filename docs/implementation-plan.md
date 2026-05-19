@@ -103,9 +103,8 @@ shape removes independent per-kind storage from the live foundation.
 - Audio defaults to AAC inside MPEG-TS for compatibility; test Opus later only if there is a concrete reason.
 - Desktop capture uses `gdigrab` first because it is broadly available. `ddagrab` is a candidate once the installed FFmpeg build is confirmed.
 - The scripts assume Windows sender and OBS receiver on the same LAN.
-- The Python live producers/renderers and OpenGL Spout sink are diagnostics or
-  migration fossils only. They should be quarantined or deleted early instead
-  of adapted.
+- The Python visual producer is a diagnostic/migration fossil only. The OpenGL
+  Spout sink has been deleted.
 
 ## Next
 
