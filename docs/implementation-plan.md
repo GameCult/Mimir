@@ -117,9 +117,10 @@ shape removes independent per-kind storage from the live foundation.
 
 ## Next
 
-1. Delete remaining production dependence on `localcast.diagnostics.visual_producer`,
-   diagnostic JSON render-frame adapters, diagnostic JSON LOD adapters, and
-   Python reservoir-window clipping.
+1. Delete remaining diagnostic command dependence on `localcast.diagnostics.visual_producer`,
+   diagnostic JSON render-frame adapters, and diagnostic JSON LOD adapters.
+   Reservoir-window clipping, Leap packed transforms, RGB reference splats, and
+   clap calibration have been split out of the producer monolith.
 2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.
    Aquarium now has a safe-code native reservoir binding layer, injected frame
    source seam, and native `ILocalCastVisualFrameSource` that reads render

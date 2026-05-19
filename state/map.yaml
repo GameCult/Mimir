@@ -301,11 +301,12 @@ current_status:
     points into `localcast.sensor_fusion.render_frame.v1` packets carrying
     source time ranges, intended visual presentation time, audio-alignment
     time, target render size, Spout sender name, and point draw metadata for
-    Aquarium/Spout. `localcast.diagnostics.visual_producer` contains the old
-    Python visual producer that writes fused render frames into
-    diagnostic typed CultCache state at `calibration/runs/visual-state.msgpack`.
-    The old Python/OpenGL diagnostic Spout sender has been deleted; only pure
-    diagnostic render math remains under `localcast.diagnostics.render_math`.
+    Aquarium/Spout. `localcast.diagnostics.visual_producer` is now diagnostic
+    orchestration for the old Python visual producer, while reservoir-window
+    clipping, Leap packed transforms, RGB reference splats, and diagnostic clap
+    calibration have separate owners. The old Python/OpenGL diagnostic Spout
+    sender has been deleted; only pure diagnostic render math remains under
+    `localcast.diagnostics.render_math`.
     OBS synchronized program setup now derives six
     per-channel stems from the aligned program audio timeline, creates/updates
     OBS Media Sources for host voice, co-streamer voice, ambient, transients,

@@ -74,8 +74,9 @@ The useful next work is foundation surgery, not hardware feature expansion:
 - bind Aquarium/Faust/native workers to the rolling-buffer `LocalcastRuntime`
 - build native mic/loopback/phase producers over `LocalcastProducer`; do not
   restore Python audio live launchers
-- delete production dependence on `localcast.diagnostics.visual_producer`
-  and diagnostic file adapters
+- delete the remaining diagnostic `visual_producer` command once native/Aquarium
+  producer paths cover it; core reservoir clipping, Leap packed transforms, RGB
+  reference splats, and diagnostic clap calibration have already been split out
 - bind Aquarium/Faust against the native runtime/producer ABI instead of
   reviving the deleted Python/OpenGL publisher
 - route future visual/audio runtime work through Aquarium/Faust/native runtime plus typed CultNet docs

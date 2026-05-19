@@ -148,9 +148,12 @@ Ownership:
   lowering, render budgeting, and Spout2 publication.
 - CultNet typed documents carry status/control/process state. JSON is schema or
   diagnostic export only.
-- `localcast.diagnostics.visual_producer`, Python fallback producers, and
-  diagnostic CultCache/JSON file adapters are diagnostics/migration fossils.
-  They must not be extended as production surfaces.
+- `localcast.diagnostics.visual_producer` is now diagnostic orchestration only.
+  Reservoir-window clipping, Leap packed transforms, RGB reference splats, and
+  diagnostic clap calibration have named modules outside the producer monolith.
+  Python fallback producers and diagnostic CultCache/JSON file adapters remain
+  diagnostics/migration fossils. They must not be extended as production
+  surfaces.
 - `localcast.diagnostics.render_frame_json` and
   `localcast.diagnostics.lod_json` are explicit compatibility adapters; model
   modules do not own file serialization.
