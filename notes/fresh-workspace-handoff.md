@@ -33,6 +33,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `LocalcastRuntime` now exposes producer pushes and consumer reads.
   `LocalcastProducer` owns source identity and sequence assignment for native
   capture workers.
+- `LocalcastAudioBlockDescriptor` is the first typed audio payload descriptor:
+  caller-owned float32 interleaved audio blocks cross the ABI by descriptor
+  pointer, while the reservoir still owns only timing/retention metadata.
 - Aquarium-Engine commit `4d5aec7` adds the first safe-code C# binding layer for
   this native ABI. It is not yet wired into `LocalCastRuntime` as the live
   source.
@@ -42,6 +45,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Aquarium-Engine commit `687845c` adds that native frame source. It still needs
   the real payload decoder/runtime creation path before file polling can be
   removed from the default runtime.
+- Aquarium-Engine commit `34694e6` adds the matching safe-code C# binding and
+  layout tests for `LocalcastAudioBlockDescriptor` and the native audio-block
+  producer helper.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been

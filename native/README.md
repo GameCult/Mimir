@@ -52,6 +52,14 @@ runtime path:
 - it appends into `LocalcastRuntime` without letting hardware adapters invent
   reservoir metadata.
 
+`LocalcastAudioBlockDescriptor` is the first typed payload descriptor:
+
+- it describes the caller-owned audio block handle, frame count, channel count,
+  sample rate, sample format, start sample, and channel-layout hash;
+- `localcast_producer_push_audio_block` only accepts `AudioBlock` producers and
+  stores the descriptor pointer as the sample payload handle;
+- the reservoir still does not copy or own audio memory.
+
 Payload handles are owned by the caller. Aquarium should treat them as handles
 to GPU/native visual memory; Faust/native DSP should treat them as handles to
 audio buffers. This crate does not interpret those bytes. It is the clocked

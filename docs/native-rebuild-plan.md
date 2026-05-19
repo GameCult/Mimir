@@ -76,6 +76,11 @@ feature, surface, material, and render payloads. Faust/native DSP owns audio
 buffers and stem payloads. The reservoir owns timing, identity, ordering,
 retention, and handle lookup.
 
+Typed payload descriptors may cross the ABI when they clarify ownership without
+copying data. `LocalcastAudioBlockDescriptor` describes caller-owned interleaved
+float32 audio blocks for native/Faust producers; the reservoir stores its
+address as the payload handle and does not own the bytes.
+
 ## Authoritative Boundaries
 
 - Config/calibration crosses into runtime as immutable measured truth plus

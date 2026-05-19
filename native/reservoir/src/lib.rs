@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 pub const DEFAULT_RESERVOIR_NS: u64 = 5_000_000_000;
 pub const LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC: u32 = 1 << 0;
+pub const LOCALCAST_AUDIO_SAMPLE_FORMAT_F32_INTERLEAVED: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SampleKind {
@@ -181,6 +182,18 @@ pub struct LocalcastSampleHandle {
     pub payload_handle: u64,
     pub flags: u32,
     pub reserved: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalcastAudioBlockDescriptor {
+    pub data_handle: u64,
+    pub frame_count: u32,
+    pub channel_count: u32,
+    pub sample_rate_hz: u32,
+    pub sample_format: u32,
+    pub start_sample: u64,
+    pub channel_layout_hash: u64,
 }
 
 pub struct LocalcastReservoir {
@@ -722,6 +735,35 @@ pub extern "C" fn localcast_producer_push(
     true
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_push_audio_block(
+    producer_ptr: *mut LocalcastProducer,
+    runtime_ptr: *mut LocalcastRuntime,
+    timestamp_ns: u64,
+    arrival_ns: u64,
+    descriptor: *const LocalcastAudioBlockDescriptor,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(producer) = (unsafe { producer_ptr.as_mut() }) else {
+        return false;
+    };
+    if producer.kind != SampleKind::AudioBlock {
+        return false;
+    }
+    if descriptor.is_null() {
+        return false;
+    }
+    let payload_handle = descriptor as u64;
+    localcast_producer_push(
+        producer_ptr,
+        runtime_ptr,
+        timestamp_ns,
+        arrival_ns,
+        payload_handle,
+        out_sample,
+    )
+}
+
 fn localcast_runtime_push_typed(
     ptr: *mut LocalcastRuntime,
     kind: SampleKind,
@@ -775,6 +817,18 @@ mod tests {
                 sequence,
                 payload_handle,
             )
+        }
+    }
+
+    fn audio_descriptor(data_handle: u64) -> LocalcastAudioBlockDescriptor {
+        LocalcastAudioBlockDescriptor {
+            data_handle,
+            frame_count: 1024,
+            channel_count: 6,
+            sample_rate_hz: 48_000,
+            sample_format: LOCALCAST_AUDIO_SAMPLE_FORMAT_F32_INTERLEAVED,
+            start_sample: 2_048,
+            channel_layout_hash: 99,
         }
     }
 
@@ -1219,6 +1273,71 @@ mod tests {
         assert_eq!(0, localcast_producer_next_sequence(producer));
 
         localcast_producer_destroy(producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn audio_block_descriptor_is_typed_payload_boundary_not_reservoir_storage() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let producer = localcast_producer_create(SampleKind::AudioBlock.id(), 55, 7);
+        let descriptor = audio_descriptor(700);
+        let mut sample = handle(0, 0, 0, 0, 0);
+
+        assert_eq!(std::mem::size_of::<LocalcastAudioBlockDescriptor>(), 40);
+        assert!(localcast_producer_push_audio_block(
+            producer,
+            runtime,
+            5_000,
+            5_010,
+            &descriptor,
+            &mut sample,
+        ));
+        assert_eq!(55, sample.sensor_id_hash);
+        assert_eq!(7, sample.sequence);
+        assert_eq!(
+            (&descriptor as *const LocalcastAudioBlockDescriptor) as u64,
+            sample.payload_handle
+        );
+        assert_eq!(0, sample.flags);
+        assert_eq!(
+            1,
+            localcast_runtime_view_len(runtime, SampleKind::AudioBlock.id())
+        );
+
+        localcast_producer_destroy(producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn audio_block_descriptor_push_rejects_wrong_kind_and_null_descriptor() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let camera_producer = localcast_producer_create(SampleKind::CameraFrame.id(), 55, 7);
+        let audio_producer = localcast_producer_create(SampleKind::AudioBlock.id(), 56, 0);
+        let descriptor = audio_descriptor(700);
+
+        assert!(!localcast_producer_push_audio_block(
+            camera_producer,
+            runtime,
+            5_000,
+            5_010,
+            &descriptor,
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_producer_push_audio_block(
+            audio_producer,
+            runtime,
+            5_000,
+            5_010,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+        ));
+        assert_eq!(
+            0,
+            localcast_runtime_view_len(runtime, SampleKind::AudioBlock.id())
+        );
+
+        localcast_producer_destroy(camera_producer);
+        localcast_producer_destroy(audio_producer);
         localcast_runtime_destroy(runtime);
     }
 

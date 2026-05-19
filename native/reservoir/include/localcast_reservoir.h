@@ -38,6 +38,20 @@ enum LocalcastSampleFlags {
     LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC = 1u << 0
 };
 
+enum LocalcastAudioSampleFormat {
+    LOCALCAST_AUDIO_SAMPLE_FORMAT_F32_INTERLEAVED = 1
+};
+
+typedef struct LocalcastAudioBlockDescriptor {
+    uint64_t data_handle;
+    uint32_t frame_count;
+    uint32_t channel_count;
+    uint32_t sample_rate_hz;
+    uint32_t sample_format;
+    uint64_t start_sample;
+    uint64_t channel_layout_hash;
+} LocalcastAudioBlockDescriptor;
+
 typedef struct LocalcastRuntimeStatus {
     uint64_t edge_ns;
     uint64_t window_start_ns;
@@ -140,6 +154,15 @@ bool localcast_producer_push(
     uint64_t timestamp_ns,
     uint64_t arrival_ns,
     uint64_t payload_handle,
+    LocalcastSampleHandle *out_sample
+);
+
+bool localcast_producer_push_audio_block(
+    LocalcastProducer *producer,
+    LocalcastRuntime *runtime,
+    uint64_t timestamp_ns,
+    uint64_t arrival_ns,
+    const LocalcastAudioBlockDescriptor *descriptor,
     LocalcastSampleHandle *out_sample
 );
 

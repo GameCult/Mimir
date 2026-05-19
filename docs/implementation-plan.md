@@ -30,6 +30,10 @@ shape removes independent per-kind storage from the live foundation.
     Aquarium/Faust bindings.
   - `LocalcastProducer` owns native ingress source identity and sequence
     assignment before appending live handles into `LocalcastRuntime`.
+  - `LocalcastAudioBlockDescriptor` is the first typed payload descriptor for
+    caller-owned float32 interleaved audio blocks. The reservoir stores only the
+    descriptor pointer as a payload handle; audio memory remains owned by
+    native/Faust producers.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.
@@ -120,8 +124,9 @@ shape removes independent per-kind storage from the live foundation.
    Aquarium now has a safe-code native reservoir binding layer, injected frame
    source seam, and native `ILocalCastVisualFrameSource` that reads render
    packet handles through `ILocalCastNativeRuntime` with an injected payload
-   decoder. The next Aquarium cut is wiring the real payload decoder/runtime
-   creation path.
+   decoder. It also has the matching safe-code audio block descriptor binding.
+   The next Aquarium cut is wiring the real payload decoder/runtime creation
+   path.
 3. Move camera/mic/loopback ingest into native capture workers that use
    `LocalcastProducer` to append typed sample handles.
 4. Move feature extraction, flow, cross-view matching, LOD reconciliation,

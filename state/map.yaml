@@ -54,6 +54,9 @@ accepted_design:
   - `LocalcastRuntime` exposes typed producer pushes plus total/typed window
     reads. `LocalcastProducer` owns source identity and sequence assignment
     before hardware adapters append live sample handles.
+  - `LocalcastAudioBlockDescriptor` is the first typed payload descriptor for
+    caller-owned float32 interleaved audio blocks; the reservoir stores only the
+    descriptor pointer as a payload handle and does not own DSP memory.
   - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
   - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
   - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.
