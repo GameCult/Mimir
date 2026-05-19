@@ -36,6 +36,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `LocalcastAudioBlockDescriptor` is the first typed audio payload descriptor:
   caller-owned float32 interleaved audio blocks cross the ABI by descriptor
   pointer, while the reservoir still owns only timing/retention metadata.
+- `LocalcastRenderPacketDescriptor` now gives render packets the same typed
+  descriptor boundary for caller-owned point buffers and presentation timing.
 - Aquarium-Engine commit `4d5aec7` adds the first safe-code C# binding layer for
   this native ABI. It is not yet wired into `LocalCastRuntime` as the live
   source.
@@ -48,6 +50,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Aquarium-Engine commit `34694e6` adds the matching safe-code C# binding and
   layout tests for `LocalcastAudioBlockDescriptor` and the native audio-block
   producer helper.
+- Aquarium-Engine commit `9eb40cf` adds the matching safe-code C# binding and
+  layout tests for `LocalcastRenderPacketDescriptor` and the native
+  render-packet producer helper.
+- Aquarium-Engine commit `cfb48d7` adds `LocalCastNativeRenderDescriptorDecoder`,
+  which reads render descriptor timing/target metadata from native payload
+  handles while keeping point-buffer decoding injectable.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been

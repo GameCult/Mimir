@@ -196,6 +196,21 @@ pub struct LocalcastAudioBlockDescriptor {
     pub channel_layout_hash: u64,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalcastRenderPacketDescriptor {
+    pub point_buffer_handle: u64,
+    pub point_count: u32,
+    pub point_stride_bytes: u32,
+    pub target_width: u32,
+    pub target_height: u32,
+    pub source_time_min_ns: u64,
+    pub source_time_max_ns: u64,
+    pub present_time_ns: u64,
+    pub audio_alignment_time_ns: u64,
+    pub metadata_handle: u64,
+}
+
 pub struct LocalcastReservoir {
     inner: RollingReservoir<LocalcastSampleHandle>,
 }
@@ -764,6 +779,35 @@ pub extern "C" fn localcast_producer_push_audio_block(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_push_render_packet(
+    producer_ptr: *mut LocalcastProducer,
+    runtime_ptr: *mut LocalcastRuntime,
+    timestamp_ns: u64,
+    arrival_ns: u64,
+    descriptor: *const LocalcastRenderPacketDescriptor,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(producer) = (unsafe { producer_ptr.as_mut() }) else {
+        return false;
+    };
+    if producer.kind != SampleKind::RenderPacket {
+        return false;
+    }
+    if descriptor.is_null() {
+        return false;
+    }
+    let payload_handle = descriptor as u64;
+    localcast_producer_push(
+        producer_ptr,
+        runtime_ptr,
+        timestamp_ns,
+        arrival_ns,
+        payload_handle,
+        out_sample,
+    )
+}
+
 fn localcast_runtime_push_typed(
     ptr: *mut LocalcastRuntime,
     kind: SampleKind,
@@ -829,6 +873,21 @@ mod tests {
             sample_format: LOCALCAST_AUDIO_SAMPLE_FORMAT_F32_INTERLEAVED,
             start_sample: 2_048,
             channel_layout_hash: 99,
+        }
+    }
+
+    fn render_descriptor(point_buffer_handle: u64) -> LocalcastRenderPacketDescriptor {
+        LocalcastRenderPacketDescriptor {
+            point_buffer_handle,
+            point_count: 4096,
+            point_stride_bytes: 64,
+            target_width: 1920,
+            target_height: 1080,
+            source_time_min_ns: 1_000,
+            source_time_max_ns: 2_000,
+            present_time_ns: 2_350,
+            audio_alignment_time_ns: 2_300,
+            metadata_handle: 88,
         }
     }
 
@@ -1338,6 +1397,70 @@ mod tests {
 
         localcast_producer_destroy(camera_producer);
         localcast_producer_destroy(audio_producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn render_packet_descriptor_is_typed_payload_boundary_not_reservoir_storage() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let producer = localcast_producer_create(SampleKind::RenderPacket.id(), 88, 12);
+        let descriptor = render_descriptor(1_000);
+        let mut sample = handle(0, 0, 0, 0, 0);
+
+        assert_eq!(std::mem::size_of::<LocalcastRenderPacketDescriptor>(), 64);
+        assert!(localcast_producer_push_render_packet(
+            producer,
+            runtime,
+            2_000,
+            2_010,
+            &descriptor,
+            &mut sample,
+        ));
+        assert_eq!(88, sample.sensor_id_hash);
+        assert_eq!(12, sample.sequence);
+        assert_eq!(
+            (&descriptor as *const LocalcastRenderPacketDescriptor) as u64,
+            sample.payload_handle
+        );
+        assert_eq!(
+            1,
+            localcast_runtime_view_len(runtime, SampleKind::RenderPacket.id())
+        );
+
+        localcast_producer_destroy(producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn render_packet_descriptor_push_rejects_wrong_kind_and_null_descriptor() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let audio_producer = localcast_producer_create(SampleKind::AudioBlock.id(), 88, 12);
+        let render_producer = localcast_producer_create(SampleKind::RenderPacket.id(), 89, 0);
+        let descriptor = render_descriptor(1_000);
+
+        assert!(!localcast_producer_push_render_packet(
+            audio_producer,
+            runtime,
+            2_000,
+            2_010,
+            &descriptor,
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_producer_push_render_packet(
+            render_producer,
+            runtime,
+            2_000,
+            2_010,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+        ));
+        assert_eq!(
+            0,
+            localcast_runtime_view_len(runtime, SampleKind::RenderPacket.id())
+        );
+
+        localcast_producer_destroy(audio_producer);
+        localcast_producer_destroy(render_producer);
         localcast_runtime_destroy(runtime);
     }
 

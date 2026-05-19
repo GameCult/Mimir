@@ -60,6 +60,16 @@ runtime path:
   stores the descriptor pointer as the sample payload handle;
 - the reservoir still does not copy or own audio memory.
 
+`LocalcastRenderPacketDescriptor` is the visual equivalent:
+
+- it describes the caller-owned point buffer handle, point count/stride, target
+  dimensions, source-time span, presentation time, audio-alignment time, and an
+  optional metadata handle;
+- `localcast_producer_push_render_packet` only accepts `RenderPacket`
+  producers and stores the descriptor pointer as the sample payload handle;
+- Aquarium owns decoding and GPU upload. The reservoir only indexes when this
+  render packet exists in the shared rolling window.
+
 Payload handles are owned by the caller. Aquarium should treat them as handles
 to GPU/native visual memory; Faust/native DSP should treat them as handles to
 audio buffers. This crate does not interpret those bytes. It is the clocked

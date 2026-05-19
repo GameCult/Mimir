@@ -52,6 +52,19 @@ typedef struct LocalcastAudioBlockDescriptor {
     uint64_t channel_layout_hash;
 } LocalcastAudioBlockDescriptor;
 
+typedef struct LocalcastRenderPacketDescriptor {
+    uint64_t point_buffer_handle;
+    uint32_t point_count;
+    uint32_t point_stride_bytes;
+    uint32_t target_width;
+    uint32_t target_height;
+    uint64_t source_time_min_ns;
+    uint64_t source_time_max_ns;
+    uint64_t present_time_ns;
+    uint64_t audio_alignment_time_ns;
+    uint64_t metadata_handle;
+} LocalcastRenderPacketDescriptor;
+
 typedef struct LocalcastRuntimeStatus {
     uint64_t edge_ns;
     uint64_t window_start_ns;
@@ -163,6 +176,15 @@ bool localcast_producer_push_audio_block(
     uint64_t timestamp_ns,
     uint64_t arrival_ns,
     const LocalcastAudioBlockDescriptor *descriptor,
+    LocalcastSampleHandle *out_sample
+);
+
+bool localcast_producer_push_render_packet(
+    LocalcastProducer *producer,
+    LocalcastRuntime *runtime,
+    uint64_t timestamp_ns,
+    uint64_t arrival_ns,
+    const LocalcastRenderPacketDescriptor *descriptor,
     LocalcastSampleHandle *out_sample
 );
 

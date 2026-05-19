@@ -80,6 +80,9 @@ Typed payload descriptors may cross the ABI when they clarify ownership without
 copying data. `LocalcastAudioBlockDescriptor` describes caller-owned interleaved
 float32 audio blocks for native/Faust producers; the reservoir stores its
 address as the payload handle and does not own the bytes.
+`LocalcastRenderPacketDescriptor` does the same for visual render packets:
+caller-owned point buffers and timing metadata are explicit, while Aquarium owns
+decode/upload/rendering.
 
 ## Authoritative Boundaries
 

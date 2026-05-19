@@ -34,6 +34,10 @@ shape removes independent per-kind storage from the live foundation.
     caller-owned float32 interleaved audio blocks. The reservoir stores only the
     descriptor pointer as a payload handle; audio memory remains owned by
     native/Faust producers.
+  - `LocalcastRenderPacketDescriptor` gives render packets the same typed
+    descriptor boundary: caller-owned point buffer, point count/stride, target
+    size, source window, present time, audio-alignment time, and optional
+    metadata handle.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.
@@ -125,9 +129,11 @@ shape removes independent per-kind storage from the live foundation.
    Aquarium now has a safe-code native reservoir binding layer, injected frame
    source seam, and native `ILocalCastVisualFrameSource` that reads render
    packet handles through `ILocalCastNativeRuntime` with an injected payload
-   decoder. It also has the matching safe-code audio block descriptor binding.
-   The next Aquarium cut is wiring the real payload decoder/runtime creation
-   path.
+   decoder. It also has the matching safe-code audio block and render packet
+   descriptor bindings, plus a render descriptor decoder that reads timing and
+   target metadata from native payload handles while leaving point-buffer
+   decoding injectable. The next Aquarium cut is wiring native runtime creation
+   and real point-buffer decode into the app path.
 3. Move camera/mic/loopback ingest into native capture workers that use
    `LocalcastProducer` to append typed sample handles.
 4. Move feature extraction, flow, cross-view matching, LOD reconciliation,
