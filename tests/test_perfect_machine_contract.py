@@ -30,6 +30,20 @@ class PerfectMachineContractTests(unittest.TestCase):
         })
         self.assertIn("dense-feature-extraction", data["bridgeDemotion"]["notPython"])
 
+    def test_native_reservoir_header_exposes_small_c_abi(self):
+        header = (ROOT / "native" / "reservoir" / "include" / "localcast_reservoir.h").read_text(encoding="utf-8")
+
+        self.assertIn("typedef struct LocalcastReservoir LocalcastReservoir;", header)
+        self.assertIn("typedef struct LocalcastSampleHandle", header)
+        self.assertIn("uint64_t payload_handle;", header)
+        self.assertIn("LocalcastReservoir *localcast_reservoir_create", header)
+        self.assertIn("void localcast_reservoir_destroy", header)
+        self.assertIn("bool localcast_reservoir_push", header)
+        self.assertIn("uint64_t localcast_reservoir_edge_ns", header)
+        self.assertIn("uint64_t localcast_reservoir_window_start_ns", header)
+        self.assertIn("size_t localcast_reservoir_ring_len", header)
+        self.assertIn("bool localcast_reservoir_latest_for_sensor", header)
+
 
 if __name__ == "__main__":
     unittest.main()

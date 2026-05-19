@@ -157,6 +157,16 @@ five-second reservoir invariant:
 - evict every ring against the same edge;
 - query the latest valid sample per sensor.
 
-This is intentionally below Aquarium and Faust. The crate owns retention and
-sample-window semantics; Aquarium owns GPU interpretation and rendering, Faust
-owns DSP interpretation.
+It now builds as `rlib`, `cdylib`, and `staticlib`, with a small C ABI declared
+in `native/reservoir/include/localcast_reservoir.h`:
+
+- create/destroy an opaque `LocalcastReservoir`;
+- push timestamped sample metadata into a typed ring;
+- advance/query the shared edge and window start;
+- query ring length;
+- query the latest sample for a sensor hash.
+
+The ABI carries `payload_handle`, not payload bytes. Aquarium owns image,
+feature, surface, material, and GPU memory interpretation. Faust/native DSP owns
+audio buffer interpretation. The reservoir owns only retention, ring identity,
+timestamp order, and the five-second shared-edge invariant.

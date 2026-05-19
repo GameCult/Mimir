@@ -34,7 +34,7 @@ invariants:
 
 accepted_design:
   - `docs/perfect-machine.md` and `config/perfect-machine.example.json` define the native target: one five-second spatiotemporal reservoir, Aquarium GPU fusion/rendering, Faust DSP, OBS output controls, and LocalCastBridge tooling.
-  - `native/reservoir` is the first native Rust crate. It implements shared-edge reservoir rings so all sample types expire from the newest live sample rather than private source histories.
+  - `native/reservoir` is the first native Rust crate. It implements shared-edge reservoir rings so all sample types expire from the newest live sample rather than private source histories, and exposes a small C ABI for Aquarium/Faust handle-based integration.
   - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
   - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
   - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.
@@ -42,7 +42,7 @@ accepted_design:
   - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
 
 active_subgoals:
-  - Implement the Perfect Machine native reservoir contract described by `docs/perfect-machine.md` and `config/perfect-machine.example.json`.
+  - Bind Aquarium/Faust to the native reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
   - Move dense visual fusion/material fitting/brush generation into Aquarium GPU compute.
   - Move hot audio DSP/voice separation/room suppression/spatialization into Faust/native runtime.
   - Validate the actual sender FFmpeg build and capture device names.

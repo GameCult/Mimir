@@ -5,6 +5,6 @@ edition = "2024"
 description = "Native five-second spatiotemporal reservoir core for LocalCastBridge"
 
 [lib]
-crate-type = ["rlib"]
+crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
