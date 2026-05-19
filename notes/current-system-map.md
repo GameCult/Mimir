@@ -151,6 +151,9 @@ Ownership:
 - `localcast.diagnostics.render_frame_json` and
   `localcast.diagnostics.lod_json` are explicit compatibility adapters; model
   modules do not own file serialization.
+- `localcast.diagnostics.render_math` is the pure, testable diagnostic renderer
+  math split away from the OpenGL publisher. `spout_output` is now only the
+  disposable Spout/OpenGL shell.
 
 Invariant: fallback/demo evidence cannot enter ground-truth reservoir kinds.
 Render packets, LOD cells, brush packets, and overlays are derived from reservoir

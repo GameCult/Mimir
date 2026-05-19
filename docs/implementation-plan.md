@@ -53,7 +53,11 @@ shape removes independent per-kind storage from the live foundation.
   - `localcast.sensor_fusion.render_bridge` emits render-frame packets with visual/audio timing metadata and Spout sender identity.
   - `localcast.diagnostics.visual_cache` stores diagnostic visual state as typed
     CultCache MessagePack documents. It is not the production live boundary.
-  - `localcast.diagnostics.spout_output` renders render-frame packets into a GPU texture and publishes it as a named Spout sender for OBS. This is diagnostic/migration code, not production runtime.
+  - `localcast.diagnostics.render_math` owns pure diagnostic render budgeting,
+    camera projection, brush lowering, and CPU rasterization tests without an
+    OpenGL or OpenCV requirement.
+  - `localcast.diagnostics.spout_output` is now only the diagnostic Spout/OpenGL
+    publisher shell around that math. It is not production runtime.
   - `scripts/diagnostic_live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`. This is diagnostic/migration code, not production runtime.
   - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
   - Live clap calibration is wired into the visual producer. It keeps a rolling frame window from the Kiyo pair plus Leap, reads the live spatial audio frame for transient candidates, publishes `clap-events.msgpack`, injects clap calibration markers into the render frame, and writes clap evidence into the LOD cache. Kiyo stereo owns the current rough 3D solve; Leap owns the best visual timing witness until its geometric model is calibrated.

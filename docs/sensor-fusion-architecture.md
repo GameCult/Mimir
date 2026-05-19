@@ -75,7 +75,12 @@ flowchart TD
 - `localcast.diagnostics.visual_cache` owns the typed CultCache document shape
   used by diagnostic visual-state files. Production visual state should cross
   the native/CultNet boundary directly, not through this Python file adapter.
-- `localcast.diagnostics.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out. It is diagnostic/migration code, not the production visual authority.
+- `localcast.diagnostics.render_math` owns pure diagnostic render budgeting,
+  camera projection, brush lowering, and CPU rasterization. It has unit tests
+  and does not require a GPU context.
+- `localcast.diagnostics.spout_output` owns only the deadline OBS publication
+  sink: render-frame packet in, GPU texture plus Spout sender heartbeat out. It
+  is diagnostic/migration code, not the production visual authority.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
 - `scripts/diagnostic_stream_spout.py` owns the diagnostic Spout sender loop for OBS.
 - `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.

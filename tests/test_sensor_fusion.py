@@ -54,7 +54,7 @@ from localcast.diagnostics.visual_cache import (
     put_live_render_frame,
 )
 from localcast.sensor_fusion.audio_overlay import clamp_frame_to_audio_reservoir
-from localcast.diagnostics.spout_output import (
+from localcast.diagnostics.render_math import (
     SpoutOutputConfig,
     VirtualCamera,
     frame_to_vertex_array,
