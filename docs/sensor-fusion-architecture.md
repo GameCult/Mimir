@@ -99,7 +99,7 @@ sensor observation
 
 The cache is not a bucket. `TrackCache` has a TTL and confidence update rule so the system can buffer and converge without pretending stale points are fresh. The live frame reservoir is explicitly five seconds wide: frame history expires from the newest shared sample, LOD evidence is clipped to that same interval, and each `RenderFramePacket` reports the exact source window. Later GPU buffers should mirror this shape: observation SoA, track SoA, material/BRDF estimate SoA, brush packet SoA.
 
-`visual-lod-cache.json` is the current CPU-authored shape for the next compute pass. It is not the final renderer. It groups stochastic/fused scene claims into multiple world-space voxel sizes, carrying center, radius, confidence, count, and source-time bounds so an Aquarium compute shader can reconcile fine and coarse claims without pulling anything older than the reservoir through the renderer.
+`visual-lod-cache.json` is the current CPU-authored shape for the next compute pass. It is not the final renderer. It groups stochastic/fused scene claims into multiple world-space voxel sizes, carrying center, radius, confidence, count, source-time bounds, and first-pass material estimates. The material channel is deliberately modest: weighted albedo plus roughness/metallic hints so Aquarium can start relighting brush/splat packets without treating screen-space color as the whole truth. A later shader pass should replace those hints with multi-view BRDF fitting inside the same reservoir.
 
 ## Test Boundaries
 
@@ -171,6 +171,8 @@ Each render frame carries:
 That lets the final stream compositor buffer point-cloud visuals until they align with the bounded audio-field cache. The renderer may show a slightly older world if the packet is coherent and labeled. It may not quietly mix fresh audio with stale visual geometry and call that sync.
 
 Current live deadline rule: `source_time_max_ns - source_time_min_ns` is five seconds. Late-arriving samples can fill the reservoir while they are inside that window; anything older is evidence for offline calibration, not the live program surface.
+
+The Spout/audio overlay applies the same rule at the consumer boundary. If the visual producer or a camera driver stalls, OBS receives a packet clamped to the current audio edge with stale points removed. The current live fallback mode uses cached/synthetic RGB and Leap frames because direct OpenCV reads measured slower than the reservoir; real cameras need nonblocking ingress feeding the same reservoir instead of blocking the producer loop.
 
 ## Next Cut
 

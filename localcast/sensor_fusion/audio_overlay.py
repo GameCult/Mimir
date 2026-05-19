@@ -17,6 +17,9 @@ if str(ROOT) not in sys.path:
 from audio_field.cultcache_audio import CultAudioSourceEvents, CultSpatialAudioFrame  # noqa: E402
 
 
+DEFAULT_RESERVOIR_NS = 5_000_000_000
+
+
 @dataclass(frozen=True)
 class AudioVisualSyncStatus:
     visual_frame_id: int
@@ -39,6 +42,7 @@ def overlay_audio_events(
     radius_m: float = 0.045,
     max_events: int = 128,
 ) -> tuple[RenderFramePacket, AudioVisualSyncStatus]:
+    frame = clamp_frame_to_audio_reservoir(frame, audio_frame)
     if events is None:
         return frame, sync_status(frame, None, 0, 0, None, False)
     overlay = select_events_for_visual_frame(frame, events, audio_frame, int(window_ns), int(max_events))
@@ -73,6 +77,32 @@ def overlay_audio_events(
             points=tuple(points),
         ),
         sync_status(frame, audio_frame, len(events.events), len(overlay), None, True),
+    )
+
+
+def clamp_frame_to_audio_reservoir(
+    frame: RenderFramePacket,
+    audio_frame: CultSpatialAudioFrame | None,
+    *,
+    reservoir_ns: int = DEFAULT_RESERVOIR_NS,
+) -> RenderFramePacket:
+    if audio_frame is None:
+        return frame
+    edge_ns = max(int(frame.source_time_max_ns), int(audio_frame.audio_time_ns))
+    start_ns = edge_ns - int(reservoir_ns)
+    points = tuple(point for point in frame.points if start_ns <= int(point.source_timestamp_ns) <= edge_ns)
+    return RenderFramePacket(
+        schema=frame.schema,
+        frame_id=frame.frame_id,
+        created_monotonic_ns=frame.created_monotonic_ns,
+        source_time_min_ns=start_ns,
+        source_time_max_ns=edge_ns,
+        present_time_ns=edge_ns,
+        audio_alignment_time_ns=edge_ns,
+        spout_sender_name=frame.spout_sender_name,
+        target_width=frame.target_width,
+        target_height=frame.target_height,
+        points=points,
     )
 
 

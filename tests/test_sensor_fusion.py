@@ -55,12 +55,14 @@ from localcast.sensor_fusion import (
     SurfaceFeatureObservation,
     triangulate_surface_tracks,
 )
+from localcast.sensor_fusion.audio_overlay import clamp_frame_to_audio_reservoir
 from localcast.sensor_fusion.spout_output import rasterize_frame_rgba
 from scripts.live_sensor_fusion import (
     DEFAULT_RESERVOIR_NS,
     LiveClapCalibrator,
     evidence_in_reservoir,
     leap_channel_motion_points,
+    render_points_in_reservoir,
     rgb_dense_camera,
     rgb_dense_stereo_splats,
     rgb_room_splats,
@@ -628,6 +630,51 @@ class SensorFusionTests(unittest.TestCase):
         )
 
         self.assertEqual(("fresh",), tuple(item.stable_key for item in kept))
+
+    def test_render_points_are_clipped_to_shared_reservoir_edge(self):
+        points = (
+            RenderPointPacket("old", np.zeros(3), 0.01, (1.0, 1.0, 1.0, 1.0), 1.0, 9),
+            RenderPointPacket("fresh", np.ones(3), 0.01, (1.0, 1.0, 1.0, 1.0), 1.0, DEFAULT_RESERVOIR_NS + 10),
+        )
+
+        kept = render_points_in_reservoir(
+            points,
+            latest_timestamp_ns=DEFAULT_RESERVOIR_NS + 10,
+            reservoir_ns=DEFAULT_RESERVOIR_NS,
+        )
+
+        self.assertEqual(("fresh",), tuple(point.stable_key for point in kept))
+
+    def test_spout_overlay_clamps_stale_visual_frame_to_audio_reservoir(self):
+        frame = RenderFramePacket(
+            schema="localcast.sensor_fusion.render_frame.v1",
+            frame_id=4,
+            created_monotonic_ns=1,
+            source_time_min_ns=0,
+            source_time_max_ns=100,
+            present_time_ns=100,
+            audio_alignment_time_ns=100,
+            spout_sender_name="test",
+            target_width=32,
+            target_height=32,
+            points=(
+                RenderPointPacket("old", np.zeros(3), 0.01, (1.0, 1.0, 1.0, 1.0), 1.0, 9),
+                RenderPointPacket("fresh", np.ones(3), 0.01, (1.0, 1.0, 1.0, 1.0), 1.0, DEFAULT_RESERVOIR_NS + 10),
+            ),
+        )
+        audio = make_spatial_audio_frame(
+            np.zeros((8, 4), dtype=np.float32),
+            frame_id=1,
+            sample_rate=48000,
+            start_sample=0,
+            audio_time_ns=DEFAULT_RESERVOIR_NS + 10,
+        )
+
+        clamped = clamp_frame_to_audio_reservoir(frame, audio)
+
+        self.assertEqual(DEFAULT_RESERVOIR_NS + 10, clamped.audio_alignment_time_ns)
+        self.assertEqual(5_000_000_000, clamped.source_time_max_ns - clamped.source_time_min_ns)
+        self.assertEqual(("fresh",), tuple(point.stable_key for point in clamped.points))
 
     def test_chirp_pose_constraints_map_camera_mics_to_range_residuals(self):
         constraints = constraints_from_phase_sources(

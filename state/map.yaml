@@ -194,7 +194,15 @@ research:
       producer now has an explicit five-second spatiotemporal reservoir:
       RGB/Leap frame history expires from the newest shared sample, LOD evidence
       is clipped to the same window, and each RenderFramePacket declares that
-      source window for Aquarium/OBS synchronization.
+      source window for Aquarium/OBS synchronization. Multi-LOD cells now carry
+      first-pass material estimates, weighted albedo plus roughness/metallic
+      hints, so Aquarium can relight/refine brush packets from reservoir state
+      instead of scraping screen-space color. The Spout/audio overlay boundary
+      clamps stale visual packets to the current audio reservoir edge before
+      OBS sees them. Current live deadline mode uses fallback-only RGB/Leap
+      because synchronous OpenCV camera reads measured slower than the reservoir;
+      the next coherent cut is nonblocking camera ingress that continuously
+      fills the five-second reservoir with real samples.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >

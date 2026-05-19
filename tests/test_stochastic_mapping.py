@@ -99,8 +99,8 @@ class StochasticMappingTests(unittest.TestCase):
 
     def test_multilod_evidence_prefers_leap_priority(self):
         evidence = [
-            LODEvidencePoint("rgb", np.array([0.01, 0.0, 1.0]), 0.7, 100, 1.0, "rgb"),
-            LODEvidencePoint("leap", np.array([0.03, 0.0, 1.0]), 0.8, 120, 3.0, "leap-ground-truth"),
+            LODEvidencePoint("rgb", np.array([0.01, 0.0, 1.0]), 0.7, 100, 1.0, "rgb", albedo=(1.0, 0.2, 0.1), roughness=0.42),
+            LODEvidencePoint("leap", np.array([0.03, 0.0, 1.0]), 0.8, 120, 3.0, "leap-ground-truth", albedo=(0.2, 0.8, 1.0), roughness=0.76),
         ]
 
         cache = multilod_cache_from_evidence(evidence, levels=(0.10,), created_monotonic_ns=5)
@@ -109,6 +109,10 @@ class StochasticMappingTests(unittest.TestCase):
         self.assertEqual("leap-ground-truth", cell.source_kind)
         self.assertEqual(3.0, cell.source_priority)
         self.assertGreater(cell.center[0], 0.02)
+        self.assertGreater(cell.material_albedo[2], cell.material_albedo[0])
+        self.assertGreater(cell.material_roughness, 0.6)
+        self.assertEqual(0.0, cell.material_metallic)
+        self.assertIn("material", cache.to_dict()["cells"][0])
 
 
 if __name__ == "__main__":

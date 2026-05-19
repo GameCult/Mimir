@@ -78,6 +78,20 @@ def evidence_in_reservoir(evidence: tuple, *, latest_timestamp_ns: int, reservoi
     return tuple(item for item in evidence if start_ns <= int(item.timestamp_ns) <= end_ns)
 
 
+def render_points_in_reservoir(points: tuple[RenderPointPacket, ...], *, latest_timestamp_ns: int, reservoir_ns: int) -> tuple[RenderPointPacket, ...]:
+    start_ns, end_ns = reservoir_window_ns(latest_timestamp_ns, reservoir_ns)
+    return tuple(point for point in points if start_ns <= int(point.source_timestamp_ns) <= end_ns)
+
+
+def latest_audio_time_ns(audio_cache: Path) -> int | None:
+    if not audio_cache.exists():
+        return None
+    frame = get_live_spatial_audio_frame(audio_cache)
+    if frame is None:
+        return None
+    return int(frame.audio_time_ns)
+
+
 def camera(sensor_id: str, x: float) -> CameraModel:
     return CameraModel(
         sensor_id=sensor_id,
@@ -292,6 +306,7 @@ class RgbSplatSampler:
         adaptive_controls: bool,
         fallback_dir: Path,
         reservoir_ns: int = DEFAULT_RESERVOIR_NS,
+        fallback_only: bool = False,
     ) -> None:
         self.api = api
         self.primary_index = primary_index
@@ -304,6 +319,7 @@ class RgbSplatSampler:
         self.enable_cpu_dense_stereo = enable_cpu_dense_stereo
         self.adaptive_controls = adaptive_controls
         self.fallback_dir = fallback_dir
+        self.fallback_only = bool(fallback_only)
         self._captures: dict[int, object] = {}
         self._frames: dict[int, np.ndarray] = {}
         self._timestamped_frames: dict[str, TimestampedFrame] = {}
@@ -369,6 +385,8 @@ class RgbSplatSampler:
     def _read_frame(self, index: int) -> np.ndarray | None:
         import cv2
 
+        if self.fallback_only:
+            return self._fallback_frame(index)
         capture = self._captures.get(index)
         if capture is None:
             capture = cv2.VideoCapture(index, cv2_api(self.api))
@@ -953,6 +971,7 @@ class LeapPackedMotionSampler:
         fps: float,
         step: int,
         fallback_dir: Path,
+        fallback_only: bool = False,
     ) -> None:
         self.api = api
         self.index = index
@@ -961,6 +980,7 @@ class LeapPackedMotionSampler:
         self.fps = fps
         self.step = max(4, int(step))
         self.fallback_dir = fallback_dir
+        self.fallback_only = bool(fallback_only)
         self._capture = None
         self._previous_channels: dict[str, np.ndarray] = {}
         self._last_timestamp_ns: int | None = None
@@ -1008,6 +1028,8 @@ class LeapPackedMotionSampler:
     def _read_frame(self) -> np.ndarray | None:
         import cv2
 
+        if self.fallback_only:
+            return self._fallback_frame()
         if self._capture is None:
             capture = cv2.VideoCapture(self.index, cv2_api(self.api))
             if capture.isOpened():
@@ -1123,6 +1145,7 @@ def main() -> None:
     parser.add_argument("--duration", type=float)
     parser.add_argument("--no-rgb", action="store_true")
     parser.add_argument("--rgb-api", choices=["any", "dshow", "msmf"], default="dshow")
+    parser.add_argument("--rgb-fallback-only", action="store_true")
     parser.add_argument("--rgb-primary-index", type=int, default=1)
     parser.add_argument("--rgb-secondary-index", type=int, default=3)
     parser.add_argument("--rgb-width", type=int, default=640)
@@ -1134,6 +1157,7 @@ def main() -> None:
     parser.add_argument("--no-adaptive-camera-controls", action="store_true")
     parser.add_argument("--no-leap", action="store_true")
     parser.add_argument("--leap-api", choices=["any", "dshow", "msmf"], default="msmf")
+    parser.add_argument("--leap-fallback-only", action="store_true")
     parser.add_argument("--leap-index", type=int, default=0)
     parser.add_argument("--leap-width", type=int, default=320)
     parser.add_argument("--leap-height", type=int, default=240)
@@ -1179,6 +1203,7 @@ def main() -> None:
         adaptive_controls=not args.no_adaptive_camera_controls,
         fallback_dir=ROOT / "calibration" / "runs",
         reservoir_ns=reservoir_ns,
+        fallback_only=args.rgb_fallback_only,
     )
     leap_sampler = None if args.no_leap else LeapPackedMotionSampler(
         api=args.leap_api,
@@ -1188,6 +1213,7 @@ def main() -> None:
         fps=args.leap_fps,
         step=args.leap_step,
         fallback_dir=ROOT / "calibration" / "runs",
+        fallback_only=args.leap_fallback_only,
     )
     clap_calibrator = None if args.no_clap_calibration else LiveClapCalibrator(
         audio_cache=Path(args.audio_cache),
@@ -1234,6 +1260,8 @@ def main() -> None:
                     clap_calibrator.observe_frames(leap_sampler.latest_timestamped_frames())
             if leap_sampler is not None and leap_sampler.last_timestamp_ns is not None:
                 timestamp_ns = max(timestamp_ns, leap_sampler.last_timestamp_ns)
+            audio_edge_ns = latest_audio_time_ns(Path(args.audio_cache))
+            reservoir_edge_ns = max(timestamp_ns, audio_edge_ns if audio_edge_ns is not None else timestamp_ns)
             leap_source_kind = (
                 "leap-ground-truth"
                 if leap_sampler is not None and leap_sampler.last_frame_kind == "capture"
@@ -1253,8 +1281,13 @@ def main() -> None:
                     rgb_points = rgb_sampler.splats(now, timestamp_ns)
             support_points = dim_fusion_points(tuple(frame.points)) if not rgb_points else ()
             stochastic_points = transient_match_render_points(transient_matches, timestamp_ns)
-            clap_points = () if clap_calibrator is None else clap_calibrator.update(timestamp_ns)
-            chirp_pose_points = () if chirp_pose_mapper is None else chirp_pose_mapper.update(timestamp_ns)
+            clap_points = () if clap_calibrator is None else clap_calibrator.update(reservoir_edge_ns)
+            chirp_pose_points = () if chirp_pose_mapper is None else chirp_pose_mapper.update(reservoir_edge_ns)
+            render_points = render_points_in_reservoir(
+                clap_points + chirp_pose_points + leap_points + rgb_points + stochastic_points + support_points,
+                latest_timestamp_ns=reservoir_edge_ns,
+                reservoir_ns=reservoir_ns,
+            )
             evidence = evidence_in_reservoir(
                 evidence_from_render_points(leap_points, source_kind=leap_source_kind, source_priority=leap_source_priority)
                 + evidence_from_render_points(rgb_points, source_kind="rgb-surface", source_priority=1.4)
@@ -1262,10 +1295,10 @@ def main() -> None:
                 + evidence_from_render_points(chirp_pose_points, source_kind="chirp-camera-pose", source_priority=1.8)
                 + evidence_from_fusion_items(transient_matches, source_kind="stochastic-transient", source_priority=1.2)
                 + evidence_from_fusion_items(result.points, source_kind="synthetic-fusion", source_priority=0.8),
-                latest_timestamp_ns=timestamp_ns,
+                latest_timestamp_ns=reservoir_edge_ns,
                 reservoir_ns=reservoir_ns,
             )
-            source_time_min_ns, source_time_max_ns = reservoir_window_ns(timestamp_ns, reservoir_ns)
+            source_time_min_ns, source_time_max_ns = reservoir_window_ns(reservoir_edge_ns, reservoir_ns)
             multilod_cache_from_evidence(
                 evidence,
                 levels=(0.01, 0.04, 0.16, 0.64),
@@ -1282,7 +1315,7 @@ def main() -> None:
                 spout_sender_name=frame.spout_sender_name,
                 target_width=frame.target_width,
                 target_height=frame.target_height,
-                points=clap_points + chirp_pose_points + leap_points + rgb_points + stochastic_points + support_points,
+                points=render_points,
             )
             put_live_render_frame(cache_path, frame)
             frame_id += 1

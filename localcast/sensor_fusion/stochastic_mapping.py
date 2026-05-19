@@ -97,6 +97,9 @@ class LODCell:
     source_time_max_ns: int
     source_priority: float = 1.0
     source_kind: str = "generic"
+    material_albedo: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    material_roughness: float = 0.7
+    material_metallic: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -123,6 +126,11 @@ class MultiLODSceneCache:
                     "sourceTimeMaxNs": cell.source_time_max_ns,
                     "sourcePriority": cell.source_priority,
                     "sourceKind": cell.source_kind,
+                    "material": {
+                        "albedo": list(cell.material_albedo),
+                        "roughness": float(cell.material_roughness),
+                        "metallic": float(cell.material_metallic),
+                    },
                 }
                 for cell in self.cells
             ],
@@ -316,6 +324,9 @@ class LODEvidencePoint:
     timestamp_ns: int
     source_priority: float
     source_kind: str
+    albedo: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    roughness: float = 0.7
+    metallic: float = 0.0
 
 
 def multilod_cache_from_evidence(
@@ -337,6 +348,10 @@ def multilod_cache_from_evidence(
             center = np.average(positions, axis=0, weights=weights)
             priority = float(max(item.source_priority for item in bucket))
             source_kind = max(bucket, key=lambda item: item.source_priority).source_kind
+            albedos = np.asarray([np.asarray(item.albedo, dtype=np.float64) for item in bucket], dtype=np.float64)
+            albedo = np.average(albedos, axis=0, weights=weights)
+            roughness = float(np.average([item.roughness for item in bucket], weights=weights))
+            metallic = float(np.average([item.metallic for item in bucket], weights=weights))
             cells.append(
                 LODCell(
                     level=level_index,
@@ -349,6 +364,9 @@ def multilod_cache_from_evidence(
                     source_time_max_ns=max(item.timestamp_ns for item in bucket),
                     source_priority=priority,
                     source_kind=source_kind,
+                    material_albedo=tuple(float(np.clip(value, 0.0, 1.0)) for value in albedo),
+                    material_roughness=float(np.clip(roughness, 0.0, 1.0)),
+                    material_metallic=float(np.clip(metallic, 0.0, 1.0)),
                 )
             )
     return MultiLODSceneCache(
@@ -362,6 +380,7 @@ def multilod_cache_from_evidence(
 def evidence_from_render_points(points: Iterable, *, source_kind: str, source_priority: float) -> tuple[LODEvidencePoint, ...]:
     rows: list[LODEvidencePoint] = []
     for point in points:
+        rgba = np.clip(np.asarray(getattr(point, "color_rgba", (1.0, 1.0, 1.0, 1.0)), dtype=np.float64), 0.0, 1.0)
         rows.append(
             LODEvidencePoint(
                 stable_key=str(point.stable_key),
@@ -370,6 +389,9 @@ def evidence_from_render_points(points: Iterable, *, source_kind: str, source_pr
                 timestamp_ns=int(point.source_timestamp_ns),
                 source_priority=float(source_priority),
                 source_kind=str(source_kind),
+                albedo=tuple(float(value) for value in rgba[:3]),
+                roughness=roughness_from_rgba(rgba, source_kind=source_kind),
+                metallic=0.0,
             )
         )
     return tuple(rows)
@@ -400,3 +422,12 @@ def item_timestamp_ns(item: TriangulatedPoint | TransientMatchHypothesis) -> int
     if hasattr(item, "timestamp_ns"):
         return int(getattr(item, "timestamp_ns"))
     return int(max(obs.timestamp_ns for obs in item.observations))
+
+
+def roughness_from_rgba(rgba: np.ndarray, *, source_kind: str) -> float:
+    rgb = np.asarray(rgba[:3], dtype=np.float64)
+    saturation = float(np.max(rgb) - np.min(rgb))
+    alpha = float(rgba[3]) if rgba.size > 3 else 1.0
+    base = 0.82 if "rgb" in source_kind else 0.74
+    roughness = base - 0.22 * saturation + 0.10 * (1.0 - alpha)
+    return float(np.clip(roughness, 0.25, 0.95))
