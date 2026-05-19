@@ -65,6 +65,7 @@ sample has:
 - arrival timestamp
 - sequence
 - payload handle
+- provenance flags
 
 Typed ring views may exist as indexes over the rolling buffer, but they do not
 own retention. Expiry happens once, against the reservoir edge. No private

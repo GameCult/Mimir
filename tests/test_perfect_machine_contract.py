@@ -37,6 +37,8 @@ class PerfectMachineContractTests(unittest.TestCase):
         self.assertIn("typedef struct LocalcastReservoir LocalcastReservoir;", header)
         self.assertIn("typedef struct LocalcastSampleHandle", header)
         self.assertIn("uint64_t payload_handle;", header)
+        self.assertIn("uint32_t flags;", header)
+        self.assertIn("LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC", header)
         self.assertIn("LocalcastReservoir *localcast_reservoir_create", header)
         self.assertIn("void localcast_reservoir_destroy", header)
         self.assertIn("bool localcast_reservoir_push", header)

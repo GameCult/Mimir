@@ -29,7 +29,13 @@ typedef struct LocalcastSampleHandle {
     uint64_t arrival_ns;
     uint64_t sequence;
     uint64_t payload_handle;
+    uint32_t flags;
+    uint32_t reserved;
 } LocalcastSampleHandle;
+
+enum LocalcastSampleFlags {
+    LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC = 1u << 0
+};
 
 typedef struct LocalcastRuntimeStatus {
     uint64_t edge_ns;

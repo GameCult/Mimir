@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 pub const DEFAULT_RESERVOIR_NS: u64 = 5_000_000_000;
+pub const LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC: u32 = 1 << 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SampleKind {
@@ -164,6 +165,8 @@ pub struct LocalcastSampleHandle {
     pub arrival_ns: u64,
     pub sequence: u64,
     pub payload_handle: u64,
+    pub flags: u32,
+    pub reserved: u32,
 }
 
 pub struct LocalcastReservoir {
@@ -257,6 +260,10 @@ fn sample_from_handle(
     )
 }
 
+fn is_live_sample(sample: LocalcastSampleHandle) -> bool {
+    sample.flags & LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC == 0
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn localcast_reservoir_create(duration_ns: u64) -> *mut LocalcastReservoir {
     Box::into_raw(Box::new(LocalcastReservoir {
@@ -286,6 +293,9 @@ pub extern "C" fn localcast_reservoir_push(
     let Some(kind) = SampleKind::from_u32(sample_kind) else {
         return false;
     };
+    if !is_live_sample(sample) {
+        return false;
+    }
     reservoir.inner.push(sample_from_handle(kind, sample));
     true
 }
@@ -518,6 +528,9 @@ fn localcast_runtime_push_typed(
     let Some(runtime) = (unsafe { ptr.as_mut() }) else {
         return false;
     };
+    if !is_live_sample(sample) {
+        return false;
+    }
     runtime.push(kind, sample);
     true
 }
@@ -525,6 +538,43 @@ fn localcast_runtime_push_typed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn handle(
+        sensor_id_hash: u64,
+        timestamp_ns: u64,
+        arrival_ns: u64,
+        sequence: u64,
+        payload_handle: u64,
+    ) -> LocalcastSampleHandle {
+        LocalcastSampleHandle {
+            sensor_id_hash,
+            timestamp_ns,
+            arrival_ns,
+            sequence,
+            payload_handle,
+            flags: 0,
+            reserved: 0,
+        }
+    }
+
+    fn diagnostic_handle(
+        sensor_id_hash: u64,
+        timestamp_ns: u64,
+        arrival_ns: u64,
+        sequence: u64,
+        payload_handle: u64,
+    ) -> LocalcastSampleHandle {
+        LocalcastSampleHandle {
+            flags: LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC,
+            ..handle(
+                sensor_id_hash,
+                timestamp_ns,
+                arrival_ns,
+                sequence,
+                payload_handle,
+            )
+        }
+    }
 
     #[test]
     fn rolling_reservoir_expires_every_kind_from_one_edge() {
@@ -705,24 +755,8 @@ mod tests {
     #[test]
     fn c_abi_pushes_and_queries_latest_sample_from_view() {
         let reservoir = localcast_reservoir_create(DEFAULT_RESERVOIR_NS);
-        let pushed = localcast_reservoir_push(
-            reservoir,
-            0,
-            LocalcastSampleHandle {
-                sensor_id_hash: 42,
-                timestamp_ns: 10,
-                arrival_ns: 11,
-                sequence: 7,
-                payload_handle: 99,
-            },
-        );
-        let mut out = LocalcastSampleHandle {
-            sensor_id_hash: 0,
-            timestamp_ns: 0,
-            arrival_ns: 0,
-            sequence: 0,
-            payload_handle: 0,
-        };
+        let pushed = localcast_reservoir_push(reservoir, 0, handle(42, 10, 11, 7, 99));
+        let mut out = handle(0, 0, 0, 0, 0);
         let found = localcast_reservoir_latest_for_sensor(reservoir, 0, 42, &mut out);
 
         assert!(pushed);
@@ -739,45 +773,21 @@ mod tests {
         assert!(localcast_reservoir_push(
             reservoir,
             0,
-            LocalcastSampleHandle {
-                sensor_id_hash: 10,
-                timestamp_ns: 10,
-                arrival_ns: 11,
-                sequence: 0,
-                payload_handle: 100,
-            },
+            handle(10, 10, 11, 0, 100),
         ));
         assert!(localcast_reservoir_push(
             reservoir,
             5,
-            LocalcastSampleHandle {
-                sensor_id_hash: 20,
-                timestamp_ns: 12,
-                arrival_ns: 13,
-                sequence: 0,
-                payload_handle: 200,
-            },
+            handle(20, 12, 13, 0, 200),
         ));
         assert!(localcast_reservoir_push(
             reservoir,
             0,
-            LocalcastSampleHandle {
-                sensor_id_hash: 30,
-                timestamp_ns: 14,
-                arrival_ns: 15,
-                sequence: 0,
-                payload_handle: 300,
-            },
+            handle(30, 14, 15, 0, 300),
         ));
 
         let mut kind = 99;
-        let mut sample = LocalcastSampleHandle {
-            sensor_id_hash: 0,
-            timestamp_ns: 0,
-            arrival_ns: 0,
-            sequence: 0,
-            payload_handle: 0,
-        };
+        let mut sample = handle(0, 0, 0, 0, 0);
 
         assert!(localcast_reservoir_sample_at(
             reservoir,
@@ -810,14 +820,23 @@ mod tests {
     }
 
     #[test]
+    fn c_abi_rejects_diagnostic_samples_from_live_reservoir() {
+        let reservoir = localcast_reservoir_create(DEFAULT_RESERVOIR_NS);
+
+        assert!(!localcast_reservoir_push(
+            reservoir,
+            0,
+            diagnostic_handle(66, 10, 11, 0, 666),
+        ));
+        assert_eq!(0, localcast_reservoir_len(reservoir));
+        assert_eq!(0, localcast_reservoir_view_len(reservoir, 0));
+
+        localcast_reservoir_destroy(reservoir);
+    }
+
+    #[test]
     fn c_abi_rejects_nulls_and_unknown_sample_kinds() {
-        let sample = LocalcastSampleHandle {
-            sensor_id_hash: 1,
-            timestamp_ns: 2,
-            arrival_ns: 3,
-            sequence: 4,
-            payload_handle: 5,
-        };
+        let sample = handle(1, 2, 3, 4, 5);
         let mut out = sample;
 
         assert!(!localcast_reservoir_push(std::ptr::null_mut(), 0, sample));
@@ -848,27 +867,9 @@ mod tests {
     #[test]
     fn runtime_spine_routes_typed_producers_into_one_rolling_buffer() {
         let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
-        let camera = LocalcastSampleHandle {
-            sensor_id_hash: 10,
-            timestamp_ns: 1_000_000_000,
-            arrival_ns: 1_000_000_001,
-            sequence: 1,
-            payload_handle: 100,
-        };
-        let audio = LocalcastSampleHandle {
-            sensor_id_hash: 20,
-            timestamp_ns: 7_000_000_001,
-            arrival_ns: 7_000_000_010,
-            sequence: 2,
-            payload_handle: 200,
-        };
-        let phase = LocalcastSampleHandle {
-            sensor_id_hash: 30,
-            timestamp_ns: 7_000_000_010,
-            arrival_ns: 7_000_000_020,
-            sequence: 3,
-            payload_handle: 300,
-        };
+        let camera = handle(10, 1_000_000_000, 1_000_000_001, 1, 100);
+        let audio = handle(20, 7_000_000_001, 7_000_000_010, 2, 200);
+        let phase = handle(30, 7_000_000_010, 7_000_000_020, 3, 300);
 
         assert!(localcast_runtime_push_camera_frame(runtime, camera));
         assert!(localcast_runtime_push_audio_block(runtime, audio));
@@ -888,13 +889,7 @@ mod tests {
 
     #[test]
     fn runtime_spine_rejects_nulls() {
-        let sample = LocalcastSampleHandle {
-            sensor_id_hash: 1,
-            timestamp_ns: 2,
-            arrival_ns: 3,
-            sequence: 4,
-            payload_handle: 5,
-        };
+        let sample = handle(1, 2, 3, 4, 5);
         let mut status = LocalcastRuntimeStatus::default();
 
         assert!(!localcast_runtime_push_camera_frame(
@@ -904,6 +899,23 @@ mod tests {
         assert!(!localcast_runtime_status(std::ptr::null(), &mut status));
         let runtime = localcast_runtime_create(0);
         assert!(!localcast_runtime_status(runtime, std::ptr::null_mut()));
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn runtime_spine_rejects_diagnostic_samples() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+
+        assert!(!localcast_runtime_push_camera_frame(
+            runtime,
+            diagnostic_handle(1, 2, 3, 4, 5),
+        ));
+
+        let mut status = LocalcastRuntimeStatus::default();
+        assert!(localcast_runtime_status(runtime, &mut status));
+        assert_eq!(0, status.total_sample_count);
+        assert_eq!(0, status.camera_frame_count);
+
         localcast_runtime_destroy(runtime);
     }
 }
