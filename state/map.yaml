@@ -56,6 +56,8 @@ accepted_design:
   - `LocalcastRuntime` exposes typed producer pushes plus total/typed window
     reads. `LocalcastProducer` owns source identity and sequence assignment
     before hardware adapters append live sample handles.
+  - `localcast_hash_source_id` owns stable native source-id hashing so capture
+    workers do not each invent incompatible sensor hashes.
   - `LocalcastAudioBlockDescriptor` is the first typed payload descriptor for
     caller-owned float32 interleaved audio blocks; the reservoir stores only the
     descriptor pointer as a payload handle and does not own DSP memory.

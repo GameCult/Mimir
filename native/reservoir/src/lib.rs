@@ -3,6 +3,8 @@ use std::collections::VecDeque;
 pub const DEFAULT_RESERVOIR_NS: u64 = 5_000_000_000;
 pub const LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC: u32 = 1 << 0;
 pub const LOCALCAST_AUDIO_SAMPLE_FORMAT_F32_INTERLEAVED: u32 = 1;
+const FNV1A_OFFSET_64: u64 = 14_695_981_039_346_656_037;
+const FNV1A_PRIME_64: u64 = 1_099_511_628_211;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SampleKind {
@@ -355,6 +357,29 @@ fn sample_from_handle(
 
 fn is_live_sample(sample: LocalcastSampleHandle) -> bool {
     sample.flags == 0
+}
+
+fn hash_source_id(bytes: &[u8]) -> u64 {
+    if bytes.is_empty() {
+        return 0;
+    }
+    let mut hash = FNV1A_OFFSET_64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(FNV1A_PRIME_64);
+    }
+    if hash == 0 { 1 } else { hash }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_hash_source_id(bytes: *const u8, byte_len: usize) -> u64 {
+    if byte_len == 0 {
+        return 0;
+    }
+    if bytes.is_null() {
+        return 0;
+    }
+    hash_source_id(unsafe { std::slice::from_raw_parts(bytes, byte_len) })
 }
 
 #[unsafe(no_mangle)]
@@ -921,6 +946,19 @@ mod tests {
             alpha: 0.9,
             confidence: 0.8,
         }
+    }
+
+    #[test]
+    fn source_id_hash_is_stable_and_rejects_empty_sources() {
+        let source = b"kiyo-primary";
+
+        assert_eq!(0, hash_source_id(b""));
+        assert_eq!(0, localcast_hash_source_id(std::ptr::null(), source.len()));
+        assert_eq!(
+            hash_source_id(source),
+            localcast_hash_source_id(source.as_ptr(), source.len())
+        );
+        assert_ne!(hash_source_id(source), hash_source_id(b"kiyo-secondary"));
     }
 
     #[test]

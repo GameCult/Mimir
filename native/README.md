@@ -19,6 +19,9 @@ tests, and offline analysis. It does not own dense live fusion or DSP.
 The reservoir ABI is intentionally small:
 
 - `LocalcastReservoir` is opaque.
+- `localcast_hash_source_id` is the stable FNV-1a source-id hash used before
+  creating producers. Empty or null source ids hash to zero and are rejected by
+  producer creation.
 - `LocalcastSampleHandle` is sample metadata plus a `payload_handle` and
   provenance flags. Live samples must have `flags == 0`; diagnostic or unknown
   flagged samples are rejected by the live reservoir.

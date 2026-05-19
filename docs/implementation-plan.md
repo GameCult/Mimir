@@ -25,6 +25,8 @@ shape removes independent per-kind storage from the live foundation.
     Aquarium/Faust C ABI: opaque reservoir create/destroy, sample-handle push,
     edge/window queries, ring counts, and latest sample lookup by sensor hash.
     The ABI now exposes total rolling-buffer length and typed-view length.
+  - `localcast_hash_source_id` owns stable FNV-1a source hashing for native
+    producers; empty/null source ids produce zero and are rejected.
   - `LocalcastRuntime` wraps the current reservoir with typed native producer
     calls and total/typed read functions. It is the intended live spine for
     Aquarium/Faust bindings.
@@ -134,9 +136,10 @@ shape removes independent per-kind storage from the live foundation.
    packet handles through `ILocalCastNativeRuntime` with an injected payload
    decoder. It also has the matching safe-code audio block and render packet
    descriptor bindings, plus a render descriptor decoder that reads timing and
-   target metadata from native payload handles while leaving point-buffer
-   decoding injectable. The next Aquarium cut is wiring native runtime creation
-   and real point-buffer decode into the app path.
+   target metadata from native payload handles and decodes the first native
+   point-buffer ABI. Aquarium also exposes the native source-id hash wrapper.
+   The next Aquarium cut is wiring native runtime creation into the app path
+   once a producer exists to feed it.
 3. Move camera/mic/loopback ingest into native capture workers that use
    `LocalcastProducer` to append typed sample handles.
 4. Move feature extraction, flow, cross-view matching, LOD reconciliation,

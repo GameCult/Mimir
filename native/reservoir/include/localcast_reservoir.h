@@ -94,6 +94,8 @@ typedef struct LocalcastRuntimeStatus {
     size_t render_packet_count;
 } LocalcastRuntimeStatus;
 
+uint64_t localcast_hash_source_id(const uint8_t *bytes, size_t byte_len);
+
 LocalcastReservoir *localcast_reservoir_create(uint64_t duration_ns);
 void localcast_reservoir_destroy(LocalcastReservoir *reservoir);
 
