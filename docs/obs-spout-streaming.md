@@ -52,7 +52,7 @@ Start the Spout sender:
 Start the current live fusion producer:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\live_sensor_fusion.py `
+.\.venv\Scripts\python.exe .\scripts\diagnostic_live_sensor_fusion.py `
   --cache .\calibration\runs\visual-state.msgpack `
   --fps 30 `
   --points 256

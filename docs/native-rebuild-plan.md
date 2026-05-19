@@ -135,9 +135,9 @@ Delete or quarantine these before adding new live features:
 4. Add the minimal Aquarium/Faust C ABI over the rolling buffer.
 5. Move any remaining useful Python packet/schema code into diagnostics or
    contract tests.
-6. Remove production imports of `scripts/live_sensor_fusion.py` and keep the
-   OpenGL Spout bridge under `localcast.diagnostics.spout_output` only until it
-   can be deleted.
+6. Keep the Python visual producer named `scripts/diagnostic_live_sensor_fusion.py`
+   and the OpenGL Spout bridge under `localcast.diagnostics.spout_output` only
+   until they can be deleted.
 7. Replace the OpenGL Spout path with an Aquarium-owned Spout publisher.
 8. Move audio hot path into Faust/native DSP behind typed reservoir handles.
 9. Keep FFmpeg/SRT scripts only as simple V1 LAN bridge and capture utilities.

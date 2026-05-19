@@ -298,7 +298,7 @@ current_status:
     source time ranges, intended visual presentation time, audio-alignment
     time, target render size, Spout sender name, and point draw metadata for
     Aquarium/Spout. A deadline OBS Spout sender is now live-shaped:
-    `scripts/live_sensor_fusion.py` now writes fused render frames into typed
+    `scripts/diagnostic_live_sensor_fusion.py` now writes fused render frames into typed
     CultCache state at `calibration/runs/visual-state.msgpack`. `scripts/stream_spout.py`
     consumes that CultCache document, lowers points into compact anisotropic
     screen brush packets, uploads an OpenGL texture, publishes Spout sender

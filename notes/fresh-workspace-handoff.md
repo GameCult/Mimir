@@ -41,7 +41,7 @@ The useful next work is foundation surgery, not hardware feature expansion:
 
 - rewrite `native/reservoir` as one rolling buffer with typed indexes/views
 - update ABI and tests around single-edge retention
-- quarantine or delete production use of `scripts/live_sensor_fusion.py` and the OpenGL `spout_output` sink
+- quarantine or delete production use of `scripts/diagnostic_live_sensor_fusion.py` and the OpenGL `spout_output` sink
 - route future visual/audio runtime work through Aquarium/Faust/native runtime plus typed CultNet docs
 - keep FFmpeg/SRT bridge scripts only as simple LAN ingest and capture utilities
 

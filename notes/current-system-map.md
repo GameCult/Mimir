@@ -144,7 +144,7 @@ Ownership:
   lowering, render budgeting, and Spout2 publication.
 - CultNet typed documents carry status/control/process state. JSON is schema or
   diagnostic export only.
-- `scripts/live_sensor_fusion.py`, Python fallback producers, JSON LOD stores,
+- `scripts/diagnostic_live_sensor_fusion.py`, Python fallback producers, JSON LOD stores,
   and `localcast.diagnostics.spout_output` are diagnostics/migration fossils.
   They must not be extended as production surfaces.
 

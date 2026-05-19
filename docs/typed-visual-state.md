@@ -10,7 +10,7 @@ JSON is no longer the authority for live visual state. The renderer consumes `ca
 
 ```mermaid
 flowchart TD
-    A["live_sensor_fusion.py"] --> B["SensorRig.fuse"]
+    A["diagnostic_live_sensor_fusion.py"] --> B["SensorRig.fuse"]
     B --> C["RenderFramePacket"]
     C --> D["CultRenderFrame"]
     X["audio-state.msgpack"] --> Y["audio event overlay"]
