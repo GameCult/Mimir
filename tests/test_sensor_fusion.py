@@ -219,7 +219,7 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(1, len(brushes))
         self.assertGreaterEqual(brushes[0].radii_px[0], brushes[0].radii_px[1])
 
-    def test_spout_output_config_is_importable_without_gpu_context(self):
+    def test_render_math_config_is_importable_without_gpu_context(self):
         config = SpoutOutputConfig(sender_name="unit-test", width=128, height=72, fps=30)
         self.assertEqual("unit-test", config.sender_name)
         self.assertEqual(128, config.width)

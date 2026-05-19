@@ -144,16 +144,14 @@ Ownership:
   lowering, render budgeting, and Spout2 publication.
 - CultNet typed documents carry status/control/process state. JSON is schema or
   diagnostic export only.
-- `scripts/diagnostic_live_sensor_fusion.py`, Python fallback producers,
-  diagnostic CultCache/JSON file adapters, and
-  `localcast.diagnostics.spout_output` are diagnostics/migration fossils. They
-  must not be extended as production surfaces.
+- `scripts/diagnostic_live_sensor_fusion.py`, Python fallback producers, and
+  diagnostic CultCache/JSON file adapters are diagnostics/migration fossils.
+  They must not be extended as production surfaces.
 - `localcast.diagnostics.render_frame_json` and
   `localcast.diagnostics.lod_json` are explicit compatibility adapters; model
   modules do not own file serialization.
 - `localcast.diagnostics.render_math` is the pure, testable diagnostic renderer
-  math split away from the OpenGL publisher. `spout_output` is now only the
-  disposable Spout/OpenGL shell.
+  math that survived deletion of the OpenGL publisher.
 
 Invariant: fallback/demo evidence cannot enter ground-truth reservoir kinds.
 Render packets, LOD cells, brush packets, and overlays are derived from reservoir

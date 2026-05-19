@@ -22,7 +22,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - V1 uses FFmpeg plus OBS Media Source over SRT.
 - Sender-side video encoding is `h264_nvenc`.
 - Audio sources are separate SRT endpoints so OBS can mix them separately.
-- The live synchronized program path is being rebuilt. The Python/OpenGL deadline Spout bridge is not a foundation.
+- The live synchronized program path is being rebuilt. The Python/OpenGL
+  deadline Spout bridge has been deleted.
 - `docs/native-rebuild-plan.md` is the current cut plan.
 - The reservoir is now one native time-ordered rolling buffer with typed
   indexes/views. The previous typed-ring crate is gone.
@@ -30,9 +31,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   are rejected at both the raw reservoir push and `LocalcastRuntime` typed
   producer boundary.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
-- Python live producers, diagnostic CultCache/JSON file adapters, and the
-  OpenGL Spout sink are diagnostics, not production foundations. Aquarium owns
-  production Spout publication.
+- Python live producers and diagnostic CultCache/JSON file adapters are
+  diagnostics, not production foundations. The OpenGL Spout sink has been
+  deleted. Aquarium owns production Spout publication.
 - Neighbor sender is deployed at `C:\Meta\LocalCastBridge` on `192.168.1.84`.
 - Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
 - Receiver OBS scene collection has `Neighbor PC - Video`, `Neighbor PC - Focusrite`, and `Neighbor PC - System Audio` Media Sources added.
@@ -46,15 +47,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
 The useful next work is foundation surgery, not hardware feature expansion:
 
 - bind Aquarium/Faust/native workers to the rolling-buffer `LocalcastRuntime`
-- delete production dependence on `scripts/diagnostic_live_sensor_fusion.py`,
-  diagnostic file adapters, and the OpenGL Spout sink
-- split any reusable pure diagnostic math away from OpenGL before deleting the
-  publisher
+- delete production dependence on `scripts/diagnostic_live_sensor_fusion.py`
+  and diagnostic file adapters
+- bind Aquarium/Faust against the native runtime instead of reviving the deleted
+  Python/OpenGL publisher
 - route future visual/audio runtime work through Aquarium/Faust/native runtime plus typed CultNet docs
 - keep FFmpeg/SRT bridge scripts only as simple LAN ingest and capture utilities
 
 ## Immediate Re-entry Instruction
 
-Do not continue the Python/OpenGL bridge. Rehydrate, read
+Do not revive the Python/OpenGL bridge. Rehydrate, read
 `docs/native-rebuild-plan.md`, then cut toward native workers,
 Aquarium/Faust bindings, and typed CultNet boundaries.

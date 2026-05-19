@@ -78,11 +78,9 @@ flowchart TD
 - `localcast.diagnostics.render_math` owns pure diagnostic render budgeting,
   camera projection, brush lowering, and CPU rasterization. It has unit tests
   and does not require a GPU context.
-- `localcast.diagnostics.spout_output` owns only the deadline OBS publication
-  sink: render-frame packet in, GPU texture plus Spout sender heartbeat out. It
-  is diagnostic/migration code, not the production visual authority.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
-- `scripts/diagnostic_stream_spout.py` owns the diagnostic Spout sender loop for OBS.
+- The Python/OpenGL Spout publisher has been deleted. No LocalCastBridge Python
+  module owns OBS publication.
 - `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.
 
 ## Cache Discipline
@@ -169,9 +167,9 @@ The current streamable cut is:
 
 ```text
 CultCache render-frame document
--> compact anisotropic screen brush lowering
--> OpenGL texture upload
--> SpoutGL sendTexture
+-> Aquarium typed runtime state
+-> D3D render target
+-> Spout2 sender
 -> OBS Spout2 Capture source
 ```
 

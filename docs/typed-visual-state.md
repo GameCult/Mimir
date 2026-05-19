@@ -21,18 +21,20 @@ flowchart TD
     Z["audio-events.msgpack"] --> Y
     D --> Y
     Y --> E["CultCache MessagePack store"]
-    E --> F["diagnostic_stream_spout.py"]
-    F --> G["ScreenBrushPacket lowering"]
-    G --> H["Spout sender"]
-    H --> I["OBS Spout2 Capture"]
+    E --> F["diagnostic readers"]
+    F --> G["render_math CPU checks"]
+    G --> H["Aquarium replacement work"]
 ```
 
 Diagnostic files:
 
 - `calibration/runs/visual-state.msgpack`: typed diagnostic visual frame state.
-- `calibration/runs/visual-stream-status.msgpack`: typed stream status state.
-- `calibration/runs/stream-spout-status.json`: compatibility heartbeat for quick terminal checks.
-- `calibration/runs/av-sync-status.json`: visual/audio sync heartbeat from the Spout/Aquarium publisher.
+- `calibration/runs/visual-stream-status.msgpack`: typed diagnostic stream
+  status state.
+- `calibration/runs/stream-spout-status.json`: legacy heartbeat shape for quick
+  terminal checks when a diagnostic publisher exists.
+- `calibration/runs/av-sync-status.json`: visual/audio sync heartbeat shape for
+  Aquarium/native publishers.
 
 ## Document Types
 
@@ -92,23 +94,20 @@ frames presentable.
 
 ## Audio Synchronization
 
-`diagnostic_stream_spout.py` can read `calibration/runs/audio-state.msgpack` and `calibration/runs/audio-events.msgpack` while it renders the diagnostic visual frame. It selects source events against `RenderFramePacket.audio_alignment_time_ns`, adds synchronized audio-event points to the render packet, and writes `calibration/runs/av-sync-status.json` with the active visual frame id, audio frame id, audio delta, event count, overlay count, and remote video sync status.
+The deleted Python/OpenGL sender used to read `calibration/runs/audio-state.msgpack`
+and `calibration/runs/audio-events.msgpack` while rendering the diagnostic
+visual frame. That responsibility now belongs in Aquarium/native code: select
+source events against `RenderFramePacket.audio_alignment_time_ns`, add
+synchronized renderer-visible transient geometry, and write/publish sync status
+with visual frame id, audio frame id, audio delta, event counts, and remote
+video status.
 
 The audio bed still travels as `localcast.audio.spatial_frame`; the visual render packet only receives renderer-visible transient geometry. That keeps the machine legible: audio owns sound, source-event analysis owns acoustic facts, Aquarium owns the final pixel/audio package for OBS.
 
-The neighbor SRT video feed is also a timed media artifact. For the diagnostic deadline path, `diagnostic_stream_spout.py` records its URL and expected SRT latency in the sync status:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\diagnostic_stream_spout.py `
-  --source cultcache `
-  --frame-cache .\calibration\runs\visual-state.msgpack `
-  --audio-cache .\calibration\runs\audio-state.msgpack `
-  --audio-events-cache .\calibration\runs\audio-events.msgpack `
-  --remote-video-url "srt://0.0.0.0:5100?mode=listener&latency=120000&timeout=5000000" `
-  --remote-video-latency-ms 250
-```
-
-That does not make the SRT feed disappear into the point renderer. It makes the dependency honest: OBS/Aquarium must delay or present the remote video according to the same presentation clock as the Spout texture and AmbiX bed. This value is presentation delay, not only the SRT socket's `latency` parameter.
+The neighbor SRT video feed is also a timed media artifact. OBS/Aquarium must
+delay or present the remote video according to the same presentation clock as
+the Spout texture and AmbiX bed. This value is presentation delay, not only the
+SRT socket's `latency` parameter.
 
 ## Cut Line
 

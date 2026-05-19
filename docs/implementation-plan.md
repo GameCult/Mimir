@@ -56,8 +56,8 @@ shape removes independent per-kind storage from the live foundation.
   - `localcast.diagnostics.render_math` owns pure diagnostic render budgeting,
     camera projection, brush lowering, and CPU rasterization tests without an
     OpenGL or OpenCV requirement.
-  - `localcast.diagnostics.spout_output` is now only the diagnostic Spout/OpenGL
-    publisher shell around that math. It is not production runtime.
+  - The Python/OpenGL Spout publisher and launcher have been deleted.
+    Production Spout2 publication belongs to Aquarium.
   - `scripts/diagnostic_live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`. This is diagnostic/migration code, not production runtime.
   - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
   - Live clap calibration is wired into the visual producer. It keeps a rolling frame window from the Kiyo pair plus Leap, reads the live spatial audio frame for transient candidates, publishes `clap-events.msgpack`, injects clap calibration markers into the render frame, and writes clap evidence into the LOD cache. Kiyo stereo owns the current rough 3D solve; Leap owns the best visual timing witness until its geometric model is calibrated.
@@ -68,8 +68,9 @@ shape removes independent per-kind storage from the live foundation.
   - Live fallback-only RGB/Leap mode exists for deadline operation when OpenCV/MSMF/DirectShow reads block longer than the five-second reservoir. It keeps the reservoir and OBS output alive while real camera capture is moved to nonblocking ingress.
   - OpenCV camera reads now run behind `LatestFramePump` workers so blocking drivers cannot freeze the fusion hot loop. The live deadline command uses lower per-frame sample density (`--rgb-room-step 16 --leap-step 16 --points 64`) so the reservoir/TAA path stays fresh enough for Spout to render visual points inside the five-second budget.
   - `localcast.sensor_fusion.chirp_pose` converts live phase-field delay meaning for Kiyo/PS Eye microphone sources into camera-body range constraints and per-camera pose-correction estimates. It can load camera-mic and speaker geometry from the audio-field profile, with the example profile used as the live fallback until measured local geometry exists. `scripts/diagnostic_live_sensor_fusion.py` injects those constraints as `camera-chirp:*` and `camera-pose-correction:*` render points plus `chirp-camera-pose` LOD evidence.
-  - `scripts/diagnostic_stream_spout.py` runs the deadline Spout sender loop from the typed cache with typed and JSON heartbeat status. This is diagnostic/migration code, not production runtime.
-  - The deadline Spout renderer has a named `kiyo-mid-deru` virtual camera preset: eye at the midpoint between the two Kiyo-class cameras and target on the co-streamer body volume. It also applies a renderer-owned point budget with pinned calibration/cross-modal constraints, stable high-confidence anchors, and frame-varying remainder samples so downstream TAA/supersampling can accumulate detail without forcing every source claim into every OBS frame. Its JSON heartbeat reports the prefix counts that survived the render budget.
+  - Diagnostic render math still has a named `kiyo-mid-deru` virtual camera
+    preset and point budget for CPU tests. Aquarium should own the production
+    version of that policy.
   - `docs/obs-spout-streaming.md` documents OBS setup and the Aquarium replacement boundary.
   - `docs/typed-visual-state.md` documents the diagnostic CultCache file shape
     and the CultNet visual schema target.
@@ -107,8 +108,8 @@ shape removes independent per-kind storage from the live foundation.
 ## Next
 
 1. Delete remaining production dependence on `scripts/diagnostic_live_sensor_fusion.py`,
-   `localcast.diagnostics.spout_output`, diagnostic JSON render-frame adapters,
-   diagnostic JSON LOD adapters, and Python reservoir-window clipping.
+   diagnostic JSON render-frame adapters, diagnostic JSON LOD adapters, and
+   Python reservoir-window clipping.
 2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.
 3. Move camera/mic/loopback ingest into native capture workers that append
    typed sample handles.

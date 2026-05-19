@@ -149,8 +149,8 @@ research:
     summary: docs/obs-spout-streaming.md
     key_decision: >
       The deadline OBS surface proved the need for a named Spout sender, but it
-      is not a foundation. `scripts/diagnostic_stream_spout.py`, SpoutGL/OpenGL rendering,
-      Python render-frame production, and JSON heartbeat stores are diagnostics
+      is not a foundation. The Python/OpenGL Spout publisher is now deleted;
+      Python render-frame production and JSON heartbeat stores are diagnostics
       or migration fossils only. Production Spout publication belongs in
       Aquarium, fed by the native rolling reservoir and typed CultNet documents.
   live_audio_phase_meaning:
@@ -301,17 +301,11 @@ current_status:
     points into `localcast.sensor_fusion.render_frame.v1` packets carrying
     source time ranges, intended visual presentation time, audio-alignment
     time, target render size, Spout sender name, and point draw metadata for
-    Aquarium/Spout. A deadline OBS Spout sender is now live-shaped:
-    `scripts/diagnostic_live_sensor_fusion.py` writes fused render frames into
+    Aquarium/Spout. `scripts/diagnostic_live_sensor_fusion.py` writes fused render frames into
     diagnostic typed CultCache state at `calibration/runs/visual-state.msgpack`.
-    `scripts/diagnostic_stream_spout.py` consumes that diagnostic document,
-    lowers points into compact anisotropic
-    screen brush packets, uploads an OpenGL texture, publishes Spout sender
-    `LocalCastBridge Point Cloud`, and writes both typed status
-    `calibration/runs/visual-stream-status.msgpack` and compatibility JSON
-    `calibration/runs/stream-spout-status.json`; OBS now has a Spout2 Capture
-    source pointed at that sender, and an OBS websocket screenshot verified
-    nonblack brush output. OBS synchronized program setup now derives six
+    The old Python/OpenGL diagnostic Spout sender has been deleted; only pure
+    diagnostic render math remains under `localcast.diagnostics.render_math`.
+    OBS synchronized program setup now derives six
     per-channel stems from the aligned program audio timeline, creates/updates
     OBS Media Sources for host voice, co-streamer voice, ambient, transients,
     co-streamer loopback, and local loopback, and can disable every scene item
@@ -352,8 +346,8 @@ current_status:
     stochastic transient hypotheses, and synthetic fusion support while still
     seeing lower-priority fallback diagnostics when the Leap capture path stalls.
   next_action: >
-    Stop live feature work on the Python/OpenGL bridge. The first native cut is
+    Stop live feature work on the Python bridge. The first native cut is
     complete: `native/reservoir` is now a single time-ordered rolling buffer
-    with typed views and updated ABI/tests. Next quarantine Python/OpenGL code
-    as diagnostics, then bind Aquarium/Faust to the native runtime and resume
-    hardware calibration through typed CultNet/native surfaces only.
+    with typed views and updated ABI/tests. Next bind Aquarium/Faust to the
+    native runtime, delete diagnostic Python producers, and resume hardware
+    calibration through typed CultNet/native surfaces only.
