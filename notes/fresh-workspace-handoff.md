@@ -33,6 +33,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `LocalcastRuntime` now exposes producer pushes and consumer reads.
   `LocalcastProducer` owns source identity and sequence assignment for native
   capture workers.
+- Aquarium-Engine commit `4d5aec7` adds the first safe-code C# binding layer for
+  this native ABI. It is not yet wired into `LocalCastRuntime` as the live
+  source.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been

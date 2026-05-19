@@ -114,6 +114,9 @@ shape removes independent per-kind storage from the live foundation.
    diagnostic JSON render-frame adapters, diagnostic JSON LOD adapters, and
    Python reservoir-window clipping.
 2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.
+   Aquarium now has a safe-code native reservoir binding layer; the next cut is
+   switching `LocalCastRuntime` from file polling to that injected native
+   runtime seam.
 3. Move camera/mic/loopback ingest into native capture workers that use
    `LocalcastProducer` to append typed sample handles.
 4. Move feature extraction, flow, cross-view matching, LOD reconciliation,
