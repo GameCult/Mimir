@@ -141,6 +141,7 @@ def main() -> None:
                     point_count=renderer.last_render_point_count,
                     frame_path=Path(frame_source_name),
                     last_error=None if ok else "SpoutGL sendTexture returned false",
+                    point_prefix_counts=renderer.last_render_prefix_counts,
                 )
                 write_cult_status(
                     status_cache_path,

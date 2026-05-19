@@ -70,12 +70,14 @@ from .clap_calibration import (
 from .chirp_pose import (
     CameraChirpPoseConstraint,
     CameraMicGeometry,
+    CameraPoseCorrectionEstimate,
     SpeakerGeometry,
     camera_mic_geometry_from_audio_profile,
     camera_sensor_id_for_microphone,
     constraints_from_phase_sources,
     default_camera_mic_geometry,
     default_speaker_geometry,
+    estimate_pose_corrections,
     phase_source_id_for_microphone,
     speaker_geometry_from_audio_profile,
 )
@@ -100,6 +102,7 @@ from .spout_output import (
     frame_to_vertex_array,
     frame_with_point_budget,
     lower_frame_to_screen_brushes,
+    point_prefix_counts,
 )
 
 __all__ = [
@@ -141,6 +144,7 @@ __all__ = [
     "CameraSyncEstimate",
     "CameraChirpPoseConstraint",
     "CameraMicGeometry",
+    "CameraPoseCorrectionEstimate",
     "SpeakerGeometry",
     "camera_mic_geometry_from_audio_profile",
     "camera_sensor_id_for_microphone",
@@ -161,6 +165,7 @@ __all__ = [
     "VirtualCamera",
     "frame_to_vertex_array",
     "frame_with_point_budget",
+    "point_prefix_counts",
     "get_live_render_frame",
     "get_live_clap_events",
     "make_clap_events_frame",
@@ -184,6 +189,7 @@ __all__ = [
     "constraints_from_phase_sources",
     "default_camera_mic_geometry",
     "default_speaker_geometry",
+    "estimate_pose_corrections",
     "phase_source_id_for_microphone",
     "speaker_geometry_from_audio_profile",
     "remote_video_artifact_for_present_time",

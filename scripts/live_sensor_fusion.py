@@ -31,6 +31,7 @@ from localcast.sensor_fusion import (
     constraints_from_phase_sources,
     detect_clap_events,
     dense_stereo_points,
+    estimate_pose_corrections,
     evidence_from_fusion_items,
     evidence_from_render_points,
     get_live_clap_events,
@@ -692,6 +693,8 @@ class LiveChirpPoseMapper:
         points: list[RenderPointPacket] = []
         for constraint in self.constraints:
             points.extend(chirp_pose_constraint_points(constraint, timestamp_ns))
+        for estimate in estimate_pose_corrections(self.constraints):
+            points.extend(chirp_pose_correction_points(estimate, timestamp_ns))
         return tuple(points)
 
 
@@ -727,6 +730,34 @@ def chirp_pose_constraint_points(
             0.012 + 0.030 * residual_strength,
             (1.0, 0.55, 0.18, 0.22 + 0.36 * confidence),
             confidence * 0.85,
+            timestamp_ns,
+        ),
+    )
+
+
+def chirp_pose_correction_points(estimate, timestamp_ns: int) -> tuple[RenderPointPacket, ...]:
+    confidence = max(0.0, min(1.0, float(estimate.confidence)))
+    start = np.asarray(estimate.position_m, dtype=np.float64)
+    correction = np.asarray(estimate.correction_m, dtype=np.float64)
+    end = start + correction
+    magnitude = float(np.linalg.norm(correction))
+    strength = min(1.0, magnitude / 0.25)
+    alpha = 0.22 + 0.55 * strength * confidence
+    return (
+        render_point(
+            f"camera-pose-correction:{estimate.sensor_id}:origin",
+            start,
+            0.022 + 0.045 * strength,
+            (0.35, 0.78, 1.0, alpha),
+            confidence,
+            timestamp_ns,
+        ),
+        render_point(
+            f"camera-pose-correction:{estimate.sensor_id}:target",
+            end,
+            0.028 + 0.055 * strength,
+            (1.0, 0.90, 0.30, alpha),
+            confidence,
             timestamp_ns,
         ),
     )

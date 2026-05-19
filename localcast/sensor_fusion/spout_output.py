@@ -278,6 +278,7 @@ def is_pinned_render_point(point: RenderPointPacket) -> bool:
     return point.stable_key.startswith(
         (
             "camera-chirp:",
+            "camera-pose-correction:",
             "camera-sync:",
             "clap-calibration:",
             "clap-ray:",
@@ -285,6 +286,22 @@ def is_pinned_render_point(point: RenderPointPacket) -> bool:
             "audio-event-",
         )
     )
+
+
+def point_prefix_counts(points: tuple[RenderPointPacket, ...] | list[RenderPointPacket]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for point in points:
+        prefix = point_prefix(point.stable_key)
+        counts[prefix] = counts.get(prefix, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def point_prefix(stable_key: str) -> str:
+    if ":" in stable_key:
+        return stable_key.split(":", 1)[0]
+    if stable_key.startswith("audio-event-"):
+        return "audio-event"
+    return stable_key
 
 
 def stable_hash(key: str, salt: int) -> int:
@@ -298,7 +315,7 @@ def render_priority(point: RenderPointPacket, camera_preset_name: str) -> float:
     semantic = 1.0
     if key.startswith("clap-calibration:"):
         semantic = 3.2
-    elif key.startswith(("camera-sync:", "camera-chirp:")):
+    elif key.startswith(("camera-sync:", "camera-chirp:", "camera-pose-correction:")):
         semantic = 2.6
     elif key.startswith(("clap-ray:", "clap-timing:")):
         semantic = 2.2
@@ -521,6 +538,7 @@ def write_status(
     point_count: int,
     frame_path: Path | None,
     last_error: str | None = None,
+    point_prefix_counts: dict[str, int] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -531,6 +549,8 @@ def write_status(
         "updated_monotonic_ns": time.monotonic_ns(),
         "last_error": last_error,
     }
+    if point_prefix_counts is not None:
+        payload["point_prefix_counts"] = dict(sorted(point_prefix_counts.items()))
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -600,6 +620,7 @@ class OpenGLSpoutPointRenderer:
         self.vao = None
         self.frames_sent = 0
         self.last_render_point_count = 0
+        self.last_render_prefix_counts: dict[str, int] = {}
 
     def __enter__(self) -> "OpenGLSpoutPointRenderer":
         self.open()
@@ -724,6 +745,7 @@ class OpenGLSpoutPointRenderer:
 
         render_frame = frame_with_point_budget(frame, self.config.max_render_points, self.config.camera_preset)
         self.last_render_point_count = len(render_frame.points)
+        self.last_render_prefix_counts = point_prefix_counts(render_frame.points)
         vertices = frame_to_vertex_array(render_frame, self.config.point_scale)
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, self.config.width, self.config.height)

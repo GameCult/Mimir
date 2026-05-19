@@ -39,6 +39,16 @@ class CameraChirpPoseConstraint:
     timestamp_ns: int
 
 
+@dataclass(frozen=True)
+class CameraPoseCorrectionEstimate:
+    sensor_id: str
+    position_m: np.ndarray
+    correction_m: np.ndarray
+    confidence: float
+    constraint_count: int
+    timestamp_ns: int
+
+
 def default_camera_mic_geometry() -> tuple[CameraMicGeometry, ...]:
     return (
         CameraMicGeometry("kiyo-primary", "kiyo-0", np.array([-0.18, -0.72, 1.28], dtype=np.float64)),
@@ -154,6 +164,50 @@ def constraints_from_phase_sources(
             )
         )
     return tuple(rows)
+
+
+def estimate_pose_corrections(
+    constraints: Sequence[CameraChirpPoseConstraint],
+    *,
+    max_step_m: float = 0.35,
+) -> tuple[CameraPoseCorrectionEstimate, ...]:
+    grouped: dict[str, list[CameraChirpPoseConstraint]] = {}
+    for constraint in constraints:
+        grouped.setdefault(constraint.sensor_id, []).append(constraint)
+    estimates: list[CameraPoseCorrectionEstimate] = []
+    for sensor_id, rows in grouped.items():
+        vectors = []
+        weights = []
+        positions = []
+        for row in rows:
+            camera = np.asarray(row.camera_position_m, dtype=np.float64)
+            speaker = np.asarray(row.speaker_position_m, dtype=np.float64)
+            direction = camera - speaker
+            norm = float(np.linalg.norm(direction))
+            if norm <= 1.0e-9:
+                continue
+            unit = direction / norm
+            confidence = max(0.0, min(1.0, float(row.confidence)))
+            vectors.append(unit * float(row.range_residual_m))
+            weights.append(max(1.0e-6, confidence))
+            positions.append(camera)
+        if not vectors:
+            continue
+        weighted = np.average(np.asarray(vectors, dtype=np.float64), axis=0, weights=np.asarray(weights, dtype=np.float64))
+        magnitude = float(np.linalg.norm(weighted))
+        if magnitude > max_step_m:
+            weighted = weighted / magnitude * float(max_step_m)
+        estimates.append(
+            CameraPoseCorrectionEstimate(
+                sensor_id=sensor_id,
+                position_m=np.average(np.asarray(positions, dtype=np.float64), axis=0, weights=np.asarray(weights, dtype=np.float64)),
+                correction_m=weighted.astype(np.float64),
+                confidence=float(min(1.0, np.mean(weights))),
+                constraint_count=len(vectors),
+                timestamp_ns=max(row.timestamp_ns for row in rows),
+            )
+        )
+    return tuple(sorted(estimates, key=lambda item: item.sensor_id))
 
 
 def _nearest_speaker(position_m: np.ndarray, speakers: Sequence[SpeakerGeometry]) -> SpeakerGeometry:

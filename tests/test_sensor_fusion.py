@@ -33,8 +33,10 @@ from localcast.sensor_fusion import (
     camera_sensor_id_for_microphone,
     constraints_from_phase_sources,
     detect_clap_events,
+    estimate_pose_corrections,
     frame_to_vertex_array,
     frame_with_point_budget,
+    point_prefix_counts,
     dense_stereo_points,
     get_live_clap_events,
     get_live_render_frame,
@@ -351,6 +353,18 @@ class SensorFusionTests(unittest.TestCase):
 
         self.assertEqual(6, len(limited.points))
         self.assertTrue(all(point.stable_key in keys for point in pinned))
+        self.assertEqual(1, point_prefix_counts(limited.points)["camera-chirp"])
+        self.assertEqual(1, point_prefix_counts(limited.points)["camera-sync"])
+        self.assertEqual(1, point_prefix_counts(limited.points)["clap-calibration"])
+
+    def test_point_prefix_counts_groups_audio_events(self):
+        points = (
+            RenderPointPacket("audio-event-16", np.zeros(3), 0.02, (1, 1, 1, 1), 1.0, 1),
+            RenderPointPacket("audio-event-17", np.zeros(3), 0.02, (1, 1, 1, 1), 1.0, 1),
+            RenderPointPacket("camera-chirp:kiyo:speaker:body", np.zeros(3), 0.02, (1, 1, 1, 1), 1.0, 1),
+        )
+
+        self.assertEqual({"audio-event": 2, "camera-chirp": 1}, point_prefix_counts(points))
 
     def test_rasterizer_uses_gaussian_envelope_not_solid_ellipse(self):
         frame = RenderFramePacket(
@@ -610,6 +624,27 @@ class SensorFusionTests(unittest.TestCase):
         self.assertAlmostEqual(1.12, constraint.observed_range_m)
         self.assertAlmostEqual(0.12, constraint.range_residual_m)
         self.assertEqual(12_345, constraint.timestamp_ns)
+
+    def test_chirp_pose_constraints_produce_pose_correction_estimates(self):
+        constraints = constraints_from_phase_sources(
+            (
+                {"sourceId": "kiyo-0", "distanceDeltaMeters": 0.20, "confidence": 0.8},
+            ),
+            audio_time_ns=9_000,
+            camera_mics=(
+                CameraMicGeometry("kiyo-primary", "kiyo-0", np.array([1.0, 0.0, 0.0], dtype=np.float64)),
+            ),
+            speakers=(
+                SpeakerGeometry("speaker-left", np.array([0.0, 0.0, 0.0], dtype=np.float64)),
+            ),
+        )
+
+        estimates = estimate_pose_corrections(constraints)
+
+        self.assertEqual(1, len(estimates))
+        self.assertEqual("kiyo-primary", estimates[0].sensor_id)
+        self.assertTrue(np.allclose([0.20, 0.0, 0.0], estimates[0].correction_m))
+        self.assertEqual(1, estimates[0].constraint_count)
 
     def test_chirp_pose_geometry_loads_from_audio_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
