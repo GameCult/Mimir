@@ -1,0 +1,81 @@
+{
+  "schema": "gamecult.localcast.perfect_machine.v1",
+  "reservoir": {
+    "durationSeconds": 5.0,
+    "clockAuthority": "presentation",
+    "lateSamplePolicy": "accept-inside-window",
+    "expiredSamplePolicy": "offline-calibration-only",
+    "storageLayout": "struct-of-arrays-native-rings"
+  },
+  "authorities": {
+    "configurationCalibrationLaunchStatus": "LocalCastBridge",
+    "denseVisualFusion": "Aquarium",
+    "gpuMaterialAndBrushReconciliation": "Aquarium",
+    "spoutPublication": "Aquarium",
+    "hotAudioDsp": "Faust",
+    "obsBroadcastControls": "OBS"
+  },
+  "visualSensors": [
+    { "id": "kiyo-primary", "role": "rgb-main", "required": true },
+    { "id": "kiyo-secondary", "role": "rgb-stereo", "required": true },
+    { "id": "ps3eye-left", "role": "high-rate-feature", "required": true },
+    { "id": "ps3eye-right", "role": "high-rate-feature", "required": true },
+    { "id": "leap-left-ir", "role": "near-field-timing-depth", "required": true },
+    { "id": "leap-right-ir", "role": "near-field-timing-depth", "required": true }
+  ],
+  "audioSensors": [
+    { "id": "host-focusrite", "role": "host-dialogue-anchor", "required": true },
+    { "id": "co-streamer-focusrite", "role": "co-streamer-dialogue-anchor", "required": true },
+    { "id": "kiyo-0", "role": "camera-spatial-witness", "required": true },
+    { "id": "kiyo-1", "role": "camera-spatial-witness", "required": true },
+    { "id": "ps-eye-0", "role": "camera-spatial-witness", "required": true },
+    { "id": "ps-eye-1", "role": "camera-spatial-witness", "required": true }
+  ],
+  "reservoirRings": [
+    "camera_frame",
+    "camera_feature",
+    "scene_ray",
+    "surface_claim",
+    "material_claim",
+    "audio_block",
+    "phase_claim",
+    "event_claim",
+    "render_packet"
+  ],
+  "outputs": {
+    "video": {
+      "target": "Spout2",
+      "senderName": "LocalCastBridge Point Cloud",
+      "owner": "Aquarium"
+    },
+    "audio": {
+      "owner": "Faust",
+      "stems": [
+        "host_voice",
+        "co_streamer_voice",
+        "ambient",
+        "transients",
+        "local_loopback",
+        "co_streamer_loopback",
+        "spatial_bed"
+      ]
+    }
+  },
+  "bridgeDemotion": {
+    "python": [
+      "calibration",
+      "contract-tests",
+      "device-discovery",
+      "status",
+      "compatibility-spout-diagnostics",
+      "offline-analysis"
+    ],
+    "notPython": [
+      "dense-feature-extraction",
+      "reservoir-reconciliation",
+      "hot-dsp",
+      "brush-splat-rendering",
+      "program-output"
+    ]
+  }
+}

@@ -1,6 +1,10 @@
 # LocalCastBridge
 
-LocalCastBridge turns a Windows gaming/desktop PC into LAN sources for another machine's OBS scene.
+LocalCastBridge turns the local streaming rig into synchronized OBS-facing
+program output. The old SRT bridge is compatibility scaffolding; the target
+machine is Aquarium GPU fusion plus Faust DSP over one five-second reservoir.
+
+Start with `docs/perfect-machine.md` for the live architecture.
 
 V1 does not fork OBS. OBS already accepts SRT Media Sources, and FFmpeg can capture Windows desktop/audio while encoding video with `h264_nvenc`. The sane first machine is:
 

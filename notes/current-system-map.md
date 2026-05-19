@@ -1,6 +1,34 @@
 # Current System Map
 
-LocalCastBridge is intentionally thin.
+LocalCastBridge is intentionally thin. The target live machine is not the
+deadline bridge; it is the native reservoir described in
+`docs/perfect-machine.md` and `config/perfect-machine.example.json`.
+
+## Perfect Machine Target
+
+```mermaid
+flowchart TD
+    A["6 cameras"] --> R["5s native reservoir"]
+    B["6 microphones"] --> R
+    C["Leap timing/IR"] --> R
+    D["loopback + remote video/audio"] --> R
+    R --> E["Aquarium GPU fusion + material field"]
+    R --> F["Faust DSP"]
+    E --> G["Spout2 texture"]
+    F --> H["program stems + spatial bed"]
+    G --> I["OBS"]
+    H --> I
+```
+
+Ownership:
+
+- LocalCastBridge owns configuration, calibration, contract tests, launch, status, and persistence.
+- Aquarium owns dense visual fusion, material/brush/splat reconciliation, final render target, and Spout publication.
+- Faust owns hot audio DSP and program stem generation.
+- OBS owns broadcast controls.
+- Python remains tooling, not the stream hot path.
+
+Invariant: the five-second spatiotemporal reservoir is the live authority. Producers append, optimizers refine, Aquarium/Faust sample. No private history outlives the reservoir.
 
 ```mermaid
 flowchart TD

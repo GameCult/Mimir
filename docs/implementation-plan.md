@@ -2,6 +2,9 @@
 
 ## Implemented
 
+- Perfect Machine contract:
+  - `docs/perfect-machine.md` defines the target native machine: one five-second spatiotemporal reservoir, Aquarium-owned dense visual fusion/material/brush rendering, Faust-owned hot audio DSP, OBS-owned broadcast controls, and LocalCastBridge-owned calibration/config/status.
+  - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir rings, native authorities, outputs, and the demotion of bridge scripts to tooling.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.
@@ -71,22 +74,12 @@
 
 ## Next
 
-1. Open OBS and confirm the three `Neighbor PC` sources load.
-2. Start the sender from Madman's interactive desktop, not SSH.
-3. Smoke-test the video endpoint in OBS.
-4. Smoke-test the Focusrite endpoint in OBS.
-5. Smoke-test the system-loopback endpoint in OBS.
-6. Tune SRT latency and FFmpeg buffering for the local network.
-7. Decide whether a small OBS scene/source generator is worth adding.
-8. Reconsider plugin/fork only if standard OBS Media Source cannot preserve the required behavior.
-9. Create local `config/audio-field.json`, confirm local Kiyo/PS Eye/Focusrite device matches, and confirm the neighbor Focusrite shotgun capture/transport path.
-10. Replace placeholder mic/speaker geometry with measured world coordinates, then build the delay/SRO alignment stage that feeds the bounded field cache and emits aligned six-channel blocks before FOA encoding.
-11. Move the render-frame consumer into Aquarium Engine so dense brush/splat rendering replaces the deadline OpenGL point sink behind the same OBS Spout boundary.
-12. Capture fixed-board ChArUco observations for every camera, solve `config/sensor-fusion.json`, and verify cross-view feature triangulation with `scripts/triangulate_surface_features.py`.
-13. Replace synchronous OpenCV camera reads in the hot producer with nonblocking camera ingress that continuously fills the five-second reservoir, then promote real PS3 Eye/Kiyo/Leap samples over fallback-only mode.
-14. Replace the example speaker/camera-mic geometry used by `chirp_pose` with measured local `config/audio-field.json` coordinates, then let the common-space optimizer consume range residuals instead of only visualizing them.
-15. Calibrate Leap as a geometric camera in the shared rig so the timing authority can also contribute direct 3D rays instead of only visual timing peaks.
-16. Fix the live Leap capture backend so actual Leap frames, not fallback frames, populate `leap-ground-truth` cells in the multi-LOD cache.
-17. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
-18. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
-19. Promote `scripts/stream_live_audio_field.py` from local deadline owner to the distributed owner by feeding it the neighbor Focusrite shotgun and neighbor loopback surfaces as synchronized live inputs instead of placeholders.
+1. Implement the native reservoir ABI declared by `config/perfect-machine.example.json`.
+2. Move camera ingest into native capture workers that append `camera_frame` samples to the reservoir.
+3. Move feature extraction, flow, cross-view matching, LOD reconciliation, and material fitting into Aquarium GPU compute.
+4. Move mic alignment, voice separation, room suppression, Ambisonic/HOA spatialization, and stem generation into Faust/native DSP.
+5. Replace the deadline Spout sink with Aquarium-owned Spout publication from the native render target.
+6. Feed the neighbor Focusrite shotgun and neighbor loopback into the reservoir as live synchronized audio inputs.
+7. Replace placeholder mic/speaker/camera geometry with measured `config/audio-field.json` and `config/sensor-fusion.json` coordinates.
+8. Calibrate Leap as a geometric camera so Leap contributes direct 3D rays, not only timing evidence.
+9. Keep the Python bridge only for calibration, contract tests, device discovery, status, and offline analysis.

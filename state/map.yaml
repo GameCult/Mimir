@@ -1,7 +1,7 @@
 workspace:
   name: LocalCastBridge
   status: active
-  focus: local-obs-lan-source
+  focus: perfect-machine-native-reservoir
   premise: >
     A second Windows PC should appear inside OBS as video plus separately
     mixable audio sources. Use ordinary media transport first; native OBS code
@@ -9,11 +9,12 @@ workspace:
 
 objective:
   primary: >
-    Provide a repeatable local streaming environment where the sender captures
-    desktop/video and audio sources, encodes video with NVENC, and delivers
-    stable OBS Media Source URLs to the receiver over LAN.
+    Build one synchronized spatial stream machine from six cameras, six
+    microphones, two speakers, Leap timing, Aquarium GPU rendering, Faust DSP,
+    and OBS output.
   current: >
-    Establish the script-and-doc spine for a two-PC smoke test.
+    Cut the deadline bridge down to tooling and define the native five-second
+    reservoir contract Aquarium/Faust must implement.
 
 constraints:
   - Sender is Windows.
@@ -39,6 +40,9 @@ accepted_design:
   - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
 
 active_subgoals:
+  - Implement the Perfect Machine native reservoir contract described by `docs/perfect-machine.md` and `config/perfect-machine.example.json`.
+  - Move dense visual fusion/material fitting/brush generation into Aquarium GPU compute.
+  - Move hot audio DSP/voice separation/room suppression/spatialization into Faust/native runtime.
   - Validate the actual sender FFmpeg build and capture device names.
   - Smoke-test the video endpoint in OBS.
   - Smoke-test each audio endpoint in OBS and tune latency.
