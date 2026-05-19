@@ -1,12 +1,14 @@
 workspace:
-  name: LocalCastBridge
+  name: Mimir
   status: active
   focus: perfect-machine-native-reservoir
+  implementation_name: LocalCastBridge / localcast
   premise: >
-    A second Windows PC should appear inside OBS as video plus separately
-    mixable audio sources. The synchronized program path now cuts away the
-    Python/OpenGL deadline bridge and rebuilds around one native rolling
-    reservoir feeding Aquarium, Faust, CultNet, and OBS.
+    Mimir is the public name for the local realtime field machine: a roomful of
+    cameras, microphones, speakers, and timing signals becomes one coherent
+    OBS-facing volumetric program surface. The synchronized program path now
+    cuts away the Python/OpenGL deadline bridge and rebuilds around one native
+    rolling reservoir feeding Aquarium, Faust, CultNet, and OBS.
 
 objective:
   primary: >
@@ -60,6 +62,9 @@ accepted_design:
   - `LocalcastRenderPacketDescriptor` gives render packets the same typed
     payload boundary for caller-owned point buffers and presentation timing;
     Aquarium still owns decoding, upload, and rendering.
+  - `LocalcastRenderPoint` is the first native point-buffer element ABI, kept
+    small to replace file-backed render-frame transport before richer material
+    and brush descriptors exist.
   - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
   - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
   - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.

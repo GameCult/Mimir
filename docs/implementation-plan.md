@@ -38,6 +38,9 @@ shape removes independent per-kind storage from the live foundation.
     descriptor boundary: caller-owned point buffer, point count/stride, target
     size, source window, present time, audio-alignment time, and optional
     metadata handle.
+  - `LocalcastRenderPoint` is the first fixed point-buffer element ABI for
+    Aquarium decoding: stable-key hash, source timestamp, position, radius,
+    color/alpha, and confidence.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.

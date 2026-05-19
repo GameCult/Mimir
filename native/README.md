@@ -70,6 +70,12 @@ runtime path:
 - Aquarium owns decoding and GPU upload. The reservoir only indexes when this
   render packet exists in the shared rolling window.
 
+`LocalcastRenderPoint` is the fixed point-buffer element shape for the initial
+native/Aquarium render path. It carries a stable-key hash, source timestamp,
+position, radius, color/alpha, and confidence. Richer material/brush payloads
+can get their own descriptors later; this point shape exists to kill the old
+JSON/CultCache render-frame dependency first.
+
 Payload handles are owned by the caller. Aquarium should treat them as handles
 to GPU/native visual memory; Faust/native DSP should treat them as handles to
 audio buffers. This crate does not interpret those bytes. It is the clocked

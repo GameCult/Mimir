@@ -65,6 +65,20 @@ typedef struct LocalcastRenderPacketDescriptor {
     uint64_t metadata_handle;
 } LocalcastRenderPacketDescriptor;
 
+typedef struct LocalcastRenderPoint {
+    uint64_t stable_key_hash;
+    uint64_t source_timestamp_ns;
+    float x;
+    float y;
+    float z;
+    float radius_m;
+    float red;
+    float green;
+    float blue;
+    float alpha;
+    float confidence;
+} LocalcastRenderPoint;
+
 typedef struct LocalcastRuntimeStatus {
     uint64_t edge_ns;
     uint64_t window_start_ns;

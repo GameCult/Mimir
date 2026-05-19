@@ -38,6 +38,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   pointer, while the reservoir still owns only timing/retention metadata.
 - `LocalcastRenderPacketDescriptor` now gives render packets the same typed
   descriptor boundary for caller-owned point buffers and presentation timing.
+- `LocalcastRenderPoint` is the fixed first point-buffer ABI for Aquarium
+  decoding.
 - Aquarium-Engine commit `4d5aec7` adds the first safe-code C# binding layer for
   this native ABI. It is not yet wired into `LocalCastRuntime` as the live
   source.

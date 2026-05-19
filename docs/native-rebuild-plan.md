@@ -83,6 +83,9 @@ address as the payload handle and does not own the bytes.
 `LocalcastRenderPacketDescriptor` does the same for visual render packets:
 caller-owned point buffers and timing metadata are explicit, while Aquarium owns
 decode/upload/rendering.
+The first point-buffer element is `LocalcastRenderPoint`; it is deliberately
+small so a native producer can kill file-backed render-frame transport before
+the richer material/brush payloads arrive.
 
 ## Authoritative Boundaries
 

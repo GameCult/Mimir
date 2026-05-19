@@ -211,6 +211,22 @@ pub struct LocalcastRenderPacketDescriptor {
     pub metadata_handle: u64,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalcastRenderPoint {
+    pub stable_key_hash: u64,
+    pub source_timestamp_ns: u64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub radius_m: f32,
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+    pub alpha: f32,
+    pub confidence: f32,
+}
+
 pub struct LocalcastReservoir {
     inner: RollingReservoir<LocalcastSampleHandle>,
 }
@@ -891,6 +907,22 @@ mod tests {
         }
     }
 
+    fn render_point(stable_key_hash: u64) -> LocalcastRenderPoint {
+        LocalcastRenderPoint {
+            stable_key_hash,
+            source_timestamp_ns: 1_900,
+            x: 0.1,
+            y: 0.2,
+            z: 1.2,
+            radius_m: 0.03,
+            red: 0.7,
+            green: 0.6,
+            blue: 0.5,
+            alpha: 0.9,
+            confidence: 0.8,
+        }
+    }
+
     #[test]
     fn rolling_reservoir_expires_every_kind_from_one_edge() {
         let mut reservoir = RollingReservoir::new(DEFAULT_RESERVOIR_NS);
@@ -1429,6 +1461,16 @@ mod tests {
 
         localcast_producer_destroy(producer);
         localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn render_point_layout_is_fixed_for_aquarium_decoding() {
+        let point = render_point(0xCAFE);
+
+        assert_eq!(std::mem::size_of::<LocalcastRenderPoint>(), 56);
+        assert_eq!(0xCAFE, point.stable_key_hash);
+        assert_eq!(1_900, point.source_timestamp_ns);
+        assert_eq!(0.03, point.radius_m);
     }
 
     #[test]
