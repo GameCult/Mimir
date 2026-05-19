@@ -61,6 +61,20 @@ uint64_t localcast_reservoir_window_start_ns(const LocalcastReservoir *reservoir
 size_t localcast_reservoir_len(const LocalcastReservoir *reservoir);
 size_t localcast_reservoir_view_len(const LocalcastReservoir *reservoir, uint32_t sample_kind);
 
+bool localcast_reservoir_sample_at(
+    const LocalcastReservoir *reservoir,
+    size_t index,
+    uint32_t *out_sample_kind,
+    LocalcastSampleHandle *out_sample
+);
+
+bool localcast_reservoir_view_sample_at(
+    const LocalcastReservoir *reservoir,
+    uint32_t sample_kind,
+    size_t index,
+    LocalcastSampleHandle *out_sample
+);
+
 bool localcast_reservoir_latest_for_sensor(
     const LocalcastReservoir *reservoir,
     uint32_t sample_kind,

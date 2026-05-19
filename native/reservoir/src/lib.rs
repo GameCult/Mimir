@@ -113,6 +113,10 @@ impl<T> RollingReservoir<T> {
         self.samples.iter()
     }
 
+    pub fn sample_at(&self, index: usize) -> Option<&ReservoirSample<T>> {
+        self.samples.get(index)
+    }
+
     pub fn view(&self, kind: SampleKind) -> impl Iterator<Item = &ReservoirSample<T>> {
         self.samples
             .iter()
@@ -121,6 +125,10 @@ impl<T> RollingReservoir<T> {
 
     pub fn view_len(&self, kind: SampleKind) -> usize {
         self.view(kind).count()
+    }
+
+    pub fn view_sample_at(&self, kind: SampleKind, index: usize) -> Option<&ReservoirSample<T>> {
+        self.view(kind).nth(index)
     }
 
     pub fn latest_for_sensor(
@@ -327,6 +335,53 @@ pub extern "C" fn localcast_reservoir_view_len(
         return 0;
     };
     reservoir.inner.view_len(kind)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_reservoir_sample_at(
+    ptr: *const LocalcastReservoir,
+    index: usize,
+    out_sample_kind: *mut u32,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(reservoir) = (unsafe { ptr.as_ref() }) else {
+        return false;
+    };
+    let Some(out_kind) = (unsafe { out_sample_kind.as_mut() }) else {
+        return false;
+    };
+    let Some(out) = (unsafe { out_sample.as_mut() }) else {
+        return false;
+    };
+    let Some(sample) = reservoir.inner.sample_at(index) else {
+        return false;
+    };
+    *out_kind = sample.kind as u32;
+    *out = sample.payload;
+    true
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_reservoir_view_sample_at(
+    ptr: *const LocalcastReservoir,
+    sample_kind: u32,
+    index: usize,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(reservoir) = (unsafe { ptr.as_ref() }) else {
+        return false;
+    };
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
+        return false;
+    };
+    let Some(out) = (unsafe { out_sample.as_mut() }) else {
+        return false;
+    };
+    let Some(sample) = reservoir.inner.view_sample_at(kind, index) else {
+        return false;
+    };
+    *out = sample.payload;
+    true
 }
 
 #[unsafe(no_mangle)]
@@ -540,6 +595,49 @@ mod tests {
     }
 
     #[test]
+    fn indexed_reads_expose_total_buffer_and_typed_views() {
+        let mut reservoir = RollingReservoir::new(DEFAULT_RESERVOIR_NS);
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "cam-a",
+            10,
+            11,
+            0,
+            "frame-a",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::AudioBlock,
+            "mic",
+            12,
+            13,
+            0,
+            "audio",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "cam-b",
+            14,
+            15,
+            0,
+            "frame-b",
+        ));
+
+        assert_eq!("audio", reservoir.sample_at(1).unwrap().payload);
+        assert_eq!(
+            "frame-b",
+            reservoir
+                .view_sample_at(SampleKind::CameraFrame, 1)
+                .unwrap()
+                .payload
+        );
+        assert!(
+            reservoir
+                .view_sample_at(SampleKind::PhaseClaim, 0)
+                .is_none()
+        );
+    }
+
+    #[test]
     fn latest_for_sensor_is_scoped_to_kind_and_sensor() {
         let mut reservoir = RollingReservoir::new(DEFAULT_RESERVOIR_NS);
         reservoir.push(ReservoirSample::new(
@@ -632,6 +730,82 @@ mod tests {
         assert_eq!(1, localcast_reservoir_len(reservoir));
         assert_eq!(1, localcast_reservoir_view_len(reservoir, 0));
         assert_eq!(99, out.payload_handle);
+        localcast_reservoir_destroy(reservoir);
+    }
+
+    #[test]
+    fn c_abi_reads_total_buffer_and_view_samples_by_index() {
+        let reservoir = localcast_reservoir_create(DEFAULT_RESERVOIR_NS);
+        assert!(localcast_reservoir_push(
+            reservoir,
+            0,
+            LocalcastSampleHandle {
+                sensor_id_hash: 10,
+                timestamp_ns: 10,
+                arrival_ns: 11,
+                sequence: 0,
+                payload_handle: 100,
+            },
+        ));
+        assert!(localcast_reservoir_push(
+            reservoir,
+            5,
+            LocalcastSampleHandle {
+                sensor_id_hash: 20,
+                timestamp_ns: 12,
+                arrival_ns: 13,
+                sequence: 0,
+                payload_handle: 200,
+            },
+        ));
+        assert!(localcast_reservoir_push(
+            reservoir,
+            0,
+            LocalcastSampleHandle {
+                sensor_id_hash: 30,
+                timestamp_ns: 14,
+                arrival_ns: 15,
+                sequence: 0,
+                payload_handle: 300,
+            },
+        ));
+
+        let mut kind = 99;
+        let mut sample = LocalcastSampleHandle {
+            sensor_id_hash: 0,
+            timestamp_ns: 0,
+            arrival_ns: 0,
+            sequence: 0,
+            payload_handle: 0,
+        };
+
+        assert!(localcast_reservoir_sample_at(
+            reservoir,
+            1,
+            &mut kind,
+            &mut sample,
+        ));
+        assert_eq!(5, kind);
+        assert_eq!(200, sample.payload_handle);
+        assert!(localcast_reservoir_view_sample_at(
+            reservoir,
+            0,
+            1,
+            &mut sample,
+        ));
+        assert_eq!(300, sample.payload_handle);
+        assert!(!localcast_reservoir_sample_at(
+            reservoir,
+            99,
+            &mut kind,
+            &mut sample,
+        ));
+        assert!(!localcast_reservoir_view_sample_at(
+            reservoir,
+            99,
+            0,
+            &mut sample,
+        ));
         localcast_reservoir_destroy(reservoir);
     }
 

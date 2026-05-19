@@ -45,6 +45,8 @@ class PerfectMachineContractTests(unittest.TestCase):
         self.assertIn("enum LocalcastSampleKind", header)
         self.assertIn("size_t localcast_reservoir_len", header)
         self.assertIn("size_t localcast_reservoir_view_len", header)
+        self.assertIn("bool localcast_reservoir_sample_at", header)
+        self.assertIn("bool localcast_reservoir_view_sample_at", header)
         self.assertIn("bool localcast_reservoir_latest_for_sensor", header)
 
     def test_native_runtime_header_exposes_typed_producer_spine(self):

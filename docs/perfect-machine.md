@@ -174,6 +174,7 @@ in `native/reservoir/include/localcast_reservoir.h`:
 - push timestamped sample metadata into a typed view of the rolling buffer;
 - advance/query the shared edge and window start;
 - query total length and typed-view length;
+- read samples by total rolling-buffer index or typed-view index;
 - query the latest sample for a sensor hash.
 - create/destroy an opaque `LocalcastRuntime`;
 - append typed camera/audio/phase/event/render handles through producer calls;

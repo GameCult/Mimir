@@ -24,8 +24,9 @@ The reservoir ABI is intentionally small:
   camera frame, camera feature, scene ray, surface claim, material claim, audio
   block, phase claim, event claim, and render packet.
 - The reservoir can create/destroy, push, set/query edge, query window start,
-  count the whole rolling buffer, count a typed view, and fetch the latest
-  sample for a sensor hash inside a typed view.
+  count the whole rolling buffer, count a typed view, read samples by total
+  buffer index or typed-view index, and fetch the latest sample for a sensor
+  hash inside a typed view.
 
 ## Runtime ABI
 
