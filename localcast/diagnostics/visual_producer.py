@@ -49,10 +49,12 @@ from localcast.diagnostics.visual_cache import (
 from localcast.diagnostics.lod_json import write_lod_cache_json
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
 from localcast.sensor_fusion.adapters import LatestFramePump, OpenCvCaptureConfig, OpenCvFrameSource
+from localcast.sensor_fusion.reservoir_window import (
+    DEFAULT_RESERVOIR_NS,
+    evidence_in_reservoir,
+    render_points_in_reservoir,
+)
 from audio_field.cultcache_audio import frame_to_numpy, get_live_audio_phase_field, get_live_spatial_audio_frame
-
-
-DEFAULT_RESERVOIR_NS = 5_000_000_000
 
 
 def acquire_runtime_lock(path: Path) -> BinaryIO | None:
@@ -70,21 +72,6 @@ def acquire_runtime_lock(path: Path) -> BinaryIO | None:
         handle.close()
         return None
     return handle
-
-
-def reservoir_window_ns(latest_timestamp_ns: int, reservoir_ns: int) -> tuple[int, int]:
-    end_ns = int(latest_timestamp_ns)
-    return end_ns - int(reservoir_ns), end_ns
-
-
-def evidence_in_reservoir(evidence: tuple, *, latest_timestamp_ns: int, reservoir_ns: int) -> tuple:
-    start_ns, end_ns = reservoir_window_ns(latest_timestamp_ns, reservoir_ns)
-    return tuple(item for item in evidence if start_ns <= int(item.timestamp_ns) <= end_ns)
-
-
-def render_points_in_reservoir(points: tuple[RenderPointPacket, ...], *, latest_timestamp_ns: int, reservoir_ns: int) -> tuple[RenderPointPacket, ...]:
-    start_ns, end_ns = reservoir_window_ns(latest_timestamp_ns, reservoir_ns)
-    return tuple(point for point in points if start_ns <= int(point.source_timestamp_ns) <= end_ns)
 
 
 def latest_audio_time_ns(audio_cache: Path) -> int | None:

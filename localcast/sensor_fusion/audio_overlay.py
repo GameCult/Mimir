@@ -8,6 +8,7 @@ import numpy as np
 
 from .render_bridge import RenderFramePacket, RenderPointPacket
 from .media_artifacts import RemoteVideoArtifact
+from .reservoir_window import DEFAULT_RESERVOIR_NS, render_points_in_reservoir
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,9 +16,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from audio_field.cultcache_audio import CultAudioSourceEvents, CultSpatialAudioFrame  # noqa: E402
-
-
-DEFAULT_RESERVOIR_NS = 5_000_000_000
 
 
 @dataclass(frozen=True)
@@ -90,7 +88,11 @@ def clamp_frame_to_audio_reservoir(
         return frame
     edge_ns = max(int(frame.source_time_max_ns), int(audio_frame.audio_time_ns))
     start_ns = edge_ns - int(reservoir_ns)
-    points = tuple(point for point in frame.points if start_ns <= int(point.source_timestamp_ns) <= edge_ns)
+    points = render_points_in_reservoir(
+        frame.points,
+        latest_timestamp_ns=edge_ns,
+        reservoir_ns=reservoir_ns,
+    )
     return RenderFramePacket(
         schema=frame.schema,
         frame_id=frame.frame_id,
