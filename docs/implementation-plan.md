@@ -52,7 +52,7 @@ shape removes independent per-kind storage from the live foundation.
   - `localcast.sensor_fusion.surface_features` matches cross-view features and triangulates calibrated surface tracks.
   - `localcast.sensor_fusion.render_bridge` emits render-frame packets with visual/audio timing metadata and Spout sender identity.
   - `localcast.sensor_fusion.cultcache_docs` stores live visual state as typed CultCache MessagePack documents.
-  - `localcast.sensor_fusion.spout_output` renders render-frame packets into a GPU texture and publishes it as a named Spout sender for OBS.
+  - `localcast.diagnostics.spout_output` renders render-frame packets into a GPU texture and publishes it as a named Spout sender for OBS. This is diagnostic/migration code, not production runtime.
   - `scripts/live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`.
   - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
   - Live clap calibration is wired into the visual producer. It keeps a rolling frame window from the Kiyo pair plus Leap, reads the live spatial audio frame for transient candidates, publishes `clap-events.msgpack`, injects clap calibration markers into the render frame, and writes clap evidence into the LOD cache. Kiyo stereo owns the current rough 3D solve; Leap owns the best visual timing witness until its geometric model is calibrated.
@@ -101,7 +101,7 @@ shape removes independent per-kind storage from the live foundation.
 ## Next
 
 1. Quarantine or delete production use of `scripts/live_sensor_fusion.py`,
-   `localcast.sensor_fusion.spout_output`, JSON render-frame stores, JSON LOD
+   `localcast.diagnostics.spout_output`, JSON render-frame stores, JSON LOD
    stores, and Python reservoir-window clipping.
 2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.
 3. Move camera/mic/loopback ingest into native capture workers that append

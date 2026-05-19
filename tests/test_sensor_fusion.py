@@ -26,24 +26,18 @@ from localcast.sensor_fusion import (
     RenderPointPacket,
     SensorRig,
     SpeakerGeometry,
-    SpoutOutputConfig,
     TimestampedFrame,
     TimestampedFrameHistory,
     TrackCache,
-    VirtualCamera,
     camera_mic_geometry_from_audio_profile,
     camera_sensor_id_for_microphone,
     constraints_from_phase_sources,
     detect_camera_motion_peaks,
     detect_clap_events,
     estimate_pose_corrections,
-    frame_to_vertex_array,
-    frame_with_point_budget,
-    point_prefix_counts,
     dense_stereo_points,
     get_live_clap_events,
     get_live_render_frame,
-    lower_frame_to_screen_brushes,
     lower_points_to_render_frame,
     match_surface_features,
     overlay_audio_events,
@@ -58,7 +52,15 @@ from localcast.sensor_fusion import (
     triangulate_surface_tracks,
 )
 from localcast.sensor_fusion.audio_overlay import clamp_frame_to_audio_reservoir
-from localcast.sensor_fusion.spout_output import rasterize_frame_rgba
+from localcast.diagnostics.spout_output import (
+    SpoutOutputConfig,
+    VirtualCamera,
+    frame_to_vertex_array,
+    frame_with_point_budget,
+    lower_frame_to_screen_brushes,
+    point_prefix_counts,
+    rasterize_frame_rgba,
+)
 from scripts.live_sensor_fusion import (
     DEFAULT_RESERVOIR_NS,
     LiveClapCalibrator,

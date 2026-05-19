@@ -145,7 +145,7 @@ Ownership:
 - CultNet typed documents carry status/control/process state. JSON is schema or
   diagnostic export only.
 - `scripts/live_sensor_fusion.py`, Python fallback producers, JSON LOD stores,
-  and `localcast.sensor_fusion.spout_output` are diagnostics/migration fossils.
+  and `localcast.diagnostics.spout_output` are diagnostics/migration fossils.
   They must not be extended as production surfaces.
 
 Invariant: fallback/demo evidence cannot enter ground-truth reservoir kinds.

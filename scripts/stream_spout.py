@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from localcast.sensor_fusion.spout_output import (
+from localcast.diagnostics.spout_output import (
     CultCacheRenderFrameSource,
     OpenGLSpoutPointRenderer,
     RenderFrameFileSource,

@@ -95,16 +95,6 @@ from .cultcache_docs import (
     put_live_clap_events,
     put_live_render_frame,
 )
-from .spout_output import (
-    ScreenBrushPacket,
-    SpoutOutputConfig,
-    VirtualCamera,
-    frame_to_vertex_array,
-    frame_with_point_budget,
-    lower_frame_to_screen_brushes,
-    point_prefix_counts,
-)
-
 __all__ = [
     "CameraModel",
     "CameraIntrinsics",
@@ -160,16 +150,9 @@ __all__ = [
     "CultRenderFrame",
     "CultRenderPoint",
     "CultStreamStatus",
-    "ScreenBrushPacket",
-    "SpoutOutputConfig",
-    "VirtualCamera",
-    "frame_to_vertex_array",
-    "frame_with_point_budget",
-    "point_prefix_counts",
     "get_live_render_frame",
     "get_live_clap_events",
     "make_clap_events_frame",
-    "lower_frame_to_screen_brushes",
     "lower_points_to_render_frame",
     "dense_stereo_points",
     "camera_models_to_config",

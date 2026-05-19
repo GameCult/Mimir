@@ -73,7 +73,7 @@ flowchart TD
 - `localcast.sensor_fusion.clap_calibration` owns deliberate clap detection: chirplet-synced audio transients nominate oracle timestamps, camera frame windows around that oracle look for motion derivatives, calibrated camera peaks triangulate the impact point, and only audio-plus-visual agreement becomes a clap calibration event.
 - `localcast.sensor_fusion.render_bridge` owns the in-process render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
 - `localcast.sensor_fusion.cultcache_docs` owns the typed CultCache document boundary for live visual state.
-- `localcast.sensor_fusion.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out.
+- `localcast.diagnostics.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out. It is diagnostic/migration code, not the production visual authority.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
 - `scripts/stream_spout.py` owns the live Spout sender loop for OBS.
 - `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.
