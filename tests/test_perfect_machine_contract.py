@@ -72,6 +72,11 @@ class PerfectMachineContractTests(unittest.TestCase):
             "localcast_runtime_push_event_claim",
             "localcast_runtime_push_render_packet",
             "localcast_runtime_status",
+            "localcast_runtime_len",
+            "localcast_runtime_view_len",
+            "localcast_runtime_sample_at",
+            "localcast_runtime_view_sample_at",
+            "localcast_runtime_latest_for_sensor",
         ]:
             self.assertIn(function, header)
 

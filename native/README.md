@@ -41,7 +41,9 @@ runtime path:
   claims, and render packets;
 - it exposes `LocalcastRuntimeStatus` so Aquarium/Faust can inspect the shared
   edge, window start, total sample count, and typed-view counts without polling JSON or
-  MessagePack files.
+  MessagePack files;
+- it exposes total and typed-view sample reads so Aquarium/Faust can consume the
+  same rolling window producers append to.
 
 Payload handles are owned by the caller. Aquarium should treat them as handles
 to GPU/native visual memory; Faust/native DSP should treat them as handles to

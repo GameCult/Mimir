@@ -31,6 +31,20 @@ impl SampleKind {
             _ => None,
         }
     }
+
+    fn id(self) -> u32 {
+        match self {
+            Self::CameraFrame => 0,
+            Self::CameraFeature => 1,
+            Self::SceneRay => 2,
+            Self::SurfaceClaim => 3,
+            Self::MaterialClaim => 4,
+            Self::AudioBlock => 5,
+            Self::PhaseClaim => 6,
+            Self::EventClaim => 7,
+            Self::RenderPacket => 8,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -520,6 +534,99 @@ pub extern "C" fn localcast_runtime_status(
     true
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_len(ptr: *const LocalcastRuntime) -> usize {
+    let Some(runtime) = (unsafe { ptr.as_ref() }) else {
+        return 0;
+    };
+    runtime.reservoir.len()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_view_len(
+    ptr: *const LocalcastRuntime,
+    sample_kind: u32,
+) -> usize {
+    let Some(runtime) = (unsafe { ptr.as_ref() }) else {
+        return 0;
+    };
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
+        return 0;
+    };
+    runtime.reservoir.view_len(kind)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_sample_at(
+    ptr: *const LocalcastRuntime,
+    index: usize,
+    out_sample_kind: *mut u32,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(runtime) = (unsafe { ptr.as_ref() }) else {
+        return false;
+    };
+    let Some(kind_out) = (unsafe { out_sample_kind.as_mut() }) else {
+        return false;
+    };
+    let Some(sample_out) = (unsafe { out_sample.as_mut() }) else {
+        return false;
+    };
+    let Some(sample) = runtime.reservoir.sample_at(index) else {
+        return false;
+    };
+    *kind_out = sample.kind.id();
+    *sample_out = sample.payload;
+    true
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_view_sample_at(
+    ptr: *const LocalcastRuntime,
+    sample_kind: u32,
+    index: usize,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(runtime) = (unsafe { ptr.as_ref() }) else {
+        return false;
+    };
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
+        return false;
+    };
+    let Some(sample_out) = (unsafe { out_sample.as_mut() }) else {
+        return false;
+    };
+    let Some(sample) = runtime.reservoir.view_sample_at(kind, index) else {
+        return false;
+    };
+    *sample_out = sample.payload;
+    true
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_latest_for_sensor(
+    ptr: *const LocalcastRuntime,
+    sample_kind: u32,
+    sensor_id_hash: u64,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(runtime) = (unsafe { ptr.as_ref() }) else {
+        return false;
+    };
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
+        return false;
+    };
+    let Some(sample_out) = (unsafe { out_sample.as_mut() }) else {
+        return false;
+    };
+    let sensor_id = sensor_id_hash.to_string();
+    let Some(sample) = runtime.reservoir.latest_for_sensor(kind, &sensor_id) else {
+        return false;
+    };
+    *sample_out = sample.payload;
+    true
+}
+
 fn localcast_runtime_push_typed(
     ptr: *mut LocalcastRuntime,
     kind: SampleKind,
@@ -900,6 +1007,51 @@ mod tests {
     }
 
     #[test]
+    fn runtime_spine_exposes_total_and_typed_window_reads() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        assert!(localcast_runtime_push_camera_frame(
+            runtime,
+            handle(10, 10, 11, 1, 100),
+        ));
+        assert!(localcast_runtime_push_audio_block(
+            runtime,
+            handle(20, 12, 13, 2, 200),
+        ));
+        assert!(localcast_runtime_push_camera_frame(
+            runtime,
+            handle(10, 14, 15, 3, 300),
+        ));
+
+        assert_eq!(3, localcast_runtime_len(runtime));
+        assert_eq!(2, localcast_runtime_view_len(runtime, 0));
+        assert_eq!(1, localcast_runtime_view_len(runtime, 5));
+
+        let mut kind = 99;
+        let mut sample = handle(0, 0, 0, 0, 0);
+        assert!(localcast_runtime_sample_at(
+            runtime,
+            1,
+            &mut kind,
+            &mut sample,
+        ));
+        assert_eq!(5, kind);
+        assert_eq!(200, sample.payload_handle);
+
+        assert!(localcast_runtime_view_sample_at(runtime, 0, 1, &mut sample,));
+        assert_eq!(300, sample.payload_handle);
+
+        assert!(localcast_runtime_latest_for_sensor(
+            runtime,
+            0,
+            10,
+            &mut sample,
+        ));
+        assert_eq!(300, sample.payload_handle);
+
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
     fn runtime_spine_rejects_nulls() {
         let sample = handle(1, 2, 3, 4, 5);
         let mut status = LocalcastRuntimeStatus::default();
@@ -909,8 +1061,28 @@ mod tests {
             sample,
         ));
         assert!(!localcast_runtime_status(std::ptr::null(), &mut status));
+        assert_eq!(0, localcast_runtime_len(std::ptr::null()));
+        assert_eq!(0, localcast_runtime_view_len(std::ptr::null(), 0));
         let runtime = localcast_runtime_create(0);
         assert!(!localcast_runtime_status(runtime, std::ptr::null_mut()));
+        let mut kind = 0;
+        let mut out = sample;
+        assert!(!localcast_runtime_sample_at(
+            runtime,
+            0,
+            std::ptr::null_mut(),
+            &mut out,
+        ));
+        assert!(!localcast_runtime_sample_at(
+            runtime,
+            0,
+            &mut kind,
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_runtime_view_sample_at(runtime, 99, 0, &mut out,));
+        assert!(!localcast_runtime_latest_for_sensor(
+            runtime, 99, 1, &mut out,
+        ));
         localcast_runtime_destroy(runtime);
     }
 

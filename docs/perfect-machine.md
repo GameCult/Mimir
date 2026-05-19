@@ -91,6 +91,8 @@ sample. No stage owns a private history that can outlive the reservoir.
 typed producer calls for each sample kind so camera capture, audio capture,
 phase estimation, material fitting, event detection, and render planning all
 append into one shared five-second window without crossing a Python file cache.
+It also exposes total and typed-view reads so Aquarium/Faust can consume that
+same window without building private histories.
 
 ## Visual Fusion
 
@@ -181,7 +183,9 @@ in `native/reservoir/include/localcast_reservoir.h`:
 - create/destroy an opaque `LocalcastRuntime`;
 - append typed camera/audio/phase/event/render handles through producer calls;
 - query a native runtime status struct with shared edge, window start, total
-  count, and typed-view counts.
+  count, and typed-view counts;
+- read runtime samples by total rolling-buffer index, typed-view index, and
+  latest sensor hash.
 
 The ABI carries `payload_handle`, not payload bytes. Aquarium owns image,
 feature, surface, material, and GPU memory interpretation. Faust/native DSP owns

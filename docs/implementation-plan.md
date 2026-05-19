@@ -26,8 +26,8 @@ shape removes independent per-kind storage from the live foundation.
     edge/window queries, ring counts, and latest sample lookup by sensor hash.
     The ABI now exposes total rolling-buffer length and typed-view length.
   - `LocalcastRuntime` wraps the current reservoir with typed native producer
-    calls. It is the intended live spine, but must be rebuilt on the single
-    rolling-buffer invariant before new runtime work.
+    calls and total/typed read functions. It is the intended live spine for
+    Aquarium/Faust bindings.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.

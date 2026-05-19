@@ -101,6 +101,29 @@ bool localcast_runtime_push_phase_claim(LocalcastRuntime *runtime, LocalcastSamp
 bool localcast_runtime_push_event_claim(LocalcastRuntime *runtime, LocalcastSampleHandle sample);
 bool localcast_runtime_push_render_packet(LocalcastRuntime *runtime, LocalcastSampleHandle sample);
 bool localcast_runtime_status(const LocalcastRuntime *runtime, LocalcastRuntimeStatus *out_status);
+size_t localcast_runtime_len(const LocalcastRuntime *runtime);
+size_t localcast_runtime_view_len(const LocalcastRuntime *runtime, uint32_t sample_kind);
+
+bool localcast_runtime_sample_at(
+    const LocalcastRuntime *runtime,
+    size_t index,
+    uint32_t *out_sample_kind,
+    LocalcastSampleHandle *out_sample
+);
+
+bool localcast_runtime_view_sample_at(
+    const LocalcastRuntime *runtime,
+    uint32_t sample_kind,
+    size_t index,
+    LocalcastSampleHandle *out_sample
+);
+
+bool localcast_runtime_latest_for_sensor(
+    const LocalcastRuntime *runtime,
+    uint32_t sample_kind,
+    uint64_t sensor_id_hash,
+    LocalcastSampleHandle *out_sample
+);
 
 #ifdef __cplusplus
 }
