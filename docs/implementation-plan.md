@@ -46,6 +46,7 @@
   - `audio_field.phase_meaning` extracts actionable delay, coherence, confidence, suppression, correction-energy, and active-probe need from internal phase/chirplet evidence.
   - `localcast.audio.phase_field` is a typed CultCache document at `calibration/runs/audio-phase-field.msgpack`.
   - `scripts/stream_phase_field.py` publishes the live meaning document from an aligned mic field plus known program/loopback reference without exposing raw phase bands as the renderer API.
+  - `stream_phase_field.py` also writes `audio-phase-field-status.json`, which declares whether the phase estimator is running against replayed WAVs or closed-loop live capture. Current deadline mode is explicit `wav-replay` with open-loop probe playback.
   - `audio_field.active_probe` wires low phase-field confidence into `ActiveProbeOptimizer`, emits bounded chirplet WAVs plus `active-probes.jsonl`, and can play probes through the default output device.
   - `scripts/start-live-audio-phase-field.ps1` starts the live dense harmonic confidence loop with near-ultrasonic probes; `scripts/stop-live-audio-phase-field.ps1` stops the PID recorded in `logs/audio-phase-field.pid`.
 - Faust voice-separation boundary:
@@ -80,4 +81,4 @@
 16. Fix the live Leap capture backend so actual Leap frames, not fallback frames, populate `leap-ground-truth` cells in the multi-LOD cache.
 17. Keep the neighbor loopback leg running through the scheduled interactive WASAPI capture path and use it as the timing witness once actual neighbor app audio is present.
 18. Let the co-streamer surface delay drive the shared presentation buffer horizon for audio stems, AmbiX, and remote video.
-19. Wire `stream_phase_field.py` and `stream_faust_mic_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so confidence maintenance closes against fresh observations instead of dry-run probe manifests.
+19. Wire `stream_phase_field.py` and `stream_faust_mic_field.py` to the real live aligned-field producer instead of replaying WAV artifacts, then feed emitted active chirps back through loopback/mic capture so `audio-phase-field-status.json` can report closed-loop probe capture.

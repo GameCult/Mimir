@@ -141,8 +141,10 @@ research:
       ActiveProbeOptimizer and emitting bounded chirplet WAVs/manifests, with
       optional default-device playback. The live launcher now uses dense
       harmonic near-ultrasonic probe textures so aliases have a musical
-      relationship instead of arbitrary squeal. This is learned audio-field
-      state, not a phase display.
+      relationship instead of arbitrary squeal. `audio-phase-field-status.json`
+      declares input mode and whether active probes are closed-loop; current
+      deadline mode is explicit `wav-replay` with open-loop probe playback.
+      This is learned audio-field state, not a phase display.
   faust_voice_separation:
     summary: docs/aquarium-spatial-audio.md
     key_decision: >

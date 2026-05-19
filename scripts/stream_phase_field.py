@@ -27,6 +27,52 @@ def read_float_wav(path: Path) -> tuple[int, np.ndarray]:
     return int(rate), samples
 
 
+def write_phase_runtime_status(
+    path: Path,
+    *,
+    field: Path,
+    reference: Path,
+    frame_id: int,
+    global_confidence: float,
+    needs_active_probe: bool,
+    emitted_probe,
+    maintain_confidence: bool,
+    play_probes: bool,
+) -> None:
+    import json
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "input_mode": "wav-replay",
+                "field": str(field),
+                "reference": str(reference),
+                "frame_id": int(frame_id),
+                "global_confidence": float(global_confidence),
+                "needs_active_probe": bool(needs_active_probe),
+                "maintain_confidence": bool(maintain_confidence),
+                "play_probes": bool(play_probes),
+                "probe_feedback_mode": "open-loop-playback" if play_probes else "dry-run",
+                "closed_loop_probe_capture": False,
+                "last_probe": None
+                if emitted_probe is None
+                else {
+                    "source_id": emitted_probe.request.source_id,
+                    "reason": emitted_probe.request.reason,
+                    "urgency": emitted_probe.request.urgency,
+                    "path": str(emitted_probe.path),
+                    "emitted_monotonic_ns": emitted_probe.emitted_monotonic_ns,
+                },
+                "updated_monotonic_ns": time.monotonic_ns(),
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
 def parse_frequencies(values: list[str]) -> list[float]:
     out: list[float] = []
     for value in values:
@@ -68,6 +114,7 @@ def main() -> None:
     parser.add_argument("--field", type=Path, required=True, help="Aligned frames-by-channel mic field WAV.")
     parser.add_argument("--reference", type=Path, required=True, help="Known program/loopback reference WAV.")
     parser.add_argument("--cache", type=Path, default=ROOT / "calibration" / "runs" / "audio-phase-field.msgpack")
+    parser.add_argument("--status", type=Path, default=ROOT / "calibration" / "runs" / "audio-phase-field-status.json")
     parser.add_argument("--source-id", action="append", default=[])
     parser.add_argument("--reference-id", default="program-reference")
     parser.add_argument("--frequency", action="append", default=["250,500,1000,2000,4000,8000,12000"])
@@ -139,6 +186,7 @@ def main() -> None:
     frame_id = 0
     cursor = 0
     max_samples = min(len(reference_mono), len(field))
+    last_status = 0.0
     while cursor + args.chunk_frames <= max_samples:
         if args.duration is not None and time.monotonic() - start_monotonic >= args.duration:
             break
@@ -167,10 +215,24 @@ def main() -> None:
                 active_probe_reason=meaning.active_probe_reason,
             ),
         )
+        emitted = None
         if maintainer is not None:
             emitted = maintainer.update(meaning, block_ref, force_masked=args.probe_unmasked)
             if emitted is not None and args.play_probes:
                 play_probe_file(emitted.path)
+        if time.monotonic() - last_status >= 1.0:
+            write_phase_runtime_status(
+                args.status,
+                field=args.field,
+                reference=args.reference,
+                frame_id=meaning.frame_id,
+                global_confidence=meaning.global_confidence,
+                needs_active_probe=meaning.needs_active_probe,
+                emitted_probe=emitted,
+                maintain_confidence=args.maintain_confidence,
+                play_probes=args.play_probes,
+            )
+            last_status = time.monotonic()
         frame_id += 1
         cursor += args.hop_frames
         if cursor + args.chunk_frames > max_samples and args.loop:

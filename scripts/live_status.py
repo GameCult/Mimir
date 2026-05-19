@@ -80,6 +80,7 @@ def msgpack_head(path: Path):
             }
         )
     elif summary["type"] == "localcast.audio.phase_field":
+        sources = payload[7] if len(payload) > 7 else []
         summary.update(
             {
                 "frameId": payload[1],
@@ -87,9 +88,22 @@ def msgpack_head(path: Path):
                 "startSample": payload[4],
                 "frameCount": payload[5],
                 "referenceId": payload[6],
-                "sourceCount": len(payload[7]) if len(payload) > 7 else 0,
+                "sourceCount": len(sources),
                 "globalConfidence": payload[8] if len(payload) > 8 else 0.0,
                 "needsActiveProbe": payload[9] if len(payload) > 9 else True,
+                "sources": [
+                    {
+                        "sourceId": source.get("sourceId"),
+                        "delayMs": source.get("delayMs"),
+                        "distanceDeltaMeters": source.get("distanceDeltaMeters"),
+                        "coherence": source.get("coherence"),
+                        "fitErrorRadians": source.get("fitErrorRadians"),
+                        "confidence": source.get("confidence"),
+                        "referenceBleed": source.get("referenceBleed"),
+                        "suppressionWeight": source.get("suppressionWeight"),
+                    }
+                    for source in sources
+                ],
             }
         )
     elif summary["type"] == "localcast.audio.mic_field":
@@ -149,6 +163,7 @@ def main() -> None:
             "visual-stream-status.msgpack",
             "audio-stream-status.msgpack",
             "audio-phase-field.msgpack",
+            "audio-phase-field-status.json",
             "audio-mic-field.msgpack",
             "clap-events.msgpack",
             "active-probes/active-probes.jsonl",
@@ -166,6 +181,7 @@ def main() -> None:
         "audioHead": msgpack_head(runs / "audio-state.msgpack"),
         "eventsHead": msgpack_head(runs / "audio-events.msgpack"),
         "phaseFieldHead": msgpack_head(runs / "audio-phase-field.msgpack"),
+        "phaseRuntime": read_json(runs / "audio-phase-field-status.json"),
         "micFieldHead": msgpack_head(runs / "audio-mic-field.msgpack"),
         "clapHead": msgpack_head(runs / "clap-events.msgpack"),
         "lastActiveProbe": read_last_jsonl(runs / "active-probes" / "active-probes.jsonl"),
