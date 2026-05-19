@@ -137,9 +137,9 @@ shape removes independent per-kind storage from the live foundation.
    decoder. It also has the matching safe-code audio block and render packet
    descriptor bindings, plus a render descriptor decoder that reads timing and
    target metadata from native payload handles and decodes the first native
-   point-buffer ABI. Aquarium also exposes the native source-id hash wrapper.
-   The next Aquarium cut is wiring native runtime creation into the app path
-   once a producer exists to feed it.
+   point-buffer ABI by default. Aquarium also exposes the native source-id hash
+   wrapper. The next Aquarium cut is wiring native runtime creation into the app
+   path once a producer exists to feed it.
 3. Move camera/mic/loopback ingest into native capture workers that use
    `LocalcastProducer` to append typed sample handles.
 4. Move feature extraction, flow, cross-view matching, LOD reconciliation,

@@ -64,6 +64,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   point-buffer decoding for the render descriptor decoder.
 - Aquarium-Engine commit `924aa2f` exposes `LocalCastNativeSourceId.HashUtf8`
   as the safe wrapper over native source-id hashing.
+- Aquarium-Engine commit `c06d4cb` makes `LocalCastNativeVisualFrameSource`
+  use the descriptor plus native point-buffer decoder by default.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been
