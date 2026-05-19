@@ -103,8 +103,8 @@ shape removes independent per-kind storage from the live foundation.
 ## Next
 
 1. Delete remaining production dependence on `scripts/diagnostic_live_sensor_fusion.py`,
-   `localcast.diagnostics.spout_output`, JSON render-frame stores, JSON LOD
-   stores, and Python reservoir-window clipping.
+   `localcast.diagnostics.spout_output`, diagnostic JSON render-frame adapters,
+   diagnostic JSON LOD adapters, and Python reservoir-window clipping.
 2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.
 3. Move camera/mic/loopback ingest into native capture workers that append
    typed sample handles.

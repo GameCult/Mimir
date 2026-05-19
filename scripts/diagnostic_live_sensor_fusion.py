@@ -46,6 +46,7 @@ from localcast.diagnostics.visual_cache import (
     put_live_clap_events,
     put_live_render_frame,
 )
+from localcast.diagnostics.lod_json import write_lod_cache_json
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
 from localcast.sensor_fusion.adapters import LatestFramePump, OpenCvCaptureConfig, OpenCvFrameSource
 from audio_field.cultcache_audio import frame_to_numpy, get_live_audio_phase_field, get_live_spatial_audio_frame
@@ -1290,11 +1291,12 @@ def main() -> None:
                 reservoir_ns=reservoir_ns,
             )
             source_time_min_ns, source_time_max_ns = reservoir_window_ns(reservoir_edge_ns, reservoir_ns)
-            multilod_cache_from_evidence(
+            lod_cache = multilod_cache_from_evidence(
                 evidence,
                 levels=(0.01, 0.04, 0.16, 0.64),
                 created_monotonic_ns=time.monotonic_ns(),
-            ).write_json(lod_cache_path)
+            )
+            write_lod_cache_json(lod_cache_path, lod_cache)
             frame = RenderFramePacket(
                 schema=frame.schema,
                 frame_id=frame.frame_id,

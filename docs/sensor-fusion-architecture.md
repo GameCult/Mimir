@@ -101,7 +101,15 @@ sensor observation
 
 The cache is not a bucket. `TrackCache` has a TTL and confidence update rule so the system can buffer and converge without pretending stale points are fresh. The live frame reservoir is explicitly five seconds wide: frame history expires from the newest shared sample, LOD evidence is clipped to that same interval, and each `RenderFramePacket` reports the exact source window. Later GPU buffers should mirror this shape: observation SoA, track SoA, material/BRDF estimate SoA, brush packet SoA.
 
-`visual-lod-cache.json` is the current CPU-authored shape for the next compute pass. It is not the final renderer. It groups stochastic/fused scene claims into multiple world-space voxel sizes, carrying center, radius, confidence, count, source-time bounds, and first-pass material estimates. The material channel is deliberately modest: weighted albedo plus roughness/metallic hints so Aquarium can start relighting brush/splat packets without treating screen-space color as the whole truth. A later shader pass should replace those hints with multi-view BRDF fitting inside the same reservoir.
+`visual-lod-cache.json` is the diagnostic CPU-authored shape for the next
+compute pass. JSON serialization lives under `localcast.diagnostics.lod_json`,
+not in the mapping model. It groups stochastic/fused scene claims into multiple
+world-space voxel sizes, carrying center, radius, confidence, count, source-time
+bounds, and first-pass material estimates. The material channel is deliberately
+modest: weighted albedo plus roughness/metallic hints so Aquarium can start
+relighting brush/splat packets without treating screen-space color as the whole
+truth. A later shader pass should replace those hints with multi-view BRDF
+fitting inside the same reservoir.
 
 ## Test Boundaries
 

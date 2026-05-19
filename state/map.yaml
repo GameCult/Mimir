@@ -242,9 +242,11 @@ research:
       `localcast.visual.stream_status` in
       `calibration/runs/visual-stream-status.msgpack`. Production visual state
       crosses native/CultNet typed document boundaries; the Python file adapter
-      is not live authority. Edge JSON may define schemas or export
-      diagnostics, but runtime data should remain typed documents because every
-      networked subsystem is under our control.
+      is not live authority. Diagnostic JSON render-frame and LOD writers live
+      under `localcast.diagnostics`; model modules do not own file
+      serialization. Edge JSON may define schemas or export diagnostics, but
+      runtime data should remain typed documents because every networked
+      subsystem is under our control.
 
 current_status:
   summary: >

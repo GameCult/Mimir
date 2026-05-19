@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import json
-from pathlib import Path
 from typing import Iterable, Sequence
 
 import numpy as np
@@ -135,10 +133,6 @@ class MultiLODSceneCache:
                 for cell in self.cells
             ],
         }
-
-    def write_json(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
 
 
 def pixel_scene_ray(camera: CameraModel, uv: np.ndarray, timestamp_ns: int, confidence: float = 1.0) -> SceneRay:

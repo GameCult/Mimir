@@ -15,6 +15,7 @@ from localcast.sensor_fusion.stochastic_mapping import (
     stochastic_transient_matches,
 )
 from localcast.sensor_fusion.surface_features import SurfaceFeatureObservation
+from localcast.diagnostics.lod_json import write_lod_cache_json
 
 
 def camera(sensor_id, x):
@@ -94,7 +95,7 @@ class StochasticMappingTests(unittest.TestCase):
         self.assertTrue(any(cell.level == 1 and cell.count == 2 for cell in cache.cells))
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "lod.json"
-            cache.write_json(path)
+            write_lod_cache_json(path, cache)
             self.assertIn("multilod_scene_cache", path.read_text(encoding="utf-8"))
 
     def test_multilod_evidence_prefers_leap_priority(self):
