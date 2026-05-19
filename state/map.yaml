@@ -51,6 +51,9 @@ accepted_design:
   - `native/reservoir` is the first native Rust crate. It now uses one
     time-ordered rolling buffer with typed views, so retention has exactly one
     owner while Aquarium/Faust still get kind-scoped queries.
+  - `LocalcastRuntime` exposes typed producer pushes plus total/typed window
+    reads. `LocalcastProducer` owns source identity and sequence assignment
+    before hardware adapters append live sample handles.
   - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
   - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
   - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.
@@ -58,11 +61,13 @@ accepted_design:
   - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
 
 active_subgoals:
-  - Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime` in the native
-    reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
+  - Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime` and
+    `LocalcastProducer` C ABI described by
+    `native/reservoir/include/localcast_reservoir.h`.
   - Delete or quarantine Python live producers and the OpenGL Spout sink before
     adding new live features.
-  - Bind Aquarium/Faust to `LocalcastRuntime` in the native reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
+  - Bind Aquarium/Faust to `LocalcastRuntime`/`LocalcastProducer` in the native
+    reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
   - Move dense visual fusion/material fitting/brush generation into Aquarium GPU compute.
   - Move hot audio DSP/voice separation/room suppression/spatialization into Faust/native runtime.
   - Validate the actual sender FFmpeg build and capture device names.

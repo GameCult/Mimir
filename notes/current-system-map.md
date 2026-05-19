@@ -140,6 +140,10 @@ Ownership:
   scene reconstruction.
 - The rolling reservoir owns the live edge, retention, ordering, and typed
   lookup.
+- `LocalcastProducer` owns source identity and sequence assignment before native
+  capture workers append sample handles into `LocalcastRuntime`.
+- `LocalcastRuntime` owns the one live rolling window and exposes both producer
+  pushes and consumer reads for Aquarium/Faust.
 - Aquarium owns dense visual fusion, material fitting, point/brush/splat
   lowering, render budgeting, and Spout2 publication.
 - CultNet typed documents carry status/control/process state. JSON is schema or

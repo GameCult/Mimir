@@ -30,6 +30,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Native reservoir samples carry provenance flags; diagnostic/fallback samples
   are rejected at both the raw reservoir push and `LocalcastRuntime` typed
   producer boundary.
+- `LocalcastRuntime` now exposes producer pushes and consumer reads.
+  `LocalcastProducer` owns source identity and sequence assignment for native
+  capture workers.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been
@@ -49,8 +52,8 @@ The useful next work is foundation surgery, not hardware feature expansion:
 - bind Aquarium/Faust/native workers to the rolling-buffer `LocalcastRuntime`
 - delete production dependence on `localcast.diagnostics.visual_producer`
   and diagnostic file adapters
-- bind Aquarium/Faust against the native runtime instead of reviving the deleted
-  Python/OpenGL publisher
+- bind Aquarium/Faust against the native runtime/producer ABI instead of
+  reviving the deleted Python/OpenGL publisher
 - route future visual/audio runtime work through Aquarium/Faust/native runtime plus typed CultNet docs
 - keep FFmpeg/SRT bridge scripts only as simple LAN ingest and capture utilities
 
