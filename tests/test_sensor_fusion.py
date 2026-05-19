@@ -36,20 +36,22 @@ from localcast.sensor_fusion import (
     detect_clap_events,
     estimate_pose_corrections,
     dense_stereo_points,
-    get_live_clap_events,
-    get_live_render_frame,
     lower_points_to_render_frame,
     match_surface_features,
     overlay_audio_events,
-    make_clap_events_frame,
-    put_live_clap_events,
-    put_live_render_frame,
     remote_video_artifact_for_present_time,
     phase_source_id_for_microphone,
     solve_common_space_from_fixed_board,
     speaker_geometry_from_audio_profile,
     SurfaceFeatureObservation,
     triangulate_surface_tracks,
+)
+from localcast.diagnostics.visual_cache import (
+    get_live_clap_events,
+    get_live_render_frame,
+    make_clap_events_frame,
+    put_live_clap_events,
+    put_live_render_frame,
 )
 from localcast.sensor_fusion.audio_overlay import clamp_frame_to_audio_reservoir
 from localcast.diagnostics.spout_output import (

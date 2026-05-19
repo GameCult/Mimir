@@ -236,13 +236,15 @@ research:
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >
-      Live visual state now lives in typed CultCache MessagePack documents:
-      `localcast.visual.render_frame` in `calibration/runs/visual-state.msgpack`
-      and `localcast.visual.stream_status` in
-      `calibration/runs/visual-stream-status.msgpack`. CultNet document_put is
-      the intended process/network API boundary. Edge JSON may define schemas
-      or export diagnostics, but runtime data should remain typed documents
-      because every networked subsystem is under our control.
+      Diagnostic visual state can still be exported as typed CultCache
+      MessagePack documents: `localcast.visual.render_frame` in
+      `calibration/runs/visual-state.msgpack` and
+      `localcast.visual.stream_status` in
+      `calibration/runs/visual-stream-status.msgpack`. Production visual state
+      crosses native/CultNet typed document boundaries; the Python file adapter
+      is not live authority. Edge JSON may define schemas or export
+      diagnostics, but runtime data should remain typed documents because every
+      networked subsystem is under our control.
 
 current_status:
   summary: >
@@ -298,9 +300,10 @@ current_status:
     source time ranges, intended visual presentation time, audio-alignment
     time, target render size, Spout sender name, and point draw metadata for
     Aquarium/Spout. A deadline OBS Spout sender is now live-shaped:
-    `scripts/diagnostic_live_sensor_fusion.py` now writes fused render frames into typed
-    CultCache state at `calibration/runs/visual-state.msgpack`. `scripts/diagnostic_stream_spout.py`
-    consumes that CultCache document, lowers points into compact anisotropic
+    `scripts/diagnostic_live_sensor_fusion.py` writes fused render frames into
+    diagnostic typed CultCache state at `calibration/runs/visual-state.msgpack`.
+    `scripts/diagnostic_stream_spout.py` consumes that diagnostic document,
+    lowers points into compact anisotropic
     screen brush packets, uploads an OpenGL texture, publishes Spout sender
     `LocalCastBridge Point Cloud`, and writes both typed status
     `calibration/runs/visual-stream-status.msgpack` and compatibility JSON

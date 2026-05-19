@@ -34,15 +34,17 @@ from localcast.sensor_fusion import (
     estimate_pose_corrections,
     evidence_from_fusion_items,
     evidence_from_render_points,
-    get_live_clap_events,
-    make_clap_events_frame,
     measure_frame_quality,
     multilod_cache_from_evidence,
-    put_live_clap_events,
-    put_live_render_frame,
     lower_points_to_render_frame,
     stochastic_transient_matches,
     speaker_geometry_from_audio_profile,
+)
+from localcast.diagnostics.visual_cache import (
+    get_live_clap_events,
+    make_clap_events_frame,
+    put_live_clap_events,
+    put_live_render_frame,
 )
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
 from localcast.sensor_fusion.adapters import LatestFramePump, OpenCvCaptureConfig, OpenCvFrameSource

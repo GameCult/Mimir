@@ -90,7 +90,9 @@ The sync heartbeat is written to `calibration/runs/av-sync-status.json`. It incl
 
 - OBS receives a named Spout texture.
 - The Spout sink owns presentation only; it does not own camera calibration, fusion, or scene truth.
-- CultCache MessagePack documents are the live local state authority. CultNet document replication is the process/network boundary.
+- CultCache MessagePack documents are diagnostic local state. Production visual
+  state crosses native/CultNet typed document boundaries; the Python file
+  adapter is not live authority.
 - JSON render-frame polling is compatibility scaffolding only.
 - Latency is explicit in the packet timestamps. The renderer may buffer, but it may not silently erase the visual/audio alignment fields.
 - The neighbor SRT video feed is a timed artifact. OBS must not be left to eyeball-sync it against the Spout texture and AmbiX bed.

@@ -51,7 +51,8 @@ shape removes independent per-kind storage from the live foundation.
   - `localcast.sensor_fusion.calibration_space` solves fixed-board ChArUco observations into camera poses in one common world frame.
   - `localcast.sensor_fusion.surface_features` matches cross-view features and triangulates calibrated surface tracks.
   - `localcast.sensor_fusion.render_bridge` emits render-frame packets with visual/audio timing metadata and Spout sender identity.
-  - `localcast.sensor_fusion.cultcache_docs` stores live visual state as typed CultCache MessagePack documents.
+  - `localcast.diagnostics.visual_cache` stores diagnostic visual state as typed
+    CultCache MessagePack documents. It is not the production live boundary.
   - `localcast.diagnostics.spout_output` renders render-frame packets into a GPU texture and publishes it as a named Spout sender for OBS. This is diagnostic/migration code, not production runtime.
   - `scripts/diagnostic_live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`. This is diagnostic/migration code, not production runtime.
   - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
@@ -66,7 +67,8 @@ shape removes independent per-kind storage from the live foundation.
   - `scripts/diagnostic_stream_spout.py` runs the deadline Spout sender loop from the typed cache with typed and JSON heartbeat status. This is diagnostic/migration code, not production runtime.
   - The deadline Spout renderer has a named `kiyo-mid-deru` virtual camera preset: eye at the midpoint between the two Kiyo-class cameras and target on the co-streamer body volume. It also applies a renderer-owned point budget with pinned calibration/cross-modal constraints, stable high-confidence anchors, and frame-varying remainder samples so downstream TAA/supersampling can accumulate detail without forcing every source claim into every OBS frame. Its JSON heartbeat reports the prefix counts that survived the render budget.
   - `docs/obs-spout-streaming.md` documents OBS setup and the Aquarium replacement boundary.
-  - `docs/typed-visual-state.md` documents the CultCache/CultNet visual boundary.
+  - `docs/typed-visual-state.md` documents the diagnostic CultCache file shape
+    and the CultNet visual schema target.
 - OBS synchronized program surface:
   - `scripts/setup_obs_synced_program.py` derives OBS-controllable stems from an aligned program audio timeline: host voice, co-streamer voice, ambient, transients, co-streamer loopback, and local loopback.
   - `scripts/capture_co_streamer_surfaces.py` captures neighbor Focusrite and neighbor loopback with local loopback ground truth, estimates the late remote-family offset, and writes aligned co-streamer surfaces for the stem packer.

@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from .render_bridge import RenderFramePacket, RenderPointPacket
+from localcast.sensor_fusion.render_bridge import RenderFramePacket, RenderPointPacket
 
 
 ROOT = Path(__file__).resolve().parents[2]

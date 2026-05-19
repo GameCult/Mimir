@@ -1,10 +1,14 @@
-# Typed Visual State
+# Diagnostic Typed Visual State
 
 ## Objective
 
-Keep visual fusion state as typed CultCache documents and expose the boundary as CultNet document messages.
+Keep the diagnostic visual file shape as typed CultCache documents and expose
+the production boundary as native CultNet document messages.
 
-JSON is no longer the authority for live visual state. The renderer consumes `calibration/runs/visual-state.msgpack`, which stores a `localcast.visual.render_frame` CultCache document.
+JSON is no longer the authority for visual state. The diagnostic renderer
+consumes `calibration/runs/visual-state.msgpack`, which stores a
+`localcast.visual.render_frame` CultCache document. Production visual state must
+not be owned by this Python file adapter.
 
 ## Current Mechanism
 
@@ -23,9 +27,9 @@ flowchart TD
     H --> I["OBS Spout2 Capture"]
 ```
 
-Live files:
+Diagnostic files:
 
-- `calibration/runs/visual-state.msgpack`: typed live visual frame state.
+- `calibration/runs/visual-state.msgpack`: typed diagnostic visual frame state.
 - `calibration/runs/visual-stream-status.msgpack`: typed stream status state.
 - `calibration/runs/stream-spout-status.json`: compatibility heartbeat for quick terminal checks.
 - `calibration/runs/av-sync-status.json`: visual/audio sync heartbeat from the Spout/Aquarium publisher.
@@ -64,7 +68,11 @@ CultNetDocumentPut(localcast.visual.render_frame)
 -> renderer frame source
 ```
 
-For the deadline rig, both producer and renderer share the local CultCache file. The boundary is still the document contract: a future camera process, Aquarium process, or remote sensor node should publish the same document through CultNet `document_put` messages rather than inventing another transport shape.
+For the deadline rig, both producer and renderer share the local CultCache file.
+That arrangement is diagnostic scaffolding. Aquarium, native capture, and remote
+sensor nodes should publish the same typed document through CultNet
+`document_put` messages rather than treating a Python-polled file as live
+authority.
 
 The live visual frame may contain multiple claim families. `dense-rgb:*` claims
 are calibrated two-camera RGB surface samples from the debug CPU stereo

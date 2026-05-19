@@ -72,7 +72,9 @@ flowchart TD
 - `localcast.sensor_fusion.active_illumination` owns deliberate light pulses as calibration telemetry. A Tuya bulb is an optional local-network actuator, not a rendering authority; its pulse timestamps are evidence for camera exposure/depth response.
 - `localcast.sensor_fusion.clap_calibration` owns deliberate clap detection: chirplet-synced audio transients nominate oracle timestamps, camera frame windows around that oracle look for motion derivatives, calibrated camera peaks triangulate the impact point, and only audio-plus-visual agreement becomes a clap calibration event.
 - `localcast.sensor_fusion.render_bridge` owns the in-process render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
-- `localcast.sensor_fusion.cultcache_docs` owns the typed CultCache document boundary for live visual state.
+- `localcast.diagnostics.visual_cache` owns the typed CultCache document shape
+  used by diagnostic visual-state files. Production visual state should cross
+  the native/CultNet boundary directly, not through this Python file adapter.
 - `localcast.diagnostics.spout_output` owns the deadline OBS publication sink: render-frame packet in, GPU texture plus Spout sender heartbeat out. It is diagnostic/migration code, not the production visual authority.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
 - `scripts/diagnostic_stream_spout.py` owns the diagnostic Spout sender loop for OBS.
@@ -133,7 +135,10 @@ LocalCastBridge TrackCache
 -> OBS Spout2 Capture source
 ```
 
-`RenderFramePacket` is the in-process shape. The live boundary is now a typed CultCache MessagePack document, with CultNet `document_put` as the intended process/network API boundary. JSON render-frame files are compatibility scaffolding only.
+`RenderFramePacket` is the diagnostic Python in-process shape. The diagnostic
+file boundary is a typed CultCache MessagePack document. The production live
+boundary is native typed state plus CultNet `document_put`; JSON render-frame
+files are compatibility scaffolding only.
 
 Clap calibration events use the same typed-state rule. A clap is not every sharp
 audio transient. The detector first finds a sharp broadband audio onset in the
