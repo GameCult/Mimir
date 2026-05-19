@@ -1,13 +1,36 @@
 # Implementation Plan
 
+## Current Cut Line
+
+`docs/native-rebuild-plan.md` is now the active plan.
+
+No more Python live hot path. No more OpenGL production Spout sink. No more JSON
+live data stores. Edge JSON may define CultNet schema or export diagnostics, but
+the real process/network data stays typed because every subsystem is under our
+control.
+
+The native reservoir must become one time-ordered rolling buffer with typed
+indexes/views. The current shared-edge typed rings proved the retention
+invariant, but independent rings are still too much duplicated structure for the
+live foundation.
+
 ## Implemented
 
 - Perfect Machine contract:
   - `docs/perfect-machine.md` defines the target native machine: one five-second spatiotemporal reservoir, Aquarium-owned dense visual fusion/material/brush rendering, Faust-owned hot audio DSP, OBS-owned broadcast controls, and LocalCastBridge-owned calibration/config/status.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir rings, native authorities, outputs, and the demotion of bridge scripts to tooling.
-  - `native/reservoir` is the first native Rust crate. It implements shared-edge five-second reservoir rings and proves that all rings expire against the newest sample, not private per-source clocks.
-  - `native/reservoir/include/localcast_reservoir.h` exposes the Aquarium/Faust C ABI: opaque reservoir create/destroy, sample-handle push, edge/window queries, ring counts, and latest sample lookup by sensor hash. Payload memory remains owned by Aquarium/GPU/Faust; the reservoir owns timing and retention.
-  - `LocalcastRuntime` now wraps the reservoir with typed native producer calls for camera frames/features, scene rays, surface/material claims, audio blocks, phase claims, events, and render packets. It also exposes native status with shared edge/window and ring counts, replacing the Python file-cache path as the intended live spine.
+  - `native/reservoir` is the first native Rust crate. It currently implements
+    shared-edge five-second typed rings and proves that every kind expires from
+    the newest live sample. That proof survives; the structure does not get a
+    pardon. The next foundation is one rolling buffer plus typed indexes/views.
+  - `native/reservoir/include/localcast_reservoir.h` exposes the initial
+    Aquarium/Faust C ABI: opaque reservoir create/destroy, sample-handle push,
+    edge/window queries, ring counts, and latest sample lookup by sensor hash.
+    This ABI should be revised around the rolling-buffer model before
+    Aquarium/Faust bind to it.
+  - `LocalcastRuntime` wraps the current reservoir with typed native producer
+    calls. It is the intended live spine, but must be rebuilt on the single
+    rolling-buffer invariant before new runtime work.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.
@@ -74,17 +97,25 @@
 - Audio defaults to AAC inside MPEG-TS for compatibility; test Opus later only if there is a concrete reason.
 - Desktop capture uses `gdigrab` first because it is broadly available. `ddagrab` is a candidate once the installed FFmpeg build is confirmed.
 - The scripts assume Windows sender and OBS receiver on the same LAN.
-- The Python live producers/renderers are compatibility diagnostics. They are no longer the intended runtime API.
+- The Python live producers/renderers and OpenGL Spout sink are diagnostics or
+  migration fossils only. They should be quarantined or deleted early instead
+  of adapted.
 
 ## Next
 
-1. Add the Aquarium-side binding that loads `localcast_reservoir`, creates `LocalcastRuntime`, and maps GPU/audio buffer handles to `LocalcastSampleHandle`.
-2. Move camera ingest into native capture workers that call `localcast_runtime_push_camera_frame`.
-3. Move mic/loopback ingest into native capture workers that call `localcast_runtime_push_audio_block`.
-4. Move feature extraction, flow, cross-view matching, LOD reconciliation, and material fitting into Aquarium GPU compute.
-5. Move mic alignment, voice separation, room suppression, Ambisonic/HOA spatialization, and stem generation into Faust/native DSP.
-6. Replace the deadline Spout sink with Aquarium-owned Spout publication from the native render target.
-7. Feed the neighbor Focusrite shotgun and neighbor loopback into the reservoir as live synchronized audio inputs.
-8. Replace placeholder mic/speaker/camera geometry with measured `config/audio-field.json` and `config/sensor-fusion.json` coordinates.
-9. Calibrate Leap as a geometric camera so Leap contributes direct 3D rays, not only timing evidence.
-10. Keep the Python bridge only for calibration, contract tests, device discovery, status, and offline analysis.
+1. Rewrite `native/reservoir` as one rolling buffer with typed indexes/views.
+2. Update ABI/tests so single-edge expiry, typed view queries, latest lookup,
+   and diagnostic/fallback exclusion are enforced by construction.
+3. Quarantine or delete production use of `scripts/live_sensor_fusion.py`,
+   `localcast.sensor_fusion.spout_output`, JSON render-frame stores, JSON LOD
+   stores, and Python reservoir-window clipping.
+4. Bind Aquarium/Faust to the rebuilt `LocalcastRuntime`.
+5. Move camera/mic/loopback ingest into native capture workers that append
+   typed sample handles.
+6. Move feature extraction, flow, cross-view matching, LOD reconciliation,
+   material fitting, brush/splat rendering, and Spout2 publication into
+   Aquarium GPU compute.
+7. Move mic alignment, room suppression, voice separation, Ambisonic/HOA
+   spatialization, and stem generation into Faust/native DSP.
+8. Keep FFmpeg/SRT scripts as simple LAN ingest/capture utilities, not the
+   synchronized program authority.

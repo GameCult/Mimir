@@ -22,10 +22,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - V1 uses FFmpeg plus OBS Media Source over SRT.
 - Sender-side video encoding is `h264_nvenc`.
 - Audio sources are separate SRT endpoints so OBS can mix them separately.
-- The repo contains scripts and docs, not a native OBS plugin.
-- Visual fusion now has a deadline Spout sender: `scripts/stream_spout.py` consumes `RenderFramePacket` JSON, renders points into an OpenGL FBO, and publishes the Spout sender `LocalCastBridge Point Cloud` for OBS.
-- The detached sender status file is `calibration/runs/stream-spout-status.json`; logs are `calibration/runs/stream-spout.log` and `calibration/runs/stream-spout.err.log`.
-- Aquarium remains the intended dense splat/brush renderer behind the same `RenderFramePacket` boundary. Do not let the OpenGL sink become scene authority.
+- The live synchronized program path is being rebuilt. The Python/OpenGL deadline Spout bridge is not a foundation.
+- `docs/native-rebuild-plan.md` is the current cut plan.
+- The reservoir target is one native time-ordered rolling buffer with typed indexes/views. The current typed-ring crate proved the expiry invariant but should be rewritten before new live features.
+- Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
+- Python live producers and the OpenGL Spout sink should be deleted or quarantined as diagnostics before the next feature pass. Aquarium owns production Spout publication.
 - Neighbor sender is deployed at `C:\Meta\LocalCastBridge` on `192.168.1.84`.
 - Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
 - Receiver OBS scene collection has `Neighbor PC - Video`, `Neighbor PC - Focusrite`, and `Neighbor PC - System Audio` Media Sources added.
@@ -36,15 +37,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Current Pressure
 
-The useful next work is real hardware validation:
+The useful next work is foundation surgery, not hardware feature expansion:
 
-- in OBS, add/select a Spout2 Capture source named `LocalCastBridge Point Cloud`
-- replace demo packets by writing live fusion packets to `calibration/runs/live-render-frame.json`
-- move the packet consumer into Aquarium Engine once the stream survives deadline pressure
-- open OBS and smoke-test the three configured receiver sources from Madman's desktop launcher
-- tune latency once streams are live in OBS
-- add a real loopback/virtual audio capture source if system-output audio is required
+- rewrite `native/reservoir` as one rolling buffer with typed indexes/views
+- update ABI and tests around single-edge retention
+- quarantine or delete production use of `scripts/live_sensor_fusion.py` and the OpenGL `spout_output` sink
+- route future visual/audio runtime work through Aquarium/Faust/native runtime plus typed CultNet docs
+- keep FFmpeg/SRT bridge scripts only as simple LAN ingest and capture utilities
 
 ## Immediate Re-entry Instruction
 
-Do not continue implementation automatically from a rehydrate-only request. Rehydrate, then follow the user's next instruction.
+Do not continue the Python/OpenGL bridge. Rehydrate, read `docs/native-rebuild-plan.md`, then cut toward the native rolling reservoir.

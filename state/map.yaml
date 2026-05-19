@@ -4,8 +4,9 @@ workspace:
   focus: perfect-machine-native-reservoir
   premise: >
     A second Windows PC should appear inside OBS as video plus separately
-    mixable audio sources. Use ordinary media transport first; native OBS code
-    only earns its keep after standard OBS/FFmpeg surfaces fail a real invariant.
+    mixable audio sources. The synchronized program path now cuts away the
+    Python/OpenGL deadline bridge and rebuilds around one native rolling
+    reservoir feeding Aquarium, Faust, CultNet, and OBS.
 
 objective:
   primary: >
@@ -13,8 +14,9 @@ objective:
     microphones, two speakers, Leap timing, Aquarium GPU rendering, Faust DSP,
     and OBS output.
   current: >
-    Cut the deadline bridge down to tooling and define the native five-second
-    reservoir contract Aquarium/Faust must implement.
+    Carve out Python live producers, the OpenGL Spout sink, JSON live stores,
+    and duplicated reservoir windows. Rebuild the live path around one native
+    rolling buffer with typed indexes/views and CultNet typed documents.
 
 constraints:
   - Sender is Windows.
@@ -23,6 +25,10 @@ constraints:
   - Audio sources must remain separately controllable in OBS.
   - V1 is LAN-only.
   - Persistent state must clarify rehydrate, not become transcript tax.
+  - No Python live hot path.
+  - No OpenGL production Spout sink.
+  - Edge JSON is schema/diagnostic only; live network/process data is typed
+    CultNet documents.
 
 invariants:
   - OBS composition authority stays in OBS.
@@ -31,10 +37,21 @@ invariants:
   - Video endpoint uses H.264 over MPEG-TS/SRT.
   - Audio endpoints default to AAC over MPEG-TS/SRT for broad OBS/FFmpeg compatibility.
   - Local secrets remain untracked.
+  - One native rolling reservoir owns the live edge and expiry.
+  - Typed views may index the rolling buffer, but no per-kind ring owns
+    retention.
+  - Aquarium owns production Spout publication; Faust/native DSP owns hot audio.
+  - Python and JSON may diagnose or test the machine, not run it.
 
 accepted_design:
+  - `docs/native-rebuild-plan.md` is the current cut plan. It supersedes the
+    deadline Python/OpenGL bridge as a foundation and defines the next coherent
+    rebuild target.
   - `docs/perfect-machine.md` and `config/perfect-machine.example.json` define the native target: one five-second spatiotemporal reservoir, Aquarium GPU fusion/rendering, Faust DSP, OBS output controls, and LocalCastBridge tooling.
-  - `native/reservoir` is the first native Rust crate. It implements shared-edge reservoir rings so all sample types expire from the newest live sample rather than private source histories, and exposes a C ABI for Aquarium/Faust handle-based integration plus `LocalcastRuntime` typed producer calls.
+  - `native/reservoir` is the first native Rust crate. Its current shared-edge
+    typed rings proved the expiry invariant, but the live target is stricter:
+    one time-ordered rolling buffer with typed indexes/views, so retention has
+    exactly one owner.
   - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
   - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
   - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.
@@ -42,6 +59,10 @@ accepted_design:
   - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
 
 active_subgoals:
+  - Rewrite `native/reservoir` from independent typed rings into one rolling
+    buffer with typed indexes/views and a single edge.
+  - Delete or quarantine Python live producers and the OpenGL Spout sink before
+    adding new live features.
   - Bind Aquarium/Faust to `LocalcastRuntime` in the native reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
   - Move dense visual fusion/material fitting/brush generation into Aquarium GPU compute.
   - Move hot audio DSP/voice separation/room suppression/spatialization into Faust/native runtime.
@@ -128,13 +149,11 @@ research:
   live_spout_deadline_sink:
     summary: docs/obs-spout-streaming.md
     key_decision: >
-      The deadline OBS surface is a real Spout sender named LocalCastBridge
-      Point Cloud. `scripts/stream_spout.py` consumes render-frame packets,
-      lowers them into compact anisotropic screen brush packets inspired by the
-      Zyphos/Aquarium brush model, uploads the texture through SpoutGL, and
-      writes a heartbeat status file. This is a sink boundary, not a new scene
-      authority; Aquarium should replace the renderer body behind the same
-      RenderFramePacket contract for dense brush/splat rendering.
+      The deadline OBS surface proved the need for a named Spout sender, but it
+      is not a foundation. `scripts/stream_spout.py`, SpoutGL/OpenGL rendering,
+      Python render-frame production, and JSON heartbeat stores are diagnostics
+      or migration fossils only. Production Spout publication belongs in
+      Aquarium, fed by the native rolling reservoir and typed CultNet documents.
   live_audio_phase_meaning:
     summary: docs/audio-field.md
     key_decision: >
@@ -222,8 +241,9 @@ research:
       `localcast.visual.render_frame` in `calibration/runs/visual-state.msgpack`
       and `localcast.visual.stream_status` in
       `calibration/runs/visual-stream-status.msgpack`. CultNet document_put is
-      the intended process/network API boundary. JSON render-frame files are no
-      longer the authority.
+      the intended process/network API boundary. Edge JSON may define schemas
+      or export diagnostics, but runtime data should remain typed documents
+      because every networked subsystem is under our control.
 
 current_status:
   summary: >
@@ -328,31 +348,9 @@ current_status:
     stochastic transient hypotheses, and synthetic fusion support while still
     seeing lower-priority fallback diagnostics when the Leap capture path stalls.
   next_action: >
-    Capture real ChArUco intrinsics for the PS3 Eyes and Kiyos, capture
-    fixed-board observations from every camera, solve a local
-    `config/sensor-fusion.json`, and prove calibrated cross-view surface tracks
-    with `scripts/triangulate_surface_features.py`. Then move the dense RGB stereo matcher
-    to a GPU-resident stereo/flow pass so high-detail surface claims can scale
-    toward the million-splat temporal accumulator without Python owning each
-    point. If a Tuya light is available, run the local-key pulse hook and record
-    its timestamps against camera responses as active illumination evidence.
-    Then replace the synthetic live producer with a detector adapter that
-    turns FFmpeg PS3 Eye frames into marker `Observation2D` records for the
-    fusion core and publishes the same typed CultCache/CultNet render-frame
-    document. Calibrate Leap as a geometric camera model so clap timing peaks
-    can become direct 3D rays instead of timing-only evidence. Also fix the live Leap capture backend so the cache emits
-    `leap-ground-truth` rather than `leap-fallback`; current MSMF probing can
-    still stall on frame reads. In parallel, move the render-frame consumer into Aquarium Engine so
-    Aquarium renders cached points/brushes into its GPU render target and
-    publishes or hands off the same Spout sender `LocalCastBridge Point Cloud`
-    for OBS, replacing the deadline OpenGL point sink without changing packet
-    ownership. In parallel, create local
-    `config/audio-field.json`, confirm local
-    Kiyo/PS Eye/Focusrite device matches, confirm the neighbor Focusrite
-    shotgun capture/transport path, replace placeholder mic/speaker geometry
-    with measured world coordinates, then build the delay/SRO alignment stage
-    that feeds the bounded field cache and emits aligned six-channel blocks for
-    FOA encoding. Keep neighbor loopback on the scheduled interactive WASAPI
-    capture path and use it as the timing witness once actual neighbor app
-    audio is present; do not reintroduce a virtual mixer unless direct loopback
-    fails a concrete invariant that the mixer actually satisfies.
+    Stop live feature work on the Python/OpenGL bridge. First rewrite
+    `native/reservoir` into a single time-ordered rolling buffer with typed
+    indexes/views, update the ABI/tests around that invariant, and quarantine
+    Python/OpenGL code as diagnostics. Then bind Aquarium/Faust to the native
+    runtime and resume hardware calibration through typed CultNet/native
+    surfaces only.

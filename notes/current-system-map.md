@@ -1,17 +1,18 @@
 # Current System Map
 
 LocalCastBridge is intentionally thin. The target live machine is not the
-deadline bridge; it is the native reservoir described in
-`docs/perfect-machine.md` and `config/perfect-machine.example.json`.
+deadline bridge; it is the native rolling reservoir described in
+`docs/native-rebuild-plan.md`, `docs/perfect-machine.md`, and
+`config/perfect-machine.example.json`.
 
 ## Perfect Machine Target
 
 ```mermaid
 flowchart TD
-    A["6 cameras"] --> R["5s native reservoir"]
-    B["6 microphones"] --> R
-    C["Leap timing/IR"] --> R
-    D["loopback + remote video/audio"] --> R
+    A["native camera workers"] --> R["single 5s rolling reservoir"]
+    B["native mic/loopback workers"] --> R
+    C["Leap timing/IR workers"] --> R
+    D["remote video/audio workers"] --> R
     R --> E["Aquarium GPU fusion + material field"]
     R --> F["Faust DSP"]
     E --> G["Spout2 texture"]
@@ -26,10 +27,21 @@ Ownership:
 - Aquarium owns dense visual fusion, material/brush/splat reconciliation, final render target, and Spout publication.
 - Faust owns hot audio DSP and program stem generation.
 - OBS owns broadcast controls.
-- Python remains tooling, not the stream hot path.
-- `native/reservoir` is the first native crate. It owns shared-edge five-second sample retention for typed rings and exposes the C ABI in `native/reservoir/include/localcast_reservoir.h`: opaque reservoir lifetime, sample-handle push, edge/window queries, ring counts, latest-by-sensor lookup, and the `LocalcastRuntime` spine for typed producer appends plus native status.
+- Python remains tooling only: calibration, contract tests, device discovery,
+  offline analysis, and diagnostics. It is not the stream hot path.
+- OpenGL is not the production Spout sink. Aquarium owns production Spout2
+  publication.
+- `native/reservoir` is the first native crate. Its current shared-edge typed
+  rings proved the retention invariant, but the target is one time-ordered
+  rolling buffer with typed indexes/views. Retention has one owner.
 
-Invariant: the five-second spatiotemporal reservoir is the live authority. Producers append sample handles through typed native calls, optimizers refine, Aquarium/Faust sample and interpret the pointed-to payloads. No private history outlives the reservoir, and the reservoir does not pretend to own GPU image memory or Faust audio buffers. Python scripts are compatibility diagnostics and calibration tools, not the live API.
+Invariant: the five-second spatiotemporal reservoir is the live authority.
+Producers append sample handles through typed native calls, optimizers refine,
+Aquarium/Faust sample and interpret the pointed-to payloads. No private history
+outlives the reservoir, and typed views do not own retention. The reservoir does
+not pretend to own GPU image memory or Faust audio buffers. Edge JSON may
+declare schema or export diagnostics; live process/network data is typed
+CultNet documents.
 
 ```mermaid
 flowchart TD
@@ -111,43 +123,35 @@ Ownership:
 
 Invariant: distributed camera/Focusrite microphones must be aligned and resampled into one reference timeline before FOA encoding. Latency is allowed as bounded buffering, but cache depth must converge toward real-time. Speaker output chirplets are live telemetry; delay/SRO/phase state must update during runtime, not only during setup. Extra chirplets may be emitted automatically when confidence drops, but only under the active probe optimizer's budget. The local shielded cardioid and neighbor shotgun are the high-quality dialogue anchors; camera mics provide spatial/context evidence.
 
-## Visual Fusion Sidecar
+## Visual Fusion Cut Line
 
 ```mermaid
 flowchart TD
-    A["synthetic/live observations"] --> B["SensorRig.fuse"]
-    B --> C["RenderFramePacket"]
-    C --> D["CultCache visual-state.msgpack"]
-    D --> E["stream_spout.py"]
-    E --> F["ScreenBrushPacket lowering"]
-    F --> G["Spout sender"]
-    G --> H["OBS Spout2 Capture"]
-    I["Leap motion evidence"] --> J["multi-LOD scene cache"]
-    K["RGB/stochastic/synthetic evidence"] --> J
-    M["live clap audio transient"] --> N["Leap-timed clap calibration"]
-    O["Kiyo stereo motion window"] --> N
-    N --> C
-    N --> J
-    J --> L["Aquarium compute reconciliation"]
+    A["native camera/Leap sample handles"] --> R["rolling reservoir"]
+    B["audio/phase/event handles"] --> R
+    R --> C["Aquarium GPU feature/fusion/material/brush"]
+    C --> D["Aquarium Spout2 sender"]
+    R --> E["typed CultNet status/docs"]
+    D --> F["OBS Spout2 Capture"]
 ```
 
 Ownership:
 
-- `localcast.sensor_fusion.cultcache_docs` owns typed visual state documents.
-- `scripts/live_sensor_fusion.py` currently owns the live producer and writes `localcast.visual.render_frame` into CultCache.
-- The live producer now keeps a rolling RGB/Leap frame window for clap calibration. Kiyo stereo motion gives the first rough 3D clap position; Leap participates as the high-precision visual timing witness until a calibrated Leap geometric model joins the rig.
-- Clap peaks update a per-camera clock sync model. Camera history sampling uses `oracle_time - camera_offset`, so the point builder can reconstruct a shared instant instead of mixing latest frames from different clock domains.
-- The live producer's temporal authority is a five-second spatiotemporal reservoir measured backward from the newest shared sample. RGB/Leap history expires against that shared edge, LOD evidence is clipped to the same window, and each render frame declares the exact reservoir slice with `source_time_min_ns` and `source_time_max_ns`.
-- Multi-LOD cache cells carry first-pass material evidence: weighted albedo plus roughness/metallic hints. Aquarium owns the real relighting/BRDF refinement, but it should receive material state from the reservoir rather than reverse-engineering it from screen brushes.
-- `stream_spout.py` clamps stale visual packets to the current audio reservoir edge before OBS sees them. If a camera path blocks past the five-second window, its stale points are dropped. Current live deadline mode uses `--rgb-fallback-only --leap-fallback-only` because direct OpenCV camera reads measured slower than the reservoir; the next cut is nonblocking camera ingress that fills the reservoir continuously.
-- `LatestFramePump` now runs blocking OpenCV camera sources off the producer hot loop. Deadline live mode keeps per-frame visual density low enough for TAA/reservoir accumulation: roughly 1.6k Spout points at `audio_delta_ns: 0` with `--rgb-room-step 16 --leap-step 16 --points 64`.
-- `localcast.sensor_fusion.chirp_pose` now turns phase-field delay meaning for Kiyo/PS Eye microphone sources into camera-body range constraints and per-camera pose-correction estimates. It loads camera-mic and speaker geometry from the audio-field profile when available, falling back to the example profile/defaults. The live producer publishes those constraints as `camera-chirp:*` and `camera-pose-correction:*` render points plus `chirp-camera-pose` LOD evidence. Audio range/timing evidence augments visual calibration; it does not own image geometry.
-- The Spout point-budget policy pins calibration and cross-modal constraints before spending the remaining adaptive LOD budget on stable high-priority surface claims and frame-rotated samples. Its JSON heartbeat reports the prefix counts that survived the render budget.
-- The live producer also writes a multi-LOD scene cache with source kind and priority. Real Leap frames are the highest-priority timing/spatial evidence; Leap fallback frames are tagged as fallback and do not become ground truth.
-- `scripts/stream_spout.py` consumes typed CultCache state and publishes Spout. Its presentation camera defaults to `kiyo-mid-deru`: the virtual eye sits halfway between the two Kiyo-class cameras and aims at the co-streamer body target. Its render budget is temporal: high-confidence anchors stay stable while the remaining samples rotate by frame id for TAA/supersampling reconciliation.
-- CultNet document replication is the intended API boundary for other producers/consumers.
+- Native capture workers own device reads and append handles. They do not own
+  scene reconstruction.
+- The rolling reservoir owns the live edge, retention, ordering, and typed
+  lookup.
+- Aquarium owns dense visual fusion, material fitting, point/brush/splat
+  lowering, render budgeting, and Spout2 publication.
+- CultNet typed documents carry status/control/process state. JSON is schema or
+  diagnostic export only.
+- `scripts/live_sensor_fusion.py`, Python fallback producers, JSON LOD stores,
+  and `localcast.sensor_fusion.spout_output` are diagnostics/migration fossils.
+  They must not be extended as production surfaces.
 
-Invariant: JSON is not the visual-state authority. The current renderer can still write a JSON heartbeat for human inspection, but live visual state lives in typed CultCache MessagePack documents. Leap outranks camera surfaces only when the frame source is actual Leap capture; diagnostics must stay labeled as diagnostics. The reservoir horizon is five seconds; producers may fill gaps as late samples arrive inside that window, but they may not silently preserve older evidence in the live fusion cache.
+Invariant: fallback/demo evidence cannot enter ground-truth reservoir kinds.
+Render packets, LOD cells, brush packets, and overlays are derived from reservoir
+claims. The renderer cannot invent scene priority from string prefixes.
 
 ## OBS Program Surface
 
