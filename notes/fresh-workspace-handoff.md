@@ -36,6 +36,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Aquarium-Engine commit `4d5aec7` adds the first safe-code C# binding layer for
   this native ABI. It is not yet wired into `LocalCastRuntime` as the live
   source.
+- Aquarium-Engine commit `8798908` makes `LocalCastRuntime` consume an injected
+  `ILocalCastVisualFrameSource`; the remaining Aquarium cut is a native source
+  implementation over the binding.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been
