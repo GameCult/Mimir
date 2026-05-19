@@ -7,13 +7,14 @@ import numpy as np
 from scipy.io import wavfile
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from audio_field.cultcache_audio import make_audio_phase_field, put_live_audio_phase_field  # noqa: E402
 from audio_field.active_probe import ActiveConfidenceMaintainer  # noqa: E402
 from audio_field.phase_meaning import LivePhaseMeaningExtractor  # noqa: E402
+from audio_field.probe_bands import parse_probe_band, ultrasonic_probe_band  # noqa: E402
 from audio_field.probe_optimizer import ActiveProbeOptimizer, ProbePolicy  # noqa: E402
 
 
@@ -110,7 +111,7 @@ def source_dicts(meaning) -> list[dict]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Publish live extracted phase-field meaning from reference and aligned mic WAVs.")
+    parser = argparse.ArgumentParser(description="Diagnostic replay of extracted phase-field meaning from reference and aligned mic WAVs.")
     parser.add_argument("--field", type=Path, required=True, help="Aligned frames-by-channel mic field WAV.")
     parser.add_argument("--reference", type=Path, required=True, help="Known program/loopback reference WAV.")
     parser.add_argument("--cache", type=Path, default=ROOT / "calibration" / "runs" / "audio-phase-field.msgpack")
@@ -242,22 +243,6 @@ def main() -> None:
             sleep_for = target_time - time.monotonic()
             if sleep_for > 0:
                 time.sleep(sleep_for)
-
-
-def parse_probe_band(value: str) -> tuple[float, float]:
-    parts = value.split(":")
-    if len(parts) != 2:
-        raise SystemExit(f"probe band must be start:end Hz, got {value!r}")
-    return float(parts[0]), float(parts[1])
-
-
-def ultrasonic_probe_band(sample_rate: int) -> tuple[float, float]:
-    nyquist = 0.5 * float(sample_rate)
-    end_hz = min(22_000.0, nyquist - 1200.0)
-    start_hz = min(18_500.0, end_hz - 2500.0)
-    if end_hz <= 16_000.0 or start_hz <= 0.0:
-        raise SystemExit(f"sample rate {sample_rate} leaves no useful ultrasonic probe band")
-    return start_hz, end_hz
 
 
 def play_probe_file(path: Path) -> None:

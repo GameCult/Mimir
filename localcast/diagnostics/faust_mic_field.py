@@ -7,7 +7,7 @@ import numpy as np
 from scipy.io import wavfile
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -48,7 +48,7 @@ def source_block(samples: np.ndarray, start_sample: int, frame_count: int, *, lo
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Publish aligned mic channels as a Faust-ready voice-separation input field.")
+    parser = argparse.ArgumentParser(description="Diagnostic replay of aligned mic channels as a Faust-ready input field.")
     parser.add_argument("--input", type=Path, default=ROOT / "calibration" / "runs" / "audio-program-live-20260518-180226" / "field-program-cleaned.wav")
     parser.add_argument("--cache", type=Path, default=ROOT / "calibration" / "runs" / "audio-mic-field.msgpack")
     parser.add_argument("--graph-id", default="localcast.faust.voice_separation.v1")

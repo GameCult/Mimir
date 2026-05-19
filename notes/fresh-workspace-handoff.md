@@ -46,6 +46,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been
   deleted. Aquarium owns production Spout publication.
+- Python audio phase/live/Faust publishers have been moved under
+  `localcast.diagnostics.*`, their live PowerShell launchers have been deleted,
+  and reusable mic-profile/probe-band helpers now live in `audio_field`.
+  Production audio ingest must use native capture workers and
+  `LocalcastProducer`.
 - Neighbor sender is deployed at `C:\Meta\LocalCastBridge` on `192.168.1.84`.
 - Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
 - Receiver OBS scene collection has `Neighbor PC - Video`, `Neighbor PC - Focusrite`, and `Neighbor PC - System Audio` Media Sources added.
@@ -59,6 +64,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
 The useful next work is foundation surgery, not hardware feature expansion:
 
 - bind Aquarium/Faust/native workers to the rolling-buffer `LocalcastRuntime`
+- build native mic/loopback/phase producers over `LocalcastProducer`; do not
+  restore Python audio live launchers
 - delete production dependence on `localcast.diagnostics.visual_producer`
   and diagnostic file adapters
 - bind Aquarium/Faust against the native runtime/producer ABI instead of

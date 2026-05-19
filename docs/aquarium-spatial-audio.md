@@ -60,19 +60,19 @@ Mic-field document type:
 - graph id: `localcast.faust.voice_separation.v1`
 - Faust source: `faust/localcast_voice_separation.dsp`
 
-Publisher smoke command:
+AmbiX replay smoke command:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\stream_spatial_audio.py --input .\calibration\runs\audio-full-sync-20260518-165751\field-foa-ambix.wav --loop --duration 5 --smoke-readback
 ```
 
-Faust mic-field publisher:
+Faust mic-field replay smoke command:
 
 ```powershell
-.\scripts\start-live-faust-mic-field.ps1
+.\.venv\Scripts\python.exe -m localcast.diagnostics.faust_mic_field --input .\calibration\runs\audio-full-sync-20260518-165751\field-cleaned.wav --loop --duration 5 --smoke-readback
 ```
 
-This publishes the aligned six-channel field directly to Aquarium/Faust while preserving the AmbiX path as a compatibility bed. Stop it with `.\scripts\stop-live-faust-mic-field.ps1`.
+This exercises the old mic-field document shape. Production voice separation should read typed reservoir/CultNet data from the native live path; Python is not the hot publisher.
 
 Source-event analysis command:
 

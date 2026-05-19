@@ -100,7 +100,7 @@ flowchart TD
     K --> L["bounded field cache"]
     L --> M["aligned six-channel blocks"]
     M --> N["FOA encoder"]
-    M --> V["Faust mic-field publisher"]
+    M --> V["native mic-field producer"]
     V --> W["localcast.audio.mic_field"]
     W --> X["Aquarium Faust voice-separation graph"]
     N --> O["AmbiX ACN/SN3D bus: W,Y,Z,X"]
@@ -113,7 +113,7 @@ Ownership:
 - `audio_field/` owns unit-testable buffering, bounded-latency convergence, injectable port protocols, and pipeline orchestration.
 - Runtime sync owns per-block chirplet observations from known speaker output and updates delay/SRO/phase estimates with confidence gates before alignment.
 - `audio_field.phase_meaning` owns extracting usable meaning from internal phase/chirplet evidence. The live cache publishes delay correction, coherence, confidence, distance-equivalent delta, reference-bleed/suppression estimates, correction energy, and active-probe need; raw phase bands stay inside the estimator.
-- `scripts/stream_live_audio_field.py` is the current live local capture owner. It publishes `localcast.audio.mic_field` and `localcast.audio.phase_field` from the visible local Kiyo/PS Eye/Scarlett inputs, uses Scarlett loopback as the known reference, and keeps missing neighbor/Kiyo-right channels as explicit placeholders until synchronized feeds exist.
+- `localcast.diagnostics.audio_live_field`, `localcast.diagnostics.audio_phase_field`, and `localcast.diagnostics.faust_mic_field` preserve the old Python audio publisher experiments as diagnostics only. Production mic, loopback, and phase ingest belongs in native capture workers that append typed sample handles through `LocalcastProducer`.
 - `audio-phase-field-status.json` declares the phase runtime mode. Current deadline mode is `live-local-capture` with closed-loop probe capture when Scarlett loopback is available.
 - Active probe optimization owns extra chirplet emission when confidence drops, bounded by level/spacing/audibility budget. `audio_field.active_probe` is the runtime join that converts phase-field confidence into emitted chirplet WAVs/manifests and playback. Probe WAVs rotate through fixed slots and the manifest rotates at a byte cap; calibration may be dense, but artifacts must stay bounded.
 - The camera/sensor-fusion pipeline may publish world poses later; it does not own audio clocks or channel timing.

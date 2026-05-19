@@ -8,7 +8,7 @@ import time
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -22,25 +22,12 @@ from audio_field.cultcache_audio import (  # noqa: E402
 )
 from audio_field.phase_meaning import LivePhaseMeaningExtractor  # noqa: E402
 from audio_field.probe_optimizer import ActiveProbeOptimizer, ProbePolicy  # noqa: E402
-from localcast.sensor_fusion import camera_sensor_id_for_microphone, phase_source_id_for_microphone  # noqa: E402
-
-
-HOST_SOURCE_BY_MIC_ID = {
-    "mic_focusrite_local": "host-focusrite",
-    "mic_focusrite_neighbor": "co-streamer-focusrite",
-}
+from audio_field.profile import local_microphones, source_id_for_microphone  # noqa: E402
+from localcast.sensor_fusion import camera_sensor_id_for_microphone  # noqa: E402
 
 
 def load_profile(path: Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def source_id_for_microphone(mic: dict) -> str | None:
-    return str(mic.get("phaseSourceId") or mic.get("sourceId") or HOST_SOURCE_BY_MIC_ID.get(str(mic.get("id", ""))) or phase_source_id_for_microphone(mic) or "")
-
-
-def local_microphones(profile: dict, machine: str) -> list[dict]:
-    return [mic for mic in profile.get("microphones", []) if mic.get("machine") == machine and source_id_for_microphone(mic)]
 
 
 def summarize_device(device: dict) -> dict:
@@ -189,7 +176,7 @@ def play_probe_file(path: Path, *, device: int | None = None, output_rate: int |
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Capture local live mics into Faust/phase CultCache fields.")
+    parser = argparse.ArgumentParser(description="Diagnostic replay of the old local mic capture experiment into CultCache fields.")
     parser.add_argument("--profile", type=Path, default=ROOT / "config" / "audio-field.json")
     parser.add_argument("--fallback-profile", type=Path, default=ROOT / "config" / "audio-field.example.json")
     parser.add_argument("--machine", default="local")

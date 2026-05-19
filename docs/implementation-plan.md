@@ -87,17 +87,16 @@ shape removes independent per-kind storage from the live foundation.
 - Live phase-field meaning:
   - `audio_field.phase_meaning` extracts actionable delay, coherence, confidence, suppression, correction-energy, and active-probe need from internal phase/chirplet evidence.
   - `localcast.audio.phase_field` is a typed CultCache document at `calibration/runs/audio-phase-field.msgpack`.
-  - `scripts/stream_phase_field.py` publishes the live meaning document from an aligned mic field plus known program/loopback reference without exposing raw phase bands as the renderer API.
-  - `stream_phase_field.py` also writes `audio-phase-field-status.json`, which declares whether the phase estimator is running against replayed WAVs or closed-loop live capture. Current deadline mode is explicit `wav-replay` with open-loop probe playback.
+  - `localcast.diagnostics.audio_phase_field` can replay an aligned mic field plus known program/loopback reference into the phase-field document for diagnostics. It is not a live bridge authority.
+  - `localcast.diagnostics.audio_phase_field` can write `audio-phase-field-status.json` during replay so estimator behavior remains inspectable while the native ingest path is built.
   - `audio_field.active_probe` wires low phase-field confidence into `ActiveProbeOptimizer`, emits bounded chirplet WAVs plus `active-probes.jsonl`, and can play probes through the default output device.
-  - `scripts/stream_live_audio_field.py` is the live local capture owner for the deadline rig. It publishes `localcast.audio.mic_field` and `localcast.audio.phase_field` from visible local WASAPI/PortAudio mics plus Scarlett loopback, reports missing rig channels as explicit placeholders, plays confidence probes through the selected Scarlett output, and resamples probe playback when the output device runs at 44.1 kHz while the field timeline remains 48 kHz.
+  - `localcast.diagnostics.audio_live_field` preserves the old local WASAPI/PortAudio capture experiment as diagnostic code only. Production local mic and loopback ingest belongs in native capture workers that append typed handles through `LocalcastProducer`.
   - Active probe maintenance only targets source ids backed by live local capture devices. Missing distributed channels remain stable placeholders in the mic/phase field, but they do not consume chirp budget.
   - Active probe artifacts are bounded: emitted chirps rotate through a fixed slot set and the manifest rotates at a byte cap. The calibration loop is allowed to be noisy; it is not allowed to become an unbounded filesystem leak.
-  - `scripts/start-live-audio-phase-field.ps1` starts the live dense harmonic confidence loop with near-ultrasonic probes; `scripts/stop-live-audio-phase-field.ps1` stops the PID recorded in `logs/audio-phase-field.pid`.
 - Faust voice-separation boundary:
   - `localcast.audio.mic_field` publishes aligned six-mic float32 blocks at `calibration/runs/audio-mic-field.msgpack`.
   - `faust/localcast_voice_separation.dsp` is the first Aquarium-hosted graph surface for host voice, co-streamer voice, ambient, transient, and loopback stems.
-  - `scripts/start-live-faust-mic-field.ps1` starts the mic-field publisher for Aquarium/Faust.
+  - `localcast.diagnostics.faust_mic_field` can replay aligned WAV blocks into the old mic-field document for smoke tests. It is not a live publisher.
 
 ## Temporary
 
@@ -107,6 +106,8 @@ shape removes independent per-kind storage from the live foundation.
 - The scripts assume Windows sender and OBS receiver on the same LAN.
 - The Python visual producer is a diagnostic/migration fossil only. The OpenGL
   Spout sink has been deleted.
+- Python audio publishers are diagnostic fossils only. The live PowerShell
+  launchers for phase-field and Faust mic-field publication have been deleted.
 
 ## Next
 

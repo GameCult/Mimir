@@ -7,7 +7,7 @@ import numpy as np
 from audio_field.active_probe import ActiveConfidenceMaintainer, harmonic_frequencies, is_masked_window, make_harmonic_probe_texture, make_probe_chirplet
 from audio_field.phase_meaning import PhaseFieldMeaning, SourcePhaseMeaning
 from audio_field.probe_optimizer import ActiveProbeOptimizer, ProbePolicy
-from scripts.stream_phase_field import ultrasonic_probe_band
+from audio_field.probe_bands import ultrasonic_probe_band
 
 
 class ActiveProbeTests(unittest.TestCase):

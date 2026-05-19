@@ -21,7 +21,7 @@ from audio_field.cultcache_audio import (
     put_live_mic_field_frame,
     put_live_spatial_audio_frame,
 )
-from scripts.stream_live_audio_field import local_microphones, source_id_for_microphone
+from audio_field.profile import local_microphones, source_id_for_microphone
 
 
 class SpatialAudioCultCacheTests(unittest.TestCase):

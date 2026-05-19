@@ -124,41 +124,23 @@ For dense runtime calibration, emit a low-level multiband chirplet texture inste
 
 `analyze-probe-train` is the offline live-fit evidence path: it uses each event's band-specific chirplet, gates weak loopback/mic detections, estimates phase-derived delay deltas across frequency bands, and updates a smoothed phase/frequency mapping. Coarse delays still include device latency; the volumetric room solve must fit latency, drift, phase response, and acoustic path jointly.
 
-Publish live extracted phase-field meaning from an aligned field and known program/loopback reference:
+Replay extracted phase-field meaning from an aligned field and known program/loopback reference:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_phase_field.py --field .\calibration\runs\<run-folder>\field-program-cleaned.wav --reference .\calibration\runs\<run-folder>\ground_truth_loopback.wav --cache .\calibration\runs\audio-phase-field.msgpack
+.\.venv\Scripts\python.exe -m localcast.diagnostics.audio_phase_field --field .\calibration\runs\<run-folder>\field-program-cleaned.wav --reference .\calibration\runs\<run-folder>\ground_truth_loopback.wav --cache .\calibration\runs\audio-phase-field.msgpack
 ```
 
-This is not a phase oscilloscope. Raw phase bands stay internal. The live cache publishes consequences: per-source delay correction, distance-equivalent delta, coherence, fit error, confidence, reference-bleed estimate, suppression weight, correction energy, and whether the active probe optimizer should spend chirps.
+This is not a phase oscilloscope. Raw phase bands stay internal. The diagnostic document publishes consequences: per-source delay correction, distance-equivalent delta, coherence, fit error, confidence, reference-bleed estimate, suppression weight, correction energy, and whether the active probe optimizer should spend chirps.
 
-Close the confidence loop by letting the phase-field stream schedule strategic active probes:
+Exercise the confidence loop by letting the replay schedule strategic active probes:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_phase_field.py --field .\calibration\runs\<run-folder>\field-program-cleaned.wav --reference .\calibration\runs\<run-folder>\ground_truth_loopback.wav --cache .\calibration\runs\audio-phase-field.msgpack --maintain-confidence --ultrasonic-probes --play-probes
+.\.venv\Scripts\python.exe -m localcast.diagnostics.audio_phase_field --field .\calibration\runs\<run-folder>\field-program-cleaned.wav --reference .\calibration\runs\<run-folder>\ground_truth_loopback.wav --cache .\calibration\runs\audio-phase-field.msgpack --maintain-confidence --ultrasonic-probes --play-probes
 ```
 
 `--maintain-confidence` converts low-confidence phase-field state into `ActiveProbeOptimizer` requests, writes emitted chirplets under `calibration/runs/active-probes`, and appends `active-probes.jsonl`. Probe files rotate through fixed slots and the manifest rotates at a byte cap, because a calibration loop that creates infinite tiny WAV files is just a storage leak with a physics degree. `--play-probes` sends the emitted chirplet to the selected output device through `sounddevice`; omit it for dry-run scheduling. `--ultrasonic-probes` uses the highest safe band under Nyquist, roughly `18.5-22 kHz` at 48 kHz. This can fail silently in the physical world if the speaker, mic, driver, or resampler refuses to carry that band; the confidence feedback is the judge, not the command line's self-esteem.
 
-For the current deadline rig, `scripts/stream_live_audio_field.py` owns the live local path:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_live_audio_field.py --profile .\config\audio-field.example.json --loopback-query Scarlett --maintain-confidence --play-probes --probe-output-query Scarlett
-```
-
-It publishes both `audio-mic-field.msgpack` and `audio-phase-field.msgpack` from visible local mics, records missing distributed channels as explicit placeholders, captures Scarlett loopback as the known reference, and resamples probe playback when the Scarlett output is exposed as 44.1 kHz while the capture field remains 48 kHz. Active probe scheduling is restricted to source ids with a live local capture device; placeholders stay in the cache for channel stability, but the calibration loop does not waste chirps trying to synchronize silence.
-
-For the current live app, start the dense harmonic confidence-maintenance loop:
-
-```powershell
-.\scripts\start-live-audio-phase-field.ps1
-```
-
-That launcher runs `stream_phase_field.py` in realtime loop mode with playback enabled, dense harmonic probes, a near-ultrasonic band, `-24 dBFS` level cap, 80 ms probe textures, and 48 harmonic voices. Stop it with:
-
-```powershell
-.\scripts\stop-live-audio-phase-field.ps1
-```
+The old Python live local-capture bridge is quarantined as `localcast.diagnostics.audio_live_field`. It documents the deadline experiment, but production local mic and loopback capture now belongs in native workers that append typed sample handles through `LocalcastProducer`.
 
 Record local mics while playing one speaker sweep. Use the output rate that the device probe says is real:
 
@@ -203,13 +185,13 @@ Encode an offline aligned six-channel WAV to FOA AmbiX:
 .\.venv\Scripts\python.exe .\scripts\audio_field.py encode-foa --profile .\config\audio-field.json --input .\calibration\runs\<run-folder>\field-aligned.wav --output .\calibration\runs\<run-folder>\field-foa-ambix.wav
 ```
 
-Publish the same aligned six-channel field directly to Aquarium/Faust for voice separation:
+Replay the same aligned six-channel field directly to the old mic-field document for Faust smoke tests:
 
 ```powershell
-.\scripts\start-live-faust-mic-field.ps1
+.\.venv\Scripts\python.exe -m localcast.diagnostics.faust_mic_field --input .\calibration\runs\<run-folder>\field-cleaned.wav --loop --realtime --smoke-readback
 ```
 
-This writes `localcast.audio.mic_field` into `calibration/runs/audio-mic-field.msgpack` with channel roles and graph id `localcast.faust.voice_separation.v1`. The Faust graph lives at `faust/localcast_voice_separation.dsp` and has six inputs plus six stem outputs: host voice, co-streamer voice, ambient, transients, local loopback placeholder, and co-streamer loopback placeholder.
+This writes `localcast.audio.mic_field` into `calibration/runs/audio-mic-field.msgpack` with channel roles and graph id `localcast.faust.voice_separation.v1`. It is a diagnostic replay path. The live path is native capture into the rolling reservoir, then Aquarium/Faust consumption.
 
 Suppress room/transient witness energy before FOA encoding:
 
