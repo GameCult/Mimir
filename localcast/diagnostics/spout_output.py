@@ -12,7 +12,8 @@ import numpy as np
 
 from localcast.sensor_fusion.audio_overlay import AudioVisualSyncStatus, overlay_audio_events, with_remote_video_status
 from localcast.sensor_fusion.media_artifacts import remote_video_artifact_for_present_time
-from localcast.sensor_fusion.render_bridge import RenderFramePacket, RenderPointPacket, load_render_frame
+from localcast.sensor_fusion.render_bridge import RenderFramePacket, RenderPointPacket
+from localcast.diagnostics.render_frame_json import load_render_frame_json
 from localcast.diagnostics.visual_cache import CultStreamStatus, get_live_render_frame, put_stream_status
 
 
@@ -71,7 +72,7 @@ class RenderFrameFileSource:
         if self.path.exists():
             mtime_ns = self.path.stat().st_mtime_ns
             if self._frame is None or mtime_ns != self._mtime_ns:
-                self._frame = load_render_frame(self.path)
+                self._frame = load_render_frame_json(self.path)
                 self._mtime_ns = mtime_ns
             return self._frame
         if not self.demo_if_missing:

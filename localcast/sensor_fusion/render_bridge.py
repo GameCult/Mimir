@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
-from pathlib import Path
 
 import numpy as np
 
@@ -90,10 +88,6 @@ class RenderFramePacket:
             "points": [point.to_dict() for point in self.points],
         }
 
-    def write_json(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
-
     @staticmethod
     def from_dict(data: dict) -> "RenderFramePacket":
         return RenderFramePacket(
@@ -109,10 +103,6 @@ class RenderFramePacket:
             target_height=int(data.get("target_height", 1080)),
             points=tuple(RenderPointPacket.from_dict(item) for item in data.get("points", [])),
         )
-
-
-def load_render_frame(path: Path) -> RenderFramePacket:
-    return RenderFramePacket.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
 def lower_points_to_render_frame(

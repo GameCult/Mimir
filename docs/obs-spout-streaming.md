@@ -2,9 +2,9 @@
 
 ## Objective
 
-Publish the live visual fusion state as a named GPU texture that OBS can receive through the Spout2 plugin.
+Publish the diagnostic visual fusion state as a named GPU texture that OBS can receive through the Spout2 plugin.
 
-This is the deadline stream surface. It is not a preview window and it is not a desktop-capture workaround. LocalCastBridge emits a typed render-frame packet; the Spout sink turns that packet into a GPU texture named for OBS.
+This is the deadline diagnostic stream surface. It is not a preview window and it is not a desktop-capture workaround. LocalCastBridge emits a typed render-frame packet; the Spout sink turns that packet into a GPU texture named for OBS.
 
 ## Current Mechanism
 
@@ -18,7 +18,10 @@ flowchart TD
     F --> G["OBS Spout2 Capture"]
 ```
 
-Aquarium Engine remains the intended authority for dense brush/splat rendering. The useful boundary is the typed `localcast.visual.render_frame` CultCache document: Aquarium can replace the OpenGL renderer behind the same packet contract without changing capture, fusion, timing, or OBS ingestion.
+Aquarium Engine remains the intended authority for dense brush/splat rendering.
+The useful diagnostic boundary is the typed `localcast.visual.render_frame`
+CultCache document; the production boundary should be the native typed packet
+and CultNet schema, not Python file polling.
 
 The deadline sink borrows the Zyphos brush rule rather than pretending points are enough: each render point lowers into a compact anisotropic screen brush with center, radii, rotation, and color. That shape mirrors Aquarium's bounded brush/splat direction while keeping the stream path simple enough to verify under pressure.
 

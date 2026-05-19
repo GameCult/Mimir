@@ -15,6 +15,7 @@ from localcast.sensor_fusion import (
     load_fusion_config,
     lower_points_to_render_frame,
 )
+from localcast.diagnostics.render_frame_json import write_render_frame_json
 
 
 
@@ -49,7 +50,7 @@ def fuse_file(args) -> None:
             created_monotonic_ns=args.created_ns,
         )
         render_frame_output = Path(args.render_frame_json)
-        frame.write_json(render_frame_output)
+        write_render_frame_json(render_frame_output, frame)
     summary = {
         "output": str(output),
         "render_frame_json": None if render_frame_output is None else str(render_frame_output),

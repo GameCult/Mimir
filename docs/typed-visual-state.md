@@ -114,7 +114,7 @@ That does not make the SRT feed disappear into the point renderer. It makes the 
 
 - Keep: typed CultCache document contracts and MessagePack payloads.
 - Keep temporarily: JSON heartbeat for human shell checks.
-- Cut next: JSON render-frame polling once no script depends on it.
+- Cut next: JSON render-frame polling now that it is isolated under diagnostics.
 - Do not add a second scene authority. Sensor fusion owns world claims; renderer owns pixels.
 - Do not make OBS synchronize separate sources. Aquarium receives synchronized visual/audio documents and emits the OBS-facing package.
 - Do not treat the neighbor SRT video feed as untimed scenery. It is a presentation artifact and belongs in the same sync status as audio and render frames.

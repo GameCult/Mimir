@@ -136,9 +136,10 @@ LocalCastBridge TrackCache
 ```
 
 `RenderFramePacket` is the diagnostic Python in-process shape. The diagnostic
-file boundary is a typed CultCache MessagePack document. The production live
-boundary is native typed state plus CultNet `document_put`; JSON render-frame
-files are compatibility scaffolding only.
+file boundary is a typed CultCache MessagePack document. Compatibility JSON
+read/write now lives under `localcast.diagnostics.render_frame_json`; the
+production packet module does not own file serialization. The production live
+boundary is native typed state plus CultNet `document_put`.
 
 Clap calibration events use the same typed-state rule. A clap is not every sharp
 audio transient. The detector first finds a sharp broadband audio onset in the
@@ -191,7 +192,7 @@ The Spout/audio overlay applies the same rule at the consumer boundary. If the v
 8. Record an observation run from the two PS3 Eyes into typed CultCache docs.
 9. Feed `RenderFramePacket` and the multi-LOD scene cache into Aquarium Engine.
 10. Publish the render target as a Spout2 sender and receive it in OBS.
-11. Replace compatibility JSON render-frame paths once no deadline script depends on them.
+11. Delete compatibility JSON render-frame paths once no diagnostic script depends on them.
 
 ## References
 
