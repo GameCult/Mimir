@@ -27,6 +27,7 @@ Ownership:
 - Faust owns hot audio DSP and program stem generation.
 - OBS owns broadcast controls.
 - Python remains tooling, not the stream hot path.
+- `native/reservoir` is the first native crate. It owns shared-edge five-second sample retention for typed rings and is the seed of the Aquarium/Faust runtime boundary.
 
 Invariant: the five-second spatiotemporal reservoir is the live authority. Producers append, optimizers refine, Aquarium/Faust sample. No private history outlives the reservoir.
 

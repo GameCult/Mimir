@@ -33,6 +33,8 @@ invariants:
   - Local secrets remain untracked.
 
 accepted_design:
+  - `docs/perfect-machine.md` and `config/perfect-machine.example.json` define the native target: one five-second spatiotemporal reservoir, Aquarium GPU fusion/rendering, Faust DSP, OBS output controls, and LocalCastBridge tooling.
+  - `native/reservoir` is the first native Rust crate. It implements shared-edge reservoir rings so all sample types expire from the newest live sample rather than private source histories.
   - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
   - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
   - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.

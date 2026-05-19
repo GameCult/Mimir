@@ -5,6 +5,7 @@
 - Perfect Machine contract:
   - `docs/perfect-machine.md` defines the target native machine: one five-second spatiotemporal reservoir, Aquarium-owned dense visual fusion/material/brush rendering, Faust-owned hot audio DSP, OBS-owned broadcast controls, and LocalCastBridge-owned calibration/config/status.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir rings, native authorities, outputs, and the demotion of bridge scripts to tooling.
+  - `native/reservoir` is the first native Rust crate. It implements shared-edge five-second reservoir rings and proves that all rings expire against the newest sample, not private per-source clocks.
 - Repo-local persistence machinery.
 - First architecture map.
 - Example config for one video source plus two audio sources.
@@ -74,7 +75,7 @@
 
 ## Next
 
-1. Implement the native reservoir ABI declared by `config/perfect-machine.example.json`.
+1. Add a C ABI and Aquarium-facing binding around `native/reservoir`.
 2. Move camera ingest into native capture workers that append `camera_frame` samples to the reservoir.
 3. Move feature extraction, flow, cross-view matching, LOD reconciliation, and material fitting into Aquarium GPU compute.
 4. Move mic alignment, voice separation, room suppression, Ambisonic/HOA spatialization, and stem generation into Faust/native DSP.

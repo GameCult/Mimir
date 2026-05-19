@@ -147,3 +147,16 @@ Keep these as tooling:
 6. Let Faust consume reservoir audio blocks and source controls directly.
 7. Keep the old bridge only as a comparison and fallback surface.
 
+## Native Work Started
+
+`native/reservoir` is the first native crate. It implements the shared-edge
+five-second reservoir invariant:
+
+- append samples into named rings;
+- advance the reservoir edge from the newest sample;
+- evict every ring against the same edge;
+- query the latest valid sample per sensor.
+
+This is intentionally below Aquarium and Faust. The crate owns retention and
+sample-window semantics; Aquarium owns GPU interpretation and rendering, Faust
+owns DSP interpretation.
