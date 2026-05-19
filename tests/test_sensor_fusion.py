@@ -65,12 +65,11 @@ from localcast.diagnostics.render_math import (
 )
 from localcast.diagnostics.visual_producer import (
     LiveClapCalibrator,
-    leap_channel_motion_points,
     rgb_dense_camera,
     rgb_dense_stereo_splats,
     rgb_room_splats,
-    unpack_leap_packed_channels,
 )
+from localcast.sensor_fusion.leap_packed import leap_channel_motion_points, unpack_leap_packed_channels
 from localcast.sensor_fusion.reservoir_window import DEFAULT_RESERVOIR_NS, evidence_in_reservoir, render_points_in_reservoir
 from localcast.sensor_fusion.active_illumination import ActiveIlluminationController, IlluminationPulsePlan
 from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame, put_live_spatial_audio_frame
