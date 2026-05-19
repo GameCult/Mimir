@@ -14,7 +14,7 @@ not be owned by this Python file adapter.
 
 ```mermaid
 flowchart TD
-    A["diagnostic_live_sensor_fusion.py"] --> B["SensorRig.fuse"]
+    A["diagnostics.visual_producer"] --> B["SensorRig.fuse"]
     B --> C["RenderFramePacket"]
     C --> D["CultRenderFrame"]
     X["audio-state.msgpack"] --> Y["audio event overlay"]

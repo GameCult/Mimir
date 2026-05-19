@@ -136,9 +136,8 @@ Delete or quarantine these before adding new live features:
 4. Add the minimal Aquarium/Faust C ABI over the rolling buffer.
 5. Move any remaining useful Python packet/schema code into diagnostics or
    contract tests.
-6. Keep the Python visual producer named `scripts/diagnostic_live_sensor_fusion.py`
-   and compatibility adapters under `localcast.diagnostics` only until they can
-   be deleted.
+6. Keep the Python visual producer and compatibility adapters under
+   `localcast.diagnostics` only until they can be deleted.
 7. Build the Aquarium-owned Spout publisher. Do not revive the Python/OpenGL
    path.
 8. Move audio hot path into Faust/native DSP behind typed reservoir handles.

@@ -58,7 +58,9 @@ shape removes independent per-kind storage from the live foundation.
     OpenGL or OpenCV requirement.
   - The Python/OpenGL Spout publisher and launcher have been deleted.
     Production Spout2 publication belongs to Aquarium.
-  - `scripts/diagnostic_live_sensor_fusion.py` writes fused render frames into `calibration/runs/visual-state.msgpack`. This is diagnostic/migration code, not production runtime.
+  - `localcast.diagnostics.visual_producer` contains the old Python visual
+    producer code. It is diagnostic/migration code, not production runtime, and
+    no longer has a script launcher.
   - The live visual producer writes a multi-LOD scene cache with source kind and priority. Real Leap frames are promoted as the highest-priority visual timing/spatial evidence; Leap fallback frames remain lower-priority diagnostics.
   - Live clap calibration is wired into the visual producer. It keeps a rolling frame window from the Kiyo pair plus Leap, reads the live spatial audio frame for transient candidates, publishes `clap-events.msgpack`, injects clap calibration markers into the render frame, and writes clap evidence into the LOD cache. Kiyo stereo owns the current rough 3D solve; Leap owns the best visual timing witness until its geometric model is calibrated.
   - Clap peaks now update a per-camera clock sync model. The point-cloud builder can sample camera history buffers at `oracle_time - camera_offset` instead of using whichever frame arrived last.
@@ -67,7 +69,7 @@ shape removes independent per-kind storage from the live foundation.
   - The Spout/audio overlay boundary clamps stale visual packets to the current audio reservoir edge. If camera geometry ages out, it is dropped instead of being broadcast out of sync.
   - Live fallback-only RGB/Leap mode exists for deadline operation when OpenCV/MSMF/DirectShow reads block longer than the five-second reservoir. It keeps the reservoir and OBS output alive while real camera capture is moved to nonblocking ingress.
   - OpenCV camera reads now run behind `LatestFramePump` workers so blocking drivers cannot freeze the fusion hot loop. The live deadline command uses lower per-frame sample density (`--rgb-room-step 16 --leap-step 16 --points 64`) so the reservoir/TAA path stays fresh enough for Spout to render visual points inside the five-second budget.
-  - `localcast.sensor_fusion.chirp_pose` converts live phase-field delay meaning for Kiyo/PS Eye microphone sources into camera-body range constraints and per-camera pose-correction estimates. It can load camera-mic and speaker geometry from the audio-field profile, with the example profile used as the live fallback until measured local geometry exists. `scripts/diagnostic_live_sensor_fusion.py` injects those constraints as `camera-chirp:*` and `camera-pose-correction:*` render points plus `chirp-camera-pose` LOD evidence.
+  - `localcast.sensor_fusion.chirp_pose` converts live phase-field delay meaning for Kiyo/PS Eye microphone sources into camera-body range constraints and per-camera pose-correction estimates. It can load camera-mic and speaker geometry from the audio-field profile, with the example profile used as the live fallback until measured local geometry exists. The diagnostic visual producer can inject those constraints as `camera-chirp:*` and `camera-pose-correction:*` render points plus `chirp-camera-pose` LOD evidence.
   - Diagnostic render math still has a named `kiyo-mid-deru` virtual camera
     preset and point budget for CPU tests. Aquarium should own the production
     version of that policy.
@@ -107,7 +109,7 @@ shape removes independent per-kind storage from the live foundation.
 
 ## Next
 
-1. Delete remaining production dependence on `scripts/diagnostic_live_sensor_fusion.py`,
+1. Delete remaining production dependence on `localcast.diagnostics.visual_producer`,
    diagnostic JSON render-frame adapters, diagnostic JSON LOD adapters, and
    Python reservoir-window clipping.
 2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.

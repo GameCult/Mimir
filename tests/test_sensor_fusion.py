@@ -63,7 +63,7 @@ from localcast.diagnostics.render_math import (
     point_prefix_counts,
     rasterize_frame_rgba,
 )
-from scripts.diagnostic_live_sensor_fusion import (
+from localcast.diagnostics.visual_producer import (
     DEFAULT_RESERVOIR_NS,
     LiveClapCalibrator,
     evidence_in_reservoir,

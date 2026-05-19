@@ -47,7 +47,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
 The useful next work is foundation surgery, not hardware feature expansion:
 
 - bind Aquarium/Faust/native workers to the rolling-buffer `LocalcastRuntime`
-- delete production dependence on `scripts/diagnostic_live_sensor_fusion.py`
+- delete production dependence on `localcast.diagnostics.visual_producer`
   and diagnostic file adapters
 - bind Aquarium/Faust against the native runtime instead of reviving the deleted
   Python/OpenGL publisher

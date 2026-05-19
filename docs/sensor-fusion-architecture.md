@@ -196,7 +196,10 @@ The Spout/audio overlay applies the same rule at the consumer boundary. If the v
 1. Capture ChArUco intrinsics for each camera with `scripts/charuco_calibration.py calibrate`.
 2. Capture fixed-board observations from every camera and solve shared extrinsics with `scripts/solve_common_camera_space.py`.
 3. Use `scripts/triangulate_surface_features.py` on calibrated image pairs to prove real cross-view surface tracks before promoting the matcher into the live producer.
-4. Replace the synthetic stochastic transient observations in `scripts/diagnostic_live_sensor_fusion.py` with real native/Aquarium ORB/flow observations from PS3 Eye/Kiyo frames, then delete the Python diagnostic producer.
+4. Replace the synthetic stochastic transient observations in
+   `localcast.diagnostics.visual_producer` with real native/Aquarium ORB/flow
+   observations from PS3 Eye/Kiyo frames, then delete the Python diagnostic
+   producer.
 5. Move dense matching and LOD reconciliation from CPU block search/JSON to GPU-resident stereo/flow and compute-shader cache reduction so the million-sample target is not murdered by Python loops.
 6. If a Tuya light is available on the local network, run `scripts/pulse_tuya_light.py` with its local key and align pulse timestamps against camera brightness response.
 7. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
