@@ -174,6 +174,12 @@ LocalcastProducer *localcast_producer_create(
     uint64_t sensor_id_hash,
     uint64_t initial_sequence
 );
+LocalcastProducer *localcast_producer_create_for_source(
+    uint32_t sample_kind,
+    const uint8_t *source_id_bytes,
+    size_t source_id_byte_len,
+    uint64_t initial_sequence
+);
 void localcast_producer_destroy(LocalcastProducer *producer);
 uint64_t localcast_producer_next_sequence(const LocalcastProducer *producer);
 

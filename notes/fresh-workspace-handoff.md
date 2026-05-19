@@ -35,6 +35,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   capture workers.
 - `localcast_hash_source_id` owns stable FNV-1a source-id hashing for native
   producer creation.
+- `localcast_producer_create_for_source` is the preferred producer constructor
+  for adapters with source-id bytes.
 - `LocalcastAudioBlockDescriptor` is the first typed audio payload descriptor:
   caller-owned float32 interleaved audio blocks cross the ABI by descriptor
   pointer, while the reservoir still owns only timing/retention metadata.

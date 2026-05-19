@@ -751,6 +751,17 @@ pub extern "C" fn localcast_producer_create(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_create_for_source(
+    sample_kind: u32,
+    source_id_bytes: *const u8,
+    source_id_byte_len: usize,
+    initial_sequence: u64,
+) -> *mut LocalcastProducer {
+    let hash = localcast_hash_source_id(source_id_bytes, source_id_byte_len);
+    localcast_producer_create(sample_kind, hash, initial_sequence)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn localcast_producer_destroy(ptr: *mut LocalcastProducer) {
     if ptr.is_null() {
         return;
@@ -1378,6 +1389,8 @@ mod tests {
     fn producer_rejects_unknown_kind_null_runtime_and_empty_source() {
         assert!(localcast_producer_create(99, 1, 0).is_null());
         assert!(localcast_producer_create(0, 0, 0).is_null());
+        assert!(localcast_producer_create_for_source(0, std::ptr::null(), 4, 0).is_null());
+        assert!(localcast_producer_create_for_source(0, b"".as_ptr(), 0, 0).is_null());
         assert_eq!(0, localcast_producer_next_sequence(std::ptr::null()));
 
         let producer = localcast_producer_create(0, 1, 0);
@@ -1400,6 +1413,34 @@ mod tests {
             std::ptr::null_mut(),
         ));
         assert_eq!(0, localcast_producer_next_sequence(producer));
+
+        localcast_producer_destroy(producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn producer_can_be_created_from_source_id_bytes() {
+        let source_id = b"kiyo-primary";
+        let producer = localcast_producer_create_for_source(
+            SampleKind::CameraFrame.id(),
+            source_id.as_ptr(),
+            source_id.len(),
+            5,
+        );
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let mut sample = handle(0, 0, 0, 0, 0);
+
+        assert!(!producer.is_null());
+        assert!(localcast_producer_push(
+            producer,
+            runtime,
+            1_000,
+            1_010,
+            90,
+            &mut sample,
+        ));
+        assert_eq!(hash_source_id(source_id), sample.sensor_id_hash);
+        assert_eq!(5, sample.sequence);
 
         localcast_producer_destroy(producer);
         localcast_runtime_destroy(runtime);

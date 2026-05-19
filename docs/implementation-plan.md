@@ -27,6 +27,8 @@ shape removes independent per-kind storage from the live foundation.
     The ABI now exposes total rolling-buffer length and typed-view length.
   - `localcast_hash_source_id` owns stable FNV-1a source hashing for native
     producers; empty/null source ids produce zero and are rejected.
+  - `localcast_producer_create_for_source` is the preferred producer constructor
+    for adapters because it keeps source-id hashing inside the native ABI.
   - `LocalcastRuntime` wraps the current reservoir with typed native producer
     calls and total/typed read functions. It is the intended live spine for
     Aquarium/Faust bindings.

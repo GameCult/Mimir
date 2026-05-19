@@ -58,6 +58,8 @@ accepted_design:
     before hardware adapters append live sample handles.
   - `localcast_hash_source_id` owns stable native source-id hashing so capture
     workers do not each invent incompatible sensor hashes.
+  - `localcast_producer_create_for_source` keeps the preferred adapter path from
+    bypassing native source-id hashing.
   - `LocalcastAudioBlockDescriptor` is the first typed payload descriptor for
     caller-owned float32 interleaved audio blocks; the reservoir stores only the
     descriptor pointer as a payload handle and does not own DSP memory.
