@@ -7,7 +7,7 @@ import numpy as np
 from scipy.io import wavfile
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -64,7 +64,7 @@ def source_block(samples: np.ndarray | None, sample_rate: int, start_sample: int
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Publish live AmbiX spatial audio blocks into typed CultCache state for Aquarium/Faust.")
+    parser = argparse.ArgumentParser(description="Diagnostic replay of AmbiX spatial audio blocks into typed CultCache state.")
     parser.add_argument("--input", type=Path, default=ROOT / "calibration" / "runs" / "audio-full-sync-20260518-165751" / "field-foa-ambix.wav")
     parser.add_argument("--cache", type=Path, default=ROOT / "calibration" / "runs" / "audio-state.msgpack")
     parser.add_argument("--status-cache", type=Path, default=ROOT / "calibration" / "runs" / "audio-stream-status.msgpack")

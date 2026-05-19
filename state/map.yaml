@@ -169,11 +169,11 @@ research:
       closes the next loop by feeding that confidence state into
       ActiveProbeOptimizer and emitting bounded chirplet WAVs/manifests, with
       optional playback. Probe artifacts rotate through fixed slots and the
-      manifest rotates at a byte cap. The old Python phase/live/Faust audio
-      publishers now live under `localcast.diagnostics.*` and are diagnostic
-      replay or experiment paths only. Production mic, loopback, and phase
-      ingest belongs in native capture workers that append typed sample handles
-      through `LocalcastProducer`.
+      manifest rotates at a byte cap. The old Python AmbiX, phase, live-local,
+      and Faust audio publishers now live under `localcast.diagnostics.*` and
+      are diagnostic replay or experiment paths only. Production mic, loopback,
+      phase, stem, and spatial-bed ingest belongs in native/Faust workers that
+      append typed sample handles through `LocalcastProducer`.
       This is learned audio-field state, not a phase display.
   faust_voice_separation:
     summary: docs/aquarium-spatial-audio.md

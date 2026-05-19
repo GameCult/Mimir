@@ -51,6 +51,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   and reusable mic-profile/probe-band helpers now live in `audio_field`.
   Production audio ingest must use native capture workers and
   `LocalcastProducer`.
+- The AmbiX spatial-audio Python publisher is also quarantined as
+  `localcast.diagnostics.spatial_audio`.
 - Neighbor sender is deployed at `C:\Meta\LocalCastBridge` on `192.168.1.84`.
 - Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
 - Receiver OBS scene collection has `Neighbor PC - Video`, `Neighbor PC - Focusrite`, and `Neighbor PC - System Audio` Media Sources added.

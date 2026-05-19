@@ -63,7 +63,7 @@ Mic-field document type:
 AmbiX replay smoke command:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\stream_spatial_audio.py --input .\calibration\runs\audio-full-sync-20260518-165751\field-foa-ambix.wav --loop --duration 5 --smoke-readback
+.\.venv\Scripts\python.exe -m localcast.diagnostics.spatial_audio --input .\calibration\runs\audio-full-sync-20260518-165751\field-foa-ambix.wav --loop --duration 5 --smoke-readback
 ```
 
 Faust mic-field replay smoke command:

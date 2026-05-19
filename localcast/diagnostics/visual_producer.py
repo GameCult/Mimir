@@ -1130,7 +1130,7 @@ def leap_channel_motion_points(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Write live sensor-fusion render frames into typed CultCache state.")
+    parser = argparse.ArgumentParser(description="Diagnostic replay of sensor-fusion render frames into typed CultCache state.")
     parser.add_argument("--cache", default=str(ROOT / "calibration" / "runs" / "visual-state.msgpack"))
     parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--points", type=int, default=256)

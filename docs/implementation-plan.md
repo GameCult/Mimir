@@ -106,8 +106,10 @@ shape removes independent per-kind storage from the live foundation.
 - The scripts assume Windows sender and OBS receiver on the same LAN.
 - The Python visual producer is a diagnostic/migration fossil only. The OpenGL
   Spout sink has been deleted.
-- Python audio publishers are diagnostic fossils only. The live PowerShell
-  launchers for phase-field and Faust mic-field publication have been deleted.
+- Python audio publishers are diagnostic fossils only. The AmbiX, phase-field,
+  live-local-capture, and Faust mic-field publisher modules live under
+  `localcast.diagnostics.*`; the live PowerShell launchers for phase-field and
+  Faust mic-field publication have been deleted.
 
 ## Next
 
