@@ -176,8 +176,8 @@ in `native/reservoir/include/localcast_reservoir.h`:
 - query total length and typed-view length;
 - read samples by total rolling-buffer index or typed-view index;
 - query the latest sample for a sensor hash.
-- reject diagnostic/probe/fallback samples at the live reservoir boundary via
-  sample provenance flags.
+- reject diagnostic/probe/fallback and unknown-flagged samples at the live
+  reservoir boundary via sample provenance flags.
 - create/destroy an opaque `LocalcastRuntime`;
 - append typed camera/audio/phase/event/render handles through producer calls;
 - query a native runtime status struct with shared edge, window start, total

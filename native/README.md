@@ -20,8 +20,8 @@ The reservoir ABI is intentionally small:
 
 - `LocalcastReservoir` is opaque.
 - `LocalcastSampleHandle` is sample metadata plus a `payload_handle` and
-  provenance flags. Samples marked `LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC` are
-  rejected by the live reservoir.
+  provenance flags. Live samples must have `flags == 0`; diagnostic or unknown
+  flagged samples are rejected by the live reservoir.
 - Sample kind ids match the Perfect Machine reservoir views:
   camera frame, camera feature, scene ray, surface claim, material claim, audio
   block, phase claim, event claim, and render packet.

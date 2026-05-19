@@ -261,7 +261,7 @@ fn sample_from_handle(
 }
 
 fn is_live_sample(sample: LocalcastSampleHandle) -> bool {
-    sample.flags & LOCALCAST_SAMPLE_FLAG_DIAGNOSTIC == 0
+    sample.flags == 0
 }
 
 #[unsafe(no_mangle)]
@@ -835,6 +835,18 @@ mod tests {
     }
 
     #[test]
+    fn c_abi_rejects_unknown_flagged_samples_from_live_reservoir() {
+        let reservoir = localcast_reservoir_create(DEFAULT_RESERVOIR_NS);
+        let mut sample = handle(66, 10, 11, 0, 666);
+        sample.flags = 1 << 30;
+
+        assert!(!localcast_reservoir_push(reservoir, 0, sample));
+        assert_eq!(0, localcast_reservoir_len(reservoir));
+
+        localcast_reservoir_destroy(reservoir);
+    }
+
+    #[test]
     fn c_abi_rejects_nulls_and_unknown_sample_kinds() {
         let sample = handle(1, 2, 3, 4, 5);
         let mut out = sample;
@@ -915,6 +927,21 @@ mod tests {
         assert!(localcast_runtime_status(runtime, &mut status));
         assert_eq!(0, status.total_sample_count);
         assert_eq!(0, status.camera_frame_count);
+
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn runtime_spine_rejects_unknown_flagged_samples() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let mut sample = handle(1, 2, 3, 4, 5);
+        sample.flags = 1 << 30;
+
+        assert!(!localcast_runtime_push_camera_frame(runtime, sample));
+
+        let mut status = LocalcastRuntimeStatus::default();
+        assert!(localcast_runtime_status(runtime, &mut status));
+        assert_eq!(0, status.total_sample_count);
 
         localcast_runtime_destroy(runtime);
     }
