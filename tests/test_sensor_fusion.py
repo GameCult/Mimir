@@ -63,9 +63,7 @@ from localcast.diagnostics.render_math import (
     point_prefix_counts,
     rasterize_frame_rgba,
 )
-from localcast.diagnostics.visual_producer import (
-    LiveClapCalibrator,
-)
+from localcast.diagnostics.clap_calibrator import LiveClapCalibrator
 from localcast.sensor_fusion.leap_packed import leap_channel_motion_points, unpack_leap_packed_channels
 from localcast.sensor_fusion.rgb_reference import rgb_dense_camera, rgb_dense_stereo_splats, rgb_room_splats
 from localcast.sensor_fusion.reservoir_window import DEFAULT_RESERVOIR_NS, evidence_in_reservoir, render_points_in_reservoir
