@@ -21,6 +21,7 @@ from audio_field.cultcache_audio import (
     put_live_mic_field_frame,
     put_live_spatial_audio_frame,
 )
+from scripts.stream_live_audio_field import local_microphones, source_id_for_microphone
 
 
 class SpatialAudioCultCacheTests(unittest.TestCase):
@@ -104,6 +105,20 @@ class SpatialAudioCultCacheTests(unittest.TestCase):
         self.assertEqual("local-loopback", loaded.reference_id)
         self.assertEqual(12.5, loaded.sources[0]["delaySamples"])
         self.assertFalse(loaded.needs_active_probe)
+
+    def test_live_audio_field_maps_profile_mics_to_cache_sources(self):
+        profile = {
+            "microphones": [
+                {"id": "mic_focusrite_local", "machine": "local"},
+                {"id": "mic_kiyo_left", "machine": "local"},
+                {"id": "mic_focusrite_neighbor", "machine": "neighbor"},
+                {"id": "unknown", "machine": "local"},
+            ]
+        }
+
+        mics = local_microphones(profile, "local")
+
+        self.assertEqual(("host-focusrite", "kiyo-0"), tuple(source_id_for_microphone(mic) for mic in mics))
 
     def test_live_mic_field_round_trip_through_cultcache(self):
         block = np.arange(48, dtype=np.float32).reshape(8, 6) / 48.0

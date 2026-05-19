@@ -106,8 +106,9 @@ class CameraClockSyncModel:
 
 
 class TimestampedFrameHistory:
-    def __init__(self, max_frames: int = 120) -> None:
+    def __init__(self, max_frames: int = 120, max_age_ns: int | None = None) -> None:
         self.max_frames = max(2, int(max_frames))
+        self.max_age_ns = None if max_age_ns is None else max(0, int(max_age_ns))
         self._frames: dict[str, list[TimestampedFrame]] = {}
 
     def add(self, frame: TimestampedFrame) -> None:
@@ -117,6 +118,7 @@ class TimestampedFrameHistory:
         bucket.append(frame)
         bucket.sort(key=lambda item: item.timestamp_ns)
         del bucket[:-self.max_frames]
+        self._expire_by_shared_latest()
 
     def add_many(self, frames: Mapping[str, TimestampedFrame]) -> None:
         for frame in frames.values():
@@ -131,6 +133,29 @@ class TimestampedFrameHistory:
             return None
         target = int(raw_time_ns)
         return min(frames, key=lambda frame: abs(frame.timestamp_ns - target))
+
+    def latest_timestamp_ns(self) -> int | None:
+        latest = None
+        for frames in self._frames.values():
+            if frames:
+                timestamp = frames[-1].timestamp_ns
+                latest = timestamp if latest is None else max(latest, timestamp)
+        return latest
+
+    def _expire_by_shared_latest(self) -> None:
+        if self.max_age_ns is None:
+            return
+        latest = self.latest_timestamp_ns()
+        if latest is None:
+            return
+        cutoff = latest - self.max_age_ns
+        empty: list[str] = []
+        for sensor_id, frames in self._frames.items():
+            self._frames[sensor_id] = [frame for frame in frames if frame.timestamp_ns >= cutoff]
+            if not self._frames[sensor_id]:
+                empty.append(sensor_id)
+        for sensor_id in empty:
+            del self._frames[sensor_id]
 
 
 def detect_audio_transients(

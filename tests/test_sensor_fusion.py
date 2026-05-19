@@ -17,6 +17,7 @@ from localcast.sensor_fusion import (
     ClapDetectorConfig,
     DenseStereoConfig,
     FusionConfig,
+    LODEvidencePoint,
     Observation2D,
     PointCloud,
     RenderBridgeConfig,
@@ -56,7 +57,9 @@ from localcast.sensor_fusion import (
 )
 from localcast.sensor_fusion.spout_output import rasterize_frame_rgba
 from scripts.live_sensor_fusion import (
+    DEFAULT_RESERVOIR_NS,
     LiveClapCalibrator,
+    evidence_in_reservoir,
     leap_channel_motion_points,
     rgb_dense_camera,
     rgb_dense_stereo_splats,
@@ -599,6 +602,32 @@ class SensorFusionTests(unittest.TestCase):
         self.assertIsNotNone(selected)
         self.assertEqual(900, selected.timestamp_ns)
         self.assertEqual(100, sync.offset_ns("cam-a"))
+
+    def test_timestamp_history_expires_from_shared_five_second_edge(self):
+        history = TimestampedFrameHistory(max_frames=20, max_age_ns=DEFAULT_RESERVOIR_NS)
+        history.add(TimestampedFrame("cam-a", 1_000_000_000, np.zeros((1, 1), dtype=np.float32)))
+        history.add(TimestampedFrame("cam-b", 4_000_000_000, np.ones((1, 1), dtype=np.float32)))
+        history.add(TimestampedFrame("cam-a", 7_100_000_000, np.full((1, 1), 2.0, dtype=np.float32)))
+
+        frames = history.frames_by_sensor()
+
+        self.assertNotIn(1_000_000_000, [frame.timestamp_ns for frame in frames["cam-a"]])
+        self.assertEqual(7_100_000_000, history.latest_timestamp_ns())
+        self.assertIsNotNone(history.nearest("cam-b", 4_000_000_000))
+
+    def test_lod_evidence_is_clipped_to_visual_reservoir(self):
+        evidence = (
+            LODEvidencePoint("old", np.zeros(3), 1.0, 9, 1.0, "rgb"),
+            LODEvidencePoint("fresh", np.ones(3), 1.0, DEFAULT_RESERVOIR_NS + 10, 1.0, "rgb"),
+        )
+
+        kept = evidence_in_reservoir(
+            evidence,
+            latest_timestamp_ns=DEFAULT_RESERVOIR_NS + 10,
+            reservoir_ns=DEFAULT_RESERVOIR_NS,
+        )
+
+        self.assertEqual(("fresh",), tuple(item.stable_key for item in kept))
 
     def test_chirp_pose_constraints_map_camera_mics_to_range_residuals(self):
         constraints = constraints_from_phase_sources(

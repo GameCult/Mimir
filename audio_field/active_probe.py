@@ -44,6 +44,8 @@ class ActiveConfidenceMaintainer:
         pattern: str = "single",
         harmonic_root_hz: float = 440.0,
         harmonic_voices: int = 24,
+        max_artifacts: int = 512,
+        manifest_max_bytes: int = 1_000_000,
     ):
         self.optimizer = optimizer
         self.sample_rate = int(sample_rate)
@@ -56,10 +58,14 @@ class ActiveConfidenceMaintainer:
         self.pattern = str(pattern)
         self.harmonic_root_hz = float(harmonic_root_hz)
         self.harmonic_voices = int(harmonic_voices)
+        self.max_artifacts = int(max_artifacts)
+        self.manifest_max_bytes = int(manifest_max_bytes)
         if self.channels <= 0:
             raise ValueError("channels must be positive")
         if self.channel < 0 or self.channel >= self.channels:
             raise ValueError("channel must be inside output channel count")
+        if self.max_artifacts <= 0:
+            raise ValueError("max_artifacts must be positive")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def update(self, meaning: PhaseFieldMeaning, reference_block: np.ndarray, *, force_masked: bool = False) -> EmittedProbe | None:
@@ -80,7 +86,8 @@ class ActiveConfidenceMaintainer:
             harmonic_root_hz=self.harmonic_root_hz,
             harmonic_voices=self.harmonic_voices,
         )
-        path = self.output_dir / f"probe-{meaning.frame_id:08d}-{request.source_id}.wav"
+        slot = meaning.frame_id % self.max_artifacts
+        path = self.output_dir / f"probe-slot-{slot:04d}-{request.source_id}.wav"
         wavfile.write(path, self.sample_rate, waveform.astype(np.float32))
         emitted = EmittedProbe(
             request=request,
@@ -92,7 +99,11 @@ class ActiveConfidenceMaintainer:
             path=path,
             emitted_monotonic_ns=time.monotonic_ns(),
         )
-        append_probe_manifest(self.output_dir / "active-probes.jsonl", emitted)
+        append_probe_manifest(
+            self.output_dir / "active-probes.jsonl",
+            emitted,
+            max_bytes=self.manifest_max_bytes,
+        )
         return emitted
 
 
@@ -239,7 +250,7 @@ def db_to_amp(db: float) -> float:
     return float(math.pow(10.0, float(db) / 20.0))
 
 
-def append_probe_manifest(path: Path, emitted: EmittedProbe) -> None:
+def append_probe_manifest(path: Path, emitted: EmittedProbe, *, max_bytes: int = 1_000_000) -> None:
     row = {
         "frameIndex": emitted.request.frame_index,
         "sourceId": emitted.request.source_id,
@@ -254,5 +265,8 @@ def append_probe_manifest(path: Path, emitted: EmittedProbe) -> None:
         "path": str(emitted.path),
         "emittedMonotonicNs": emitted.emitted_monotonic_ns,
     }
+    if path.exists() and path.stat().st_size > int(max_bytes):
+        previous = path.with_name(f"{path.stem}.previous{path.suffix}")
+        path.replace(previous)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, sort_keys=True) + "\n")

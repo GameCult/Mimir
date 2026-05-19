@@ -48,6 +48,9 @@ from localcast.sensor_fusion.camera_control import AdaptiveCameraController, Ope
 from audio_field.cultcache_audio import frame_to_numpy, get_live_audio_phase_field, get_live_spatial_audio_frame
 
 
+DEFAULT_RESERVOIR_NS = 5_000_000_000
+
+
 def acquire_runtime_lock(path: Path) -> BinaryIO | None:
     import msvcrt
 
@@ -63,6 +66,16 @@ def acquire_runtime_lock(path: Path) -> BinaryIO | None:
         handle.close()
         return None
     return handle
+
+
+def reservoir_window_ns(latest_timestamp_ns: int, reservoir_ns: int) -> tuple[int, int]:
+    end_ns = int(latest_timestamp_ns)
+    return end_ns - int(reservoir_ns), end_ns
+
+
+def evidence_in_reservoir(evidence: tuple, *, latest_timestamp_ns: int, reservoir_ns: int) -> tuple:
+    start_ns, end_ns = reservoir_window_ns(latest_timestamp_ns, reservoir_ns)
+    return tuple(item for item in evidence if start_ns <= int(item.timestamp_ns) <= end_ns)
 
 
 def camera(sensor_id: str, x: float) -> CameraModel:
@@ -278,6 +291,7 @@ class RgbSplatSampler:
         enable_cpu_dense_stereo: bool,
         adaptive_controls: bool,
         fallback_dir: Path,
+        reservoir_ns: int = DEFAULT_RESERVOIR_NS,
     ) -> None:
         self.api = api
         self.primary_index = primary_index
@@ -293,7 +307,7 @@ class RgbSplatSampler:
         self._captures: dict[int, object] = {}
         self._frames: dict[int, np.ndarray] = {}
         self._timestamped_frames: dict[str, TimestampedFrame] = {}
-        self._history = TimestampedFrameHistory(max_frames=96)
+        self._history = TimestampedFrameHistory(max_frames=720, max_age_ns=reservoir_ns)
         self._controllers: dict[int, AdaptiveCameraController] = {}
         self._setting_ports: dict[int, OpenCvCameraSettingPort] = {}
 
@@ -496,12 +510,13 @@ class LiveClapCalibrator:
         clap_cache: Path,
         camera_width: int,
         camera_height: int,
-        max_frames_per_sensor: int = 24,
+        max_frames_per_sensor: int = 720,
+        reservoir_ns: int = DEFAULT_RESERVOIR_NS,
     ) -> None:
         self.audio_cache = audio_cache
         self.clap_cache = clap_cache
         self.max_frames_per_sensor = max(2, int(max_frames_per_sensor))
-        self.history = TimestampedFrameHistory(max_frames=self.max_frames_per_sensor)
+        self.history = TimestampedFrameHistory(max_frames=self.max_frames_per_sensor, max_age_ns=reservoir_ns)
         self.sync_model = CameraClockSyncModel()
         self.last_audio_frame_id: int | None = None
         self.last_audio_time_ns: int | None = None
@@ -510,7 +525,7 @@ class LiveClapCalibrator:
         right = rgb_dense_camera("kiyo-secondary", 0.18, camera_width, camera_height)
         self.rig = SensorRig(
             cameras={left.sensor_id: left, right.sensor_id: right},
-            config=FusionConfig(max_pair_dt_ns=80_000_000, max_reprojection_error_px=80.0, cache_ttl_ns=1_000_000_000),
+            config=FusionConfig(max_pair_dt_ns=80_000_000, max_reprojection_error_px=80.0, cache_ttl_ns=reservoir_ns),
         )
         self.config = ClapDetectorConfig(
             audio_window_samples=96,
@@ -1132,13 +1147,15 @@ def main() -> None:
     parser.add_argument("--no-clap-calibration", action="store_true")
     parser.add_argument("--no-chirp-pose", action="store_true")
     parser.add_argument("--no-stochastic-transients", action="store_true")
+    parser.add_argument("--reservoir-seconds", type=float, default=5.0)
     args = parser.parse_args()
+    reservoir_ns = max(1, int(round(args.reservoir_seconds * 1_000_000_000)))
 
     left = camera("ps3eye_left", -0.25)
     right = camera("ps3eye_right", 0.25)
     rig = SensorRig(
         cameras={left.sensor_id: left, right.sensor_id: right},
-        config=FusionConfig(max_pair_dt_ns=30_000_000, max_reprojection_error_px=0.01, cache_ttl_ns=500_000_000),
+        config=FusionConfig(max_pair_dt_ns=30_000_000, max_reprojection_error_px=0.01, cache_ttl_ns=reservoir_ns),
     )
     render_config = RenderBridgeConfig(default_point_radius_m=0.035)
     interval = 1.0 / max(1.0, args.fps)
@@ -1161,6 +1178,7 @@ def main() -> None:
         enable_cpu_dense_stereo=args.cpu_dense_stereo,
         adaptive_controls=not args.no_adaptive_camera_controls,
         fallback_dir=ROOT / "calibration" / "runs",
+        reservoir_ns=reservoir_ns,
     )
     leap_sampler = None if args.no_leap else LeapPackedMotionSampler(
         api=args.leap_api,
@@ -1176,6 +1194,7 @@ def main() -> None:
         clap_cache=Path(args.clap_cache),
         camera_width=args.rgb_width,
         camera_height=args.rgb_height,
+        reservoir_ns=reservoir_ns,
     )
     audio_profile = Path(args.audio_profile)
     if not audio_profile.exists() and audio_profile.name == "audio-field.json":
@@ -1236,13 +1255,19 @@ def main() -> None:
             stochastic_points = transient_match_render_points(transient_matches, timestamp_ns)
             clap_points = () if clap_calibrator is None else clap_calibrator.update(timestamp_ns)
             chirp_pose_points = () if chirp_pose_mapper is None else chirp_pose_mapper.update(timestamp_ns)
-            multilod_cache_from_evidence(
+            evidence = evidence_in_reservoir(
                 evidence_from_render_points(leap_points, source_kind=leap_source_kind, source_priority=leap_source_priority)
                 + evidence_from_render_points(rgb_points, source_kind="rgb-surface", source_priority=1.4)
                 + evidence_from_render_points(clap_points, source_kind="clap-calibration", source_priority=2.4)
                 + evidence_from_render_points(chirp_pose_points, source_kind="chirp-camera-pose", source_priority=1.8)
                 + evidence_from_fusion_items(transient_matches, source_kind="stochastic-transient", source_priority=1.2)
                 + evidence_from_fusion_items(result.points, source_kind="synthetic-fusion", source_priority=0.8),
+                latest_timestamp_ns=timestamp_ns,
+                reservoir_ns=reservoir_ns,
+            )
+            source_time_min_ns, source_time_max_ns = reservoir_window_ns(timestamp_ns, reservoir_ns)
+            multilod_cache_from_evidence(
+                evidence,
                 levels=(0.01, 0.04, 0.16, 0.64),
                 created_monotonic_ns=time.monotonic_ns(),
             ).write_json(lod_cache_path)
@@ -1250,8 +1275,8 @@ def main() -> None:
                 schema=frame.schema,
                 frame_id=frame.frame_id,
                 created_monotonic_ns=frame.created_monotonic_ns,
-                source_time_min_ns=frame.source_time_min_ns,
-                source_time_max_ns=timestamp_ns,
+                source_time_min_ns=source_time_min_ns,
+                source_time_max_ns=source_time_max_ns,
                 present_time_ns=timestamp_ns + render_config.visual_delay_ns,
                 audio_alignment_time_ns=timestamp_ns + render_config.audio_alignment_delay_ns,
                 spout_sender_name=frame.spout_sender_name,

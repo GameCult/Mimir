@@ -24,6 +24,7 @@ deadline scaffolding, but it is not enough for detailed reconstruction.
 - Fusion core is pure and testable: calibrated camera models plus 2D observations in, 3D points/confidence out.
 - Point clouds and later brush/splat packets are cached render lowerings, not the canonical scene.
 - A missing high-detail update renders stale-but-bounded state until better evidence arrives.
+- The live temporal reservoir is five seconds wide, measured backward from the newest shared sample. Every camera, Leap, audio-derived calibration point, and LOD claim must either land inside that window or leave the live cache.
 
 ## Intended Change
 
@@ -96,9 +97,9 @@ sensor observation
 -> OBS source
 ```
 
-The cache is not a bucket. `TrackCache` has a TTL and confidence update rule so the system can buffer and converge without pretending stale points are fresh. Later GPU buffers should mirror this shape: observation SoA, track SoA, brush packet SoA.
+The cache is not a bucket. `TrackCache` has a TTL and confidence update rule so the system can buffer and converge without pretending stale points are fresh. The live frame reservoir is explicitly five seconds wide: frame history expires from the newest shared sample, LOD evidence is clipped to that same interval, and each `RenderFramePacket` reports the exact source window. Later GPU buffers should mirror this shape: observation SoA, track SoA, material/BRDF estimate SoA, brush packet SoA.
 
-`visual-lod-cache.json` is the current CPU-authored shape for the next compute pass. It is not the final renderer. It groups stochastic/fused scene claims into multiple world-space voxel sizes, carrying center, radius, confidence, count, and source-time bounds so an Aquarium compute shader can reconcile fine and coarse claims without pulling the whole observation history through the renderer.
+`visual-lod-cache.json` is the current CPU-authored shape for the next compute pass. It is not the final renderer. It groups stochastic/fused scene claims into multiple world-space voxel sizes, carrying center, radius, confidence, count, and source-time bounds so an Aquarium compute shader can reconcile fine and coarse claims without pulling anything older than the reservoir through the renderer.
 
 ## Test Boundaries
 
@@ -168,6 +169,8 @@ Each render frame carries:
 - `audio_alignment_time_ns`: the corresponding ambisonic output time.
 
 That lets the final stream compositor buffer point-cloud visuals until they align with the bounded audio-field cache. The renderer may show a slightly older world if the packet is coherent and labeled. It may not quietly mix fresh audio with stale visual geometry and call that sync.
+
+Current live deadline rule: `source_time_max_ns - source_time_min_ns` is five seconds. Late-arriving samples can fill the reservoir while they are inside that window; anything older is evidence for offline calibration, not the live program surface.
 
 ## Next Cut
 

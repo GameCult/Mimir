@@ -139,11 +139,18 @@ research:
       weights, correction energy, and active-probe need. `audio_field.active_probe`
       closes the next loop by feeding that confidence state into
       ActiveProbeOptimizer and emitting bounded chirplet WAVs/manifests, with
-      optional default-device playback. The live launcher now uses dense
-      harmonic near-ultrasonic probe textures so aliases have a musical
-      relationship instead of arbitrary squeal. `audio-phase-field-status.json`
+      optional playback. The live launcher now uses dense harmonic
+      near-ultrasonic probe textures so aliases have a musical relationship
+      instead of arbitrary squeal. Probe artifacts rotate through fixed slots
+      and the manifest rotates at a byte cap. `scripts/stream_live_audio_field.py`
+      is the current live local capture owner: it writes mic-field and
+      phase-field CultCache documents from visible local mics plus Scarlett
+      loopback, sends probes through the selected Scarlett output, resamples
+      probe playback when that output is 44.1 kHz, and reports missing
+      distributed channels as explicit placeholders. `audio-phase-field-status.json`
       declares input mode and whether active probes are closed-loop; current
-      deadline mode is explicit `wav-replay` with open-loop probe playback.
+      deadline mode is `live-local-capture` with closed-loop probe capture when
+      Scarlett loopback is available.
       This is learned audio-field state, not a phase display.
   faust_voice_separation:
     summary: docs/aquarium-spatial-audio.md
@@ -183,7 +190,11 @@ research:
       calibration; they do not own image geometry. The Spout point-budget policy
       pins calibration and cross-modal constraints before spending adaptive LOD
       budget on stable high-priority surfaces and frame-rotated samples, and
-      its JSON heartbeat reports budgeted point prefix counts.
+      its JSON heartbeat reports budgeted point prefix counts. The live fusion
+      producer now has an explicit five-second spatiotemporal reservoir:
+      RGB/Leap frame history expires from the newest shared sample, LOD evidence
+      is clipped to the same window, and each RenderFramePacket declares that
+      source window for Aquarium/OBS synchronization.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >

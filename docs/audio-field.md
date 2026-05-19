@@ -138,7 +138,15 @@ Close the confidence loop by letting the phase-field stream schedule strategic a
 .\.venv\Scripts\python.exe .\scripts\stream_phase_field.py --field .\calibration\runs\<run-folder>\field-program-cleaned.wav --reference .\calibration\runs\<run-folder>\ground_truth_loopback.wav --cache .\calibration\runs\audio-phase-field.msgpack --maintain-confidence --ultrasonic-probes --play-probes
 ```
 
-`--maintain-confidence` converts low-confidence phase-field state into `ActiveProbeOptimizer` requests, writes each emitted chirplet to `calibration/runs/active-probes`, and appends `active-probes.jsonl`. `--play-probes` sends the emitted chirplet to the default output device through `sounddevice`; omit it for dry-run scheduling. `--ultrasonic-probes` uses the highest safe band under Nyquist, roughly `18.5-22 kHz` at 48 kHz. This can fail silently in the physical world if the speaker, mic, driver, or resampler refuses to carry that band; the confidence feedback is the judge, not the command line's self-esteem.
+`--maintain-confidence` converts low-confidence phase-field state into `ActiveProbeOptimizer` requests, writes emitted chirplets under `calibration/runs/active-probes`, and appends `active-probes.jsonl`. Probe files rotate through fixed slots and the manifest rotates at a byte cap, because a calibration loop that creates infinite tiny WAV files is just a storage leak with a physics degree. `--play-probes` sends the emitted chirplet to the selected output device through `sounddevice`; omit it for dry-run scheduling. `--ultrasonic-probes` uses the highest safe band under Nyquist, roughly `18.5-22 kHz` at 48 kHz. This can fail silently in the physical world if the speaker, mic, driver, or resampler refuses to carry that band; the confidence feedback is the judge, not the command line's self-esteem.
+
+For the current deadline rig, `scripts/stream_live_audio_field.py` owns the live local path:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\stream_live_audio_field.py --profile .\config\audio-field.example.json --loopback-query Scarlett --maintain-confidence --play-probes --probe-output-query Scarlett
+```
+
+It publishes both `audio-mic-field.msgpack` and `audio-phase-field.msgpack` from visible local mics, records missing distributed channels as explicit placeholders, captures Scarlett loopback as the known reference, and resamples probe playback when the Scarlett output is exposed as 44.1 kHz while the capture field remains 48 kHz.
 
 For the current live app, start the dense harmonic confidence-maintenance loop:
 
@@ -261,7 +269,7 @@ The audio code is split so the hard parts can be tested without the room, driver
 - `audio_field.pipeline` wires those ports together without knowing whether the source is a real Focusrite, an SRT receiver, a WAV fixture, or a test double.
 - The next runtime estimator module should own chirplet observations, delay/SRO/phase state, confidence gates, and phase-field updates. It should feed the aligner; it should not be hidden inside the FOA encoder.
 - The active probe optimizer owns whether to emit extra chirplets. It reads sync confidence and probe budget, then decides when and where an intentional chirplet is worth the cost.
-- `audio_field.active_probe` owns the runtime join between phase-field confidence and emitted chirplet probes. It converts extracted source confidence into sync states, applies masking/spacing policy, writes probe WAVs plus a manifest, and optionally plays them.
+- `audio_field.active_probe` owns the runtime join between phase-field confidence and emitted chirplet probes. It converts extracted source confidence into sync states, applies masking/spacing policy, writes bounded probe WAV slots plus a rotating manifest, and optionally plays them.
 - `audio_field.phase_meaning` owns live extraction of meaning from phase/chirplet evidence. It consumes known reference audio plus aligned mic windows, keeps the smoothed phase/frequency state internal, and emits only actionable state for alignment, suppression, and probe control.
 - Room suppression owns stream-side cleanup: dialogue anchors define desired direct energy, spatial/context mics act as witnesses for room and transient clutter, and the cleaned aligned field feeds FOA/Aquarium/Faust.
 - Source-event analysis owns non-vocal spatial facts: dialogue focus weights and localized transient vectors are published beside the AmbiX bed, not hidden inside it.
