@@ -9,25 +9,22 @@ live data stores. Edge JSON may define CultNet schema or export diagnostics, but
 the real process/network data stays typed because every subsystem is under our
 control.
 
-The native reservoir must become one time-ordered rolling buffer with typed
-indexes/views. The current shared-edge typed rings proved the retention
-invariant, but independent rings are still too much duplicated structure for the
-live foundation.
+The native reservoir is now one time-ordered rolling buffer with typed views.
+The previous shared-edge typed rings proved the retention invariant; the new
+shape removes independent per-kind storage from the live foundation.
 
 ## Implemented
 
 - Perfect Machine contract:
   - `docs/perfect-machine.md` defines the target native machine: one five-second spatiotemporal reservoir, Aquarium-owned dense visual fusion/material/brush rendering, Faust-owned hot audio DSP, OBS-owned broadcast controls, and LocalCastBridge-owned calibration/config/status.
-  - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir rings, native authorities, outputs, and the demotion of bridge scripts to tooling.
-  - `native/reservoir` is the first native Rust crate. It currently implements
-    shared-edge five-second typed rings and proves that every kind expires from
-    the newest live sample. That proof survives; the structure does not get a
-    pardon. The next foundation is one rolling buffer plus typed indexes/views.
+  - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir typed views, native authorities, outputs, and the demotion of bridge scripts to tooling.
+  - `native/reservoir` is the first native Rust crate. It implements one
+    shared-edge five-second rolling buffer with typed views and proves that
+    every kind expires from the newest live sample.
   - `native/reservoir/include/localcast_reservoir.h` exposes the initial
     Aquarium/Faust C ABI: opaque reservoir create/destroy, sample-handle push,
     edge/window queries, ring counts, and latest sample lookup by sensor hash.
-    This ABI should be revised around the rolling-buffer model before
-    Aquarium/Faust bind to it.
+    The ABI now exposes total rolling-buffer length and typed-view length.
   - `LocalcastRuntime` wraps the current reservoir with typed native producer
     calls. It is the intended live spine, but must be rebuilt on the single
     rolling-buffer invariant before new runtime work.
@@ -103,19 +100,16 @@ live foundation.
 
 ## Next
 
-1. Rewrite `native/reservoir` as one rolling buffer with typed indexes/views.
-2. Update ABI/tests so single-edge expiry, typed view queries, latest lookup,
-   and diagnostic/fallback exclusion are enforced by construction.
-3. Quarantine or delete production use of `scripts/live_sensor_fusion.py`,
+1. Quarantine or delete production use of `scripts/live_sensor_fusion.py`,
    `localcast.sensor_fusion.spout_output`, JSON render-frame stores, JSON LOD
    stores, and Python reservoir-window clipping.
-4. Bind Aquarium/Faust to the rebuilt `LocalcastRuntime`.
-5. Move camera/mic/loopback ingest into native capture workers that append
+2. Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime`.
+3. Move camera/mic/loopback ingest into native capture workers that append
    typed sample handles.
-6. Move feature extraction, flow, cross-view matching, LOD reconciliation,
+4. Move feature extraction, flow, cross-view matching, LOD reconciliation,
    material fitting, brush/splat rendering, and Spout2 publication into
    Aquarium GPU compute.
-7. Move mic alignment, room suppression, voice separation, Ambisonic/HOA
+5. Move mic alignment, room suppression, voice separation, Ambisonic/HOA
    spatialization, and stem generation into Faust/native DSP.
-8. Keep FFmpeg/SRT scripts as simple LAN ingest/capture utilities, not the
+6. Keep FFmpeg/SRT scripts as simple LAN ingest/capture utilities, not the
    synchronized program authority.

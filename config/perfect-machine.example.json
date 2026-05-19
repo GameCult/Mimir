@@ -5,7 +5,7 @@
     "clockAuthority": "presentation",
     "lateSamplePolicy": "accept-inside-window",
     "expiredSamplePolicy": "offline-calibration-only",
-    "storageLayout": "struct-of-arrays-native-rings"
+    "storageLayout": "single-native-rolling-buffer-with-typed-views"
   },
   "authorities": {
     "configurationCalibrationLaunchStatus": "LocalCastBridge",

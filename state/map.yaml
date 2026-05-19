@@ -48,10 +48,9 @@ accepted_design:
     deadline Python/OpenGL bridge as a foundation and defines the next coherent
     rebuild target.
   - `docs/perfect-machine.md` and `config/perfect-machine.example.json` define the native target: one five-second spatiotemporal reservoir, Aquarium GPU fusion/rendering, Faust DSP, OBS output controls, and LocalCastBridge tooling.
-  - `native/reservoir` is the first native Rust crate. Its current shared-edge
-    typed rings proved the expiry invariant, but the live target is stricter:
-    one time-ordered rolling buffer with typed indexes/views, so retention has
-    exactly one owner.
+  - `native/reservoir` is the first native Rust crate. It now uses one
+    time-ordered rolling buffer with typed views, so retention has exactly one
+    owner while Aquarium/Faust still get kind-scoped queries.
   - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
   - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
   - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.
@@ -59,8 +58,8 @@ accepted_design:
   - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
 
 active_subgoals:
-  - Rewrite `native/reservoir` from independent typed rings into one rolling
-    buffer with typed indexes/views and a single edge.
+  - Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime` in the native
+    reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
   - Delete or quarantine Python live producers and the OpenGL Spout sink before
     adding new live features.
   - Bind Aquarium/Faust to `LocalcastRuntime` in the native reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
@@ -348,9 +347,8 @@ current_status:
     stochastic transient hypotheses, and synthetic fusion support while still
     seeing lower-priority fallback diagnostics when the Leap capture path stalls.
   next_action: >
-    Stop live feature work on the Python/OpenGL bridge. First rewrite
-    `native/reservoir` into a single time-ordered rolling buffer with typed
-    indexes/views, update the ABI/tests around that invariant, and quarantine
-    Python/OpenGL code as diagnostics. Then bind Aquarium/Faust to the native
-    runtime and resume hardware calibration through typed CultNet/native
-    surfaces only.
+    Stop live feature work on the Python/OpenGL bridge. The first native cut is
+    complete: `native/reservoir` is now a single time-ordered rolling buffer
+    with typed views and updated ABI/tests. Next quarantine Python/OpenGL code
+    as diagnostics, then bind Aquarium/Faust to the native runtime and resume
+    hardware calibration through typed CultNet/native surfaces only.

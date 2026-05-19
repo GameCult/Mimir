@@ -8,16 +8,16 @@
 extern "C" {
 #endif
 
-enum LocalcastRingKind {
-    LOCALCAST_RING_CAMERA_FRAME = 0,
-    LOCALCAST_RING_CAMERA_FEATURE = 1,
-    LOCALCAST_RING_SCENE_RAY = 2,
-    LOCALCAST_RING_SURFACE_CLAIM = 3,
-    LOCALCAST_RING_MATERIAL_CLAIM = 4,
-    LOCALCAST_RING_AUDIO_BLOCK = 5,
-    LOCALCAST_RING_PHASE_CLAIM = 6,
-    LOCALCAST_RING_EVENT_CLAIM = 7,
-    LOCALCAST_RING_RENDER_PACKET = 8
+enum LocalcastSampleKind {
+    LOCALCAST_SAMPLE_CAMERA_FRAME = 0,
+    LOCALCAST_SAMPLE_CAMERA_FEATURE = 1,
+    LOCALCAST_SAMPLE_SCENE_RAY = 2,
+    LOCALCAST_SAMPLE_SURFACE_CLAIM = 3,
+    LOCALCAST_SAMPLE_MATERIAL_CLAIM = 4,
+    LOCALCAST_SAMPLE_AUDIO_BLOCK = 5,
+    LOCALCAST_SAMPLE_PHASE_CLAIM = 6,
+    LOCALCAST_SAMPLE_EVENT_CLAIM = 7,
+    LOCALCAST_SAMPLE_RENDER_PACKET = 8
 };
 
 typedef struct LocalcastReservoir LocalcastReservoir;
@@ -34,6 +34,7 @@ typedef struct LocalcastSampleHandle {
 typedef struct LocalcastRuntimeStatus {
     uint64_t edge_ns;
     uint64_t window_start_ns;
+    size_t total_sample_count;
     size_t camera_frame_count;
     size_t camera_feature_count;
     size_t scene_ray_count;
@@ -50,18 +51,19 @@ void localcast_reservoir_destroy(LocalcastReservoir *reservoir);
 
 bool localcast_reservoir_push(
     LocalcastReservoir *reservoir,
-    uint32_t ring_kind,
+    uint32_t sample_kind,
     LocalcastSampleHandle sample
 );
 
 bool localcast_reservoir_set_edge(LocalcastReservoir *reservoir, uint64_t edge_ns);
 uint64_t localcast_reservoir_edge_ns(const LocalcastReservoir *reservoir);
 uint64_t localcast_reservoir_window_start_ns(const LocalcastReservoir *reservoir);
-size_t localcast_reservoir_ring_len(const LocalcastReservoir *reservoir, uint32_t ring_kind);
+size_t localcast_reservoir_len(const LocalcastReservoir *reservoir);
+size_t localcast_reservoir_view_len(const LocalcastReservoir *reservoir, uint32_t sample_kind);
 
 bool localcast_reservoir_latest_for_sensor(
     const LocalcastReservoir *reservoir,
-    uint32_t ring_kind,
+    uint32_t sample_kind,
     uint64_t sensor_id_hash,
     LocalcastSampleHandle *out_sample
 );

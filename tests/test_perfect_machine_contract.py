@@ -16,7 +16,7 @@ class PerfectMachineContractTests(unittest.TestCase):
         self.assertEqual("Faust", data["authorities"]["hotAudioDsp"])
         self.assertEqual("Aquarium", data["outputs"]["video"]["owner"])
 
-    def test_contract_covers_six_cameras_six_mics_and_required_rings(self):
+    def test_contract_covers_six_cameras_six_mics_and_required_sample_views(self):
         data = json.loads((ROOT / "config" / "perfect-machine.example.json").read_text(encoding="utf-8"))
 
         self.assertEqual(6, len(data["visualSensors"]))
@@ -29,6 +29,7 @@ class PerfectMachineContractTests(unittest.TestCase):
             "phase_claim",
         })
         self.assertIn("dense-feature-extraction", data["bridgeDemotion"]["notPython"])
+        self.assertEqual("single-native-rolling-buffer-with-typed-views", data["reservoir"]["storageLayout"])
 
     def test_native_reservoir_header_exposes_small_c_abi(self):
         header = (ROOT / "native" / "reservoir" / "include" / "localcast_reservoir.h").read_text(encoding="utf-8")
@@ -41,7 +42,9 @@ class PerfectMachineContractTests(unittest.TestCase):
         self.assertIn("bool localcast_reservoir_push", header)
         self.assertIn("uint64_t localcast_reservoir_edge_ns", header)
         self.assertIn("uint64_t localcast_reservoir_window_start_ns", header)
-        self.assertIn("size_t localcast_reservoir_ring_len", header)
+        self.assertIn("enum LocalcastSampleKind", header)
+        self.assertIn("size_t localcast_reservoir_len", header)
+        self.assertIn("size_t localcast_reservoir_view_len", header)
         self.assertIn("bool localcast_reservoir_latest_for_sensor", header)
 
     def test_native_runtime_header_exposes_typed_producer_spine(self):
@@ -50,6 +53,7 @@ class PerfectMachineContractTests(unittest.TestCase):
         self.assertIn("typedef struct LocalcastRuntime LocalcastRuntime;", header)
         self.assertIn("typedef struct LocalcastRuntimeStatus", header)
         self.assertIn("uint64_t edge_ns;", header)
+        self.assertIn("size_t total_sample_count;", header)
         self.assertIn("size_t camera_frame_count;", header)
         self.assertIn("LocalcastRuntime *localcast_runtime_create", header)
         self.assertIn("void localcast_runtime_destroy", header)

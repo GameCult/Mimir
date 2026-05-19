@@ -31,9 +31,8 @@ Ownership:
   offline analysis, and diagnostics. It is not the stream hot path.
 - OpenGL is not the production Spout sink. Aquarium owns production Spout2
   publication.
-- `native/reservoir` is the first native crate. Its current shared-edge typed
-  rings proved the retention invariant, but the target is one time-ordered
-  rolling buffer with typed indexes/views. Retention has one owner.
+- `native/reservoir` is the first native crate. It now uses one time-ordered
+  rolling buffer with typed views. Retention has one owner.
 
 Invariant: the five-second spatiotemporal reservoir is the live authority.
 Producers append sample handles through typed native calls, optimizers refine,

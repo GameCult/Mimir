@@ -67,9 +67,11 @@ flowchart TD
 
 ## Reservoir Contract
 
-The reservoir stores struct-of-arrays blocks, not one giant JSON-ish object.
+The reservoir stores one time-ordered rolling buffer of sample handles, not one
+giant JSON-ish object and not independent per-kind histories. Typed views over
+that buffer expose the kinds consumers need.
 
-Required rings:
+Required sample kinds / typed views:
 
 - `camera_frame`: raw or GPU-importable image handles plus timestamps.
 - `camera_feature`: keypoints, descriptors, optical flow, confidence, sensor id.
@@ -86,9 +88,9 @@ The reservoir owns retention. Producers append. Optimizers refine. Renderers
 sample. No stage owns a private history that can outlive the reservoir.
 
 `LocalcastRuntime` is the first native owner above the raw reservoir. It exposes
-typed producer calls for each ring so camera capture, audio capture, phase
-estimation, material fitting, event detection, and render planning all append
-into one shared five-second window without crossing a Python file cache.
+typed producer calls for each sample kind so camera capture, audio capture,
+phase estimation, material fitting, event detection, and render planning all
+append into one shared five-second window without crossing a Python file cache.
 
 ## Visual Fusion
 
@@ -97,7 +99,8 @@ operation.
 
 The visual path should:
 
-- ingest all cameras continuously into pinned/native rings;
+- ingest all cameras continuously into pinned/native buffers referenced by
+  reservoir sample handles;
 - extract features and flow on GPU where possible;
 - match every plausible cross-view feature within time and epipolar bounds;
 - use Leap as the strongest near-field timing/spatial witness when live;
@@ -147,7 +150,7 @@ Keep these as tooling:
 
 1. Define the native reservoir ABI from `config/perfect-machine.example.json`.
 2. Build a native reservoir process or Aquarium module that owns the five-second
-   rings.
+   rolling buffer.
 3. Move camera ingest into native capture workers that write reservoir samples.
 4. Move audio ingest/phase claims into the same presentation-clock reservoir.
 5. Let Aquarium consume reservoir surfaces/material claims directly on GPU.
@@ -157,27 +160,27 @@ Keep these as tooling:
 ## Native Work Started
 
 `native/reservoir` is the first native crate. It implements the shared-edge
-five-second reservoir invariant:
+five-second rolling reservoir invariant:
 
-- append samples into named rings;
+- append samples into one rolling buffer with typed views;
 - advance the reservoir edge from the newest sample;
-- evict every ring against the same edge;
-- query the latest valid sample per sensor.
+- evict all sample kinds against the same edge;
+- query the latest valid sample per sensor inside a typed view.
 
 It now builds as `rlib`, `cdylib`, and `staticlib`, with a small C ABI declared
 in `native/reservoir/include/localcast_reservoir.h`:
 
 - create/destroy an opaque `LocalcastReservoir`;
-- push timestamped sample metadata into a typed ring;
+- push timestamped sample metadata into a typed view of the rolling buffer;
 - advance/query the shared edge and window start;
-- query ring length;
+- query total length and typed-view length;
 - query the latest sample for a sensor hash.
 - create/destroy an opaque `LocalcastRuntime`;
 - append typed camera/audio/phase/event/render handles through producer calls;
-- query a native runtime status struct with shared edge, window start, and ring
-  counts.
+- query a native runtime status struct with shared edge, window start, total
+  count, and typed-view counts.
 
 The ABI carries `payload_handle`, not payload bytes. Aquarium owns image,
 feature, surface, material, and GPU memory interpretation. Faust/native DSP owns
-audio buffer interpretation. The reservoir owns only retention, ring identity,
+audio buffer interpretation. The reservoir owns only retention, sample kind,
 timestamp order, and the five-second shared-edge invariant.

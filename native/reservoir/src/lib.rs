@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 
 pub const DEFAULT_RESERVOIR_NS: u64 = 5_000_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RingKind {
+pub enum SampleKind {
     CameraFrame,
     CameraFeature,
     SceneRay,
@@ -15,7 +15,7 @@ pub enum RingKind {
     RenderPacket,
 }
 
-impl RingKind {
+impl SampleKind {
     fn from_u32(value: u32) -> Option<Self> {
         match value {
             0 => Some(Self::CameraFrame),
@@ -33,7 +33,8 @@ impl RingKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Sample<T> {
+pub struct ReservoirSample<T> {
+    pub kind: SampleKind,
     pub sensor_id: String,
     pub timestamp_ns: u64,
     pub arrival_ns: u64,
@@ -41,8 +42,9 @@ pub struct Sample<T> {
     pub payload: T,
 }
 
-impl<T> Sample<T> {
+impl<T> ReservoirSample<T> {
     pub fn new(
+        kind: SampleKind,
         sensor_id: impl Into<String>,
         timestamp_ns: u64,
         arrival_ns: u64,
@@ -50,6 +52,7 @@ impl<T> Sample<T> {
         payload: T,
     ) -> Self {
         Self {
+            kind,
             sensor_id: sensor_id.into(),
             timestamp_ns,
             arrival_ns,
@@ -60,22 +63,26 @@ impl<T> Sample<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct ReservoirRing<T> {
+pub struct RollingReservoir<T> {
     duration_ns: u64,
     edge_ns: u64,
-    samples: VecDeque<Sample<T>>,
+    samples: VecDeque<ReservoirSample<T>>,
 }
 
-impl<T> ReservoirRing<T> {
+impl<T> RollingReservoir<T> {
     pub fn new(duration_ns: u64) -> Self {
         Self {
-            duration_ns,
+            duration_ns: if duration_ns == 0 {
+                DEFAULT_RESERVOIR_NS
+            } else {
+                duration_ns
+            },
             edge_ns: 0,
             samples: VecDeque::new(),
         }
     }
 
-    pub fn push(&mut self, sample: Sample<T>) {
+    pub fn push(&mut self, sample: ReservoirSample<T>) {
         self.edge_ns = self.edge_ns.max(sample.timestamp_ns);
         self.samples.push_back(sample);
         self.evict_expired();
@@ -102,15 +109,29 @@ impl<T> ReservoirRing<T> {
         self.samples.is_empty()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Sample<T>> {
+    pub fn iter(&self) -> impl Iterator<Item = &ReservoirSample<T>> {
         self.samples.iter()
     }
 
-    pub fn latest_for_sensor(&self, sensor_id: &str) -> Option<&Sample<T>> {
+    pub fn view(&self, kind: SampleKind) -> impl Iterator<Item = &ReservoirSample<T>> {
+        self.samples
+            .iter()
+            .filter(move |sample| sample.kind == kind)
+    }
+
+    pub fn view_len(&self, kind: SampleKind) -> usize {
+        self.view(kind).count()
+    }
+
+    pub fn latest_for_sensor(
+        &self,
+        kind: SampleKind,
+        sensor_id: &str,
+    ) -> Option<&ReservoirSample<T>> {
         self.samples
             .iter()
             .rev()
-            .find(|sample| sample.sensor_id == sensor_id)
+            .find(|sample| sample.kind == kind && sample.sensor_id == sensor_id)
     }
 
     fn evict_expired(&mut self) {
@@ -121,56 +142,7 @@ impl<T> ReservoirRing<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Reservoir<T> {
-    duration_ns: u64,
-    edge_ns: u64,
-    rings: BTreeMap<RingKind, ReservoirRing<T>>,
-}
-
-impl<T> Reservoir<T> {
-    pub fn new(duration_ns: u64) -> Self {
-        Self {
-            duration_ns,
-            edge_ns: 0,
-            rings: BTreeMap::new(),
-        }
-    }
-
-    pub fn push(&mut self, kind: RingKind, sample: Sample<T>) {
-        self.edge_ns = self.edge_ns.max(sample.timestamp_ns);
-        for ring in self.rings.values_mut() {
-            ring.set_edge(self.edge_ns);
-        }
-        let ring = self
-            .rings
-            .entry(kind)
-            .or_insert_with(|| ReservoirRing::new(self.duration_ns));
-        ring.push(sample);
-        ring.set_edge(self.edge_ns);
-    }
-
-    pub fn set_edge(&mut self, edge_ns: u64) {
-        self.edge_ns = self.edge_ns.max(edge_ns);
-        for ring in self.rings.values_mut() {
-            ring.set_edge(self.edge_ns);
-        }
-    }
-
-    pub fn ring(&self, kind: RingKind) -> Option<&ReservoirRing<T>> {
-        self.rings.get(&kind)
-    }
-
-    pub fn edge_ns(&self) -> u64 {
-        self.edge_ns
-    }
-
-    pub fn window_start_ns(&self) -> u64 {
-        self.edge_ns.saturating_sub(self.duration_ns)
-    }
-}
-
-impl<T> Default for Reservoir<T> {
+impl<T> Default for RollingReservoir<T> {
     fn default() -> Self {
         Self::new(DEFAULT_RESERVOIR_NS)
     }
@@ -187,11 +159,11 @@ pub struct LocalcastSampleHandle {
 }
 
 pub struct LocalcastReservoir {
-    inner: Reservoir<LocalcastSampleHandle>,
+    inner: RollingReservoir<LocalcastSampleHandle>,
 }
 
 pub struct LocalcastRuntime {
-    reservoir: Reservoir<LocalcastSampleHandle>,
+    reservoir: RollingReservoir<LocalcastSampleHandle>,
 }
 
 #[repr(C)]
@@ -199,6 +171,7 @@ pub struct LocalcastRuntime {
 pub struct LocalcastRuntimeStatus {
     pub edge_ns: u64,
     pub window_start_ns: u64,
+    pub total_sample_count: usize,
     pub camera_frame_count: usize,
     pub camera_feature_count: usize,
     pub scene_ray_count: usize,
@@ -215,6 +188,7 @@ impl Default for LocalcastRuntimeStatus {
         Self {
             edge_ns: 0,
             window_start_ns: 0,
+            total_sample_count: 0,
             camera_frame_count: 0,
             camera_feature_count: 0,
             scene_ray_count: 0,
@@ -230,59 +204,55 @@ impl Default for LocalcastRuntimeStatus {
 
 impl LocalcastRuntime {
     fn new(duration_ns: u64) -> Self {
-        let duration = if duration_ns == 0 {
-            DEFAULT_RESERVOIR_NS
-        } else {
-            duration_ns
-        };
         Self {
-            reservoir: Reservoir::new(duration),
+            reservoir: RollingReservoir::new(duration_ns),
         }
     }
 
-    fn push(&mut self, kind: RingKind, sample: LocalcastSampleHandle) {
-        self.reservoir.push(
-            kind,
-            Sample::new(
-                sample.sensor_id_hash.to_string(),
-                sample.timestamp_ns,
-                sample.arrival_ns,
-                sample.sequence,
-                sample,
-            ),
-        );
+    fn push(&mut self, kind: SampleKind, sample: LocalcastSampleHandle) {
+        self.reservoir.push(sample_from_handle(kind, sample));
     }
 
-    fn ring_len(&self, kind: RingKind) -> usize {
-        self.reservoir.ring(kind).map_or(0, ReservoirRing::len)
+    fn view_len(&self, kind: SampleKind) -> usize {
+        self.reservoir.view_len(kind)
     }
 
     fn status(&self) -> LocalcastRuntimeStatus {
         LocalcastRuntimeStatus {
             edge_ns: self.reservoir.edge_ns(),
             window_start_ns: self.reservoir.window_start_ns(),
-            camera_frame_count: self.ring_len(RingKind::CameraFrame),
-            camera_feature_count: self.ring_len(RingKind::CameraFeature),
-            scene_ray_count: self.ring_len(RingKind::SceneRay),
-            surface_claim_count: self.ring_len(RingKind::SurfaceClaim),
-            material_claim_count: self.ring_len(RingKind::MaterialClaim),
-            audio_block_count: self.ring_len(RingKind::AudioBlock),
-            phase_claim_count: self.ring_len(RingKind::PhaseClaim),
-            event_claim_count: self.ring_len(RingKind::EventClaim),
-            render_packet_count: self.ring_len(RingKind::RenderPacket),
+            total_sample_count: self.reservoir.len(),
+            camera_frame_count: self.view_len(SampleKind::CameraFrame),
+            camera_feature_count: self.view_len(SampleKind::CameraFeature),
+            scene_ray_count: self.view_len(SampleKind::SceneRay),
+            surface_claim_count: self.view_len(SampleKind::SurfaceClaim),
+            material_claim_count: self.view_len(SampleKind::MaterialClaim),
+            audio_block_count: self.view_len(SampleKind::AudioBlock),
+            phase_claim_count: self.view_len(SampleKind::PhaseClaim),
+            event_claim_count: self.view_len(SampleKind::EventClaim),
+            render_packet_count: self.view_len(SampleKind::RenderPacket),
         }
     }
 }
 
+fn sample_from_handle(
+    kind: SampleKind,
+    sample: LocalcastSampleHandle,
+) -> ReservoirSample<LocalcastSampleHandle> {
+    ReservoirSample::new(
+        kind,
+        sample.sensor_id_hash.to_string(),
+        sample.timestamp_ns,
+        sample.arrival_ns,
+        sample.sequence,
+        sample,
+    )
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn localcast_reservoir_create(duration_ns: u64) -> *mut LocalcastReservoir {
-    let duration = if duration_ns == 0 {
-        DEFAULT_RESERVOIR_NS
-    } else {
-        duration_ns
-    };
     Box::into_raw(Box::new(LocalcastReservoir {
-        inner: Reservoir::new(duration),
+        inner: RollingReservoir::new(duration_ns),
     }))
 }
 
@@ -299,25 +269,16 @@ pub extern "C" fn localcast_reservoir_destroy(ptr: *mut LocalcastReservoir) {
 #[unsafe(no_mangle)]
 pub extern "C" fn localcast_reservoir_push(
     ptr: *mut LocalcastReservoir,
-    ring_kind: u32,
+    sample_kind: u32,
     sample: LocalcastSampleHandle,
 ) -> bool {
     let Some(reservoir) = (unsafe { ptr.as_mut() }) else {
         return false;
     };
-    let Some(kind) = RingKind::from_u32(ring_kind) else {
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
         return false;
     };
-    reservoir.inner.push(
-        kind,
-        Sample::new(
-            sample.sensor_id_hash.to_string(),
-            sample.timestamp_ns,
-            sample.arrival_ns,
-            sample.sequence,
-            sample,
-        ),
-    );
+    reservoir.inner.push(sample_from_handle(kind, sample));
     true
 }
 
@@ -347,40 +308,45 @@ pub extern "C" fn localcast_reservoir_window_start_ns(ptr: *const LocalcastReser
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn localcast_reservoir_ring_len(
+pub extern "C" fn localcast_reservoir_len(ptr: *const LocalcastReservoir) -> usize {
+    let Some(reservoir) = (unsafe { ptr.as_ref() }) else {
+        return 0;
+    };
+    reservoir.inner.len()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_reservoir_view_len(
     ptr: *const LocalcastReservoir,
-    ring_kind: u32,
+    sample_kind: u32,
 ) -> usize {
     let Some(reservoir) = (unsafe { ptr.as_ref() }) else {
         return 0;
     };
-    let Some(kind) = RingKind::from_u32(ring_kind) else {
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
         return 0;
     };
-    reservoir.inner.ring(kind).map_or(0, ReservoirRing::len)
+    reservoir.inner.view_len(kind)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn localcast_reservoir_latest_for_sensor(
     ptr: *const LocalcastReservoir,
-    ring_kind: u32,
+    sample_kind: u32,
     sensor_id_hash: u64,
     out_sample: *mut LocalcastSampleHandle,
 ) -> bool {
     let Some(reservoir) = (unsafe { ptr.as_ref() }) else {
         return false;
     };
-    let Some(kind) = RingKind::from_u32(ring_kind) else {
+    let Some(kind) = SampleKind::from_u32(sample_kind) else {
         return false;
     };
     let Some(out) = (unsafe { out_sample.as_mut() }) else {
         return false;
     };
-    let Some(ring) = reservoir.inner.ring(kind) else {
-        return false;
-    };
     let key = sensor_id_hash.to_string();
-    let Some(sample) = ring.latest_for_sensor(&key) else {
+    let Some(sample) = reservoir.inner.latest_for_sensor(kind, &key) else {
         return false;
     };
     *out = sample.payload;
@@ -407,7 +373,7 @@ pub extern "C" fn localcast_runtime_push_camera_frame(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::CameraFrame, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::CameraFrame, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -415,7 +381,7 @@ pub extern "C" fn localcast_runtime_push_camera_feature(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::CameraFeature, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::CameraFeature, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -423,7 +389,7 @@ pub extern "C" fn localcast_runtime_push_scene_ray(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::SceneRay, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::SceneRay, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -431,7 +397,7 @@ pub extern "C" fn localcast_runtime_push_surface_claim(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::SurfaceClaim, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::SurfaceClaim, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -439,7 +405,7 @@ pub extern "C" fn localcast_runtime_push_material_claim(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::MaterialClaim, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::MaterialClaim, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -447,7 +413,7 @@ pub extern "C" fn localcast_runtime_push_audio_block(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::AudioBlock, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::AudioBlock, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -455,7 +421,7 @@ pub extern "C" fn localcast_runtime_push_phase_claim(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::PhaseClaim, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::PhaseClaim, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -463,7 +429,7 @@ pub extern "C" fn localcast_runtime_push_event_claim(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::EventClaim, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::EventClaim, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -471,7 +437,7 @@ pub extern "C" fn localcast_runtime_push_render_packet(
     ptr: *mut LocalcastRuntime,
     sample: LocalcastSampleHandle,
 ) -> bool {
-    localcast_runtime_push_typed(ptr, RingKind::RenderPacket, sample)
+    localcast_runtime_push_typed(ptr, SampleKind::RenderPacket, sample)
 }
 
 #[unsafe(no_mangle)]
@@ -491,7 +457,7 @@ pub extern "C" fn localcast_runtime_status(
 
 fn localcast_runtime_push_typed(
     ptr: *mut LocalcastRuntime,
-    kind: RingKind,
+    kind: SampleKind,
     sample: LocalcastSampleHandle,
 ) -> bool {
     let Some(runtime) = (unsafe { ptr.as_mut() }) else {
@@ -506,54 +472,140 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ring_expires_from_newest_shared_edge() {
-        let mut ring = ReservoirRing::new(DEFAULT_RESERVOIR_NS);
-        ring.push(Sample::new("cam-a", 1_000_000_000, 1_000_000_010, 0, 1));
-        ring.push(Sample::new("cam-b", 4_000_000_000, 4_000_000_010, 0, 2));
-        ring.push(Sample::new("cam-a", 7_100_000_000, 7_100_000_010, 1, 3));
+    fn rolling_reservoir_expires_every_kind_from_one_edge() {
+        let mut reservoir = RollingReservoir::new(DEFAULT_RESERVOIR_NS);
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "cam-a",
+            1_000_000_000,
+            1_000_000_010,
+            0,
+            "old-camera",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::AudioBlock,
+            "audio",
+            7_000_000_001,
+            7_000_000_020,
+            0,
+            "audio-edge",
+        ));
 
-        let timestamps = ring
-            .iter()
-            .map(|sample| sample.timestamp_ns)
-            .collect::<Vec<_>>();
-
-        assert_eq!(vec![4_000_000_000, 7_100_000_000], timestamps);
-        assert_eq!(2_100_000_000, ring.window_start_ns());
-    }
-
-    #[test]
-    fn reservoir_edge_expires_all_rings() {
-        let mut reservoir = Reservoir::default();
-        reservoir.push(
-            RingKind::CameraFrame,
-            Sample::new("cam-a", 1_000_000_000, 1_000_000_010, 0, "old-camera"),
-        );
-        reservoir.push(
-            RingKind::AudioBlock,
-            Sample::new("audio", 7_000_000_001, 7_000_000_020, 0, "audio-edge"),
-        );
-
-        let camera_ring = reservoir.ring(RingKind::CameraFrame).unwrap();
-
-        assert!(camera_ring.is_empty());
+        assert_eq!(1, reservoir.len());
+        assert_eq!(0, reservoir.view_len(SampleKind::CameraFrame));
+        assert_eq!(1, reservoir.view_len(SampleKind::AudioBlock));
         assert_eq!(2_000_000_001, reservoir.window_start_ns());
     }
 
     #[test]
-    fn latest_for_sensor_ignores_other_sources() {
-        let mut ring = ReservoirRing::new(DEFAULT_RESERVOIR_NS);
-        ring.push(Sample::new("cam-a", 10, 11, 0, "a0"));
-        ring.push(Sample::new("cam-b", 12, 13, 0, "b0"));
-        ring.push(Sample::new("cam-a", 14, 15, 1, "a1"));
+    fn typed_views_share_storage_without_owning_retention() {
+        let mut reservoir = RollingReservoir::new(DEFAULT_RESERVOIR_NS);
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "cam-a",
+            10,
+            11,
+            0,
+            "a0",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::AudioBlock,
+            "mic",
+            12,
+            13,
+            0,
+            "m0",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "cam-b",
+            14,
+            15,
+            0,
+            "b0",
+        ));
 
-        let latest = ring.latest_for_sensor("cam-a").unwrap();
+        let all = reservoir
+            .iter()
+            .map(|sample| sample.payload)
+            .collect::<Vec<_>>();
+        let camera = reservoir
+            .view(SampleKind::CameraFrame)
+            .map(|sample| sample.payload)
+            .collect::<Vec<_>>();
 
-        assert_eq!("a1", latest.payload);
+        assert_eq!(vec!["a0", "m0", "b0"], all);
+        assert_eq!(vec!["a0", "b0"], camera);
+        assert_eq!(3, reservoir.len());
+    }
+
+    #[test]
+    fn latest_for_sensor_is_scoped_to_kind_and_sensor() {
+        let mut reservoir = RollingReservoir::new(DEFAULT_RESERVOIR_NS);
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "cam-a",
+            10,
+            11,
+            0,
+            "frame-a0",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::AudioBlock,
+            "cam-a",
+            12,
+            13,
+            0,
+            "audio-a0",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "cam-a",
+            14,
+            15,
+            1,
+            "frame-a1",
+        ));
+
+        let latest = reservoir
+            .latest_for_sensor(SampleKind::CameraFrame, "cam-a")
+            .unwrap();
+
+        assert_eq!("frame-a1", latest.payload);
         assert_eq!(1, latest.sequence);
     }
 
     #[test]
-    fn c_abi_pushes_and_queries_latest_sample() {
+    fn late_samples_outside_the_window_cannot_be_observed() {
+        let mut reservoir = RollingReservoir::new(DEFAULT_RESERVOIR_NS);
+        reservoir.push(ReservoirSample::new(
+            SampleKind::AudioBlock,
+            "audio",
+            8_000_000_000,
+            8_000_000_010,
+            0,
+            "edge",
+        ));
+        reservoir.push(ReservoirSample::new(
+            SampleKind::CameraFrame,
+            "fallback-camera",
+            1_000_000_000,
+            8_000_000_020,
+            0,
+            "too-late",
+        ));
+
+        assert_eq!(1, reservoir.len());
+        assert_eq!(0, reservoir.view_len(SampleKind::CameraFrame));
+        assert!(
+            reservoir
+                .latest_for_sensor(SampleKind::CameraFrame, "fallback-camera")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn c_abi_pushes_and_queries_latest_sample_from_view() {
         let reservoir = localcast_reservoir_create(DEFAULT_RESERVOIR_NS);
         let pushed = localcast_reservoir_push(
             reservoir,
@@ -577,13 +629,14 @@ mod tests {
 
         assert!(pushed);
         assert!(found);
-        assert_eq!(1, localcast_reservoir_ring_len(reservoir, 0));
+        assert_eq!(1, localcast_reservoir_len(reservoir));
+        assert_eq!(1, localcast_reservoir_view_len(reservoir, 0));
         assert_eq!(99, out.payload_handle);
         localcast_reservoir_destroy(reservoir);
     }
 
     #[test]
-    fn c_abi_rejects_nulls_and_unknown_ring_kinds() {
+    fn c_abi_rejects_nulls_and_unknown_sample_kinds() {
         let sample = LocalcastSampleHandle {
             sensor_id_hash: 1,
             timestamp_ns: 2,
@@ -597,7 +650,8 @@ mod tests {
         assert!(!localcast_reservoir_set_edge(std::ptr::null_mut(), 10));
         assert_eq!(0, localcast_reservoir_edge_ns(std::ptr::null()));
         assert_eq!(0, localcast_reservoir_window_start_ns(std::ptr::null()));
-        assert_eq!(0, localcast_reservoir_ring_len(std::ptr::null(), 0));
+        assert_eq!(0, localcast_reservoir_len(std::ptr::null()));
+        assert_eq!(0, localcast_reservoir_view_len(std::ptr::null(), 0));
         assert!(!localcast_reservoir_latest_for_sensor(
             std::ptr::null(),
             0,
@@ -607,7 +661,7 @@ mod tests {
 
         let reservoir = localcast_reservoir_create(0);
         assert!(!localcast_reservoir_push(reservoir, 99, sample));
-        assert_eq!(0, localcast_reservoir_ring_len(reservoir, 99));
+        assert_eq!(0, localcast_reservoir_view_len(reservoir, 99));
         assert!(!localcast_reservoir_latest_for_sensor(
             reservoir,
             0,
@@ -618,7 +672,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_spine_routes_typed_producers_into_one_reservoir() {
+    fn runtime_spine_routes_typed_producers_into_one_rolling_buffer() {
         let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
         let camera = LocalcastSampleHandle {
             sensor_id_hash: 10,
@@ -650,6 +704,7 @@ mod tests {
         assert!(localcast_runtime_status(runtime, &mut status));
         assert_eq!(7_000_000_010, status.edge_ns);
         assert_eq!(2_000_000_010, status.window_start_ns);
+        assert_eq!(2, status.total_sample_count);
         assert_eq!(0, status.camera_frame_count);
         assert_eq!(1, status.audio_block_count);
         assert_eq!(1, status.phase_claim_count);
