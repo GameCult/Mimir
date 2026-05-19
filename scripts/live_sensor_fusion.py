@@ -45,6 +45,7 @@ from localcast.sensor_fusion import (
     speaker_geometry_from_audio_profile,
 )
 from localcast.sensor_fusion.camera_control import AdaptiveCameraController, OpenCvCameraSettingPort
+from localcast.sensor_fusion.adapters import LatestFramePump, OpenCvCaptureConfig, OpenCvFrameSource
 from audio_field.cultcache_audio import frame_to_numpy, get_live_audio_phase_field, get_live_spatial_audio_frame
 
 
@@ -321,6 +322,7 @@ class RgbSplatSampler:
         self.fallback_dir = fallback_dir
         self.fallback_only = bool(fallback_only)
         self._captures: dict[int, object] = {}
+        self._pumps: dict[int, LatestFramePump] = {}
         self._frames: dict[int, np.ndarray] = {}
         self._timestamped_frames: dict[str, TimestampedFrame] = {}
         self._history = TimestampedFrameHistory(max_frames=720, max_age_ns=reservoir_ns)
@@ -383,39 +385,27 @@ class RgbSplatSampler:
         return dict(self._timestamped_frames)
 
     def _read_frame(self, index: int) -> np.ndarray | None:
-        import cv2
-
         if self.fallback_only:
             return self._fallback_frame(index)
-        capture = self._captures.get(index)
-        if capture is None:
-            capture = cv2.VideoCapture(index, cv2_api(self.api))
-            if capture.isOpened():
-                capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-                capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                self._captures[index] = capture
-                if self.adaptive_controls:
-                    self._controllers[index] = AdaptiveCameraController()
-                    self._setting_ports[index] = OpenCvCameraSettingPort(capture)
-            else:
-                try:
-                    capture.release()
-                except Exception:
-                    pass
-                return self._fallback_frame(index)
-        ok = False
-        frame = None
-        for _ in range(2):
-            ok, frame = capture.read()
-            if ok and frame is not None:
-                sensor_id = self._sensor_id(index)
-                stamped = TimestampedFrame(sensor_id, time.monotonic_ns(), frame.copy())
-                self._timestamped_frames[sensor_id] = stamped
-                self._history.add(stamped)
-                self._tune_capture(index, frame)
-                self._frames[index] = frame
-                return frame
+        pump = self._pumps.get(index)
+        if pump is None:
+            sensor_id = self._sensor_id(index)
+            pump = LatestFramePump(
+                lambda sensor_id=sensor_id, index=index: OpenCvFrameSource(
+                    OpenCvCaptureConfig(sensor_id=sensor_id, index=index, api=self.api, width=self.width, height=self.height)
+                )
+            )
+            pump.start()
+            self._pumps[index] = pump
+        packet = pump.latest(max_age_ns=DEFAULT_RESERVOIR_NS)
+        if packet is not None:
+            frame = packet.image_bgr
+            stamped = TimestampedFrame(packet.sensor_id, packet.timestamp_ns, frame.copy())
+            self._timestamped_frames[packet.sensor_id] = stamped
+            self._history.add(stamped)
+            self._tune_capture(index, frame)
+            self._frames[index] = frame
+            return frame
         cached = self._frames.get(index)
         if cached is not None:
             return cached
@@ -982,6 +972,7 @@ class LeapPackedMotionSampler:
         self.fallback_dir = fallback_dir
         self.fallback_only = bool(fallback_only)
         self._capture = None
+        self._pump: LatestFramePump | None = None
         self._previous_channels: dict[str, np.ndarray] = {}
         self._last_timestamp_ns: int | None = None
         self._last_frame_kind: str | None = None
@@ -1026,28 +1017,26 @@ class LeapPackedMotionSampler:
         return tuple(points)
 
     def _read_frame(self) -> np.ndarray | None:
-        import cv2
-
         if self.fallback_only:
             return self._fallback_frame()
-        if self._capture is None:
-            capture = cv2.VideoCapture(self.index, cv2_api(self.api))
-            if capture.isOpened():
-                capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-                capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-                capture.set(cv2.CAP_PROP_FPS, self.fps)
-                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                self._capture = capture
-            else:
-                try:
-                    capture.release()
-                except Exception:
-                    pass
-                return self._fallback_frame()
-        ok, frame = self._capture.read()
-        if ok and frame is not None:
+        if self._pump is None:
+            self._pump = LatestFramePump(
+                lambda: OpenCvFrameSource(
+                    OpenCvCaptureConfig(
+                        sensor_id="leap",
+                        index=self.index,
+                        api=self.api,
+                        width=self.width,
+                        height=self.height,
+                        fps=self.fps,
+                    )
+                )
+            )
+            self._pump.start()
+        packet = self._pump.latest(max_age_ns=DEFAULT_RESERVOIR_NS)
+        if packet is not None:
             self._last_frame_kind = "capture"
-            return frame
+            return packet.image_bgr
         return self._fallback_frame()
 
     def _fallback_frame(self) -> np.ndarray | None:

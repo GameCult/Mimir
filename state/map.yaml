@@ -202,7 +202,11 @@ research:
       OBS sees them. Current live deadline mode uses fallback-only RGB/Leap
       because synchronous OpenCV camera reads measured slower than the reservoir;
       the next coherent cut is nonblocking camera ingress that continuously
-      fills the five-second reservoir with real samples.
+      fills the five-second reservoir with real samples. `LatestFramePump` now
+      moves blocking OpenCV reads off the fusion hot loop; the running deadline
+      mode uses lower per-frame sample density so Spout can render visual points
+      inside the five-second budget while TAA/reservoir accumulation carries
+      detail over time.
   typed_visual_state:
     summary: docs/typed-visual-state.md
     key_decision: >

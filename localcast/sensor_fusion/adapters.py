@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import subprocess
+import threading
 import time
-from typing import BinaryIO, Iterator, Protocol
+from typing import BinaryIO, Callable, Iterator, Protocol
 
 import numpy as np
 
@@ -58,6 +59,120 @@ class FfmpegRawVideoConfig:
             "rawvideo",
             "-",
         ]
+
+
+@dataclass(frozen=True)
+class OpenCvCaptureConfig:
+    sensor_id: str
+    index: int
+    api: str
+    width: int
+    height: int
+    fps: float | None = None
+
+
+class OpenCvFrameSource:
+    """OpenCV camera source. Use behind LatestFramePump for live loops."""
+
+    def __init__(self, config: OpenCvCaptureConfig):
+        self.config = config
+        self._capture = None
+
+    def __enter__(self) -> "OpenCvFrameSource":
+        import cv2
+
+        capture = cv2.VideoCapture(self.config.index, cv2_api(self.config.api))
+        if not capture.isOpened():
+            try:
+                capture.release()
+            except Exception:
+                pass
+            raise RuntimeError(f"OpenCV capture did not open: {self.config}")
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
+        if self.config.fps is not None:
+            capture.set(cv2.CAP_PROP_FPS, float(self.config.fps))
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self._capture = capture
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._capture is not None:
+            try:
+                self._capture.release()
+            except Exception:
+                pass
+            self._capture = None
+
+    def frames(self) -> Iterator[FramePacket]:
+        if self._capture is None:
+            raise RuntimeError("OpenCvFrameSource must be used as a context manager")
+        sequence = 0
+        while True:
+            ok, frame = self._capture.read()
+            if not ok or frame is None:
+                return
+            yield FramePacket(
+                sensor_id=self.config.sensor_id,
+                timestamp_ns=time.monotonic_ns(),
+                sequence=sequence,
+                image_bgr=frame.copy(),
+            )
+            sequence += 1
+
+
+class LatestFramePump:
+    """Runs a blocking FrameSource in a daemon thread and exposes its latest frame."""
+
+    def __init__(self, source_factory: Callable[[], FrameSource]):
+        self.source_factory = source_factory
+        self._lock = threading.Lock()
+        self._latest: FramePacket | None = None
+        self._error: str | None = None
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(target=self._run, name="localcast-latest-frame-pump", daemon=True)
+        self._thread.start()
+
+    def latest(self, *, max_age_ns: int | None = None, now_ns: int | None = None) -> FramePacket | None:
+        with self._lock:
+            frame = self._latest
+        if frame is None:
+            return None
+        if max_age_ns is not None:
+            current = time.monotonic_ns() if now_ns is None else int(now_ns)
+            if current - int(frame.timestamp_ns) > int(max_age_ns):
+                return None
+        return frame
+
+    @property
+    def error(self) -> str | None:
+        with self._lock:
+            return self._error
+
+    def _run(self) -> None:
+        try:
+            with self.source_factory() as source:  # type: ignore[attr-defined]
+                for frame in source.frames():
+                    with self._lock:
+                        self._latest = frame
+                        self._error = None
+        except Exception as exc:
+            with self._lock:
+                self._error = repr(exc)
+
+
+def cv2_api(name: str) -> int:
+    import cv2
+
+    return {
+        "any": 0,
+        "dshow": cv2.CAP_DSHOW,
+        "msmf": cv2.CAP_MSMF,
+    }[name]
 
 
 class FfmpegRawVideoSource:

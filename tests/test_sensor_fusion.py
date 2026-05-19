@@ -1,6 +1,7 @@
 import io
 from pathlib import Path
 import tempfile
+import time
 import unittest
 
 import numpy as np
@@ -33,6 +34,7 @@ from localcast.sensor_fusion import (
     camera_mic_geometry_from_audio_profile,
     camera_sensor_id_for_microphone,
     constraints_from_phase_sources,
+    detect_camera_motion_peaks,
     detect_clap_events,
     estimate_pose_corrections,
     frame_to_vertex_array,
@@ -71,6 +73,7 @@ from scripts.live_sensor_fusion import (
 from localcast.sensor_fusion.active_illumination import ActiveIlluminationController, IlluminationPulsePlan
 from audio_field.cultcache_audio import make_audio_source_events, make_spatial_audio_frame, put_live_spatial_audio_frame
 from localcast.sensor_fusion.adapters import read_raw_bgr_frames
+from localcast.sensor_fusion.adapters import LatestFramePump, FramePacket
 
 
 def camera(sensor_id, x):
@@ -675,6 +678,44 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(DEFAULT_RESERVOIR_NS + 10, clamped.audio_alignment_time_ns)
         self.assertEqual(5_000_000_000, clamped.source_time_max_ns - clamped.source_time_min_ns)
         self.assertEqual(("fresh",), tuple(point.stable_key for point in clamped.points))
+
+    def test_latest_frame_pump_exposes_newest_frame_without_blocking_reader(self):
+        class FakeSource:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return None
+
+            def frames(self):
+                yield FramePacket("cam", 10, 0, np.zeros((1, 1, 3), dtype=np.uint8))
+                yield FramePacket("cam", 20, 1, np.ones((1, 1, 3), dtype=np.uint8))
+
+        pump = LatestFramePump(lambda: FakeSource())
+        pump.start()
+        deadline = time.monotonic() + 1.0
+        latest = None
+        while time.monotonic() < deadline:
+            latest = pump.latest()
+            if latest is not None and latest.sequence == 1:
+                break
+            time.sleep(0.01)
+
+        self.assertIsNotNone(latest)
+        self.assertEqual(1, latest.sequence)
+        self.assertEqual(20, latest.timestamp_ns)
+
+    def test_camera_motion_peaks_skip_mismatched_frame_shapes(self):
+        frames = {
+            "leap": [
+                TimestampedFrame("leap", 1_000, np.zeros((12, 16), dtype=np.float32)),
+                TimestampedFrame("leap", 2_000, np.zeros((24, 16), dtype=np.float32)),
+            ]
+        }
+
+        peaks = detect_camera_motion_peaks(frames, 1_500)
+
+        self.assertEqual([], peaks)
 
     def test_chirp_pose_constraints_map_camera_mics_to_range_residuals(self):
         constraints = constraints_from_phase_sources(

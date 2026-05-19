@@ -211,6 +211,8 @@ def detect_camera_motion_peaks(
             midpoint_ns = (previous.timestamp_ns + current.timestamp_ns) // 2
             if abs(midpoint_ns - oracle_time_ns) > config.camera_window_ns:
                 continue
+            if previous.image.shape[:2] != current.image.shape[:2]:
+                continue
             score, uv = frame_motion_score(previous.image, current.image)
             if score < config.min_camera_motion_score:
                 continue
