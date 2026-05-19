@@ -147,7 +147,9 @@ research:
       phase-field CultCache documents from visible local mics plus Scarlett
       loopback, sends probes through the selected Scarlett output, resamples
       probe playback when that output is 44.1 kHz, and reports missing
-      distributed channels as explicit placeholders. `audio-phase-field-status.json`
+      distributed channels as explicit placeholders. Active probe scheduling is
+      restricted to source ids with live local capture devices, so placeholders
+      do not consume chirp budget. `audio-phase-field-status.json`
       declares input mode and whether active probes are closed-loop; current
       deadline mode is `live-local-capture` with closed-loop probe capture when
       Scarlett loopback is available.

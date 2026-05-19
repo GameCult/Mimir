@@ -307,6 +307,7 @@ def main() -> None:
     extractor = LivePhaseMeaningExtractor(channels, sample_rate, [250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 12000.0])
     maintainer = None
     if args.maintain_confidence:
+        live_source_ids = {source_id_for_microphone(mic) for group in groups.values() for mic in group["mics"]}
         maintainer = ActiveConfidenceMaintainer(
             ActiveProbeOptimizer(
                 ProbePolicy(
@@ -329,6 +330,7 @@ def main() -> None:
             harmonic_voices=args.harmonic_voices,
             max_artifacts=args.probe_artifact_slots,
             manifest_max_bytes=args.probe_manifest_max_bytes,
+            eligible_source_ids={source_id for source_id in live_source_ids if source_id},
         )
     start = time.monotonic()
     origin_ns = time.monotonic_ns()

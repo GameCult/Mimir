@@ -46,6 +46,7 @@ class ActiveConfidenceMaintainer:
         harmonic_voices: int = 24,
         max_artifacts: int = 512,
         manifest_max_bytes: int = 1_000_000,
+        eligible_source_ids: set[str] | frozenset[str] | None = None,
     ):
         self.optimizer = optimizer
         self.sample_rate = int(sample_rate)
@@ -60,6 +61,7 @@ class ActiveConfidenceMaintainer:
         self.harmonic_voices = int(harmonic_voices)
         self.max_artifacts = int(max_artifacts)
         self.manifest_max_bytes = int(manifest_max_bytes)
+        self.eligible_source_ids = None if eligible_source_ids is None else frozenset(str(source_id) for source_id in eligible_source_ids)
         if self.channels <= 0:
             raise ValueError("channels must be positive")
         if self.channel < 0 or self.channel >= self.channels:
@@ -70,6 +72,10 @@ class ActiveConfidenceMaintainer:
 
     def update(self, meaning: PhaseFieldMeaning, reference_block: np.ndarray, *, force_masked: bool = False) -> EmittedProbe | None:
         states = sync_states_from_phase_meaning(meaning)
+        if self.eligible_source_ids is not None:
+            states = {source_id: state for source_id, state in states.items() if source_id in self.eligible_source_ids}
+            if not states:
+                return None
         masked = force_masked or is_masked_window(reference_block)
         request = self.optimizer.choose_probe(meaning.frame_id, states, masked_window=masked)
         if request is None:

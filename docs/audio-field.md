@@ -146,7 +146,7 @@ For the current deadline rig, `scripts/stream_live_audio_field.py` owns the live
 .\.venv\Scripts\python.exe .\scripts\stream_live_audio_field.py --profile .\config\audio-field.example.json --loopback-query Scarlett --maintain-confidence --play-probes --probe-output-query Scarlett
 ```
 
-It publishes both `audio-mic-field.msgpack` and `audio-phase-field.msgpack` from visible local mics, records missing distributed channels as explicit placeholders, captures Scarlett loopback as the known reference, and resamples probe playback when the Scarlett output is exposed as 44.1 kHz while the capture field remains 48 kHz.
+It publishes both `audio-mic-field.msgpack` and `audio-phase-field.msgpack` from visible local mics, records missing distributed channels as explicit placeholders, captures Scarlett loopback as the known reference, and resamples probe playback when the Scarlett output is exposed as 44.1 kHz while the capture field remains 48 kHz. Active probe scheduling is restricted to source ids with a live local capture device; placeholders stay in the cache for channel stability, but the calibration loop does not waste chirps trying to synchronize silence.
 
 For the current live app, start the dense harmonic confidence-maintenance loop:
 

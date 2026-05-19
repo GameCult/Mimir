@@ -74,6 +74,37 @@ class ActiveProbeTests(unittest.TestCase):
             self.assertEqual("probe-slot-0000-weak.wav", paths[0])
             self.assertEqual("probe-slot-0000-weak.wav", paths[-1])
 
+    def test_probe_maintainer_ignores_ineligible_placeholder_sources(self):
+        meaning = PhaseFieldMeaning(
+            frame_id=10,
+            audio_time_ns=1,
+            sample_rate=48000,
+            start_sample=0,
+            frame_count=1024,
+            reference_id="program",
+            sources=(
+                SourcePhaseMeaning("placeholder", 0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.1, 0.0, 0.0),
+                SourcePhaseMeaning("live", 1, 0.0, 0.0, 0.0, 0.0, 0.6, 1.0, 0.6, 0.1, 0.0, 0.0),
+            ),
+            global_confidence=0.3,
+            needs_active_probe=True,
+            active_probe_reason="weak",
+        )
+        reference = np.full(1024, 0.05, dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            maintainer = ActiveConfidenceMaintainer(
+                ActiveProbeOptimizer(ProbePolicy(trigger_confidence=0.35, min_interval_frames=1)),
+                sample_rate=48000,
+                output_dir=Path(tmp),
+                eligible_source_ids={"live"},
+            )
+
+            emitted = maintainer.update(meaning, reference, force_masked=True)
+
+            self.assertIsNone(emitted)
+            self.assertFalse((Path(tmp) / "active-probes.jsonl").exists())
+
     def test_probe_chirplet_respects_level_and_channel(self):
         chirp = make_probe_chirplet(48000, duration_seconds=0.02, start_hz=1000, end_hz=4000, level_dbfs=-20, channels=2, channel=1)
 
