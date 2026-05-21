@@ -26,6 +26,9 @@ VoidBot heartbeat contract, read `docs/mimir-face.md`.
 - Treat `docs/mimir-face.md` as the persistent Face memory for the Mimir agent.
 - Update `state/map.yaml` when project understanding changes. Add evidence only when the lesson changes what the next agent should believe.
 - Keep exact branch and HEAD snapshots out of handoff prose. Git commands own volatile truth.
+- Commit `.voidbot` state whenever it is dirty, even if you did not create the
+  changes. Put it in a separate state commit so Face memory and status do not
+  stay stranded as local-only residue.
 
 ## Persistence Commands
 
