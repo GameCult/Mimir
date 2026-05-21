@@ -11,6 +11,10 @@ tools/obs-spout2-plugin/
 tools/src/
 target/
 native/**/target/
+bin/
+obj/
+**/bin/
+**/obj/
 /.voidbot/birth/
 /.voidbot/logs/
 /.voidbot/**/*.lock

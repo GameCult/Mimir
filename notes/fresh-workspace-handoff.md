@@ -37,6 +37,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - The live synchronized program path is being rebuilt. The Python/OpenGL
   deadline Spout bridge has been deleted.
 - `docs/native-rebuild-plan.md` is the current cut plan.
+- `docs/viable-stream-app.md` is the near-term stream target: Aquarium hosts
+  the in-memory five-second runtime and operator UI, local/networked feeds append
+  as producers, and OBS receives synchronized program outputs rather than raw
+  feed sync.
+- `Mimir.slnx` is the repo-owned C# app surface. `src/Mimir.App` references
+  Aquarium Engine as the windowing/rendering/D3D12 host and loads
+  `src/Mimir.Runtime` as the Aquarium client runtime assembly.
 - The reservoir is now one native time-ordered rolling buffer with typed
   indexes/views. The previous typed-ring crate is gone.
 - Native reservoir samples carry provenance flags; diagnostic/fallback samples

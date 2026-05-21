@@ -7,6 +7,26 @@
     "expiredSamplePolicy": "offline-calibration-only",
     "storageLayout": "single-native-rolling-buffer-with-typed-views"
   },
+  "viableStreamApp": {
+    "owner": "Aquarium",
+    "solution": "Mimir.slnx",
+    "appProject": "src/Mimir.App/Mimir.App.csproj",
+    "runtimeProject": "src/Mimir.Runtime/Mimir.Runtime.csproj",
+    "windowingRenderingLibrary": "Aquarium.Engine",
+    "d3d12Bridge": "Aquarium.Engine",
+    "defaultReservoirSeconds": 5.0,
+    "runtimeState": "in-memory-localcast-runtime",
+    "uiAuthority": "debug-settings-output-management",
+    "ingest": {
+      "videoFeeds": "local-or-networked-producers",
+      "audioFeeds": "local-or-networked-producers",
+      "networkFeedsAre": "producers-not-clock-authorities"
+    },
+    "outputs": {
+      "video": "synchronized-program-video",
+      "audio": "separately-controllable-synchronized-stems"
+    }
+  },
   "authorities": {
     "configurationCalibrationLaunchStatus": "Mimir",
     "denseVisualFusion": "Aquarium",

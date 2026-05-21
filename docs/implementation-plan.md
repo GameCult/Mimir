@@ -13,6 +13,14 @@ The native reservoir is now one time-ordered rolling buffer with typed views.
 The previous shared-edge typed rings proved the retention invariant; the new
 shape removes independent per-kind storage from the live foundation.
 
+The near-term viable stream app is Aquarium-hosted: it ingests local or
+networked video/audio feeds as producers into the same five-second in-memory
+`LocalcastRuntime`, exposes debug/settings/output control through Aquarium UI,
+and emits synchronized OBS program video plus separately controllable audio
+stems. Mimir now owns its own C# solution while referencing Aquarium Engine as
+the windowing/rendering library and D3D12 bridge. `docs/viable-stream-app.md`
+is the current cut line for that app.
+
 The v1 OBS bridge is now gated by a bounded smoke-test witness ledger. No
 plugin/native receiver expansion is justified until
 `calibration/runs/obs-v1-smoke-ledger.json` records sender capture, SRT receive,
@@ -35,6 +43,13 @@ latency, and confidence.
     behavior, and inherited memories. VoidBot is only the mouth/scheduler.
 - Perfect Machine contract:
   - `docs/perfect-machine.md` defines the target native machine: one five-second spatiotemporal reservoir, Aquarium-owned dense visual fusion/material/brush rendering, Faust-owned hot audio DSP, OBS-owned broadcast controls, and Mimir-owned calibration/config/status.
+  - `docs/viable-stream-app.md` defines the first useful application cut:
+    Aquarium hosts the in-memory five-second runtime, owns runtime UI and
+    output management, treats local/networked feeds as producers, and emits
+    synchronized OBS program surfaces.
+  - `Mimir.slnx` contains `src/Mimir.App` and `src/Mimir.Runtime`.
+    `Mimir.App` launches `AquariumHost` from Aquarium Engine, and
+    `Mimir.Runtime` supplies the Aquarium client runtime factory.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir typed views, native authorities, outputs, and the demotion of bridge scripts to tooling.
   - `native/reservoir` is the first native Rust crate. It implements one
     shared-edge five-second rolling buffer with typed views and proves that

@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Mimir.Runtime</AssemblyName>
+    <RootNamespace>Mimir.Runtime</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Aquarium-Engine\src\Aquarium.Engine.Contracts\Aquarium.Engine.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\Aquarium-Engine\src\Aquarium.LocalCast\Aquarium.LocalCast.csproj" />
+  </ItemGroup>
+
+</Project>

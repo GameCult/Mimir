@@ -55,6 +55,17 @@ not pretend to own GPU image memory or Faust audio buffers. Edge JSON may
 declare schema or export diagnostics; live process/network data is typed
 CultNet documents.
 
+## Viable Stream App
+
+`docs/viable-stream-app.md` defines the near-term app target while full native
+capture work continues. Aquarium hosts the running Mimir app, keeps the default
+five-second reservoir in memory, exposes debug/settings/output controls, and
+emits synchronized OBS program video plus separately controllable audio stems.
+Local and networked video/audio feeds are producers into that one runtime
+window; they do not own clocks or private synchronization buffers. Mimir owns
+`Mimir.slnx`; `src/Mimir.App` references Aquarium Engine as the host/windowing
+and D3D12 bridge, while `src/Mimir.Runtime` provides the Aquarium client runtime.
+
 ```mermaid
 flowchart TD
     A["config/localcast.json"] --> B["sender-start.ps1"]

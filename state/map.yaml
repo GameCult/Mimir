@@ -18,7 +18,12 @@ objective:
   current: >
     Carve out Python live producers, the OpenGL Spout sink, JSON live stores,
     and duplicated reservoir windows. Rebuild the live path around one native
-    rolling buffer with typed indexes/views and CultNet typed documents.
+    rolling buffer with typed indexes/views and CultNet typed documents. The
+    immediate viable stream app is Aquarium-hosted: local and networked
+    video/audio feeds append into one five-second in-memory runtime, Aquarium
+    provides debug/settings/output UI, and OBS receives synchronized program
+    outputs. Mimir owns its own C# solution and references Aquarium Engine as
+    the windowing/rendering library and D3D12 bridge.
 
 constraints:
   - Sender is Windows.
@@ -31,6 +36,8 @@ constraints:
   - No OpenGL production Spout sink.
   - Edge JSON is schema/diagnostic only; live network/process data is typed
     CultNet documents.
+  - Networked feeds are producers into the live runtime, not independent clock
+    or synchronization authorities.
 
 invariants:
   - OBS composition authority stays in OBS.
@@ -44,6 +51,8 @@ invariants:
     retention.
   - Aquarium owns production Spout publication; Faust/native DSP owns hot audio.
   - Python and JSON may diagnose or test the machine, not run it.
+  - Aquarium owns the viable stream app UI for runtime debugging, settings, and
+    output management.
 
 accepted_design:
   - `docs/mimir-face.md`, `.voidbot/voice/identity.json`, and
@@ -55,6 +64,13 @@ accepted_design:
     deadline Python/OpenGL bridge as a foundation and defines the next coherent
     rebuild target.
   - `docs/perfect-machine.md` and `config/perfect-machine.example.json` define the native target: one five-second spatiotemporal reservoir, Aquarium GPU fusion/rendering, Faust DSP, OBS output controls, and Mimir tooling.
+  - `docs/viable-stream-app.md` defines the near-term application cut: Aquarium
+    hosts the five-second in-memory `LocalcastRuntime`, local/networked feeds
+    append as producers, Aquarium exposes debug/settings/output controls, and
+    OBS receives synchronized program video plus controllable audio stems.
+  - `Mimir.slnx` owns the app surface. `src/Mimir.App` launches Aquarium Engine
+    as the host/window/D3D12 library, and `src/Mimir.Runtime` provides Mimir's
+    Aquarium client runtime factory.
   - `native/reservoir` is the first native Rust crate. It now uses one
     time-ordered rolling buffer with typed views, so retention has exactly one
     owner while Aquarium/Faust still get kind-scoped queries.
@@ -93,6 +109,9 @@ accepted_design:
   - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
 
 active_subgoals:
+  - Build the viable Aquarium-hosted stream app around one five-second
+    `LocalcastRuntime`: ingest local/networked video and audio producers,
+    expose runtime UI, and emit synchronized OBS program outputs.
   - Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime` and
     `LocalcastProducer` C ABI described by
     `native/reservoir/include/localcast_reservoir.h`.
