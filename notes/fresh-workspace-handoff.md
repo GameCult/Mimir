@@ -47,6 +47,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   output management.
 - Keep PowerShell/FFmpeg/SRT as bridge utilities until native program output
   replaces them.
+- Kiyo Pro has two UVC extension units, but the immediate 60 fps blocker now
+  looks like bus topology: the local Pro is behind a Genesys Logic USB hub as
+  USB high-speed / `bcdUSB=0x0210`, not SuperSpeed. Move/verify it on a USB 3.x
+  path before poking writable vendor selectors.
 
 ## Immediate Re-entry Instruction
 

@@ -89,13 +89,16 @@ current_status:
     usable through KS when manual exposure is forced shorter: 1080p MJPG reaches
     about 30 fps and 720p MJPG reaches about 51.5 fps. Kiyo Pro advertises 60
     fps MJPG at 720p/1080p but currently delivers only about 25 fps through the
-    same KS path even with manual exposure tuning. Online reports and local
-    control tests point at Kiyo Pro firmware/Synapse/anti-flicker or extension
-    control state: standard KS low-light compensation off does not restore 60
-    fps, powerline 60Hz only raises Pro cadence to about 29 fps, and standard
-    extended Video HDR is not exposed on this KS path.
+    same KS path even with manual exposure tuning. Standard KS low-light
+    compensation off does not restore 60 fps, powerline 60Hz only raises Pro
+    cadence to about 29 fps, and standard extended Video HDR is not exposed on
+    this KS path. The controls-only probe now parses USB VideoControl
+    descriptors and found the Kiyo Pro's two vendor extension units. One
+    extension unit answers writable KS selectors, but the stronger local cause
+    is bus topology: the Pro is currently behind a Genesys Logic USB hub as
+    high-speed USB 2.x (`bcdUSB=0x0210`, speed `2`), not SuperSpeed USB 3.x.
   next_action: >
     Turn the warmed, queued Leap KS path into an `IMimirVideoCaptureDriver`,
     preserve direct control hooks for timing-camera state, and decide whether
-    Kiyo Pro needs Synapse/OBS comparison, vendor extension enumeration, or
-    firmware reset before it joins the six-camera capture set.
+    Kiyo Pro reaches 60 fps after moving it to a verified SuperSpeed USB path
+    before mutating unknown vendor extension selectors.

@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <winioctl.h>
 #include <setupapi.h>
+#include <usbioctl.h>
 #include <ks.h>
 #include <ksmedia.h>
 #include <winternl.h>
@@ -12,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -123,6 +125,11 @@ struct ControlScenario
 };
 
 std::string lastErrorText();
+std::string wideToUtf8(const wchar_t* value);
+std::string guidText(const GUID& guid);
+
+constexpr GUID UsbHubInterfaceGuid =
+    {0xf18a0e88, 0xc30c, 0x11d0, {0x88, 0x15, 0x00, 0xa0, 0xc9, 0x06, 0xbe, 0xd8}};
 
 bool ksProperty(HANDLE handle, void* property, DWORD propertyBytes, void* output, DWORD outputBytes, DWORD* returned = nullptr)
 {
@@ -141,6 +148,55 @@ bool ksProperty(HANDLE handle, void* property, DWORD propertyBytes, void* output
         *returned = bytes;
     }
     return ok != FALSE;
+}
+
+std::vector<std::string> enumerateInterfacePaths(const GUID& interfaceGuid, const char* label)
+{
+    std::vector<std::string> paths;
+    DeviceInfoSet info(SetupDiGetClassDevsA(
+        &interfaceGuid,
+        nullptr,
+        nullptr,
+        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE));
+    if (info.value == INVALID_HANDLE_VALUE)
+    {
+        std::printf("SetupDiGetClassDevs(%s) failed: %s\n", label, lastErrorText().c_str());
+        return paths;
+    }
+
+    for (DWORD index = 0;; ++index)
+    {
+        SP_DEVICE_INTERFACE_DATA interfaceData{};
+        interfaceData.cbSize = sizeof(interfaceData);
+        if (!SetupDiEnumDeviceInterfaces(info.value, nullptr, &interfaceGuid, index, &interfaceData))
+        {
+            if (GetLastError() != ERROR_NO_MORE_ITEMS)
+            {
+                std::printf("SetupDiEnumDeviceInterfaces(%s) failed: %s\n", label, lastErrorText().c_str());
+            }
+            break;
+        }
+
+        DWORD required = 0;
+        SetupDiGetDeviceInterfaceDetailW(info.value, &interfaceData, nullptr, 0, &required, nullptr);
+        if (required == 0)
+        {
+            continue;
+        }
+
+        std::vector<std::uint8_t> storage(required);
+        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(storage.data());
+        detail->cbSize = sizeof(*detail);
+        if (!SetupDiGetDeviceInterfaceDetailW(info.value, &interfaceData, detail, required, nullptr, nullptr))
+        {
+            std::printf("SetupDiGetDeviceInterfaceDetail(%s) failed: %s\n", label, lastErrorText().c_str());
+            continue;
+        }
+
+        paths.push_back(wideToUtf8(detail->DevicePath));
+    }
+
+    return paths;
 }
 
 bool getVideoProcAmp(HANDLE filter, ULONG id, LONG& value, ULONG& flags)
@@ -318,6 +374,446 @@ void printKnownControls(HANDLE filter)
     }
 }
 
+std::string accessText(ULONG accessFlags)
+{
+    std::string text;
+    if ((accessFlags & KSPROPERTY_TYPE_GET) != 0)
+    {
+        text += "GET";
+    }
+    if ((accessFlags & KSPROPERTY_TYPE_SET) != 0)
+    {
+        if (!text.empty())
+        {
+            text += "|";
+        }
+        text += "SET";
+    }
+    return text.empty() ? "none" : text;
+}
+
+bool getTopologyNodes(HANDLE filter, std::vector<GUID>& nodes)
+{
+    KSPROPERTY property{};
+    property.Set = KSPROPSETID_Topology;
+    property.Id = KSPROPERTY_TOPOLOGY_NODES;
+    property.Flags = KSPROPERTY_TYPE_GET;
+
+    DWORD bytes = 0;
+    ksProperty(filter, &property, sizeof(property), nullptr, 0, &bytes);
+    if (bytes < sizeof(KSMULTIPLE_ITEM))
+    {
+        std::printf("topology nodes unavailable: %s\n", lastErrorText().c_str());
+        return false;
+    }
+
+    std::vector<std::uint8_t> storage(bytes);
+    if (!ksProperty(filter, &property, sizeof(property), storage.data(), static_cast<DWORD>(storage.size()), &bytes))
+    {
+        std::printf("topology nodes query failed: %s\n", lastErrorText().c_str());
+        return false;
+    }
+
+    auto* multiple = reinterpret_cast<KSMULTIPLE_ITEM*>(storage.data());
+    auto* guidData = reinterpret_cast<GUID*>(storage.data() + sizeof(KSMULTIPLE_ITEM));
+    nodes.assign(guidData, guidData + multiple->Count);
+    return true;
+}
+
+bool getTopologyName(HANDLE filter, ULONG nodeId, std::string& name)
+{
+    KSP_NODE property{};
+    property.Property.Set = KSPROPSETID_Topology;
+    property.Property.Id = KSPROPERTY_TOPOLOGY_NAME;
+    property.Property.Flags = KSPROPERTY_TYPE_GET;
+    property.NodeId = nodeId;
+
+    DWORD bytes = 0;
+    ksProperty(filter, &property, sizeof(property), nullptr, 0, &bytes);
+    if (bytes == 0)
+    {
+        return false;
+    }
+
+    std::vector<wchar_t> storage((bytes / sizeof(wchar_t)) + 1);
+    if (!ksProperty(filter, &property, sizeof(property), storage.data(), static_cast<DWORD>(storage.size() * sizeof(wchar_t)), &bytes))
+    {
+        return false;
+    }
+
+    name = wideToUtf8(storage.data());
+    return true;
+}
+
+void printExtensionUnits(HANDLE filter)
+{
+    const GUID extensionUnitPropertySet =
+        {0x749e15f1, 0x12f6, 0x4d27, {0x97, 0x9f, 0x9a, 0xad, 0x9b, 0xde, 0xd6, 0xa5}};
+    const GUID selectorPropertySet =
+        {0x1abdaeca, 0x68b6, 0x4f83, {0x93, 0x71, 0xb4, 0x13, 0x90, 0x7c, 0x7b, 0x9f}};
+    const GUID kiyoProExtensionUnit2 =
+        {0x2c49d16a, 0x32b8, 0x4485, {0x3e, 0xa8, 0x64, 0x3a, 0x15, 0x23, 0x62, 0xf2}};
+    const GUID kiyoProExtensionUnit6 =
+        {0x23e49ed0, 0x1178, 0x4f31, {0xae, 0x52, 0xd2, 0xfb, 0x8a, 0x8d, 0x3b, 0x48}};
+    const std::pair<const char*, GUID> propertySets[] = {
+        {"node-type", KSNODETYPE_DEV_SPECIFIC},
+        {"registered.extension-unit", extensionUnitPropertySet},
+        {"registered.selector", selectorPropertySet},
+        {"kiyo-pro.xu2", kiyoProExtensionUnit2},
+        {"kiyo-pro.xu6", kiyoProExtensionUnit6},
+    };
+
+    std::vector<GUID> nodes;
+    if (!getTopologyNodes(filter, nodes))
+    {
+        return;
+    }
+
+    std::printf("topology nodes: %zu\n", nodes.size());
+    for (std::size_t nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex)
+    {
+        std::string name;
+        const bool hasName = getTopologyName(filter, static_cast<ULONG>(nodeIndex), name);
+        const bool devSpecific = IsEqualGUID(nodes[nodeIndex], KSNODETYPE_DEV_SPECIFIC);
+        std::printf(
+            "  node %zu: type=%s%s",
+            nodeIndex,
+            guidText(nodes[nodeIndex]).c_str(),
+            devSpecific ? " KSNODETYPE_DEV_SPECIFIC" : "");
+        if (hasName && !name.empty())
+        {
+            std::printf(" name=%s", name.c_str());
+        }
+        std::printf("\n");
+
+        if (!devSpecific)
+        {
+            continue;
+        }
+
+        for (const auto& propertySet : propertySets)
+        {
+            bool printedSetHeader = false;
+            for (ULONG controlId = 1; controlId <= 64; ++controlId)
+            {
+                KSP_NODE property{};
+                property.Property.Set = propertySet.second;
+                property.Property.Id = controlId;
+                property.Property.Flags = KSPROPERTY_TYPE_BASICSUPPORT | KSPROPERTY_TYPE_TOPOLOGY;
+                property.NodeId = static_cast<ULONG>(nodeIndex);
+
+                std::uint8_t supportStorage[512]{};
+                DWORD returned = 0;
+                if (!ksProperty(filter, &property, sizeof(property), supportStorage, sizeof(supportStorage), &returned))
+                {
+                    continue;
+                }
+
+                if (!printedSetHeader)
+                {
+                    std::printf("    property-set %s %s\n", propertySet.first, guidText(propertySet.second).c_str());
+                    printedSetHeader = true;
+                }
+
+                ULONG accessFlags = 0;
+                ULONG descriptionSize = 0;
+                ULONG membersSize = 0;
+                ULONG membersCount = 0;
+                ULONG membersFlags = 0;
+                if (returned >= sizeof(KSPROPERTY_DESCRIPTION))
+                {
+                    auto* description = reinterpret_cast<KSPROPERTY_DESCRIPTION*>(supportStorage);
+                    accessFlags = description->AccessFlags;
+                    descriptionSize = description->DescriptionSize;
+                    if (description->MembersListCount > 0 &&
+                        returned >= sizeof(KSPROPERTY_DESCRIPTION) + sizeof(KSPROPERTY_MEMBERSHEADER))
+                    {
+                        auto* members = reinterpret_cast<KSPROPERTY_MEMBERSHEADER*>(
+                            supportStorage + sizeof(KSPROPERTY_DESCRIPTION));
+                        membersFlags = members->MembersFlags;
+                        membersSize = members->MembersSize;
+                        membersCount = members->MembersCount;
+                    }
+                }
+                else if (returned >= sizeof(ULONG))
+                {
+                    accessFlags = *reinterpret_cast<ULONG*>(supportStorage);
+                }
+
+                std::printf(
+                    "      selector %lu: support=%s returned=%lu descSize=%lu members=0x%lx/%lu/%lu",
+                    static_cast<unsigned long>(controlId),
+                    accessText(accessFlags).c_str(),
+                    static_cast<unsigned long>(returned),
+                    static_cast<unsigned long>(descriptionSize),
+                    static_cast<unsigned long>(membersFlags),
+                    static_cast<unsigned long>(membersSize),
+                    static_cast<unsigned long>(membersCount));
+
+                bool printedValue = false;
+                std::vector<DWORD> valueSizes;
+                if (membersSize > 0 && membersSize <= 64)
+                {
+                    valueSizes.push_back(membersSize);
+                }
+                const DWORD fallbackValueSizes[] = {1, 2, 4, 8, 16, 32, 64};
+                for (const DWORD valueBytes : fallbackValueSizes)
+                {
+                    bool alreadyListed = false;
+                    for (const DWORD listed : valueSizes)
+                    {
+                        alreadyListed = alreadyListed || listed == valueBytes;
+                    }
+                    if (!alreadyListed)
+                    {
+                        valueSizes.push_back(valueBytes);
+                    }
+                }
+
+                for (const DWORD valueBytes : valueSizes)
+                {
+                    std::uint8_t valueStorage[64]{};
+                    KSP_NODE getProperty{};
+                    getProperty.Property.Set = propertySet.second;
+                    getProperty.Property.Id = controlId;
+                    getProperty.Property.Flags = KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_TOPOLOGY;
+                    getProperty.NodeId = static_cast<ULONG>(nodeIndex);
+                    DWORD getReturned = 0;
+                    if (!ksProperty(filter, &getProperty, sizeof(getProperty), valueStorage, valueBytes, &getReturned))
+                    {
+                        continue;
+                    }
+
+                    std::printf(" get[%lu]=", static_cast<unsigned long>(valueBytes));
+                    for (DWORD byte = 0; byte < valueBytes; ++byte)
+                    {
+                        std::printf("%02x", valueStorage[byte]);
+                    }
+                    std::printf(" returned=%lu", static_cast<unsigned long>(getReturned));
+                    printedValue = true;
+                    break;
+                }
+
+                if (!printedValue)
+                {
+                    std::printf(" get=unavailable");
+                }
+                std::printf("\n");
+            }
+        }
+    }
+}
+
+std::vector<std::uint8_t> getUsbConfigurationDescriptor(HANDLE hub, ULONG port)
+{
+    const auto requestBytes = sizeof(USB_DESCRIPTOR_REQUEST) + sizeof(USB_CONFIGURATION_DESCRIPTOR);
+    std::vector<std::uint8_t> headerStorage(requestBytes);
+    auto* headerRequest = reinterpret_cast<USB_DESCRIPTOR_REQUEST*>(headerStorage.data());
+    headerRequest->ConnectionIndex = port;
+    headerRequest->SetupPacket.wValue = USB_CONFIGURATION_DESCRIPTOR_TYPE << 8;
+    headerRequest->SetupPacket.wLength = sizeof(USB_CONFIGURATION_DESCRIPTOR);
+
+    DWORD returned = 0;
+    if (!DeviceIoControl(
+            hub,
+            IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
+            headerRequest,
+            static_cast<DWORD>(headerStorage.size()),
+            headerRequest,
+            static_cast<DWORD>(headerStorage.size()),
+            &returned,
+            nullptr))
+    {
+        return {};
+    }
+
+    const auto* config = reinterpret_cast<const USB_CONFIGURATION_DESCRIPTOR*>(headerRequest->Data);
+    if (config->wTotalLength < sizeof(USB_CONFIGURATION_DESCRIPTOR))
+    {
+        return {};
+    }
+
+    std::vector<std::uint8_t> storage(sizeof(USB_DESCRIPTOR_REQUEST) + config->wTotalLength);
+    auto* request = reinterpret_cast<USB_DESCRIPTOR_REQUEST*>(storage.data());
+    request->ConnectionIndex = port;
+    request->SetupPacket.wValue = USB_CONFIGURATION_DESCRIPTOR_TYPE << 8;
+    request->SetupPacket.wLength = config->wTotalLength;
+
+    if (!DeviceIoControl(
+            hub,
+            IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
+            request,
+            static_cast<DWORD>(storage.size()),
+            request,
+            static_cast<DWORD>(storage.size()),
+            &returned,
+            nullptr))
+    {
+        return {};
+    }
+
+    std::vector<std::uint8_t> descriptor(config->wTotalLength);
+    std::memcpy(descriptor.data(), request->Data, descriptor.size());
+    return descriptor;
+}
+
+void printUvcVideoControlDescriptors(const std::vector<std::uint8_t>& descriptor)
+{
+    std::printf("  configuration descriptor bytes: %zu\n", descriptor.size());
+    std::size_t offset = 0;
+    std::uint8_t currentInterface = 0xff;
+    while (offset + 2 <= descriptor.size())
+    {
+        const std::uint8_t length = descriptor[offset];
+        const std::uint8_t type = descriptor[offset + 1];
+        if (length < 2 || offset + length > descriptor.size())
+        {
+            std::printf("  descriptor parse stopped at offset %zu length=%u type=0x%02x\n", offset, length, type);
+            break;
+        }
+
+        const auto* data = descriptor.data() + offset;
+        if (type == USB_INTERFACE_DESCRIPTOR_TYPE && length >= sizeof(USB_INTERFACE_DESCRIPTOR))
+        {
+            const auto* iface = reinterpret_cast<const USB_INTERFACE_DESCRIPTOR*>(data);
+            currentInterface = iface->bInterfaceNumber;
+            std::printf(
+                "  interface %u alt=%u class=0x%02x subclass=0x%02x protocol=0x%02x endpoints=%u\n",
+                iface->bInterfaceNumber,
+                iface->bAlternateSetting,
+                iface->bInterfaceClass,
+                iface->bInterfaceSubClass,
+                iface->bInterfaceProtocol,
+                iface->bNumEndpoints);
+        }
+        else if (type == 0x24 && length >= 3)
+        {
+            const std::uint8_t subtype = data[2];
+            if (currentInterface == 0 && subtype == 0x05 && length >= 8)
+            {
+                const std::uint8_t unitId = data[3];
+                const std::uint8_t controlSize = data[7];
+                std::printf("    processing-unit id=%u controls=", unitId);
+                for (std::uint8_t i = 0; i < controlSize && 8 + i < length; ++i)
+                {
+                    std::printf("%02x", data[8 + i]);
+                }
+                std::printf(" interface=%u\n", currentInterface);
+            }
+            else if (currentInterface == 0 && subtype == 0x06 && length >= 24)
+            {
+                const std::uint8_t unitId = data[3];
+                GUID extensionGuid{};
+                std::memcpy(&extensionGuid, data + 4, sizeof(extensionGuid));
+                const std::uint8_t numControls = data[20];
+                const std::uint8_t numPins = data[21];
+                const std::size_t controlSizeOffset = 22 + numPins;
+                std::printf(
+                    "    extension-unit id=%u guid=%s controls=%u pins=%u",
+                    unitId,
+                    guidText(extensionGuid).c_str(),
+                    numControls,
+                    numPins);
+                if (controlSizeOffset < length)
+                {
+                    const std::uint8_t controlSize = data[controlSizeOffset];
+                    std::printf(" bmControls=");
+                    for (std::uint8_t i = 0; i < controlSize && controlSizeOffset + 1 + i < length; ++i)
+                    {
+                        std::printf("%02x", data[controlSizeOffset + 1 + i]);
+                    }
+                }
+                std::printf(" interface=%u\n", currentInterface);
+            }
+            else if (currentInterface == 0 && subtype == 0x04 && length >= 6)
+            {
+                std::printf("    selector-unit id=%u pins=%u interface=%u\n", data[3], data[4], currentInterface);
+            }
+        }
+
+        offset += length;
+    }
+}
+
+void printUsbVideoDescriptors(USHORT vendorId, USHORT productId)
+{
+    const auto hubPaths = enumerateInterfacePaths(UsbHubInterfaceGuid, "GUID_DEVINTERFACE_USB_HUB");
+    std::printf("USB hubs: %zu\n", hubPaths.size());
+    for (const auto& hubPath : hubPaths)
+    {
+        Handle hub(CreateFileA(
+            hubPath.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr));
+        if (!hub)
+        {
+            continue;
+        }
+
+        USB_NODE_INFORMATION nodeInfo{};
+        nodeInfo.NodeType = UsbHub;
+        DWORD returned = 0;
+        if (!DeviceIoControl(
+                hub.value,
+                IOCTL_USB_GET_NODE_INFORMATION,
+                &nodeInfo,
+                sizeof(nodeInfo),
+                &nodeInfo,
+                sizeof(nodeInfo),
+                &returned,
+                nullptr))
+        {
+            continue;
+        }
+
+        const ULONG ports = nodeInfo.u.HubInformation.HubDescriptor.bNumberOfPorts;
+        for (ULONG port = 1; port <= ports; ++port)
+        {
+            std::vector<std::uint8_t> connectionStorage(sizeof(USB_NODE_CONNECTION_INFORMATION_EX));
+            auto* connection = reinterpret_cast<USB_NODE_CONNECTION_INFORMATION_EX*>(connectionStorage.data());
+            connection->ConnectionIndex = port;
+            if (!DeviceIoControl(
+                    hub.value,
+                    IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX,
+                    connection,
+                    static_cast<DWORD>(connectionStorage.size()),
+                    connection,
+                    static_cast<DWORD>(connectionStorage.size()),
+                    &returned,
+                    nullptr))
+            {
+                continue;
+            }
+
+            if (connection->DeviceDescriptor.idVendor != vendorId ||
+                connection->DeviceDescriptor.idProduct != productId)
+            {
+                continue;
+            }
+
+            std::printf(
+                "USB descriptor match: hub=%s port=%lu speed=%d configs=%u bcdUSB=0x%04x bcdDevice=0x%04x\n",
+                hubPath.c_str(),
+                static_cast<unsigned long>(port),
+                static_cast<int>(connection->Speed),
+                connection->DeviceDescriptor.bNumConfigurations,
+                connection->DeviceDescriptor.bcdUSB,
+                connection->DeviceDescriptor.bcdDevice);
+            const auto descriptor = getUsbConfigurationDescriptor(hub.value, port);
+            if (descriptor.empty())
+            {
+                std::printf("  configuration descriptor unavailable: %s\n", lastErrorText().c_str());
+                continue;
+            }
+            printUvcVideoControlDescriptors(descriptor);
+        }
+    }
+}
+
 std::vector<SavedControl> saveControls(HANDLE filter, const ControlScenario& scenario)
 {
     std::vector<SavedControl> saved;
@@ -475,51 +971,7 @@ bool setState(HANDLE pin, KSSTATE state)
 
 std::vector<std::string> enumerateCapturePaths()
 {
-    std::vector<std::string> paths;
-    DeviceInfoSet info(SetupDiGetClassDevsA(
-        &KSCATEGORY_CAPTURE,
-        nullptr,
-        nullptr,
-        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE));
-    if (info.value == INVALID_HANDLE_VALUE)
-    {
-        std::printf("SetupDiGetClassDevs(KSCATEGORY_CAPTURE) failed: %s\n", lastErrorText().c_str());
-        return paths;
-    }
-
-    for (DWORD index = 0;; ++index)
-    {
-        SP_DEVICE_INTERFACE_DATA interfaceData{};
-        interfaceData.cbSize = sizeof(interfaceData);
-        if (!SetupDiEnumDeviceInterfaces(info.value, nullptr, &KSCATEGORY_CAPTURE, index, &interfaceData))
-        {
-            if (GetLastError() != ERROR_NO_MORE_ITEMS)
-            {
-                std::printf("SetupDiEnumDeviceInterfaces failed: %s\n", lastErrorText().c_str());
-            }
-            break;
-        }
-
-        DWORD required = 0;
-        SetupDiGetDeviceInterfaceDetailW(info.value, &interfaceData, nullptr, 0, &required, nullptr);
-        if (required == 0)
-        {
-            continue;
-        }
-
-        std::vector<std::uint8_t> storage(required);
-        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(storage.data());
-        detail->cbSize = sizeof(*detail);
-        if (!SetupDiGetDeviceInterfaceDetailW(info.value, &interfaceData, detail, required, nullptr, nullptr))
-        {
-            std::printf("SetupDiGetDeviceInterfaceDetail failed: %s\n", lastErrorText().c_str());
-            continue;
-        }
-
-        paths.push_back(wideToUtf8(detail->DevicePath));
-    }
-
-    return paths;
+    return enumerateInterfacePaths(KSCATEGORY_CAPTURE, "KSCATEGORY_CAPTURE");
 }
 
 std::vector<PinCandidate> inspectPins(HANDLE filter)
@@ -921,7 +1373,9 @@ bool measureScenario(HANDLE filter, const PinCandidate& candidate, const Control
 
 int main(int argc, char** argv)
 {
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     const std::string targetVid = argc > 1 ? argv[1] : "vid_f182";
+    const bool controlsOnly = argc > 2 && std::string(argv[2]) == "--controls-only";
     const bool leapMode = targetVid == "vid_f182" || targetVid == "VID_F182";
     const auto paths = enumerateCapturePaths();
     std::printf("capture interfaces: %zu\n", paths.size());
@@ -958,6 +1412,13 @@ int main(int argc, char** argv)
         if (!leapMode)
         {
             printKnownControls(filter.value);
+            printExtensionUnits(filter.value);
+            printUsbVideoDescriptors(0x1532, 0x0e05);
+            if (controlsOnly)
+            {
+                return 0;
+            }
+
             const ULONG camManual = KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL;
             const ULONG procManual = KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL;
             const std::vector<ControlScenario> webcamScenarios = {

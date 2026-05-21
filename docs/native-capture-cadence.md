@@ -208,3 +208,30 @@ not exposed through the standard Windows extended Video HDR KS property on this
 device path. The next useful cut is vendor-extension enumeration or an
 OBS/Synapse comparison to see whether Razer flips a private UVC extension before
 opening the real 60 fps stream.
+
+Vendor/USB descriptor follow-up:
+
+- Synapse is not installed and was not used.
+- The probe now has a controls-only mode:
+  `ks_camera_cadence.exe vid_1532&pid_0e05&mi_00 --controls-only`.
+- The Kiyo Pro exposes two `KSNODETYPE_DEV_SPECIFIC` topology nodes.
+- USB VideoControl descriptor parsing found two UVC extension units:
+  `{2c49d16a-32b8-4485-3ea8-643a152362f2}` with unit id `2`, six controls,
+  and `bmControls=3f00`; `{23e49ed0-1178-4f31-ae52-d2fb8a8d3b48}` with unit id
+  `6`, five declared controls, and `bmControls=ff6f`.
+- The second extension GUID answers KS selector probes on node `2`. Selectors
+  `1`, `3`, `4`, `6`, `11`, `12`, `14`, and `15` report writable support;
+  selectors `2`, `5`, `7`, `8`, `9`, `10`, and `15` return current payloads.
+  Selector `10` returns ASCII `PYTHON_V2B`, which looks like camera/firmware
+  identity rather than an FPS switch.
+- The first extension GUID is present in the descriptor but did not answer the
+  current KS selector sweep.
+- The local Kiyo Pro is currently behind a Genesys Logic `VID_05E3&PID_0610`
+  hub and reports USB speed `2` with `bcdUSB=0x0210`, i.e. high-speed USB 2.x,
+  not SuperSpeed USB 3.x.
+
+Conclusion: the strongest current explanation for the Pro's 25-29 fps ceiling
+is bus topology, not HDR or low-light mode. Razer documents the Kiyo Pro's
+60 fps modes as USB 3.0 operation; locally the device is sitting on a USB 2.x
+hub path. Move it to a verified SuperSpeed root/hub path before spending more
+time mutating unknown vendor selectors.
