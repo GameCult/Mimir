@@ -277,3 +277,17 @@ Second motherboard USB3 port check:
 Conclusion: two motherboard USB3 ports have now failed to negotiate SuperSpeed
 with the Kiyo Pro's stock cable. The next useful physical test is a known-good
 USB3 data cable or a known-good SuperSpeed device on the same ports.
+
+Raven host check:
+
+- The neighbor sender machine is now codenamed Raven.
+- With the Kiyo Pro plugged into Raven, Windows reports the camera, media, USB
+  composite, and microphone interfaces as present.
+- The descriptor-only probe reports the Kiyo Pro on a USB3 root hub at port `6`
+  with `bcdUSB=0x0320`, but negotiated speed is still `UsbHighSpeed(2)`, not
+  `UsbSuperSpeed(3)`.
+- Raven's hub inventory reports zero currently connected SuperSpeed devices.
+
+Conclusion: the same Kiyo Pro/cable also falls back to high-speed on Raven.
+That makes the stock cable or the Kiyo Pro's own SuperSpeed lane the stronger
+suspect than the receiver workstation's rear ports.

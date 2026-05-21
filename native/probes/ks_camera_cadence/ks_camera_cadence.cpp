@@ -1493,6 +1493,18 @@ int main(int argc, char** argv)
         printUsbHubInventory();
         return 0;
     }
+    if (targetVid == "--usb-device")
+    {
+        unsigned int vendorId = 0;
+        unsigned int productId = 0;
+        if (argc < 4 || std::sscanf(argv[2], "%x", &vendorId) != 1 || std::sscanf(argv[3], "%x", &productId) != 1)
+        {
+            std::printf("usage: ks_camera_cadence --usb-device <vid-hex> <pid-hex>\n");
+            return 2;
+        }
+        printUsbVideoDescriptors(static_cast<USHORT>(vendorId), static_cast<USHORT>(productId));
+        return 0;
+    }
 
     bool controlsOnly = false;
     bool baselineOnly = false;
