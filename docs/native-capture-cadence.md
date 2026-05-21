@@ -491,3 +491,35 @@ Conclusion: the current local topology can run all local sensors in parallel:
 Leap stereo plus regular Kiyo plus both PS3 Eyes. With the Focusrite out of the
 Leap neighborhood and the Kiyo Pro absent, Leap stays close to its previous
 best cadence instead of falling into the old ~81 fps band.
+
+After moving the Kiyo Pro back to the Mimir host, local enumeration showed
+LeapUVC, Kiyo Pro, and both PS3 Eyes. The regular Kiyo was not local for this
+run. Kiyo Pro remained on high-speed USB:
+
+- hub: `root_hub30#7&18eea21b`;
+- port: 8;
+- speed: `UsbHighSpeed(2)`;
+- descriptor: `bcdUSB=0x0320`.
+
+Simultaneous local results with Kiyo Pro and both PS3 Eyes at `320x240@187`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 110.80 |
+| Kiyo Pro | 1920x1080 MJPG | 24.97 |
+| PS3 Eye 0 | 320x240 Bayer | 187.46 |
+| PS3 Eye 1 | 320x240 Bayer | 186.89 |
+
+Simultaneous local results with Kiyo Pro and both PS3 Eyes at `640x480@60`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 110.72 |
+| Kiyo Pro | 1920x1080 MJPG | 24.87 |
+| PS3 Eye 0 | 640x480 Bayer | 59.91 |
+| PS3 Eye 1 | 640x480 Bayer | 59.19 |
+
+Conclusion: in the current USB layout, Kiyo Pro does not poison Leap cadence.
+It remains a ~25 fps RGB source because it still negotiates high-speed USB, but
+the restored local sensor set is stable with Leap stereo, Kiyo Pro, and both
+PS3 Eyes active.

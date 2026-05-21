@@ -135,7 +135,13 @@ current_status:
     PS3 Eyes run in parallel while Kiyo Pro stays off-host. With both Eyes at
     320x240@187, Leap delivered 106.07 fps, Kiyo 30.33 fps, and the Eyes 186.57
     / 186.14 fps. With both Eyes at 640x480@60, Leap delivered 108.07 fps, Kiyo
-    30.34 fps, and the Eyes 57.79 / 58.08 fps.
+    30.34 fps, and the Eyes 57.79 / 58.08 fps. Moving Kiyo Pro back to the
+    Mimir host while regular Kiyo was absent kept Leap healthy: with both Eyes
+    at 320x240@187, Leap delivered 110.80 fps, Kiyo Pro 24.97 fps, and the Eyes
+    187.46 / 186.89 fps; with both Eyes at 640x480@60, Leap delivered 110.72
+    fps, Kiyo Pro 24.87 fps, and the Eyes 59.91 / 59.19 fps. Kiyo Pro still
+    negotiates UsbHighSpeed(2), but it does not poison Leap cadence in the
+    current layout.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
     runtime capture driver, then isolate Raven's PS3 Eye port/controller until
