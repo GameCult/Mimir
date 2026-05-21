@@ -121,7 +121,12 @@ current_status:
     LeapUVC, regular Kiyo, and one PS3 Eye, but local cadence still stayed low:
     Leap delivered 81.34 fps with Kiyo+Eye, 82.77 fps with Kiyo only, and only
     84.18 fps in a same-session Leap-only baseline. The previous ~110.8 fps
-    Leap result is not currently reproduced.
+    Leap result was not reproduced until the Focusrite Scarlett Solo was moved
+    away from the Leap USB neighborhood. After that, Leap-only baseline rose to
+    95.48 fps, best full-height scenario to 101.67 fps, and the local split set
+    delivered Leap 105.10 fps, regular Kiyo 30.17 fps, and one PS3 Eye 185.81
+    fps. The split-host layout is viable if the Leap's USB neighborhood stays
+    free of the Focusrite and other heavy devices.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
     runtime capture driver, then rerun the six-optical-sensor pull from repo

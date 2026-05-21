@@ -410,3 +410,18 @@ cure the local Leap cadence loss. In this port/controller state, Leap is below
 its previous ~110.8 fps result even when measured alone, so the next check is
 Leap physical/controller state rather than assuming total local camera bandwidth
 was the only problem.
+
+Follow-up: the Focusrite Scarlett Solo had been sharing the Leap's USB row.
+After moving it away, Leap cadence recovered substantially:
+
+| Local active set after moving Focusrite | Leap FPS | Other delivered FPS |
+| --- | ---: | --- |
+| Leap only, baseline control scenario | 95.48 | n/a |
+| Leap only, best fast-combined scenario in that pass | 101.67 | n/a |
+| Leap only, 640x120 baseline | 192.83 | n/a |
+| Leap + Kiyo + one PS3 Eye at 320x240@187 | 105.10 | Kiyo 30.17, PS3 Eye 185.81 |
+
+Conclusion: the split-host local set is viable when the Focusrite is not on the
+Leap's USB neighborhood. Full-height Leap stereo is still a little below the
+old ~110.8 fps best result, but the catastrophic ~81 fps band was caused by the
+local USB layout, not by needing every camera off the machine.
