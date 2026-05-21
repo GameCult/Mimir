@@ -85,6 +85,10 @@ accepted_design:
     the C# runtime: width, height, pixel format, stride, device timestamp, and
     optional native/GPU handle. Leap stereo IR should use this path as the
     timing-camera candidate instead of OpenCV arrival timing.
+  - `IMimirVideoCaptureDriver` plus `MimirVideoCaptureDriverSource` is the live
+    driver-facing seam. LeapUVC/libusb, LeapC images, Media Foundation,
+    DirectShow, or GPU shared textures should plug in there; OpenCV remains
+    offline calibration/diagnostic tooling, not live ingest.
   - `native/reservoir` is the first native Rust crate. It now uses one
     time-ordered rolling buffer with typed views, so retention has exactly one
     owner while Aquarium/Faust still get kind-scoped queries.

@@ -98,7 +98,10 @@ The first cut should be deliberately boring:
   camera/audio adapters that already own buffers or handles.
 - `MimirVideoFrameDescriptor` carries video shape, pixel format, device
   timestamp, stride, and optional native/GPU handle metadata. Leap stereo IR
-  should enter here, not through OpenCV.
+  should enter here through a native driver path.
+- `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the
+  driver-facing seam for polling/pushing frames from LeapUVC/libusb, LeapC image
+  APIs, Media Foundation, DirectShow, or a future GPU shared-texture capture.
 - `MimirProcessStreamSource` is a compatibility adapter for network or
   diagnostic command sources. It is not the six-camera local capture foundation.
 
@@ -123,7 +126,7 @@ to the driver, GPU, and capture APIs.
 
 Leap should be treated as the timing-camera candidate only when the native
 adapter preserves device timestamps or captures a monotonic timestamp
-immediately on frame receipt. OpenCV arrival timing is too soft for that job.
+immediately on frame receipt. Do not put OpenCV in the live ingest path.
 
 ## Cut Line
 

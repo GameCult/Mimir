@@ -55,6 +55,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `MimirVideoFrameDescriptor` now carries video shape, pixel format, stride,
   device timestamp, and optional native/GPU handle metadata for close-to-metal
   frame ingest; Leap stereo IR is the timing-camera candidate for this path.
+  `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
+  driver seam; future LeapUVC/libusb, LeapC image, Media Foundation, DirectShow,
+  or GPU shared-texture adapters should plug in there. OpenCV is no longer a
+  live ingest target.
 - The reservoir is now one native time-ordered rolling buffer with typed
   indexes/views. The previous typed-ring crate is gone.
 - Native reservoir samples carry provenance flags; diagnostic/fallback samples

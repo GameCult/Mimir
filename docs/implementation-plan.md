@@ -61,6 +61,9 @@ latency, and confidence.
     dimensions, pixel format, stride, device timestamp, and optional native/GPU
     handle. Leap stereo IR should enter Mimir through this native descriptor,
     with OpenCV kept out of the hot loop.
+  - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` define the
+    live driver-facing seam. LeapUVC/libusb, LeapC images, Media Foundation,
+    DirectShow, or GPU shared texture capture should plug in here.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir typed views, native authorities, outputs, and the demotion of bridge scripts to tooling.
   - `native/reservoir` is the first native Rust crate. It implements one
     shared-edge five-second rolling buffer with typed views and proves that

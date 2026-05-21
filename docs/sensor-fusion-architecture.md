@@ -9,8 +9,10 @@ Produce an aligned, timestamped point cloud from the local visual rig while allo
 The rig currently has usable capture surfaces:
 
 - PS3 Eyes through FFmpeg DirectShow device names `PS3 Eye Universal` and `PS3 Eye Universal2`, verified at dual `320x240@60`.
-- Kiyo-class RGB cameras through OpenCV/DirectShow/MSMF for color evidence.
-- LeapUVC raw IR through OpenCV for near-field evidence.
+- Kiyo-class RGB cameras through native Windows camera APIs such as Media
+  Foundation or DirectShow for color evidence.
+- LeapUVC raw IR through native LeapUVC/libusb or LeapC image APIs for
+  near-field timing evidence.
 - ChArUco tooling for intrinsics capture, but no shared fusion state yet.
 
 That is capture. Capture is not a world model. The previous live producer also
@@ -67,7 +69,7 @@ flowchart TD
 - `localcast.sensor_fusion.calibration_space` owns fixed-board common-space calibration: ChArUco corner observations plus intrinsics become `CameraModel.world_from_sensor` transforms in one room frame.
 - `localcast.sensor_fusion.surface_features` owns cross-view feature observations, descriptor matching, and triangulated surface tracks. It consumes calibrated cameras; it does not invent camera geometry.
 - `localcast.sensor_fusion.stochastic_mapping` owns transient feature hypothesis sampling, image-pixel to scene-ray lowering, learned image-ray bias cells, and multi-LOD scene cache packets for later compute-shader reconciliation.
-- `localcast.sensor_fusion.camera_control` owns measurement-quality policy: luminance, clipping, contrast, and sharpness in; normalized exposure/gain/focus commands out. Driver adapters own translating those commands to OpenCV, DirectShow, vendor tools, or no-op mocks.
+- `localcast.sensor_fusion.camera_control` owns measurement-quality policy: luminance, clipping, contrast, and sharpness in; normalized exposure/gain/focus commands out. Driver adapters own translating those commands to native camera APIs, vendor tools, or no-op mocks.
 - `localcast.sensor_fusion.dense_stereo` owns a debug CPU reference for dense calibrated RGB surface claims. It is useful for tests and shader parity, but the live million-splat path belongs to Aquarium/GPU compute.
 - `localcast.sensor_fusion.active_illumination` owns deliberate light pulses as calibration telemetry. A Tuya bulb is an optional local-network actuator, not a rendering authority; its pulse timestamps are evidence for camera exposure/depth response.
 - `localcast.sensor_fusion.clap_calibration` owns deliberate clap detection: chirplet-synced audio transients nominate oracle timestamps, camera frame windows around that oracle look for motion derivatives, calibrated camera peaks triangulate the impact point, and only audio-plus-visual agreement becomes a clap calibration event.
@@ -189,7 +191,7 @@ That lets the final stream compositor buffer point-cloud visuals until they alig
 
 Current live deadline rule: `source_time_max_ns - source_time_min_ns` is five seconds. Late-arriving samples can fill the reservoir while they are inside that window; anything older is evidence for offline calibration, not the live program surface.
 
-The Spout/audio overlay applies the same rule at the consumer boundary. If the visual producer or a camera driver stalls, OBS receives a packet clamped to the current audio edge with stale points removed. The current live fallback mode uses cached/synthetic RGB and Leap frames because direct OpenCV reads measured slower than the reservoir; real cameras need nonblocking ingress feeding the same reservoir instead of blocking the producer loop.
+The Spout/audio overlay applies the same rule at the consumer boundary. If the visual producer or a camera driver stalls, OBS receives a packet clamped to the current audio edge with stale points removed. The current live fallback mode uses cached/synthetic RGB and Leap frames because the old diagnostic capture path measured slower than the reservoir; real cameras need nonblocking native-driver ingress feeding the same reservoir instead of blocking the producer loop.
 
 ## Next Cut
 
@@ -198,8 +200,8 @@ The Spout/audio overlay applies the same rule at the consumer boundary. If the v
 3. Use `scripts/triangulate_surface_features.py` on calibrated image pairs to prove real cross-view surface tracks before promoting the matcher into the live producer.
 4. Replace the synthetic stochastic transient observations in
    `localcast.diagnostics.visual_producer` with real native/Aquarium ORB/flow
-   observations from PS3 Eye/Kiyo frames, then delete the Python diagnostic
-   producer.
+   observations from driver-ingested PS3 Eye/Kiyo/Leap frames, then delete the
+   Python diagnostic producer.
 5. Move dense matching and LOD reconciliation from CPU block search/JSON to GPU-resident stereo/flow and compute-shader cache reduction so the million-sample target is not murdered by Python loops.
 6. If a Tuya light is available on the local network, run `scripts/pulse_tuya_light.py` with its local key and align pulse timestamps against camera brightness response.
 7. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
@@ -210,7 +212,9 @@ The Spout/audio overlay applies the same rule at the consumer boundary. If the v
 
 ## References
 
-- OpenCV multi-camera calibration and triangulation are the geometry spine. See `research/visual-spatial-map/summary.md`.
+- Multi-camera calibration and triangulation are the geometry spine. OpenCV may
+  remain an offline calibration library; it is not live frame ingest. See
+  `research/visual-spatial-map/summary.md`.
 - Jacob and Haeb-Umbach 2015 motivates audio-visual coordinate alignment. See `research/visual-spatial-map/mirrors/krekovic-2015-audio-visual-geometry-calibration.pdf`.
 - Kerbl et al. 2023 and RTG-SLAM motivate splats as render packets, not state ownership. See `research/visual-spatial-map/summary.md` and `research/gpu-fusion-splatting/summary.md`.
 - Spout2 and the OBS Spout2 plugin are the Windows/OBS texture-sharing bridge. See `research/spout-obs-bridge/summary.md`.

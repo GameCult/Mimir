@@ -73,6 +73,9 @@ Local six-camera ingest should push native handles through
 edge for network SRT or diagnostics. `MimirVideoFrameDescriptor` carries
 dimensions, pixel format, stride, device timestamp, and optional native/GPU
 handle metadata so Leap stereo IR can enter Mimir without OpenCV owning timing.
+`IMimirVideoCaptureDriver` is the driver-facing seam for LeapUVC/libusb, LeapC
+images, Media Foundation, DirectShow, or GPU shared textures. OpenCV is only an
+offline calibration or diagnostic library now.
 
 ```mermaid
 flowchart TD

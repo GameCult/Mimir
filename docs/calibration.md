@@ -85,7 +85,7 @@ Observed video access:
 
 Mode probe notes:
 
-- `msmf:0` LeapUVC accepts a `320x240x120` request and reports about 115 fps, with rough OpenCV measured capture around 52 fps in the first short probe. Treat that as "tracking mode is plausible," not calibrated throughput.
+- Historical diagnostic only: `msmf:0` LeapUVC accepted a `320x240x120` request and reported about 115 fps, while the old OpenCV probe measured around 52 fps. Treat that as evidence that the sensor mode is plausible and that the diagnostic path is too soft for live timing. Mimir live ingest should talk directly to the driver path.
 - Kiyo RGB devices produce snapshots, but initial isolated mode probes against Kiyo indices timed out. Do not trust FPS configuration for Kiyos until a backend-specific capture path is chosen.
 - PS3 Eye default DirectShow capture works at `640x480` near 30 fps. High-FPS tracking modes are not proven yet; mode probes against the DirectShow filter can hang or collide with another open handle, so test them sequentially.
 
@@ -192,9 +192,9 @@ After registration, this machine exposes:
 
 Known caveats:
 
-- OpenCV `mode-probe` calls that set width/height/fps may time out against the PS3EyeDirectShow filter.
+- Historical diagnostic only: OpenCV `mode-probe` calls that set width/height/fps may time out against the PS3EyeDirectShow filter.
 - Parallel probes can race the same libusb/backend state and produce `Access is denied`; test PS3 Eye mode changes one handle at a time.
-- OpenCV by index does not negotiate high-rate PS3 Eye modes correctly. It can report a requested FPS while delivering the wrong shape or frame rate.
+- Historical diagnostic only: OpenCV by index did not negotiate high-rate PS3 Eye modes correctly. It can report a requested FPS while delivering the wrong shape or frame rate.
 - FFmpeg by DirectShow device name does negotiate the filter pins correctly. Verified modes:
   - single `PS3 Eye Universal` at `640x480@30/40/50/60`; `640x480@60` delivered about 56 fps over three seconds
   - single `PS3 Eye Universal` at `320x240@30/40/50/60`; `320x240@60` delivered 180 frames over three seconds

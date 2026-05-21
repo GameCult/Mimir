@@ -50,6 +50,8 @@ class MimirAppContractTests(unittest.TestCase):
         native_source = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirNativeIngestStreamSource.cs").read_text(encoding="utf-8")
         process_source = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirProcessStreamSource.cs").read_text(encoding="utf-8")
         frame_descriptor = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirVideoFrameDescriptor.cs").read_text(encoding="utf-8")
+        driver = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "IMimirVideoCaptureDriver.cs").read_text(encoding="utf-8")
+        driver_source = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirVideoCaptureDriverSource.cs").read_text(encoding="utf-8")
 
         self.assertIn("payloadHandle", native_source)
         self.assertIn("PushVideoFrame", native_source)
@@ -57,6 +59,8 @@ class MimirAppContractTests(unittest.TestCase):
         self.assertIn("LeapStereoIr", frame_descriptor)
         self.assertIn("DeviceTimestampNs", frame_descriptor)
         self.assertIn("NativeHandle", frame_descriptor)
+        self.assertIn("TryCapture", driver)
+        self.assertIn("MimirNativeIngestStreamSource", driver_source)
         self.assertIn("RedirectStandardOutput", process_source)
 
 

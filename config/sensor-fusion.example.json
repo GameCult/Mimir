@@ -74,8 +74,9 @@
       "id": "kiyo_rgb",
       "role": "rgb_projection",
       "capture": {
-        "adapter": "opencv-dshow",
-        "index": 1,
+        "adapter": "native-driver",
+        "driver": "media-foundation-or-directshow",
+        "device_name": "Razer Kiyo",
         "width": 640,
         "height": 480,
         "fps": 30
