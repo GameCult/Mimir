@@ -141,10 +141,15 @@ current_status:
     187.46 / 186.89 fps; with both Eyes at 640x480@60, Leap delivered 110.72
     fps, Kiyo Pro 24.87 fps, and the Eyes 59.91 / 59.19 fps. Kiyo Pro still
     negotiates UsbHighSpeed(2), but it does not poison Leap cadence in the
-    current layout.
+    current layout. Moving regular Kiyo from front panel to a rear port made
+    all five camera devices / six optical sensors visible locally. With both
+    Eyes at 320x240@187, the full set delivered Leap 110.84 fps, Kiyo Pro 25.08
+    fps, Kiyo 30.18 fps, PS3 Eye 0 187.59 fps, and PS3 Eye 1 187.02 fps. With
+    both Eyes at 640x480@60, it delivered Leap 110.76 fps, Kiyo Pro 25.14 fps,
+    Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
-    runtime capture driver, then isolate Raven's PS3 Eye port/controller until
-    its raw WinUSB cadence is stable. Keep high-rate cameras split across
-    controllers/hubs deliberately, because current shared-load tests show Leap
-    and the Eyes are sensitive to non-camera USB neighbors.
+    runtime capture driver using the current viable local USB topology. Keep
+    the Focusrite away from the Leap USB neighborhood, preserve the full local
+    sensor baseline, and treat Kiyo Pro as a ~25 fps source until its
+    SuperSpeed negotiation is fixed.

@@ -523,3 +523,34 @@ Conclusion: in the current USB layout, Kiyo Pro does not poison Leap cadence.
 It remains a ~25 fps RGB source because it still negotiates high-speed USB, but
 the restored local sensor set is stable with Leap stereo, Kiyo Pro, and both
 PS3 Eyes active.
+
+After moving the regular Kiyo from the front panel to a rear port, all five
+camera devices / six optical sensors were visible locally. The mouse moved into
+the Leap's USB neighborhood and did not disturb cadence. The regular Kiyo was
+behind a Genesys hub at high-speed USB, and the Kiyo Pro remained high-speed
+USB on `root_hub30#7&18eea21b` port 8.
+
+Full local result with both PS3 Eyes at `320x240@187`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 110.84 |
+| Kiyo Pro | 1920x1080 MJPG | 25.08 |
+| Kiyo | 1920x1080 MJPG | 30.18 |
+| PS3 Eye 0 | 320x240 Bayer | 187.59 |
+| PS3 Eye 1 | 320x240 Bayer | 187.02 |
+
+Full local result with both PS3 Eyes at `640x480@60`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 110.76 |
+| Kiyo Pro | 1920x1080 MJPG | 25.14 |
+| Kiyo | 1920x1080 MJPG | 30.18 |
+| PS3 Eye 0 | 640x480 Bayer | 59.66 |
+| PS3 Eye 1 | 640x480 Bayer | 59.95 |
+
+Conclusion: the current USB topology can run the full intended local optical
+set: Leap stereo, Kiyo Pro, regular Kiyo, and both PS3 Eyes. The remaining
+limitation is Kiyo Pro cadence from high-speed USB negotiation, not whole-rig
+USB collapse.
