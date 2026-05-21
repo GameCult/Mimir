@@ -58,10 +58,17 @@ Get-Content .\state\evidence.jsonl -Tail 8
   but Leap drops hard under shared USB load: 40.12 fps when the PS3 Eye runs
   640x480@60, and 81.10 fps when the PS3 Eye runs 320x240@187. The regular
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
+- After port swapping, five camera devices / six optical sensors were visible
+  and pulled at once: LeapUVC's packed stereo IR pair, Kiyo Pro, regular Kiyo,
+  and two PS3 Eyes. With both Eyes at 320x240@187, the set delivered Leap
+  stereo 81.05 fps, Kiyo Pro 24.97 fps, Kiyo 30.28 fps, PS3 Eye 0 187.60 fps,
+  and PS3 Eye 1 187.03 fps. With both Eyes at 640x480@60, Leap rose compared
+  with the earlier three-device run but still only reached 57.33 fps. Kiyo Pro
+  still reports high-speed USB, not SuperSpeed.
 
 ## Immediate Re-entry Instruction
 
 Move the raw PS3 Eye cadence probe into `native/probes` or cut the first real
-runtime capture driver, then rerun simultaneous pulls with the regular Kiyo and
-second PS3 Eye present. Do not restore deleted script infrastructure because a
-stale doc once missed it.
+runtime capture driver, then rerun the six-optical-sensor pull from repo probes
+after deliberate USB topology changes. Do not restore deleted script
+infrastructure because a stale doc once missed it.

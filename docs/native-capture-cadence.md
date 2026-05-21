@@ -335,3 +335,35 @@ solo/KS-only result. The PS3 Eye's 320x240 mode is much less damaging than its
 640x480 mode, but still drags Leap below its ~110 fps warm steady-state. Before
 claiming six-camera viability, plug in the missing regular Kiyo and second PS3
 Eye and split high-rate cameras across controllers/hubs deliberately.
+
+After port swapping, the regular Kiyo and second PS3 Eye appeared, making five
+camera devices visible and six optical sensors present: LeapUVC's packed
+left/right stereo IR pair, Kiyo Pro, Kiyo, and two PS3 Eyes. The Kiyo Pro still
+reports `UsbHighSpeed(2)` on `root_hub30` with `bcdUSB=0x0320`; no hub reported
+a SuperSpeed device.
+
+Five-camera simultaneous results with both PS3 Eyes at `640x480@60`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 57.33 |
+| Kiyo Pro | 1920x1080 MJPG | 24.97 |
+| Kiyo | 1920x1080 MJPG | 30.30 |
+| PS3 Eye 0 | 640x480 Bayer | 59.59 |
+| PS3 Eye 1 | 640x480 Bayer | 57.60 |
+
+Five-camera simultaneous results with both PS3 Eyes at `320x240@187`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 81.05 |
+| Kiyo Pro | 1920x1080 MJPG | 24.97 |
+| Kiyo | 1920x1080 MJPG | 30.28 |
+| PS3 Eye 0 | 320x240 Bayer | 187.60 |
+| PS3 Eye 1 | 320x240 Bayer | 187.03 |
+
+Conclusion: all six currently intended optical sensors can be pulled at once
+through the current direct-driver probes, with the Leap stereo pair delivered
+as one packed UVC frame. The PS3 Eyes are healthiest at `320x240@187`; at
+`640x480@60` they stay near target, but Leap drops farther. Leap is not yet a
+stable ground-truth timing camera under this shared USB topology.

@@ -104,11 +104,18 @@ current_status:
     once, but Leap cadence collapsed under shared load: with PS3 Eye at
     640x480@60 the set delivered Leap 40.12 fps, Kiyo Pro 24.99 fps, and PS3
     Eye 56.06 fps; with PS3 Eye at 320x240@187 it delivered Leap 81.10 fps,
-    Kiyo Pro 25.33 fps, and PS3 Eye 185.74 fps.
+    Kiyo Pro 25.33 fps, and PS3 Eye 185.74 fps. After port swapping, five
+    camera devices / six optical sensors were visible and pulled at once:
+    LeapUVC's packed stereo IR pair, Kiyo Pro, regular Kiyo, and two PS3 Eyes.
+    With both Eyes at 640x480@60, the set delivered Leap stereo 57.33 fps,
+    Kiyo Pro 24.97 fps, Kiyo 30.30 fps, PS3 Eye 0 59.59 fps, and PS3 Eye 1
+    57.60 fps. With both Eyes at 320x240@187, it delivered Leap stereo 81.05
+    fps, Kiyo Pro 24.97 fps, Kiyo 30.28 fps, PS3 Eye 0 187.60 fps, and PS3
+    Eye 1 187.03 fps. Kiyo Pro still negotiates high-speed USB, and Leap
+    remains topology-sensitive under shared load.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
-    runtime capture driver, then rerun simultaneous pulls with the missing
-    regular Kiyo and second PS3 Eye present. Keep high-rate cameras split
-    across controllers/hubs deliberately, because current shared-load tests
-    show Leap is no longer a stable timing authority under the present USB
-    topology.
+    runtime capture driver, then rerun the six-optical-sensor pull from repo
+    probes after deliberate USB topology changes. Keep high-rate cameras split
+    across controllers/hubs deliberately, because current shared-load tests show
+    Leap is no longer a stable timing authority under the present USB topology.
