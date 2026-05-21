@@ -2,5 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/Mimir.App/Mimir.App.csproj" />
     <Project Path="src/Mimir.Runtime/Mimir.Runtime.csproj" />
+    <Project Path="src/Mimir.BufferSmoke/Mimir.BufferSmoke.csproj" />
   </Folder>
 </Solution>

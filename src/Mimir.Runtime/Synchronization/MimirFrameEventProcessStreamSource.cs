@@ -41,6 +41,8 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
 
     public MimirFrameEventProcessStreamSourceOptions Options { get; }
 
+    public bool ExposesDescriptorBuffer => Options.AcceptedSourceIds is not { Count: > 0 };
+
     public bool TryRead(out MimirStreamSample sample)
     {
         return samples.TryDequeue(out sample);

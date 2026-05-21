@@ -4,5 +4,7 @@ public interface IMimirStreamSource : IDisposable
 {
     MimirStreamDescriptor Descriptor { get; }
 
+    bool ExposesDescriptorBuffer => true;
+
     bool TryRead(out MimirStreamSample sample);
 }

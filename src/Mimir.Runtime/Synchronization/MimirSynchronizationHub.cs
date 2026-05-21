@@ -27,7 +27,10 @@ public sealed class MimirSynchronizationHub : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         sources.Add(source);
-        Buffers.EnsureBuffer(source.Descriptor);
+        if (source.ExposesDescriptorBuffer)
+        {
+            Buffers.EnsureBuffer(source.Descriptor);
+        }
     }
 
     public int PollSources(int maxSamplesPerSource = 256)

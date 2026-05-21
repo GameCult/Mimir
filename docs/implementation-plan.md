@@ -33,6 +33,9 @@ a named invariant that the native runtime cannot protect yet.
   from native probes into the same rolling buffers Aquarium inspects. One probe
   process can accept multiple emitted `sourceId` values so it does not reopen
   the same camera set once per stream.
+- `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
+  hub, and prints the actual rolling buffers. Use `--require-samples` when an
+  empty declared sensor buffer should fail the run.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -59,18 +62,21 @@ a named invariant that the native runtime cannot protect yet.
 
 ## Next
 
-1. Replace the frame-event diagnostic bridge with concrete direct capture
+1. Recover the Kiyo Pro KS acquire path, which currently enumerates but leaves
+   its runtime smoke buffer empty with `KSSTATE_ACQUIRE failed: The handle is
+   invalid`.
+2. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
    other cameras.
-2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
+3. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Add native audio capture workers for local mic, loopback, and network audio
+4. Add native audio capture workers for local mic, loopback, and network audio
    feeds.
-4. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
+5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-5. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+6. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Aquarium.
-6. Move mic alignment, room suppression, voice separation, spatialization, and
+7. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-7. Keep the OBS bridge witness ledger as evidence before expanding receiver
+8. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

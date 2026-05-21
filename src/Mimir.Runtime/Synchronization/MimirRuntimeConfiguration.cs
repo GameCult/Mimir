@@ -34,7 +34,7 @@ public sealed class MimirRuntimeConfiguration
             .Where(stream => stream.Enabled)
             .ToArray();
         var streams = sourceModels
-            .Select(ToDescriptor)
+            .SelectMany(ToDescriptors)
             .ToArray();
         var sources = sourceModels
             .Select(stream => TryCreateSource(stream, Path.GetDirectoryName(path)))
@@ -89,6 +89,24 @@ public sealed class MimirRuntimeConfiguration
             ParseKind(stream.Kind),
             ParseOrigin(stream.Origin),
             stream.Enabled);
+    }
+
+    private static IEnumerable<MimirStreamDescriptor> ToDescriptors(MimirStreamConfig stream)
+    {
+        if (stream.AcceptSourceIds.Length == 0)
+        {
+            yield return ToDescriptor(stream);
+            yield break;
+        }
+
+        foreach (var sourceId in stream.AcceptSourceIds.Where(sourceId => !string.IsNullOrWhiteSpace(sourceId)))
+        {
+            yield return new MimirStreamDescriptor(
+                sourceId,
+                ParseKind(stream.Kind),
+                ParseOrigin(stream.Origin),
+                stream.Enabled);
+        }
     }
 
     private static IMimirStreamSource? TryCreateSource(MimirStreamConfig stream, string? configDirectory)
