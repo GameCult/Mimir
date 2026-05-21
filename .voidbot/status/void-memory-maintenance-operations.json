@@ -1,0 +1,92 @@
+[
+  {
+    "operation": "apply_memory_distillation",
+    "proposalId": "mimir-sleep-distill-perfect-machine-witness-law-2026-05-20",
+    "sourceMemoryIds": [
+      "mimir-perfect-machine-spatial-evidence-2026-05-19",
+      "mimir-research-reservoir-sampling-2026-05-19",
+      "mimir-research-splat-projection-2026-05-19",
+      "mimir-research-sensor-fusion-tsdf-2026-05-19",
+      "mimir-research-virtualized-stochastic-detail-2026-05-19"
+    ],
+    "memory": {
+      "memoryId": "mimir-perfect-machine-witness-law-2026-05-20",
+      "kind": "project_seam",
+      "target": {
+        "kind": "system",
+        "id": "aquarium-localcastbridge-spatial-evidence",
+        "label": "Aquarium and LocalCastBridge spatial evidence contract"
+      },
+      "summary": "The Perfect Machine research is worth keeping as one witness-law architecture rather than five separate article scraps.",
+      "claim": "Geometry, procedural detail, sensor feeds, reservoirs, occupancy memory, and rendering may share one machine only when each witness names its domain, bounds, confidence, validation story, and owning authority before reuse or fusion.",
+      "tension": "The article and paper stack make the machine sound grand enough to fake completion; reservoir math, splat vocabulary, TSDF fusion, and residency logic become lies if they are borrowed as atmosphere instead of bounded contracts.",
+      "actionImplication": "Future Mimir proposals about Aquarium or LocalCastBridge should spell out witness type, proposal source, validation rule, confidence bound, resource cost, and handoff owner before claiming a coherent field or adding hotter machinery.",
+      "anchorRefs": [
+        {
+          "ref": "E:/Projects/gamecult-site/GameCult/Blog/perfect-machine-fractal-reservoir-architecture.md",
+          "kind": "blog-article",
+          "summary": "Public Mimir article that gathered the architecture, papers, and ownership chain into one statement."
+        },
+        {
+          "ref": "Aquarium-Engine:docs/perfect-machine-architecture.md",
+          "kind": "indexed-source",
+          "summary": "Architecture plan covering domains, probes, occupancy graph, SDF tile/backend phases, and Mimir adapter work."
+        },
+        {
+          "ref": "Aquarium-Engine:docs/temporal-spatial-evidence-reservoir.md",
+          "kind": "indexed-source",
+          "summary": "Reservoir and temporal resolve guide for typed evidence reuse."
+        },
+        {
+          "ref": "LocalCastBridge:notes/current-system-map.md",
+          "kind": "indexed-source",
+          "summary": "Current LocalCastBridge map naming separate-endpoint drift risk and the need for an explicit crossing contract."
+        },
+        {
+          "ref": "LocalCastBridge:docs/architecture.md",
+          "kind": "indexed-source",
+          "summary": "V1 cut line that rejects premature receiver/plugin complexity before the boring spine earns trust."
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "ref": "Bitterli et al. 2020 ReSTIR DI",
+          "kind": "paper",
+          "summary": "Reservoir reuse depends on explicit proposal/target probability and validation rather than temporal vibes."
+        },
+        {
+          "ref": "Lin et al. 2022 GRIS",
+          "kind": "paper",
+          "summary": "Generalized resampling foundation reinforcing reservoir legality and weight ownership."
+        },
+        {
+          "ref": "Zwicker et al. 2001 EWA Splatting",
+          "kind": "paper",
+          "summary": "Bounded anisotropic support and explicit filtering for point evidence."
+        },
+        {
+          "ref": "Newcombe et al. 2011 KinectFusion",
+          "kind": "paper",
+          "summary": "Range observations become world evidence only after calibration and fusion rules."
+        },
+        {
+          "ref": "Karis et al. 2021 Nanite Virtualized Geometry",
+          "kind": "paper",
+          "summary": "Useful detail selection under budget without pretending the whole universe is resident."
+        }
+      ],
+      "createdAt": "2026-05-19T18:52:31.642Z",
+      "updatedAt": "2026-05-20T13:30:00.000Z",
+      "tags": [
+        "identity:mimir",
+        "topic:spatial-evidence",
+        "topic:reservoirs",
+        "topic:sensor-fusion",
+        "topic:occupancy",
+        "topic:ownership-chain",
+        "article:perfect-machine"
+      ]
+    },
+    "appliedAt": "2026-05-20T13:30:00.000Z"
+  }
+]
