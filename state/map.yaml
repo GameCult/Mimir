@@ -94,11 +94,14 @@ current_status:
     cadence to about 29 fps, and standard extended Video HDR is not exposed on
     this KS path. The controls-only probe now parses USB VideoControl
     descriptors and found the Kiyo Pro's two vendor extension units. One
-    extension unit answers writable KS selectors, but the stronger local cause
-    is bus topology: the Pro is currently behind a Genesys Logic USB hub as
-    high-speed USB 2.x (`bcdUSB=0x0210`, speed `2`), not SuperSpeed USB 3.x.
+    extension unit answers writable KS selectors. Moving the Pro directly to a
+    motherboard USB3 port changed the path to `root_hub30`, `bcdUSB=0x0320`,
+    and exposed 720p/1080p YUY2/MJPG/H264/NV12 at 60 fps, but Windows still
+    reports `UsbHighSpeed` rather than `UsbSuperSpeed`, and baseline cadence is
+    still about 25 fps across every tested format.
   next_action: >
     Turn the warmed, queued Leap KS path into an `IMimirVideoCaptureDriver`,
     preserve direct control hooks for timing-camera state, and decide whether
-    Kiyo Pro reaches 60 fps after moving it to a verified SuperSpeed USB path
-    before mutating unknown vendor extension selectors.
+    Kiyo Pro reaches 60 fps after confirming a true `UsbSuperSpeed` cable/port
+    path; if it remains locked at 25 fps there, inspect explicit frame-interval
+    negotiation or vendor selectors.

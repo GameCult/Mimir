@@ -235,3 +235,32 @@ is bus topology, not HDR or low-light mode. Razer documents the Kiyo Pro's
 60 fps modes as USB 3.0 operation; locally the device is sitting on a USB 2.x
 hub path. Move it to a verified SuperSpeed root/hub path before spending more
 time mutating unknown vendor selectors.
+
+Motherboard USB3 port follow-up:
+
+- After moving the Kiyo Pro off the external hub and directly onto the
+  motherboard USB3 port, the device moved to
+  `\\?\usb#root_hub30#...` port `7` and reports `bcdUSB=0x0320`.
+- Windows still reports the negotiated connection speed enum as `2`
+  (`UsbHighSpeed`, not `UsbSuperSpeed`). The probe now prints the enum name so
+  this is harder to misread.
+- The advertised mode surface improved: `1280x720` and `1920x1080` now expose
+  `YUY2`, `MJPG`, `H264`, and `NV12` at 60 fps.
+- Baseline measured cadence stayed around 25 fps for every 720p/1080p format:
+
+| Mode | Advertised FPS | Delivered FPS |
+| --- | ---: | ---: |
+| 1280x720 YUY2 | 60.00 | 24.96 |
+| 1920x1080 YUY2 | 60.00 | 24.98 |
+| 1280x720 MJPG | 60.00 | 25.20 |
+| 1920x1080 MJPG | 60.00 | 25.03 |
+| 1280x720 H264 | 60.00 | 25.19 |
+| 1920x1080 H264 | 60.00 | 25.01 |
+| 1280x720 NV12 | 60.00 | 25.07 |
+| 1920x1080 NV12 | 60.00 | 25.16 |
+
+Conclusion: the direct motherboard port improved enumeration but did not fix
+cadence. Because Windows still reports `UsbHighSpeed`, verify the cable and
+port path before assuming the private firmware selectors are guilty. If the
+same 25 fps lock remains after `UsbSuperSpeed` is confirmed, the next cut is
+explicit frame-interval negotiation or cautious vendor-selector tracing.

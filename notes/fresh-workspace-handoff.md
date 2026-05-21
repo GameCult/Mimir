@@ -47,10 +47,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
   output management.
 - Keep PowerShell/FFmpeg/SRT as bridge utilities until native program output
   replaces them.
-- Kiyo Pro has two UVC extension units, but the immediate 60 fps blocker now
-  looks like bus topology: the local Pro is behind a Genesys Logic USB hub as
-  USB high-speed / `bcdUSB=0x0210`, not SuperSpeed. Move/verify it on a USB 3.x
-  path before poking writable vendor selectors.
+- Kiyo Pro has two UVC extension units. Moving it to a motherboard USB3 port
+  changed the descriptor path to `root_hub30` / `bcdUSB=0x0320` and exposed
+  720p/1080p YUY2/MJPG/H264/NV12 at 60 fps, but Windows still reports
+  `UsbHighSpeed` rather than `UsbSuperSpeed`; measured cadence remains about
+  25 fps across all tested formats. Verify cable/port SuperSpeed before poking
+  writable vendor selectors.
 
 ## Immediate Re-entry Instruction
 

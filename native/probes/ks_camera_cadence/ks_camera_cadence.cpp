@@ -392,6 +392,23 @@ std::string accessText(ULONG accessFlags)
     return text.empty() ? "none" : text;
 }
 
+const char* usbSpeedText(UCHAR speed)
+{
+    switch (speed)
+    {
+    case UsbLowSpeed:
+        return "UsbLowSpeed";
+    case UsbFullSpeed:
+        return "UsbFullSpeed";
+    case UsbHighSpeed:
+        return "UsbHighSpeed";
+    case UsbSuperSpeed:
+        return "UsbSuperSpeed";
+    default:
+        return "unknown";
+    }
+}
+
 bool getTopologyNodes(HANDLE filter, std::vector<GUID>& nodes)
 {
     KSPROPERTY property{};
@@ -796,9 +813,10 @@ void printUsbVideoDescriptors(USHORT vendorId, USHORT productId)
             }
 
             std::printf(
-                "USB descriptor match: hub=%s port=%lu speed=%d configs=%u bcdUSB=0x%04x bcdDevice=0x%04x\n",
+                "USB descriptor match: hub=%s port=%lu speed=%s(%d) configs=%u bcdUSB=0x%04x bcdDevice=0x%04x\n",
                 hubPath.c_str(),
                 static_cast<unsigned long>(port),
+                usbSpeedText(connection->Speed),
                 static_cast<int>(connection->Speed),
                 connection->DeviceDescriptor.bNumConfigurations,
                 connection->DeviceDescriptor.bcdUSB,
@@ -1375,7 +1393,16 @@ int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     const std::string targetVid = argc > 1 ? argv[1] : "vid_f182";
-    const bool controlsOnly = argc > 2 && std::string(argv[2]) == "--controls-only";
+    bool controlsOnly = false;
+    bool baselineOnly = false;
+    bool allWebcamFormats = false;
+    for (int arg = 2; arg < argc; ++arg)
+    {
+        const std::string option = argv[arg];
+        controlsOnly = controlsOnly || option == "--controls-only";
+        baselineOnly = baselineOnly || option == "--baseline-only";
+        allWebcamFormats = allWebcamFormats || option == "--all-webcam-formats";
+    }
     const bool leapMode = targetVid == "vid_f182" || targetVid == "VID_F182";
     const auto paths = enumerateCapturePaths();
     std::printf("capture interfaces: %zu\n", paths.size());
@@ -1439,17 +1466,23 @@ int main(int argc, char** argv)
                     {"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -8, camManual}}},
                 {"gain minimum", {{"procamp.gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 0, procManual}}},
             };
+            const std::vector<ControlScenario> baselineScenarios = {
+                {"baseline", {}},
+            };
+            const auto& scenarios = baselineOnly ? baselineScenarios : webcamScenarios;
             bool measuredAny = false;
             for (const auto& candidate : candidates)
             {
                 const double targetFps = candidate.interval100ns > 0
                     ? 10000000.0 / static_cast<double>(candidate.interval100ns)
                     : 0.0;
+                const auto subtype = fourccOrGuid(candidate.subtype);
                 const bool interesting =
                     ((candidate.width == 1920 && candidate.height == 1080) ||
                      (candidate.width == 1280 && candidate.height == 720)) &&
                     targetFps >= 25.0 &&
-                    fourccOrGuid(candidate.subtype) == "MJPG";
+                    (subtype == "MJPG" ||
+                     (allWebcamFormats && (subtype == "YUY2" || subtype == "NV12" || subtype == "H264")));
                 if (!interesting)
                 {
                     continue;
@@ -1461,9 +1494,9 @@ int main(int argc, char** argv)
                     candidate.width,
                     candidate.height,
                     candidate.bitCount,
-                    fourccOrGuid(candidate.subtype).c_str(),
+                    subtype.c_str(),
                     targetFps);
-                for (const auto& scenario : webcamScenarios)
+                for (const auto& scenario : scenarios)
                 {
                     measuredAny = measureScenario(filter.value, candidate, scenario) || measuredAny;
                 }
