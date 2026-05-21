@@ -50,6 +50,10 @@ latency, and confidence.
   - `Mimir.slnx` contains `src/Mimir.App` and `src/Mimir.Runtime`.
     `Mimir.App` launches `AquariumHost` from Aquarium Engine, and
     `Mimir.Runtime` supplies the Aquarium client runtime factory.
+  - `Mimir.Runtime` now owns `MimirSynchronizationHub`,
+    `MimirRollingStreamBuffer`, stream descriptors, and the `IMimirStreamSource`
+    adapter seam. It initializes one bounded rolling buffer per configured
+    audio/video stream and polls registered local/network sources each frame.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir typed views, native authorities, outputs, and the demotion of bridge scripts to tooling.
   - `native/reservoir` is the first native Rust crate. It implements one
     shared-edge five-second rolling buffer with typed views and proves that

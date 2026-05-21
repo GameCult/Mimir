@@ -65,6 +65,9 @@ Local and networked video/audio feeds are producers into that one runtime
 window; they do not own clocks or private synchronization buffers. Mimir owns
 `Mimir.slnx`; `src/Mimir.App` references Aquarium Engine as the host/windowing
 and D3D12 bridge, while `src/Mimir.Runtime` provides the Aquarium client runtime.
+`Mimir.Runtime` owns the first synchronization hub: one five-second default
+rolling buffer per configured audio/video stream, source polling through
+`IMimirStreamSource`, and runtime UI readouts for stream/buffer health.
 
 ```mermaid
 flowchart TD

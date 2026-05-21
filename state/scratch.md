@@ -11,5 +11,8 @@ No active scratch subgoal.
   OBS receives synchronized program outputs.
 - Mimir app scaffold now lives in `Mimir.slnx` with `src/Mimir.App` and
   `src/Mimir.Runtime`; Aquarium Engine remains an external project reference.
+- Synchronization ownership started moving into `Mimir.Runtime`: hub, stream
+  descriptors, per-stream rolling buffers, settings, and source adapter seam are
+  in C# now; concrete capture adapters are next.
 - Keep scratch short and disposable.
 - Promote only durable lessons into `state/evidence.jsonl` or the map.

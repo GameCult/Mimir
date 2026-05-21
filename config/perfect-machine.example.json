@@ -16,6 +16,12 @@
     "d3d12Bridge": "Aquarium.Engine",
     "defaultReservoirSeconds": 5.0,
     "runtimeState": "in-memory-localcast-runtime",
+    "syncBuffers": {
+      "owner": "Mimir.Runtime",
+      "defaultDurationSeconds": 5.0,
+      "layout": "one-rolling-buffer-per-configured-audio-or-video-stream",
+      "sourceAdapter": "IMimirStreamSource"
+    },
     "uiAuthority": "debug-settings-output-management",
     "ingest": {
       "videoFeeds": "local-or-networked-producers",

@@ -71,6 +71,11 @@ accepted_design:
   - `Mimir.slnx` owns the app surface. `src/Mimir.App` launches Aquarium Engine
     as the host/window/D3D12 library, and `src/Mimir.Runtime` provides Mimir's
     Aquarium client runtime factory.
+  - `Mimir.Runtime` owns the first synchronization spine:
+    `MimirSynchronizationHub`, `MimirRollingStreamBuffer`, stream descriptors,
+    and `IMimirStreamSource`. It initializes one bounded rolling buffer per
+    configured audio/video stream and drains registered local/network sources
+    into those buffers each Aquarium update.
   - `native/reservoir` is the first native Rust crate. It now uses one
     time-ordered rolling buffer with typed views, so retention has exactly one
     owner while Aquarium/Faust still get kind-scoped queries.
@@ -112,6 +117,8 @@ active_subgoals:
   - Build the viable Aquarium-hosted stream app around one five-second
     `LocalcastRuntime`: ingest local/networked video and audio producers,
     expose runtime UI, and emit synchronized OBS program outputs.
+  - Implement concrete local device and network `IMimirStreamSource` adapters
+    that feed the Mimir runtime buffers with live audio/video samples.
   - Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime` and
     `LocalcastProducer` C ABI described by
     `native/reservoir/include/localcast_reservoir.h`.

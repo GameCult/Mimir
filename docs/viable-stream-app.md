@@ -82,6 +82,33 @@ The first cut should be deliberately boring:
   Aquarium's LocalCast runtime until Mimir-specific ingest workers replace the
   remaining diagnostic source.
 
+## Synchronization Runtime
+
+`Mimir.Runtime` now owns the first synchronization spine:
+
+- `MimirRuntime` is the Aquarium client runtime. It wraps the current
+  Aquarium `LocalCastRuntime` visual path and adds a Mimir-owned synchronization
+  hub.
+- `MimirSynchronizationHub` owns stream source polling and appends samples into
+  bounded buffers.
+- `MimirRollingStreamBuffer` owns one stream's short history and evicts samples
+  outside the configured window.
+- `IMimirStreamSource` is the adapter seam for local devices and network feeds.
+
+The default buffer duration is five seconds. It can be overridden with
+`MIMIR_SYNC_BUFFER_SECONDS` or `MIMIR_RESERVOIR_SECONDS`.
+
+Configured stream ids can be declared with comma- or semicolon-separated
+environment variables:
+
+- `MIMIR_LOCAL_VIDEO_STREAMS`
+- `MIMIR_LOCAL_AUDIO_STREAMS`
+- `MIMIR_NETWORK_VIDEO_STREAMS`
+- `MIMIR_NETWORK_AUDIO_STREAMS`
+
+These create buffers immediately. Capture adapters still need to register
+`IMimirStreamSource` implementations to feed live samples into those buffers.
+
 ## Cut Line
 
 Do not add a new registry, bridge daemon, JSON live store, OBS plugin, or

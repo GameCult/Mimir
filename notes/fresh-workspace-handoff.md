@@ -44,6 +44,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `Mimir.slnx` is the repo-owned C# app surface. `src/Mimir.App` references
   Aquarium Engine as the windowing/rendering/D3D12 host and loads
   `src/Mimir.Runtime` as the Aquarium client runtime assembly.
+- `src/Mimir.Runtime` now wraps Aquarium's LocalCast visual runtime in
+  `MimirRuntime` and owns `MimirSynchronizationHub`: one configurable rolling
+  buffer per audio/video stream, defaulting to five seconds. Stream ids can be
+  declared with `MIMIR_LOCAL_VIDEO_STREAMS`, `MIMIR_LOCAL_AUDIO_STREAMS`,
+  `MIMIR_NETWORK_VIDEO_STREAMS`, and `MIMIR_NETWORK_AUDIO_STREAMS`; real capture
+  adapters feed buffers through `IMimirStreamSource`.
 - The reservoir is now one native time-ordered rolling buffer with typed
   indexes/views. The previous typed-ring crate is gone.
 - Native reservoir samples carry provenance flags; diagnostic/fallback samples

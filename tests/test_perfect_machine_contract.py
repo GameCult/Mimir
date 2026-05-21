@@ -16,6 +16,8 @@ class PerfectMachineContractTests(unittest.TestCase):
         self.assertEqual("Mimir.slnx", data["viableStreamApp"]["solution"])
         self.assertEqual("Aquarium.Engine", data["viableStreamApp"]["windowingRenderingLibrary"])
         self.assertEqual("in-memory-localcast-runtime", data["viableStreamApp"]["runtimeState"])
+        self.assertEqual("Mimir.Runtime", data["viableStreamApp"]["syncBuffers"]["owner"])
+        self.assertEqual("one-rolling-buffer-per-configured-audio-or-video-stream", data["viableStreamApp"]["syncBuffers"]["layout"])
         self.assertEqual("producers-not-clock-authorities", data["viableStreamApp"]["ingest"]["networkFeedsAre"])
         self.assertEqual("Aquarium", data["authorities"]["denseVisualFusion"])
         self.assertEqual("Faust", data["authorities"]["hotAudioDsp"])
