@@ -1,16 +1,44 @@
-# LocalCastBridge
+﻿# Mimir
 
-LocalCastBridge turns the local streaming rig into synchronized OBS-facing
-program output. The old SRT bridge is compatibility scaffolding; the target
-machine is Aquarium GPU fusion plus Faust DSP over one five-second reservoir.
+Mimir turns a roomful of local cameras, microphones, speakers, and timing
+signals into one realtime coherent volumetric field.
+
+The public job is simple: make the physical room available as a synchronized
+OBS-facing program surface. The actual machine stays disciplined. Mimir owns
+configuration, calibration, launch, status, and typed contracts; Aquarium owns
+GPU fusion and Spout publication; Faust owns hot audio DSP; OBS owns broadcast
+composition. The old SRT bridge is compatibility scaffolding over the same
+boring truth: stable endpoints beat theatrical plumbing.
 
 Start with `docs/perfect-machine.md` for the live architecture.
 
-V1 does not fork OBS. OBS already accepts SRT Media Sources, and FFmpeg can capture Windows desktop/audio while encoding video with `h264_nvenc`. The sane first machine is:
+## Branding
+
+Working display name: **Mimir**.
+
+Short pitch:
+
+> Local sensors, coherent field.
+
+Icon exploration lives in `assets/branding/`. The current contact sheet pairs
+four pixel-art Imagegen outputs with the prompts used to make them:
+
+![Mimir avatar](assets/branding/mimir-avatar-256.png)
+
+![Mimir icon exploration](assets/branding/mimir-icon-contact-sheet.png)
+
+Mimir is also the repo Face: a persistent agent identity that uses the VoidBot
+layer for communication and heartbeats. Its birth memory, jurisdiction, voice,
+and heartbeat contract live in `docs/mimir-face.md`; its VoidBot-facing identity
+and typed Face state live under `.voidbot/voice/` and `.voidbot/state/`.
+
+V1 does not fork OBS. OBS already accepts SRT Media Sources, and FFmpeg can
+capture Windows desktop/audio while encoding video with `h264_nvenc`. The first
+LAN bridge is:
 
 ```mermaid
 flowchart LR
-    A["Husband's PC"] --> B["FFmpeg capture scripts"]
+    A["sensor / sender PC"] --> B["FFmpeg capture scripts"]
     B --> C["NVENC H.264 video over SRT"]
     B --> D["Opus audio source 1 over SRT"]
     B --> E["Opus audio source 2 over SRT"]
@@ -19,7 +47,8 @@ flowchart LR
     E --> H["OBS Media Source: audio source 2"]
 ```
 
-The video stream is encoded on the sender. Audio sources are separate endpoints so OBS can mix, mute, filter, and monitor them independently.
+The video stream is encoded on the sender. Audio sources are separate endpoints
+so OBS can mix, mute, filter, and monitor them independently.
 
 ## Audio Field
 
@@ -29,7 +58,11 @@ That path is stricter than the OBS endpoint path: microphones feeding the Ambiso
 
 ## Current Status
 
-This repo is the first coherent scaffold: architecture docs, persistence machinery, and Windows scripts for device discovery, config validation, and FFmpeg command generation. It is ready for a real two-PC smoke test once FFmpeg with SRT/NVENC support is installed on the sender.
+This repo is the first coherent scaffold for Mimir: architecture docs,
+persistence machinery, and Windows scripts for device discovery, config
+validation, and FFmpeg command generation. The deeper target is the native
+five-second reservoir feeding Aquarium and Faust; the bridge scripts remain the
+plain, inspectable path into OBS while the field machine grows teeth.
 
 ## Quick Start
 
@@ -56,6 +89,8 @@ This repo is the first coherent scaffold: architecture docs, persistence machine
 ```
 
 8. In OBS on the receiver, add one Media Source per URL from `docs/obs-receiver-setup.md`.
+9. Before expanding the receiver path, run the bounded OBS smoke ledger in
+   `docs/obs-v1-smoke-test.md`.
 
 ## Why SRT Media Sources First
 

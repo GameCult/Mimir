@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -236,7 +236,7 @@ def render_report(findings: list[Finding], status: str, log: str, evidence: list
     }
 
     lines = [
-        "LocalCastBridge pre-compaction persistence check",
+        "Mimir pre-compaction persistence check",
         f"Workspace: {ROOT}",
         f"Findings: {counts['ok']} ok, {counts['warn']} warn, {counts['error']} error",
         "",
@@ -284,7 +284,7 @@ def render_report(findings: list[Finding], status: str, log: str, evidence: list
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Audit LocalCastBridge persistent state before imminent compaction."
+        description="Audit Mimir persistent state before imminent compaction."
     )
     parser.add_argument(
         "--strict",

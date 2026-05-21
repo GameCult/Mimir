@@ -1,8 +1,8 @@
-# Visual Spatial Map And Splat Scene
+﻿# Visual Spatial Map And Splat Scene
 
 ## Objective
 
-Extend the AquaSynth/LocalCastBridge concept from "one camera view plus spatial audio" into a shared live spatial scene:
+Extend the AquaSynth/Mimir concept from "one camera view plus spatial audio" into a shared live spatial scene:
 
 - two Razer Kiyo-class camera/mic rigs provide RGB and audio; one is Kiyo Pro
 - two PlayStation Eye / PS3 Eye cameras provide cheap high-rate low-resolution tracking views

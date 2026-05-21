@@ -1,6 +1,6 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
-$root = "C:\Meta\LocalCastBridge"
+$root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $soundVolumeView = "C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\SoundVolumeView.exe"
 $ffmpeg = "C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe"
 $config = Join-Path $root "config\localcast.json"

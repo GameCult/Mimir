@@ -28,6 +28,22 @@ If using a passphrase, append:
 
 OBS should be open before the sender starts if OBS is the SRT listener. If a source gets wedged, deactivate and reactivate the Media Source before changing ports; port churn is a symptom, not a configuration strategy.
 
+## V1 Smoke Gate
+
+Before adding receiver plugins, native OBS surfaces, or new bridge elegance, run
+the bounded witness ledger in `docs/obs-v1-smoke-test.md`.
+
+The required artifact is:
+
+```text
+calibration/runs/obs-v1-smoke-ledger.json
+```
+
+It must include `sender_capture`, `srt_receive`, and `obs_present` evidence for
+every planned endpoint, plus endpoint drift, end-to-end latency, and confidence.
+If the ledger fails, fix the clocks before expanding the receiver. The field may
+be charming while lying. Still a liar.
+
 ## Synchronization
 
 The video SRT source is a timed media artifact in the Aquarium path, not just

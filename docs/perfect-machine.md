@@ -1,4 +1,4 @@
-# Perfect Machine
+﻿# Perfect Machine
 
 ## Objective
 
@@ -41,7 +41,7 @@ not the runtime API.
   brush/splat generation, final render target, and Spout publication.
 - Faust owns hot audio DSP: voice separation, room suppression, Ambisonic/HOA
   spatialization, and loopback/source stem generation.
-- LocalCastBridge owns configuration, calibration, typed contracts, launch,
+- Mimir owns configuration, calibration, typed contracts, launch,
   status, persistence, and compatibility surfaces.
 
 ## Native Runtime Shape

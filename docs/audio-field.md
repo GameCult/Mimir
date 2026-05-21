@@ -1,4 +1,4 @@
-# Audio Field Spine
+﻿# Audio Field Spine
 
 ## Objective
 
@@ -255,7 +255,7 @@ The audio code is split so the hard parts can be tested without the room, driver
 - `audio_field.phase_meaning` owns live extraction of meaning from phase/chirplet evidence. It consumes known reference audio plus aligned mic windows, keeps the smoothed phase/frequency state internal, and emits only actionable state for alignment, suppression, and probe control.
 - Room suppression owns stream-side cleanup: dialogue anchors define desired direct energy, spatial/context mics act as witnesses for room and transient clutter, and the cleaned aligned field feeds FOA/Aquarium/Faust.
 - Source-event analysis owns non-vocal spatial facts: dialogue focus weights and localized transient vectors are published beside the AmbiX bed, not hidden inside it.
-- Aquarium/Faust owns the hot voice-separation graph after `localcast.audio.mic_field`; LocalCastBridge owns alignment, timing, roles, and control publication.
+- Aquarium/Faust owns the hot voice-separation graph after `localcast.audio.mic_field`; Mimir owns alignment, timing, roles, and control publication.
 - `scripts/audio_field.py` stays as the operator CLI and hardware probe surface.
 
 This is the portfolio-piece line: each module owns one invariant, and the tests use mocks/fakes instead of asking a driver stack to please be emotionally available.

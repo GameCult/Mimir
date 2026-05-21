@@ -1,8 +1,8 @@
-[package]
+﻿[package]
 name = "localcast-reservoir"
 version = "0.1.0"
 edition = "2024"
-description = "Native five-second spatiotemporal reservoir core for LocalCastBridge"
+description = "Native five-second spatiotemporal reservoir core for Mimir"
 
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]

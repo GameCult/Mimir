@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import json
 import subprocess
 import sys
@@ -321,7 +321,7 @@ def audio_smoke(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Probe LocalCastBridge calibration devices.")
+    parser = argparse.ArgumentParser(description="Probe Mimir calibration devices.")
     sub = parser.add_subparsers(required=True)
 
     p = sub.add_parser("discover")

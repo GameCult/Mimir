@@ -1,6 +1,6 @@
-# Fresh Workspace Handoff
+﻿# Fresh Workspace Handoff
 
-This is the short re-entry packet for `E:\Projects\LocalCastBridge`.
+This is the short re-entry packet for `E:\Projects\Mimir`.
 
 Do not trust this file for the exact live HEAD. Exact branch, HEAD, and dirty state are volatile. Always ask git.
 
@@ -19,6 +19,18 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Current Shape
 
+- Public brand/Face is Mimir. Implementation surfaces still use `localcast`
+  until a deliberate package/schema rename cut exists.
+- Mimir's Face doctrine lives in `docs/mimir-face.md`.
+- Mimir's 256px avatar source is `Mimir.png`; project copy is
+  `assets/branding/mimir-avatar-256.png`; VoidBot persona copy is
+  `.voidbot/voice/mimir.png`.
+- Mimir is registered in VoidBot's private repo-Face registry alongside Nibu and
+  Aqua. Repo-local Face identity/state live at `.voidbot/voice/identity.json`
+  and `.voidbot/state/mimir.cc`.
+- Birth runner completed in plan mode under `.voidbot/birth`; the typed
+  repo-Face state has already been seeded with durable Mimir birth memories and
+  a heartbeat agency pressure.
 - V1 uses FFmpeg plus OBS Media Source over SRT.
 - Sender-side video encoding is `h264_nvenc`.
 - Audio sources are separate SRT endpoints so OBS can mix them separately.
@@ -70,6 +82,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   use the descriptor plus native point-buffer decoder by default.
 - Aquarium-Engine commit `3316895` exposes `CreateProducer(kind, sourceId)` so
   producer source hashing goes through native `localcast_producer_create_for_source`.
+- Aquarium-Engine commit `0f610d0` makes native render packets a direct GPU
+  fusion input: `LocalCastNativeVisualFrameSource` exposes caller-owned
+  `LocalcastRenderPoint` buffers, `LocalCastRuntime` publishes that buffer
+  instead of managed seeds when present, and D3D12 uploads the native point bytes
+  for the LocalCast fusion compute shader.
 - Edge JSON is schema/diagnostic only. Runtime network/process data should remain typed CultNet documents.
 - Python live producers and diagnostic CultCache/JSON file adapters are
   diagnostics, not production foundations. The OpenGL Spout sink has been
@@ -81,11 +98,18 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `LocalcastProducer`.
 - The AmbiX spatial-audio Python publisher is also quarantined as
   `localcast.diagnostics.spatial_audio`.
-- Neighbor sender is deployed at `C:\Meta\LocalCastBridge` on `192.168.1.84`.
-- Madman's desktop has `Start LocalCast Sender.cmd` and `Stop LocalCast Sender.cmd`.
+- Neighbor sender is deployed at `C:\Meta\Mimir` on `192.168.1.84`.
+- Madman's desktop has `Start Mimir Sender.cmd` and `Stop Mimir Sender.cmd`.
 - Receiver OBS scene collection has `Neighbor PC - Video`, `Neighbor PC - Focusrite`, and `Neighbor PC - System Audio` Media Sources added.
+- V1 OBS bridge expansion is now gated by
+  `calibration/runs/obs-v1-smoke-ledger.json`. The harness is
+  `scripts/obs_smoke_test.py`, pure summary logic lives in
+  `localcast.obs_smoke`, and the runbook is `docs/obs-v1-smoke-test.md`.
+  A passing ledger needs `sender_capture`, `srt_receive`, and `obs_present`
+  evidence for every planned endpoint, with endpoint drift, end-to-end latency,
+  and confidence.
 - Sender uses SoundVolumeView for default device selection. Voicemeeter is no longer the loopback authority; co-streamer playback loopback uses the direct WASAPI shim scheduled into the neighbor console session.
-- Sender script was patched after failed transmission: live FFmpeg commands now include `-nostdin`, logs go under `C:\Meta\LocalCastBridge\logs`, and interactive video capture size is `1920x1080`.
+- Sender script was patched after failed transmission: live FFmpeg commands now include `-nostdin`, logs go under `C:\Meta\Mimir\logs`, and interactive video capture size is `1920x1080`.
 - Madman's desktop launchers call PowerShell wrappers: `scripts\start-localcast-desktop.ps1` and `scripts\stop-localcast-desktop.ps1`.
 - SSH-launched video capture fails with `gdigrab` error 5; test video from Madman's interactive desktop launcher.
 
@@ -93,7 +117,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 The useful next work is foundation surgery, not hardware feature expansion:
 
-- bind Aquarium/Faust/native workers to the rolling-buffer `LocalcastRuntime`
+- build native capture workers that fill typed audio/render buffers through
+  `LocalcastProducer`
+- bind Faust/native audio workers to the rolling-buffer `LocalcastRuntime`
 - build native mic/loopback/phase producers over `LocalcastProducer`; do not
   restore Python audio live launchers
 - delete the remaining diagnostic `visual_producer` command once native/Aquarium
@@ -103,9 +129,12 @@ The useful next work is foundation surgery, not hardware feature expansion:
   reviving the deleted Python/OpenGL publisher
 - route future visual/audio runtime work through Aquarium/Faust/native runtime plus typed CultNet docs
 - keep FFmpeg/SRT bridge scripts only as simple LAN ingest and capture utilities
+- run the v1 OBS smoke-test witness ledger against the real sender/receiver
+  before adding any OBS plugin/native receiver expansion
 
 ## Immediate Re-entry Instruction
 
 Do not revive the Python/OpenGL bridge. Rehydrate, read
-`docs/native-rebuild-plan.md`, then cut toward native workers,
-Aquarium/Faust bindings, and typed CultNet boundaries.
+`docs/native-rebuild-plan.md`, then run the v1 OBS smoke-test witness ledger
+before receiver expansion. After that clock evidence exists, cut toward native
+workers, Aquarium/Faust bindings, and typed CultNet boundaries.

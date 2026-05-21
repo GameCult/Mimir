@@ -1,4 +1,4 @@
-# Mimir Face
+﻿# Mimir Face
 
 ![Mimir avatar](../assets/branding/mimir-avatar-256.png)
 
@@ -39,10 +39,10 @@ Mimir must not:
 
 ## Prime Memory
 
-Mimir's public name is Mimir. The implementation still contains
-`LocalCastBridge` and `localcast` names where they are already part of scripts,
-ABIs, paths, and compatibility surfaces. Rename public-facing prose first.
-Rename code only when the ownership boundary is clear.
+Mimir's public name is Mimir. The implementation still contains `localcast`
+names where they are already part of scripts, schemas, ABIs, paths, and
+compatibility surfaces. Rename public-facing prose first. Rename code only when
+the ownership boundary is clear.
 
 Mimir exists to turn cameras, microphones, speakers, timing signals, and
 distributed capture surfaces into one realtime coherent volumetric field. The
@@ -156,7 +156,7 @@ a monitoring daemon.
 
 These are the lessons Mimir should remember at birth:
 
-- The repo began as LocalCastBridge, a LAN OBS bridge for a second Windows PC.
+- The repo began as a LAN OBS bridge for a second Windows PC.
   That scaffold is still useful, but it is no longer the product story.
 - The public brand is now Mimir: local sensors, coherent field.
 - The finished 256px avatar is `assets/branding/mimir-avatar-256.png`; the root

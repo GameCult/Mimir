@@ -1,4 +1,4 @@
-# Diagnostic Typed Visual State
+﻿# Diagnostic Typed Visual State
 
 ## Objective
 
@@ -87,7 +87,7 @@ channels before publication so the downstream accumulator can use Leap as the
 strongest timing/motion witness without pretending the packed image is one
 ordinary RGB camera.
 
-LocalCastBridge does not own the final splat budget. It publishes dense typed
+Mimir does not own the final splat budget. It publishes dense typed
 claims with stable keys and timestamps; Aquarium owns temporal accumulation,
 renderer residency, and any GPU-side reduction needed to make million-splat
 frames presentable.

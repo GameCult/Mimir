@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -9,7 +9,7 @@ from .core import TriangulatedPoint
 
 @dataclass(frozen=True)
 class RenderBridgeConfig:
-    spout_sender_name: str = "LocalCastBridge Point Cloud"
+    spout_sender_name: str = "Mimir Point Cloud"
     target_width: int = 1920
     target_height: int = 1080
     visual_delay_ns: int = 250_000_000
@@ -19,7 +19,7 @@ class RenderBridgeConfig:
     @staticmethod
     def from_dict(data: dict) -> "RenderBridgeConfig":
         return RenderBridgeConfig(
-            spout_sender_name=data.get("spout_sender_name", "LocalCastBridge Point Cloud"),
+            spout_sender_name=data.get("spout_sender_name", "Mimir Point Cloud"),
             target_width=int(data.get("target_width", 1920)),
             target_height=int(data.get("target_height", 1080)),
             visual_delay_ns=int(data.get("visual_delay_ns", 250_000_000)),
@@ -98,7 +98,7 @@ class RenderFramePacket:
             source_time_max_ns=int(data.get("source_time_max_ns", 0)),
             present_time_ns=int(data.get("present_time_ns", 0)),
             audio_alignment_time_ns=int(data.get("audio_alignment_time_ns", 0)),
-            spout_sender_name=str(data.get("spout_sender_name", "LocalCastBridge Point Cloud")),
+            spout_sender_name=str(data.get("spout_sender_name", "Mimir Point Cloud")),
             target_width=int(data.get("target_width", 1920)),
             target_height=int(data.get("target_height", 1080)),
             points=tuple(RenderPointPacket.from_dict(item) for item in data.get("points", [])),

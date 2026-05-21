@@ -1,10 +1,18 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 ## Purpose
 
-LocalCastBridge is the local LAN streaming rig for making another Windows PC available inside OBS as video plus separately mixable audio sources, with video encoded by NVENC on the sender.
+Mimir is the public face of this repo: the local realtime field machine for
+turning cameras, microphones, speakers, and timing signals into one coherent
+OBS-facing volumetric program surface.
+
+`localcast` remains the implementation surface where existing scripts, ABIs,
+schemas, paths, and compatibility docs still use that name.
 
 Keep this repo blunt. The goal is not to fork OBS for sport. Use existing OBS and FFmpeg surfaces until a real invariant is impossible without native code.
+
+For the persistent Mimir Face agent identity, voice, jurisdiction, avatar, and
+VoidBot heartbeat contract, read `docs/mimir-face.md`.
 
 ## Persistence Scaffolding
 
@@ -15,6 +23,7 @@ Keep this repo blunt. The goal is not to fork OBS for sport. Use existing OBS an
 - Treat `notes/fresh-workspace-handoff.md` as the short re-entry packet.
 - Treat `notes/current-system-map.md` as the current source-grounded architecture and data-flow map.
 - Treat `docs/implementation-plan.md` as the forward plan for what is implemented, temporary, and next.
+- Treat `docs/mimir-face.md` as the persistent Face memory for the Mimir agent.
 - Update `state/map.yaml` when project understanding changes. Add evidence only when the lesson changes what the next agent should believe.
 - Keep exact branch and HEAD snapshots out of handoff prose. Git commands own volatile truth.
 

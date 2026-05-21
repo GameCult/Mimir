@@ -1,6 +1,6 @@
-declare name "LocalCastBridge Voice Separation";
+﻿declare name "Mimir Voice Separation";
 declare version "1.0";
-declare author "LocalCastBridge";
+declare author "Mimir";
 declare license "MIT";
 
 // Six aligned microphone inputs:

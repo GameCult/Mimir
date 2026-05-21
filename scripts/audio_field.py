@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import importlib.util
 import json
 import math
@@ -2027,7 +2027,7 @@ def foa_weights(mic):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build and calibrate the LocalCastBridge six-mic Ambisonic audio field.")
+    parser = argparse.ArgumentParser(description="Build and calibrate the Mimir six-mic Ambisonic audio field.")
     sub = parser.add_subparsers(required=True)
 
     p = sub.add_parser("devices", help="List PortAudio devices as JSON.")
@@ -2096,7 +2096,7 @@ def main():
     p.add_argument("--mic-id", default="mic_focusrite_neighbor")
     p.add_argument("--ssh-target", default="madman's lullaby@192.168.1.84")
     p.add_argument("--ffmpeg", default=r"C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe")
-    p.add_argument("--remote-dir", default=r"C:\Meta\LocalCastBridge\calibration\remote-captures")
+    p.add_argument("--remote-dir", default=r"C:\Meta\Mimir\calibration\remote-captures")
     p.add_argument("--device", default="Analogue 1 + 2 (Focusrite USB Audio)")
     p.add_argument("--dshow-device", help=argparse.SUPPRESS)
     p.add_argument("--seconds", type=float, default=8.0)

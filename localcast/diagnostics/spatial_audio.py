@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 from pathlib import Path
 import sys
 import time
@@ -68,7 +68,7 @@ def main() -> None:
     parser.add_argument("--input", type=Path, default=ROOT / "calibration" / "runs" / "audio-full-sync-20260518-165751" / "field-foa-ambix.wav")
     parser.add_argument("--cache", type=Path, default=ROOT / "calibration" / "runs" / "audio-state.msgpack")
     parser.add_argument("--status-cache", type=Path, default=ROOT / "calibration" / "runs" / "audio-stream-status.msgpack")
-    parser.add_argument("--stream-name", default="LocalCastBridge AmbiX")
+    parser.add_argument("--stream-name", default="Mimir AmbiX")
     parser.add_argument("--chunk-frames", type=int, default=1024)
     parser.add_argument("--duration", type=float)
     parser.add_argument("--loop", action="store_true")

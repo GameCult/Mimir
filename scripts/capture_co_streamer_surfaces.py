@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -29,11 +29,11 @@ def main() -> int:
     parser.add_argument("--sample-rate", type=int, default=48000)
     parser.add_argument("--ssh-target", default="madman's lullaby@192.168.1.84")
     parser.add_argument("--ffmpeg", default=r"C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe")
-    parser.add_argument("--remote-dir", default=r"C:\Meta\LocalCastBridge\calibration\remote-captures")
+    parser.add_argument("--remote-dir", default=r"C:\Meta\Mimir\calibration\remote-captures")
     parser.add_argument("--focusrite-device", default="Analogue 1 + 2 (Focusrite USB Audio)")
     parser.add_argument("--loopback-device", default="")
     parser.add_argument("--loopback-capture", choices=("wasapi", "dshow"), default="wasapi")
-    parser.add_argument("--remote-wasapi-script", default=r"C:\Meta\LocalCastBridge\scripts\wasapi-loopback-capture.ps1")
+    parser.add_argument("--remote-wasapi-script", default=r"C:\Meta\Mimir\scripts\wasapi-loopback-capture.ps1")
     parser.add_argument("--remote-wasapi-role", choices=("Console", "Multimedia", "Communications"), default="Console")
     parser.add_argument("--local-loopback-query", default="Scarlett")
     parser.add_argument("--max-lag-ms", type=float, default=3000.0)
@@ -165,7 +165,7 @@ def remote_loopback_command(args: argparse.Namespace, output: str) -> str:
             raise SystemExit("--loopback-device is required when --loopback-capture dshow")
         return remote_ffmpeg_command(args, args.loopback_device, output, channels=2)
     log = output.rsplit(".", 1)[0] + ".log"
-    task = "LocalCastWasapiLoopbackCapture"
+    task = "MimirWasapiLoopbackCapture"
     return (
         "powershell -NoProfile -ExecutionPolicy Bypass -Command "
         + quote_for_cmd(

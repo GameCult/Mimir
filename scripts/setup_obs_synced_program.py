@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -25,7 +25,7 @@ RAW_UNSYNCED_INPUTS = (
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Build synchronized LocalCastBridge OBS audio stems from the aligned "
+            "Build synchronized Mimir OBS audio stems from the aligned "
             "program timeline and hide raw unsynchronized OBS inputs."
         )
     )
@@ -39,7 +39,7 @@ def main() -> int:
     parser.add_argument(
         "--disable-other-scene-items",
         action="store_true",
-        help="Disable every scene item except the synchronized LocalCastBridge program sources.",
+        help="Disable every scene item except the synchronized Mimir program sources.",
     )
     args = parser.parse_args()
 
@@ -99,7 +99,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
 
     stems = [
         stem_spec(
-            "LocalCastBridge - Host Voice",
+            "Mimir - Host Voice",
             "host_voice.wav",
             host_voice,
             field_rate,
@@ -108,7 +108,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
             position_m=[0.0, 0.0, 1.2],
         ),
         stem_spec(
-            "LocalCastBridge - CoStreamer Voice",
+            "Mimir - CoStreamer Voice",
             "co_streamer_voice.wav",
             co_streamer_voice,
             field_rate,
@@ -117,7 +117,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
             position_m=[0.0, 2.0, 1.2],
         ),
         stem_spec(
-            "LocalCastBridge - Ambient",
+            "Mimir - Ambient",
             "ambient.wav",
             ambient,
             field_rate,
@@ -126,7 +126,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
             position_m=None,
         ),
         stem_spec(
-            "LocalCastBridge - Transients",
+            "Mimir - Transients",
             "transients.wav",
             transients,
             field_rate,
@@ -135,7 +135,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
             position_m=None,
         ),
         stem_spec(
-            "LocalCastBridge - CoStreamer Loopback",
+            "Mimir - CoStreamer Loopback",
             "co_streamer_loopback.wav",
             co_streamer_loopback,
             field_rate,
@@ -144,7 +144,7 @@ def build_stems(run: Path, stem_dir: Path) -> dict[str, Any]:
             position_m=None,
         ),
         stem_spec(
-            "LocalCastBridge - Local Loopback",
+            "Mimir - Local Loopback",
             "local_loopback.wav",
             local_loopback,
             field_rate,
@@ -217,7 +217,7 @@ def configure_obs(
         mute_input(client, raw_name)
         disable_scene_item(client, scene, scene_items, raw_name)
 
-    allowed_scene_items = {"LocalCastBridge Point Cloud"} | {
+    allowed_scene_items = {"Mimir Point Cloud"} | {
         str(stem["obs_name"]) for stem in stem_manifest["stems"]
     }
 

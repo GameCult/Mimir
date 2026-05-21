@@ -1,4 +1,4 @@
-"""Sensor fusion spine for the LocalCastBridge spatial rig."""
+﻿"""Sensor fusion spine for the Mimir spatial rig."""
 
 from .core import (
     CameraModel,

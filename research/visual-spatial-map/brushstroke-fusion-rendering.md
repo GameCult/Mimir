@@ -1,4 +1,4 @@
-# Brushstroke Fusion Rendering Approach
+﻿# Brushstroke Fusion Rendering Approach
 
 ## Objective
 
@@ -19,7 +19,7 @@ semantic intent
 -> renderer
 ```
 
-For LocalCastBridge, the equivalent is:
+For Mimir, the equivalent is:
 
 ```text
 sensor observations

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -144,7 +144,7 @@ def cmd_close_branch(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Inspect and update LocalCastBridge persistence state files."
+        description="Inspect and update Mimir persistence state files."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

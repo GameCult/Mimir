@@ -1,10 +1,10 @@
-# OBS Spout Streaming
+﻿# OBS Spout Streaming
 
 ## Current Status
 
 The Python/OpenGL Spout sender has been deleted.
 
-LocalCastBridge no longer carries a runnable OpenGL publication path. The only
+Mimir no longer carries a runnable OpenGL publication path. The only
 surviving pieces are diagnostic packet/brush math in
 `localcast.diagnostics.render_math` and typed diagnostic visual documents in
 `localcast.diagnostics.visual_cache`.
@@ -25,7 +25,7 @@ native rolling reservoir
 ## Invariants
 
 - OBS receives a named Spout2 texture from Aquarium, not Python/OpenGL.
-- LocalCastBridge may expose diagnostic typed documents and CPU render math, but
+- Mimir may expose diagnostic typed documents and CPU render math, but
   it does not own the production renderer.
 - JSON remains a diagnostic/status surface only.
 - The neighbor SRT video feed is a timed media artifact and must share the same

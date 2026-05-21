@@ -1,4 +1,4 @@
-# Native Rebuild Plan
+﻿# Native Rebuild Plan
 
 This is the cut line after the architectural teardown.
 
@@ -14,7 +14,7 @@ to extend the deadline bridge.
 Make the second PC available in OBS as synchronized program video plus
 separately controllable audio while preserving the real ownership model:
 
-- LocalCastBridge owns config, calibration, contract tests, launch, status, and
+- Mimir owns config, calibration, contract tests, launch, status, and
   CultNet schema.
 - One native runtime owns live sample timing and retention.
 - Aquarium owns GPU visual fusion, material/brush/splat rendering, and Spout2

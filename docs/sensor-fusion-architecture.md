@@ -1,4 +1,4 @@
-# Sensor Fusion Architecture
+﻿# Sensor Fusion Architecture
 
 ## Objective
 
@@ -79,7 +79,7 @@ flowchart TD
   camera projection, brush lowering, and CPU rasterization. It has unit tests
   and does not require a GPU context.
 - `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
-- The Python/OpenGL Spout publisher has been deleted. No LocalCastBridge Python
+- The Python/OpenGL Spout publisher has been deleted. No Mimir Python
   module owns OBS publication.
 - `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.
 
@@ -137,12 +137,12 @@ OBS should see a named Spout sender, not a camera window, file tail, or desktop 
 The intended production handoff is:
 
 ```text
-LocalCastBridge TrackCache
+Mimir TrackCache
 -> CultCache render-frame document
 -> Aquarium Engine typed runtime state
 -> GPU point/brush/splat buffer
 -> D3D render target
--> Spout2 sender named "LocalCastBridge Point Cloud"
+-> Spout2 sender named "Mimir Point Cloud"
 -> OBS Spout2 Capture source
 ```
 

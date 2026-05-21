@@ -1,4 +1,4 @@
-# Ambisonic AquaSynth Field: Distilled Research
+﻿# Ambisonic AquaSynth Field: Distilled Research
 
 ## Objective
 
@@ -6,7 +6,7 @@ Consolidate four live microphones -- shielded cardioid, Deru shotgun, and two ca
 
 ## Current Mechanism
 
-LocalCastBridge currently treats audio as independent OBS-ingestable endpoints: one FFmpeg process per audio source, one SRT port per source, and OBS owns the mix. That is coherent for manual OBS mixing, but it is the wrong ownership model for a single spatial field. An ambisonic bus needs clocked multichannel audio before spatial encoding, then effects, then decode/render.
+Mimir currently treats audio as independent OBS-ingestable endpoints: one FFmpeg process per audio source, one SRT port per source, and OBS owns the mix. That is coherent for manual OBS mixing, but it is the wrong ownership model for a single spatial field. An ambisonic bus needs clocked multichannel audio before spatial encoding, then effects, then decode/render.
 
 ## Invariants
 

@@ -1,4 +1,4 @@
-{
+﻿{
   "schema": "gamecult.localcast.perfect_machine.v1",
   "reservoir": {
     "durationSeconds": 5.0,
@@ -8,7 +8,7 @@
     "storageLayout": "single-native-rolling-buffer-with-typed-views"
   },
   "authorities": {
-    "configurationCalibrationLaunchStatus": "LocalCastBridge",
+    "configurationCalibrationLaunchStatus": "Mimir",
     "denseVisualFusion": "Aquarium",
     "gpuMaterialAndBrushReconciliation": "Aquarium",
     "spoutPublication": "Aquarium",
@@ -45,7 +45,7 @@
   "outputs": {
     "video": {
       "target": "Spout2",
-      "senderName": "LocalCastBridge Point Cloud",
+      "senderName": "Mimir Point Cloud",
       "owner": "Aquarium"
     },
     "audio": {

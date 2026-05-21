@@ -12,7 +12,7 @@ from localcast.sensor_fusion.render_bridge import RenderFramePacket, RenderPoint
 
 @dataclass(frozen=True)
 class SpoutOutputConfig:
-    sender_name: str = "LocalCastBridge Point Cloud"
+    sender_name: str = "Mimir Point Cloud"
     width: int = 1920
     height: int = 1080
     fps: float = 60.0

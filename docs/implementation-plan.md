@@ -1,4 +1,4 @@
-# Implementation Plan
+﻿# Implementation Plan
 
 ## Current Cut Line
 
@@ -13,10 +13,28 @@ The native reservoir is now one time-ordered rolling buffer with typed views.
 The previous shared-edge typed rings proved the retention invariant; the new
 shape removes independent per-kind storage from the live foundation.
 
+The v1 OBS bridge is now gated by a bounded smoke-test witness ledger. No
+plugin/native receiver expansion is justified until
+`calibration/runs/obs-v1-smoke-ledger.json` records sender capture, SRT receive,
+and OBS presentation timestamps for every planned endpoint with bounded drift,
+latency, and confidence.
+
 ## Implemented
 
+- Mimir public identity and repo Face:
+  - `README.md` now presents the project as Mimir: local sensors, coherent
+    field.
+  - `Mimir.png` is the user-repixelized 256px avatar source.
+  - `assets/branding/mimir-avatar-256.png` is the project branding copy.
+  - `.voidbot/voice/mimir.png` and `.voidbot/voice/identity.json` are the
+    VoidBot-facing persona surfaces for the Mimir Face.
+  - `.voidbot/state/mimir.cc` is the typed persistent Face state. It is seeded
+    with durable birth memories for Mimir identity, native-reservoir target,
+    ownership boundaries, audio-field discipline, and heartbeat agency pressure.
+  - `docs/mimir-face.md` defines Mimir's jurisdiction, voice, heartbeat
+    behavior, and inherited memories. VoidBot is only the mouth/scheduler.
 - Perfect Machine contract:
-  - `docs/perfect-machine.md` defines the target native machine: one five-second spatiotemporal reservoir, Aquarium-owned dense visual fusion/material/brush rendering, Faust-owned hot audio DSP, OBS-owned broadcast controls, and LocalCastBridge-owned calibration/config/status.
+  - `docs/perfect-machine.md` defines the target native machine: one five-second spatiotemporal reservoir, Aquarium-owned dense visual fusion/material/brush rendering, Faust-owned hot audio DSP, OBS-owned broadcast controls, and Mimir-owned calibration/config/status.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir typed views, native authorities, outputs, and the demotion of bridge scripts to tooling.
   - `native/reservoir` is the first native Rust crate. It implements one
     shared-edge five-second rolling buffer with typed views and proves that
@@ -51,12 +69,12 @@ shape removes independent per-kind storage from the live foundation.
 - Sender device discovery script.
 - Sender launch script with dry-run mode and per-source FFmpeg commands.
 - OBS receiver setup notes.
-- Neighbor sender deployment under `C:\Meta\LocalCastBridge`.
+- Neighbor sender deployment under `C:\Meta\Mimir`.
 - Madman's desktop start/stop launchers for the sender.
 - Receiver OBS scene has `Neighbor PC - Video` and `Neighbor PC - Focusrite` Media Sources.
 - Direct co-streamer loopback capture is now attempted with the repo WASAPI shim instead of Voicemeeter.
 - Receiver OBS scene has `Neighbor PC - System Audio` on SRT port `5102`.
-- Sender script uses `-nostdin` and repo-root logs so desktop launchers stay alive and diagnostics land in `C:\Meta\LocalCastBridge\logs`.
+- Sender script uses `-nostdin` and repo-root logs so desktop launchers stay alive and diagnostics land in `C:\Meta\Mimir\logs`.
 - Sender video config is `1920x1080` for the interactive desktop. The `1024x768` SSH session size is not the streaming target.
 - Desktop `.cmd` launchers delegate to PowerShell wrappers so paths with spaces and apostrophes are handled in one place.
 - Audio-field sidecar profile and tool:
@@ -94,11 +112,19 @@ shape removes independent per-kind storage from the live foundation.
   - `docs/typed-visual-state.md` documents the diagnostic CultCache file shape
     and the CultNet visual schema target.
 - OBS synchronized program surface:
+  - `scripts/obs_smoke_test.py` creates the v1 OBS smoke-test endpoint plan,
+    event template, and witness ledger.
+  - `localcast.obs_smoke` owns the pure endpoint planning and ledger summary
+    logic: per-stage timestamps, matched end-to-end latency, endpoint drift, and
+    confidence.
+  - `docs/obs-v1-smoke-test.md` is the runbook for collecting
+    `sender_capture`, `srt_receive`, and `obs_present` evidence before receiver
+    expansion.
   - `scripts/setup_obs_synced_program.py` derives OBS-controllable stems from an aligned program audio timeline: host voice, co-streamer voice, ambient, transients, co-streamer loopback, and local loopback.
   - `scripts/capture_co_streamer_surfaces.py` captures neighbor Focusrite and neighbor loopback with local loopback ground truth, estimates the late remote-family offset, and writes aligned co-streamer surfaces for the stem packer.
   - `scripts/wasapi-loopback-capture.ps1` is the direct primary-playback loopback path. It must run in the neighbor's interactive console session; SSH-only capture sees the device but receives no render packets.
   - The tool creates/updates local OBS Media Sources for those stems and mutes/disables raw unsynchronized inputs.
-  - Strict mode disables every scene item except the synchronized LocalCastBridge program video and stem controls.
+  - Strict mode disables every scene item except the synchronized Mimir program video and stem controls.
 - Live phase-field meaning:
   - `audio_field.phase_meaning` extracts actionable delay, coherence, confidence, suppression, correction-energy, and active-probe need from internal phase/chirplet evidence.
   - `localcast.audio.phase_field` is a typed CultCache document at `calibration/runs/audio-phase-field.msgpack`.
@@ -116,6 +142,8 @@ shape removes independent per-kind storage from the live foundation.
 ## Temporary
 
 - Audio and video are separate SRT endpoints. This preserves OBS mixing authority but may need latency tuning.
+- The OBS v1 smoke ledger currently owns the receiver expansion gate. Until a
+  real run passes, endpoint coherence is unknown rather than assumed.
 - Audio defaults to AAC inside MPEG-TS for compatibility; test Opus later only if there is a concrete reason.
 - Desktop capture uses `gdigrab` first because it is broadly available. `ddagrab` is a candidate once the installed FFmpeg build is confirmed.
 - The scripts assume Windows sender and OBS receiver on the same LAN.
@@ -151,3 +179,5 @@ shape removes independent per-kind storage from the live foundation.
    spatialization, and stem generation into Faust/native DSP.
 6. Keep FFmpeg/SRT scripts as simple LAN ingest/capture utilities, not the
    synchronized program authority.
+7. Run the v1 OBS smoke test against the actual sender/receiver setup and keep
+   the ledger as evidence before any receiver/plugin/native OBS expansion.

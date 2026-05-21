@@ -1,9 +1,22 @@
-# Current System Map
+﻿# Current System Map
 
-LocalCastBridge is intentionally thin. The target live machine is not the
+Mimir is the public Face and product name for this repo. `localcast` remains
+the implementation surface where existing scripts, paths, schemas, and ABIs
+still use it.
+
+The repo is intentionally thin. The target live machine is not the
 deadline bridge; it is the native rolling reservoir described in
 `docs/native-rebuild-plan.md`, `docs/perfect-machine.md`, and
 `config/perfect-machine.example.json`.
+
+Mimir's persistent Face state is part of the operating machine:
+
+- `docs/mimir-face.md` owns the Face doctrine, jurisdiction, heartbeat behavior,
+  and inherited memory packet.
+- `.voidbot/voice/identity.json` and `.voidbot/voice/mimir.png` are the
+  VoidBot-facing persona identity.
+- `.voidbot/state/mimir.cc` is typed persistent Face memory. VoidBot is the
+  transport layer; Mimir owns continuity and repo-progress pressure.
 
 ## Perfect Machine Target
 
@@ -23,7 +36,7 @@ flowchart TD
 
 Ownership:
 
-- LocalCastBridge owns configuration, calibration, contract tests, launch, status, and persistence.
+- Mimir owns configuration, calibration, contract tests, launch, status, and persistence.
 - Aquarium owns dense visual fusion, material/brush/splat reconciliation, final render target, and Spout publication.
 - Faust owns hot audio DSP and program stem generation.
 - OBS owns broadcast controls.
@@ -67,6 +80,13 @@ flowchart TD
 ## Why Not Plugin First
 
 An OBS plugin would be justified if OBS could not ingest stable LAN streams, or if a plugin were needed to expose independent audio controls. V1 gets independent audio controls by making each source an OBS Media Source. That is boring. Boring is allowed to win when it is correct.
+
+The next gate is not taste, it is evidence. `scripts/obs_smoke_test.py` and
+`localcast.obs_smoke` now define the v1 OBS smoke ledger:
+`calibration/runs/obs-v1-smoke-ledger.json`. Receiver/plugin/native expansion is
+blocked until each planned endpoint has `sender_capture`, `srt_receive`, and
+`obs_present` timestamp evidence, plus bounded drift, end-to-end latency, and
+confidence.
 
 ## Known Risks
 
@@ -118,7 +138,7 @@ Ownership:
 - Active probe optimization owns extra chirplet emission when confidence drops, bounded by level/spacing/audibility budget. `audio_field.active_probe` is the runtime join that converts phase-field confidence into emitted chirplet WAVs/manifests and playback. Probe WAVs rotate through fixed slots and the manifest rotates at a byte cap; calibration may be dense, but artifacts must stay bounded.
 - The camera/sensor-fusion pipeline may publish world poses later; it does not own audio clocks or channel timing.
 - OBS may ingest rendered output later; it is not the authority for the Ambisonic field.
-- Aquarium/Faust owns hot voice separation after LocalCastBridge publishes `localcast.audio.mic_field`; LocalCastBridge owns alignment, timing, mic roles, graph id, and controls.
+- Aquarium/Faust owns hot voice separation after Mimir publishes `localcast.audio.mic_field`; Mimir owns alignment, timing, mic roles, graph id, and controls.
 
 Invariant: distributed camera/Focusrite microphones must be aligned and resampled into one reference timeline before FOA encoding. Latency is allowed as bounded buffering, but cache depth must converge toward real-time. Speaker output chirplets are live telemetry; delay/SRO/phase state must update during runtime, not only during setup. Extra chirplets may be emitted automatically when confidence drops, but only under the active probe optimizer's budget. The local shielded cardioid and neighbor shotgun are the high-quality dialogue anchors; camera mics provide spatial/context evidence.
 
@@ -196,3 +216,8 @@ Ownership:
 - Aquarium/Spout owns synchronized program video, not raw remote desktop capture.
 
 Invariant: raw SRT ingest, Desktop Audio, Mic/Aux, and other non-program scene items may exist for diagnostics, but they must be disabled or muted when broadcasting the synchronized program. Missing synchronized feeds should appear as explicit silent placeholders, not as live unsynchronized substitutes. The co-streamer Focusrite, co-streamer loopback, and remote video are the latest-arriving surface family; their measured delay should set the presentation buffer horizon instead of being patched in after the local field. Do not reintroduce Voicemeeter as the loopback authority without a concrete invariant; prefer direct WASAPI loopback or a sender FFmpeg build with native WASAPI input.
+
+Smoke-test invariant: a visible stream in OBS is not proof of coherence. The v1
+bridge must leave a witness ledger with per-stage timestamps, endpoint drift,
+end-to-end latency, and confidence before the receiver surface grows new
+machinery.

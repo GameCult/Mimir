@@ -1,4 +1,4 @@
-# Live Adaptive Sync: Distilled Research
+﻿# Live Adaptive Sync: Distilled Research
 
 ## Objective
 
@@ -6,7 +6,7 @@ Find prior work that supports synchronizing independent live microphone feeds we
 
 ## Current Mechanism
 
-LocalCastBridge currently launches separate FFmpeg capture processes and SRT endpoints. That preserves OBS mix control but does not give us one clocked multichannel stream. For Ambisonics, independent device clocks create two separate problems:
+Mimir currently launches separate FFmpeg capture processes and SRT endpoints. That preserves OBS mix control but does not give us one clocked multichannel stream. For Ambisonics, independent device clocks create two separate problems:
 
 - initial offset: one stream starts late or has more device/buffer latency
 - sampling-rate offset: one device runs slightly faster/slower, so offset grows over time

@@ -1,6 +1,6 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
-$root = "C:\Meta\LocalCastBridge"
+$root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $soundVolumeView = "C:\Users\Madman's Lullaby\AppData\Local\Microsoft\WinGet\Links\SoundVolumeView.exe"
 $senderStop = Join-Path $root "scripts\sender-stop.ps1"
 
@@ -16,4 +16,3 @@ if (Test-Path -LiteralPath $soundVolumeView) {
 }
 
 Get-Process voicemeeter_x64 -ErrorAction SilentlyContinue | Stop-Process -Force
-

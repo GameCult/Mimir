@@ -1,1 +1,1 @@
-"""LocalCastBridge Python helpers."""
+﻿"""Mimir Python helpers."""

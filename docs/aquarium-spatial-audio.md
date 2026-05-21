@@ -1,8 +1,8 @@
-# Aquarium Spatial Audio
+﻿# Aquarium Spatial Audio
 
 ## Objective
 
-Publish the live spatial audio field through the same typed state discipline as the splat renderer. Aquarium consumes the AmbiX bus and hands it to native Faust DSP; LocalCastBridge owns capture, sync, calibration, and stream timing.
+Publish the live spatial audio field through the same typed state discipline as the splat renderer. Aquarium consumes the AmbiX bus and hands it to native Faust DSP; Mimir owns capture, sync, calibration, and stream timing.
 
 ## Current Mechanism
 
@@ -88,8 +88,8 @@ the next OBS-facing publisher.
 ## Invariants
 
 - Aquarium owns rendering and Faust DSP, not microphone capture or clock correction.
-- LocalCastBridge publishes declared AmbiX blocks for the spatial bed and aligned six-mic blocks for Faust voice separation. Unaligned heterogeneous microphones still do not cross this boundary.
-- LocalCastBridge publishes source-event geometry separately from AmbiX audio; render effects do not have to infer transient positions from the sound bed.
+- Mimir publishes declared AmbiX blocks for the spatial bed and aligned six-mic blocks for Faust voice separation. Unaligned heterogeneous microphones still do not cross this boundary.
+- Mimir publishes source-event geometry separately from AmbiX audio; render effects do not have to infer transient positions from the sound bed.
 - Faust owns the voice-separation graph once the aligned mic field has crossed into Aquarium. Python may publish controls and telemetry, but it must not become the hot separation engine.
 - Aquarium/Spout packaging selects audio source events against each visual frame's `audio_alignment_time_ns`; OBS should receive the already synchronized output rather than trying to align independent media sources.
 - The audio frame carries `start_sample` and `audio_time_ns` so visual packets can align against the same bounded-latency timeline.

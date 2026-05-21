@@ -15,7 +15,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace LocalCastBridge {
+namespace Mimir {
     public static class WasapiLoopbackCapture {
         const int eRender = 0;
         const int eConsole = 0;
@@ -277,4 +277,4 @@ namespace LocalCastBridge {
 "@
 
 Add-Type -TypeDefinition $source
-[LocalCastBridge.WasapiLoopbackCapture]::Capture($Output, $Seconds, $SampleRate, $Channels, $Role)
+[Mimir.WasapiLoopbackCapture]::Capture($Output, $Seconds, $SampleRate, $Channels, $Role)

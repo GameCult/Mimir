@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$LogDirectory = ".\logs"
 )
 
@@ -17,7 +17,7 @@ $ffmpegProcesses = Get-CimInstance Win32_Process |
     }
 
 if (-not $ffmpegProcesses) {
-    Write-Host "No LocalCastBridge-looking ffmpeg SRT processes found."
+    Write-Host "No Mimir-looking ffmpeg SRT processes found."
     return
 }
 

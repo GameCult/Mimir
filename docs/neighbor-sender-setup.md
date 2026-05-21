@@ -1,10 +1,10 @@
-# Neighbor Sender Setup
+﻿# Neighbor Sender Setup
 
 ## Host
 
 - Sender: `192.168.1.84` / `DESKTOP-M9FTRLL`
 - SSH: `ssh "madman's lullaby@192.168.1.84"`
-- Install root: `C:\Meta\LocalCastBridge`
+- Install root: `C:\Meta\Mimir`
 - Receiver OBS workstation: `192.168.1.66`
 
 ## Installed State
@@ -25,7 +25,7 @@
 Live local config on the sender:
 
 ```text
-C:\Meta\LocalCastBridge\config\localcast.json
+C:\Meta\Mimir\config\localcast.json
 ```
 
 Current endpoints:
@@ -66,8 +66,8 @@ The pre-edit backup is next to the scene file with a
 Madman's desktop has:
 
 ```text
-C:\Users\Madman's Lullaby\Desktop\Start LocalCast Sender.cmd
-C:\Users\Madman's Lullaby\Desktop\Stop LocalCast Sender.cmd
+C:\Users\Madman's Lullaby\Desktop\Start Mimir Sender.cmd
+C:\Users\Madman's Lullaby\Desktop\Stop Mimir Sender.cmd
 ```
 
 Start launcher:
@@ -79,7 +79,7 @@ Start launcher:
   winget alias is not reliably available in interactive `cmd.exe`
 - sets Windows default render to `Focusrite USB Audio\Device\Speakers\Render`
 - sets Windows default capture to `Focusrite USB Audio\Device\Analogue 1 + 2\Capture`
-- writes FFmpeg logs under `C:\Meta\LocalCastBridge\logs`
+- writes FFmpeg logs under `C:\Meta\Mimir\logs`
 
 Stop launcher:
 
@@ -121,7 +121,7 @@ can fail with `Failed to capture image (error 5)`. The sender video process
 must be launched from Madman's interactive desktop, normally through:
 
 ```text
-C:\Users\Madman's Lullaby\Desktop\Start LocalCast Sender.cmd
+C:\Users\Madman's Lullaby\Desktop\Start Mimir Sender.cmd
 ```
 
 Attached SSH probes are still useful for audio devices and SRT reachability.
