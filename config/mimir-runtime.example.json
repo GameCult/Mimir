@@ -1,0 +1,38 @@
+{
+  "bufferSeconds": 5.0,
+  "streams": [
+    {
+      "sourceId": "kiyo-primary",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "native"
+    },
+    {
+      "sourceId": "host-focusrite",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "native"
+    },
+    {
+      "sourceId": "neighbor-video-srt",
+      "kind": "Video",
+      "origin": "Network",
+      "enabled": false,
+      "adapter": "process",
+      "command": "ffmpeg",
+      "arguments": [
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-i",
+        "srt://127.0.0.1:5100?mode=caller",
+        "-f",
+        "rawvideo",
+        "pipe:1"
+      ],
+      "chunkBytes": 65536
+    }
+  ]
+}

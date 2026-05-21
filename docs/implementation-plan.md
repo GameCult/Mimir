@@ -54,6 +54,9 @@ latency, and confidence.
     `MimirRollingStreamBuffer`, stream descriptors, and the `IMimirStreamSource`
     adapter seam. It initializes one bounded rolling buffer per configured
     audio/video stream and polls registered local/network sources each frame.
+    Local devices should feed through native push adapters; process-backed
+    sources are compatibility edges for network/diagnostic command ingest, not
+    the six-camera capture foundation.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir typed views, native authorities, outputs, and the demotion of bridge scripts to tooling.
   - `native/reservoir` is the first native Rust crate. It implements one
     shared-edge five-second rolling buffer with typed views and proves that

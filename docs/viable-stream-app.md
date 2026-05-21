@@ -94,6 +94,10 @@ The first cut should be deliberately boring:
 - `MimirRollingStreamBuffer` owns one stream's short history and evicts samples
   outside the configured window.
 - `IMimirStreamSource` is the adapter seam for local devices and network feeds.
+- `MimirNativeIngestStreamSource` is the low-overhead push seam for native
+  camera/audio adapters that already own buffers or handles.
+- `MimirProcessStreamSource` is a compatibility adapter for network or
+  diagnostic command sources. It is not the six-camera local capture foundation.
 
 The default buffer duration is five seconds. It can be overridden with
 `MIMIR_SYNC_BUFFER_SECONDS` or `MIMIR_RESERVOIR_SECONDS`.
@@ -108,6 +112,11 @@ environment variables:
 
 These create buffers immediately. Capture adapters still need to register
 `IMimirStreamSource` implementations to feed live samples into those buffers.
+
+For local cameras, prefer native adapters that push sample handles directly
+through `MimirNativeIngestStreamSource`. Process-backed FFmpeg ingest is allowed
+for remote SRT/diagnostic edges, but local six-camera ingest should stay close
+to the driver, GPU, and capture APIs.
 
 ## Cut Line
 

@@ -68,6 +68,9 @@ and D3D12 bridge, while `src/Mimir.Runtime` provides the Aquarium client runtime
 `Mimir.Runtime` owns the first synchronization hub: one five-second default
 rolling buffer per configured audio/video stream, source polling through
 `IMimirStreamSource`, and runtime UI readouts for stream/buffer health.
+Local six-camera ingest should push native handles through
+`MimirNativeIngestStreamSource`; process-backed ingest remains a compatibility
+edge for network SRT or diagnostics.
 
 ```mermaid
 flowchart TD

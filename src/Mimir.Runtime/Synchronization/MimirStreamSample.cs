@@ -8,4 +8,5 @@ public readonly record struct MimirStreamSample(
     long ArrivalNs,
     ulong Sequence,
     ulong PayloadHandle,
-    int ByteLength = 0);
+    int ByteLength = 0,
+    ReadOnlyMemory<byte> Data = default);

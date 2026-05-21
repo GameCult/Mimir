@@ -14,5 +14,8 @@ No active scratch subgoal.
 - Synchronization ownership started moving into `Mimir.Runtime`: hub, stream
   descriptors, per-stream rolling buffers, settings, and source adapter seam are
   in C# now; concrete capture adapters are next.
+- Local six-camera ingest should stay close to the metal: native push sources
+  carry payload handles into buffers; process sources are network/diagnostic
+  compatibility, not the main local camera path.
 - Keep scratch short and disposable.
 - Promote only durable lessons into `state/evidence.jsonl` or the map.

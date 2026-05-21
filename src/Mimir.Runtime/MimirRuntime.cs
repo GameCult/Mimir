@@ -16,7 +16,12 @@ public sealed class MimirRuntime : IAquariumRuntime
     private int lastPollCount;
 
     public MimirRuntime(AquariumRuntimeOptions options)
-        : this(options, MimirSynchronizationSettings.FromEnvironment())
+        : this(options, MimirRuntimeConfiguration.Load())
+    {
+    }
+
+    public MimirRuntime(AquariumRuntimeOptions options, MimirRuntimeConfiguration configuration)
+        : this(options, configuration.Settings, configuration.Sources)
     {
     }
 

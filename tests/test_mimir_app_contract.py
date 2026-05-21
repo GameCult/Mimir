@@ -47,6 +47,12 @@ class MimirAppContractTests(unittest.TestCase):
         self.assertIn("TimeSpan.FromSeconds(5)", settings)
         self.assertIn("MIMIR_NETWORK_VIDEO_STREAMS", settings)
         self.assertIn("MIMIR_LOCAL_AUDIO_STREAMS", settings)
+        native_source = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirNativeIngestStreamSource.cs").read_text(encoding="utf-8")
+        process_source = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirProcessStreamSource.cs").read_text(encoding="utf-8")
+
+        self.assertIn("payloadHandle", native_source)
+        self.assertIn("ReadOnlyMemory<byte>", native_source)
+        self.assertIn("RedirectStandardOutput", process_source)
 
 
 if __name__ == "__main__":

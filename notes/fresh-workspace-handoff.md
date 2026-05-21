@@ -49,7 +49,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   buffer per audio/video stream, defaulting to five seconds. Stream ids can be
   declared with `MIMIR_LOCAL_VIDEO_STREAMS`, `MIMIR_LOCAL_AUDIO_STREAMS`,
   `MIMIR_NETWORK_VIDEO_STREAMS`, and `MIMIR_NETWORK_AUDIO_STREAMS`; real capture
-  adapters feed buffers through `IMimirStreamSource`.
+  adapters feed buffers through `IMimirStreamSource`. Local six-camera ingest
+  should use native push adapters such as `MimirNativeIngestStreamSource`, not
+  FFmpeg stdout/process capture except as a network or diagnostic edge.
 - The reservoir is now one native time-ordered rolling buffer with typed
   indexes/views. The previous typed-ring crate is gone.
 - Native reservoir samples carry provenance flags; diagnostic/fallback samples

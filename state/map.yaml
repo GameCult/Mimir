@@ -76,6 +76,11 @@ accepted_design:
     and `IMimirStreamSource`. It initializes one bounded rolling buffer per
     configured audio/video stream and drains registered local/network sources
     into those buffers each Aquarium update.
+  - Local six-camera ingest should use native push sources such as
+    `MimirNativeIngestStreamSource`, carrying native payload handles and
+    optional memory spans into Mimir buffers. `MimirProcessStreamSource` is a
+    compatibility path for network SRT or diagnostics, not the local camera
+    foundation.
   - `native/reservoir` is the first native Rust crate. It now uses one
     time-ordered rolling buffer with typed views, so retention has exactly one
     owner while Aquarium/Faust still get kind-scoped queries.
@@ -119,6 +124,9 @@ active_subgoals:
     expose runtime UI, and emit synchronized OBS program outputs.
   - Implement concrete local device and network `IMimirStreamSource` adapters
     that feed the Mimir runtime buffers with live audio/video samples.
+  - Build the local camera adapter close to the driver/GPU capture surface;
+    avoid FFmpeg stdout for the six local camera streams unless used only as a
+    temporary diagnostic witness.
   - Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime` and
     `LocalcastProducer` C ABI described by
     `native/reservoir/include/localcast_reservoir.h`.
