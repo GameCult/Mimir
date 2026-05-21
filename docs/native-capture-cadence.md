@@ -291,3 +291,47 @@ Raven host check:
 Conclusion: the same Kiyo Pro/cable also falls back to high-speed on Raven.
 That makes the stock cable or the Kiyo Pro's own SuperSpeed lane the stronger
 suspect than the receiver workstation's rear ports.
+
+## 2026-05-21: Simultaneous Local Camera Pull
+
+The first simultaneous pull used one process for KS/UVC cameras and the raw
+PS3 Eye probe beside it. Current local visibility is only three camera devices:
+
+- Leap Motion Controller / LeapUVC camera interface;
+- Razer Kiyo Pro camera interface;
+- one PS3 Eye raw libusbk camera interface.
+
+The regular Kiyo and second PS3 Eye were not present on this rig during this
+run.
+
+Probe changes:
+
+- `ks_camera_cadence.exe --multi-ks-baseline` starts all matched KS camera
+  streams from one process with one start gate.
+- The raw PS3 Eye probe was launched at the same time as the KS multi-stream
+  harness.
+- KS matching now limits Kiyo/Leap profiles to `MI_00` so media/audio
+  interfaces do not masquerade as cameras.
+
+Simultaneous results with PS3 Eye at `640x480@60`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 40.12 |
+| Kiyo Pro | 1920x1080 MJPG | 24.99 |
+| PS3 Eye | 640x480 Bayer | 56.06 |
+
+Simultaneous results with PS3 Eye at `320x240@187`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 81.10 |
+| Kiyo Pro | 1920x1080 MJPG | 25.33 |
+| PS3 Eye | 320x240 Bayer | 185.74 |
+
+Conclusion: the current local topology can pull the three visible cameras
+concurrently, but Leap cadence collapses under shared load compared with its
+solo/KS-only result. The PS3 Eye's 320x240 mode is much less damaging than its
+640x480 mode, but still drags Leap below its ~110 fps warm steady-state. Before
+claiming six-camera viability, plug in the missing regular Kiyo and second PS3
+Eye and split high-rate cameras across controllers/hubs deliberately.

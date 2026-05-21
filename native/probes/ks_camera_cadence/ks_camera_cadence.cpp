@@ -7,9 +7,12 @@
 #include <winternl.h>
 
 #include <chrono>
+#include <atomic>
+#include <algorithm>
 #include <cstring>
 #include <cstdint>
 #include <cstdio>
+#include <cctype>
 #include <string>
 #include <vector>
 #include <thread>
@@ -91,6 +94,17 @@ struct PinCandidate
     LONG imageBytes = 0;
     LONGLONG interval100ns = 0;
     GUID subtype{};
+};
+
+struct MultiKsProfile
+{
+    const char* pathNeedle = "";
+    const char* label = "";
+    LONG width = 0;
+    LONG height = 0;
+    const char* subtype = "";
+    double minFps = 0.0;
+    bool forceFastExposure = false;
 };
 
 enum class ControlSet
@@ -1209,7 +1223,7 @@ std::vector<PinCandidate> inspectPins(HANDLE filter)
     return candidates;
 }
 
-bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDepth)
+bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDepth, std::atomic<bool>* startGate = nullptr)
 {
     const ULONG connectBytes = sizeof(KSPIN_CONNECT) + static_cast<ULONG>(candidate.format.size());
     std::vector<std::uint8_t> connectStorage(connectBytes);
@@ -1337,6 +1351,14 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
             static_cast<unsigned long>(status));
         return false;
     };
+
+    if (startGate)
+    {
+        while (!startGate->load(std::memory_order_acquire))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
 
     const auto start = std::chrono::steady_clock::now();
     const auto measureStart = start + std::chrono::seconds(2);
@@ -1482,6 +1504,154 @@ bool measureScenario(HANDLE filter, const PinCandidate& candidate, const Control
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     return measured;
 }
+
+std::string lowercase(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+const PinCandidate* findCandidate(
+    const std::vector<PinCandidate>& candidates,
+    LONG width,
+    LONG height,
+    const char* subtype,
+    double minFps)
+{
+    for (const auto& candidate : candidates)
+    {
+        const double fps = candidate.interval100ns > 0
+            ? 10000000.0 / static_cast<double>(candidate.interval100ns)
+            : 0.0;
+        if (candidate.width == width &&
+            candidate.height == height &&
+            fps >= minFps &&
+            fourccOrGuid(candidate.subtype) == subtype)
+        {
+            return &candidate;
+        }
+    }
+
+    return nullptr;
+}
+
+int runMultiKsBaseline()
+{
+    const MultiKsProfile profiles[] = {
+        {"vid_f182&pid_0003&mi_00", "LeapUVC full stereo IR", 640, 240, "YUY2", 100.0, false},
+        {"vid_1532&pid_0e05&mi_00", "Kiyo Pro RGB", 1920, 1080, "MJPG", 25.0, false},
+        {"vid_1532&pid_0e03&mi_00", "Kiyo RGB", 1920, 1080, "MJPG", 25.0, true},
+    };
+
+    struct Worker
+    {
+        std::string path;
+        MultiKsProfile profile;
+        std::thread thread;
+        bool matched = false;
+        bool measured = false;
+    };
+
+    const auto paths = enumerateCapturePaths();
+    std::vector<Worker> workers;
+    for (const auto& profile : profiles)
+    {
+        for (const auto& path : paths)
+        {
+            if (lowercase(path).find(profile.pathNeedle) == std::string::npos)
+            {
+                continue;
+            }
+
+            Worker worker{};
+            worker.path = path;
+            worker.profile = profile;
+            worker.matched = true;
+            workers.push_back(std::move(worker));
+        }
+    }
+
+    std::printf("multi-ks capture interfaces: %zu selected from %zu\n", workers.size(), paths.size());
+    if (workers.empty())
+    {
+        return 5;
+    }
+
+    std::atomic<bool> startGate(false);
+    for (auto& worker : workers)
+    {
+        worker.thread = std::thread([&startGate, &worker]() {
+            std::printf("multi-ks preparing: %s path=%s\n", worker.profile.label, worker.path.c_str());
+            Handle filter(CreateFileA(
+                worker.path.c_str(),
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                nullptr,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                nullptr));
+            if (!filter)
+            {
+                std::printf("multi-ks open failed: %s error=%s\n", worker.profile.label, lastErrorText().c_str());
+                return;
+            }
+
+            auto candidates = inspectPins(filter.value);
+            const PinCandidate* candidate = findCandidate(
+                candidates,
+                worker.profile.width,
+                worker.profile.height,
+                worker.profile.subtype,
+                worker.profile.minFps);
+            if (!candidate)
+            {
+                std::printf(
+                    "multi-ks target mode unavailable: %s %ldx%ld %s minFps=%.2f\n",
+                    worker.profile.label,
+                    worker.profile.width,
+                    worker.profile.height,
+                    worker.profile.subtype,
+                    worker.profile.minFps);
+                return;
+            }
+
+            if (worker.profile.forceFastExposure)
+            {
+                setCameraControl(filter.value, KSPROPERTY_CAMERACONTROL_EXPOSURE, -9, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL);
+                setVideoProcAmp(filter.value, KSPROPERTY_VIDEOPROCAMP_GAIN, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL);
+            }
+
+            std::printf(
+                "multi-ks ready: %s pin=%lu %ldx%ld %s target=%.2f\n",
+                worker.profile.label,
+                static_cast<unsigned long>(candidate->pinId),
+                candidate->width,
+                candidate->height,
+                fourccOrGuid(candidate->subtype).c_str(),
+                candidate->interval100ns > 0 ? 10000000.0 / static_cast<double>(candidate->interval100ns) : 0.0);
+            worker.measured = measureCandidate(filter.value, *candidate, 8, &startGate);
+        });
+    }
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::printf("multi-ks starting %zu streams\n", workers.size());
+    startGate.store(true, std::memory_order_release);
+
+    bool allMeasured = true;
+    for (auto& worker : workers)
+    {
+        if (worker.thread.joinable())
+        {
+            worker.thread.join();
+        }
+        allMeasured = allMeasured && worker.measured;
+    }
+
+    std::printf("multi-ks complete: measured=%s\n", allMeasured ? "yes" : "partial");
+    return allMeasured ? 0 : 6;
+}
 }
 
 int main(int argc, char** argv)
@@ -1504,6 +1674,10 @@ int main(int argc, char** argv)
         }
         printUsbVideoDescriptors(static_cast<USHORT>(vendorId), static_cast<USHORT>(productId));
         return 0;
+    }
+    if (targetVid == "--multi-ks-baseline")
+    {
+        return runMultiKsBaseline();
     }
 
     bool controlsOnly = false;

@@ -98,10 +98,17 @@ current_status:
     motherboard USB3 port changed the path to `root_hub30`, `bcdUSB=0x0320`,
     and exposed 720p/1080p YUY2/MJPG/H264/NV12 at 60 fps, but Windows still
     reports `UsbHighSpeed` rather than `UsbSuperSpeed`, and baseline cadence is
-    still about 25 fps across every tested format.
+    still about 25 fps across every tested format. The first simultaneous local
+    camera pull only had three visible devices: LeapUVC, Kiyo Pro, and one PS3
+    Eye. The KS multi-stream harness plus raw PS3 Eye probe pulled all three at
+    once, but Leap cadence collapsed under shared load: with PS3 Eye at
+    640x480@60 the set delivered Leap 40.12 fps, Kiyo Pro 24.99 fps, and PS3
+    Eye 56.06 fps; with PS3 Eye at 320x240@187 it delivered Leap 81.10 fps,
+    Kiyo Pro 25.33 fps, and PS3 Eye 185.74 fps.
   next_action: >
-    Turn the warmed, queued Leap KS path into an `IMimirVideoCaptureDriver`,
-    preserve direct control hooks for timing-camera state, and decide whether
-    Kiyo Pro reaches 60 fps after confirming a true `UsbSuperSpeed` cable/port
-    path; if it remains locked at 25 fps there, inspect explicit frame-interval
-    negotiation or vendor selectors.
+    Move the raw PS3 Eye probe into the repo or replace it with the first
+    runtime capture driver, then rerun simultaneous pulls with the missing
+    regular Kiyo and second PS3 Eye present. Keep high-rate cameras split
+    across controllers/hubs deliberately, because current shared-load tests
+    show Leap is no longer a stable timing authority under the present USB
+    topology.

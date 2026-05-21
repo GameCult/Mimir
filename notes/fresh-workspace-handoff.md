@@ -53,9 +53,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `UsbHighSpeed` rather than `UsbSuperSpeed`; measured cadence remains about
   25 fps across all tested formats. Verify cable/port SuperSpeed before poking
   writable vendor selectors.
+- First simultaneous local pull only saw LeapUVC, Kiyo Pro, and one PS3 Eye.
+  The KS multi-stream harness and raw PS3 Eye probe can pull all three at once,
+  but Leap drops hard under shared USB load: 40.12 fps when the PS3 Eye runs
+  640x480@60, and 81.10 fps when the PS3 Eye runs 320x240@187. The regular
+  Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
 
 ## Immediate Re-entry Instruction
 
-Read `docs/native-rebuild-plan.md`, then make the smallest direct-driver or
-runtime-buffer cut that improves the live Mimir machine. Do not restore deleted
-script infrastructure because a stale doc once missed it.
+Move the raw PS3 Eye cadence probe into `native/probes` or cut the first real
+runtime capture driver, then rerun simultaneous pulls with the regular Kiyo and
+second PS3 Eye present. Do not restore deleted script infrastructure because a
+stale doc once missed it.
