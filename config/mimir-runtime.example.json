@@ -9,6 +9,13 @@
       "adapter": "native"
     },
     {
+      "sourceId": "leap-stereo-ir",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "native"
+    },
+    {
       "sourceId": "host-focusrite",
       "kind": "Audio",
       "origin": "LocalDevice",

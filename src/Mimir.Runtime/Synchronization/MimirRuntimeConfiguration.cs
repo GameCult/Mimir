@@ -93,6 +93,11 @@ public sealed class MimirRuntimeConfiguration
 
     private static IMimirStreamSource? TryCreateSource(MimirStreamConfig stream)
     {
+        if (string.Equals(stream.Adapter, "native", StringComparison.OrdinalIgnoreCase))
+        {
+            return new MimirNativeIngestStreamSource(ToDescriptor(stream));
+        }
+
         if (!string.Equals(stream.Adapter, "process", StringComparison.OrdinalIgnoreCase))
         {
             return null;

@@ -19,7 +19,8 @@ public sealed class MimirNativeIngestStreamSource : IMimirStreamSource
         long arrivalNs,
         ulong payloadHandle,
         int byteLength = 0,
-        ReadOnlyMemory<byte> data = default)
+        ReadOnlyMemory<byte> data = default,
+        MimirVideoFrameDescriptor? videoFrame = null)
     {
         samples.Enqueue(new MimirStreamSample(
             Descriptor.SourceId,
@@ -30,7 +31,27 @@ public sealed class MimirNativeIngestStreamSource : IMimirStreamSource
             sequence++,
             payloadHandle,
             byteLength,
-            data));
+            data,
+            videoFrame));
+    }
+
+    public void PushVideoFrame(
+        MimirVideoFrameDescriptor frame,
+        long arrivalNs,
+        ReadOnlyMemory<byte> data = default)
+    {
+        if (Descriptor.Kind != MimirStreamKind.Video)
+        {
+            throw new InvalidOperationException("Video frames can only be pushed into a video stream source.");
+        }
+
+        Push(
+            frame.DeviceTimestampNs,
+            arrivalNs,
+            frame.NativeHandle,
+            data.Length,
+            data,
+            frame);
     }
 
     public bool TryRead(out MimirStreamSample sample)

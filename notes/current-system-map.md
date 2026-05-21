@@ -70,7 +70,9 @@ rolling buffer per configured audio/video stream, source polling through
 `IMimirStreamSource`, and runtime UI readouts for stream/buffer health.
 Local six-camera ingest should push native handles through
 `MimirNativeIngestStreamSource`; process-backed ingest remains a compatibility
-edge for network SRT or diagnostics.
+edge for network SRT or diagnostics. `MimirVideoFrameDescriptor` carries
+dimensions, pixel format, stride, device timestamp, and optional native/GPU
+handle metadata so Leap stereo IR can enter Mimir without OpenCV owning timing.
 
 ```mermaid
 flowchart TD

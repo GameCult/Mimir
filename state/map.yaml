@@ -81,6 +81,10 @@ accepted_design:
     optional memory spans into Mimir buffers. `MimirProcessStreamSource` is a
     compatibility path for network SRT or diagnostics, not the local camera
     foundation.
+  - `MimirVideoFrameDescriptor` is the first native video-frame descriptor for
+    the C# runtime: width, height, pixel format, stride, device timestamp, and
+    optional native/GPU handle. Leap stereo IR should use this path as the
+    timing-camera candidate instead of OpenCV arrival timing.
   - `native/reservoir` is the first native Rust crate. It now uses one
     time-ordered rolling buffer with typed views, so retention has exactly one
     owner while Aquarium/Faust still get kind-scoped queries.

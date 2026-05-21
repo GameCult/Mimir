@@ -17,5 +17,7 @@ No active scratch subgoal.
 - Local six-camera ingest should stay close to the metal: native push sources
   carry payload handles into buffers; process sources are network/diagnostic
   compatibility, not the main local camera path.
+- `MimirVideoFrameDescriptor` is the hot-path video descriptor for native camera
+  workers. Leap stereo IR should push device timestamps/handles through it.
 - Keep scratch short and disposable.
 - Promote only durable lessons into `state/evidence.jsonl` or the map.

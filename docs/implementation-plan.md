@@ -57,6 +57,10 @@ latency, and confidence.
     Local devices should feed through native push adapters; process-backed
     sources are compatibility edges for network/diagnostic command ingest, not
     the six-camera capture foundation.
+  - `MimirVideoFrameDescriptor` is the first video-frame hot-path descriptor:
+    dimensions, pixel format, stride, device timestamp, and optional native/GPU
+    handle. Leap stereo IR should enter Mimir through this native descriptor,
+    with OpenCV kept out of the hot loop.
   - `config/perfect-machine.example.json` declares the contract shape for six cameras, six microphones, reservoir typed views, native authorities, outputs, and the demotion of bridge scripts to tooling.
   - `native/reservoir` is the first native Rust crate. It implements one
     shared-edge five-second rolling buffer with typed views and proves that

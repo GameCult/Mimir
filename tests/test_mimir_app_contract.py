@@ -49,9 +49,14 @@ class MimirAppContractTests(unittest.TestCase):
         self.assertIn("MIMIR_LOCAL_AUDIO_STREAMS", settings)
         native_source = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirNativeIngestStreamSource.cs").read_text(encoding="utf-8")
         process_source = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirProcessStreamSource.cs").read_text(encoding="utf-8")
+        frame_descriptor = (ROOT / "src" / "Mimir.Runtime" / "Synchronization" / "MimirVideoFrameDescriptor.cs").read_text(encoding="utf-8")
 
         self.assertIn("payloadHandle", native_source)
+        self.assertIn("PushVideoFrame", native_source)
         self.assertIn("ReadOnlyMemory<byte>", native_source)
+        self.assertIn("LeapStereoIr", frame_descriptor)
+        self.assertIn("DeviceTimestampNs", frame_descriptor)
+        self.assertIn("NativeHandle", frame_descriptor)
         self.assertIn("RedirectStandardOutput", process_source)
 
 

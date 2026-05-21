@@ -52,6 +52,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   adapters feed buffers through `IMimirStreamSource`. Local six-camera ingest
   should use native push adapters such as `MimirNativeIngestStreamSource`, not
   FFmpeg stdout/process capture except as a network or diagnostic edge.
+  `MimirVideoFrameDescriptor` now carries video shape, pixel format, stride,
+  device timestamp, and optional native/GPU handle metadata for close-to-metal
+  frame ingest; Leap stereo IR is the timing-camera candidate for this path.
 - The reservoir is now one native time-ordered rolling buffer with typed
   indexes/views. The previous typed-ring crate is gone.
 - Native reservoir samples carry provenance flags; diagnostic/fallback samples

@@ -85,7 +85,8 @@ public sealed class MimirProcessStreamSource : IMimirStreamSource
                 sequence++,
                 0,
                 buffer.Length,
-                buffer));
+                buffer,
+                null));
         }
     }
 
