@@ -1,0 +1,325 @@
+<html>
+
+<head>
+    <title> PSEye Software Setup (Windows) - psmoveservice/PSMoveService GitHub Wiki </title>
+    <style>
+        #main {
+            max-width: 38rem;
+            margin: auto;
+            overflow-wrap: break-word;
+            min-width: 0;
+            background-color: white;
+        }
+
+        body {
+            background-image: url('/callToAction.svg');
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        #header_button {
+            position: sticky;
+            top: 0;
+            padding: 10px;
+            border-style: ridge;
+            border-color: lightgrey;
+            border-width: thin;
+            color: red;
+            font-weight: bold;
+            background-color: honeydew;
+            font-size: large;
+        }
+
+        #header_button p {
+            margin-bottom: 0;
+            margin-top: 10px;
+        }
+
+        #header_info {
+            padding: 10px;
+            border-style: ridge;
+            border-color: lightgrey;
+            border-width: thin;
+            color: red;
+            font-weight: bold;
+            background-color: honeydew;
+            font-size: large;
+        }
+
+        #content,
+        #index {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        #footer_info {
+            position: sticky;
+            bottom: 0;
+            padding: 10px;
+            border-style: ridge;
+            border-color: lightgrey;
+            border-width: thin;
+            color: red;
+            font-weight: bold;
+            background-color: honeydew;
+        }
+
+        #footer_info .blocks {
+            background: black;
+            color: white;
+            /* outline: 1px solid blue; */
+            padding: .1em .2em;
+        }
+
+        /* Hide useless-parts of transcluded HTML */
+        .width-full.input-group {
+            display: none;
+        }
+
+        h5:nth-last-child(2) {
+            display: none;
+        }
+
+        .Box-row.wiki-more-pages-link {
+            display: none;
+        }
+
+        .filter-bar {
+            display: none;
+        }
+
+        .Box-title>.octicon {
+            display: none;
+        }
+
+        .anchor {
+            display: none;
+        }
+
+        pre {
+            overflow: auto;
+        }
+
+        #main {
+            word-wrap: break-word;
+        }
+
+        .Counter {
+            background-color: lightgray;
+            border-radius: 20px;
+            padding: 0 10px;
+        }
+
+        table {
+            max-width: 100%;
+            overflow: auto;
+            width: 100%;
+            display: block;
+        }
+
+        .js-wiki-sidebar-toc-toggle-chevron-button {
+            display: none;
+        }
+
+        a.visit_url_original {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2em; /* adjust as needed */
+            max-height: 1.2em; /* should match line-height */
+            display: block;
+        }
+
+        /* White background for span */
+        /* Rounded corners */
+        /* Black border */
+        .visit_url_pillbar {
+            background-color: white;
+            border-radius: 10px;
+            padding: 5px;
+            margin: 5px;
+            display: block;
+            border: 1px solid black;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Broken Images */
+        img:before {
+            content: "⚠️ MISSING OR BROKEN IMAGE RENDERING ERROR: PLEASE VIEW ORIGINAL PAGE ON GITHUB.COM ⚠️";
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        @font-face {
+            font-family: "color-emoji";
+            src: local("Apple Color Emoji"),
+                local("Segoe UI Emoji"),
+                local("Segoe UI Symbol"),
+                local("Noto Color Emoji");
+        }
+
+        .emoji {
+            font-family: "color-emoji";
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid black;
+        }
+
+        .visit_url_link {
+            font-size: xx-large;
+        }
+
+        .why_exist {
+            position: relative;
+            text-align: center;
+            /* italics */
+            font-style: italic;
+        }
+
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Not used, did not want to risk non-indexing. -->
+    <!-- <meta property="og:url" content="https://github.com/psmoveservice/PSMoveService/wiki/PSEye-Software-Setup-%28Windows%29"> -->
+    <!-- Did not want to risk contaminating content to be indexed. -->
+    <!-- <meta property="og:description" content="not used"> -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="PSEye Software Setup (Windows) - psmoveservice/PSMoveService GitHub Wiki">
+</head>
+
+<body>
+    <div id="main">
+        <nav id="header_button">
+            <p>Content mirrored for search engine indexing from:</p>
+            <div>
+                <span class="visit_url_pillbar">
+                    <a href="https://github.com/psmoveservice/PSMoveService/wiki/PSEye-Software-Setup-%28Windows%29" class="visit_url_original">https://github.com/psmoveservice/PSMoveService/wiki/PSEye-Software-Setup-%28Windows%29</a>
+                </span>
+
+            </div>
+            <div class="why_exist">
+                <a href="/">Why does this service exist?</a>
+            </div>
+        </nav>
+        <aside id="header_info">
+            <!-- Last Modified Date added around here from redirect checker-->
+        <p>📅 Last Modified: Thu, 08 Aug 2019 14:42:55 GMT</p></aside>
+        <article id="content">
+            <h1>PSEye Software Setup (Windows) - psmoveservice/PSMoveService GitHub Wiki</h1>
+            <div id="mirrored"> <h1><a href="#overview" aria-hidden="true" class="anchor" id="overview"></a>Overview</h1>
+<p>There are many different ways to get the PS Eye working on a Windows PC. This is pretty confusing, so expect to be confused.</p>
+<table>
+<thead>
+<tr>
+<th>Driver</th>
+<th>Cost</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>IPISoft PS3EYEDriver</strong></td>
+<td>Free</td>
+<td>Supports multiple cameras. Applications like ex. skype cant see the cameras. The most easy PSEYE driver setup !</td>
+</tr>
+<tr>
+<td><strong>PS3EYEDriver</strong></td>
+<td>Free</td>
+<td>Wraps libusb. Open source and continues to be worked on so sometimes can be flaky. Supports as many cameras as there is bandwidth for. Instructions are below.</td>
+</tr>
+<tr>
+<td><strong>CL Eye Platform Driver</strong></td>
+<td>$2.99 USD</td>
+<td>Exposes the camera as a DirectShow object so can be used easily by this and other software (e.g. Skype, I think, no guarantees). Only supports one camera.</td>
+</tr>
+<tr>
+<td><strong>CL Eye Platform SDK</strong></td>
+<td>$4.99 USD</td>
+<td>Supports multiple cameras. Only works if you use your own (non-redistributable, developer version) CLEyeMulticam.dll. Delete the dll that comes with PSMoveService to use the DLL that gets installed with the SDK.</td>
+</tr>
+<tr>
+<td><strong>CL Eye redistributable + registered camera</strong></td>
+<td>$?? USD * n_cameras</td>
+<td>Apparently, after you register your cameras, the redistributable CLEyeMulticam.dll that we supply works. I don't think I ever correctly registered my camera so I don't know if it actually works.</td>
+</tr>
+<tr>
+<td><strong>PS3EyeDirectShow</strong></td>
+<td>Free</td>
+<td>Exposes the camera as a DirectShow object so can be used easily by this and other software (e.g. Skype, I think, no guarantees). <a href="https://github.com/jkevin/PS3EyeDirectShow" rel="nofollow ugc">https://github.com/jkevin/PS3EyeDirectShow</a></td>
+</tr>
+</tbody>
+</table>
+<h1><a href="#setup-the-camera-drivers" aria-hidden="true" class="anchor" id="setup-the-camera-drivers"></a>Setup the camera drivers</h1>
+<h2><a href="#option-a-ipisoft-pseye-driver-installation" aria-hidden="true" class="anchor" id="option-a-ipisoft-pseye-driver-installation"></a>Option A) IPIsoft PSEYE Driver Installation</h2>
+<p><strong>NOTE: If you have already install libusb based drivers, please uninstall those drivers first in Windows device manager</strong></p>
+<p>This installation option is very simple. Just download the driver for your Windows OS architecture and all PSEYE Cameras should be recognized. IPISoft is software for Motion Capture Full Body system. This PS3Eye driver was not originally intended to be used with PSMoveService (opensource software), though it does appear to work. Therefore, please do not spam the support of IPISoft with questions about this driver. Use at your own risk.</p>
+<p>Downloads:</p>
+<p>64-bit OS:</p>
+<p><a href="http://files.ipisoft.com/drivers/PlayStation3_Eye_iPi-x64.msi" rel="nofollow ugc">http://files.ipisoft.com/drivers/PlayStation3_Eye_iPi-x64.msi</a></p>
+<p>32-bit OS:</p>
+<p><a href="http://files.ipisoft.com/drivers/PlayStation3_Eye_iPi-x86.msi" rel="nofollow ugc">http://files.ipisoft.com/drivers/PlayStation3_Eye_iPi-x86.msi</a></p>
+<p>Result in 'Device Manager', tested successfully in Windows 10 x64:</p>
+<p><img src="http://i.imgur.com/4Kdyp96.jpg" alt="" /></p>
+<p>Source info:
+<a href="http://docs.ipisoft.com/User_Guide_for_Multiple_PS_Eye_Cameras_Configuration" rel="nofollow ugc">http://docs.ipisoft.com/User_Guide_for_Multiple_PS_Eye_Cameras_Configuration</a></p>
+<h2><a href="#option-b-libusb-pseye-driver-installation" aria-hidden="true" class="anchor" id="option-b-libusb-pseye-driver-installation"></a>Option B) Libusb PSEYE Driver Installation</h2>
+<p>The instructions below apply to our customized version of the <a href="https://github.com/HipsterSloth/PS3EYEDriver/tree/psmoveservice" rel="nofollow ugc">PS3EYEDriver wrapper</a> around <a href="http://libusb.info/" rel="nofollow ugc">libusb</a>.</p>
+<h3><a href="#libusb-driver-pre-install" aria-hidden="true" class="anchor" id="libusb-driver-pre-install"></a>Libusb Driver Pre-Install</h3>
+<p>Download UsbDeview from <a href="http://www.nirsoft.net/utils/usbdeview-x64.zip" rel="nofollow ugc">Nirsoft.net</a>. This is a handy utility for showing all connected usb devices attached to your system and what drivers they are running. Once downloaded, launch <code>usbdeview.exe</code>.</p>
+<ol>
+<li>After you have plugged in the PS Eye camera you should see entries for the camera and the microphone of the ps3 eye.
+<ul>
+<li>The cameras take a lot of USB bandwidth. This is especially a concern if using more than one camera. We have some tips <a href="https://github.com/cboulay/PSMoveService/wiki/Troubleshooting-(Windows)#general-weird-camera-behavior-clean-camera-driver-reinstall" rel="nofollow ugc">here</a> on how to manage your camera-connections. Also see <a href="https://www.oculus.com/blog/oculus-roomscale-balancing-bandwidth-on-usb/" rel="nofollow ugc">what Oculus has to say</a> on the matter.</li>
+</ul>
+</li>
+<li>Under the &quot;service name&quot; column for the camera you should see &quot;usbccgp&quot; for the camera device and &quot;usbaudio&quot; for the audio device.
+a. If you don't see &quot;usbccgp&quot; for the camera, right-click on the entry with the purple dot and select &quot;uninstall selected devices&quot;, after which, unplug the ps3eye camera, and then plug it back in.</li>
+<li>Close usbdeview</li>
+</ol>
+<p><a href="/m/psmoveservice/PSMoveService/wiki/images/USBCameraPreInstall.jpg">images/USBCameraPreInstall.jpg</a></p>
+<h3><a href="#libusb-driver-install" aria-hidden="true" class="anchor" id="libusb-driver-install"></a>Libusb Driver Install</h3>
+<p>Download the Zadig usb utility from <a href="http://zadig.akeo.ie/" rel="nofollow ugc">here</a>. This is another handy usb utility for installing custom usb drivers. In our case we're going to use it to install the libusb driver over the top of the default Windows driver for the PS Eye camera. Once downloaded, Launch <code>zadig_2.2.exe</code>.</p>
+<ol>
+<li>From the options menu launch select &quot;List all devices&quot;</li>
+<li>From the device list drop down select &quot;USB Camera-B4.09.24.1 (Interface 0)&quot;</li>
+<li>From the driver drop down select &quot;libusb-win32 (v 1.2.6.0)&quot;</li>
+<li>Click the Install Driver option</li>
+<li>There should be a few second delay and then it should say &quot;driver installed successfully&quot;</li>
+</ol>
+<p>Note: Computer reboot might be require to complete installation.
+Note 2: Having an error message from the timeout expiration might not mean the driver was not install properly.</p>
+<p><a href="/m/psmoveservice/PSMoveService/wiki/images/ZadigInstall.jpg">images/ZadigInstall.jpg</a></p>
+<h3><a href="#libusb-driver-post-install" aria-hidden="true" class="anchor" id="libusb-driver-post-install"></a>Libusb Driver Post-Install</h3>
+<ol>
+<li>Launch <code>usbdeview.exe</code> again.</li>
+<li>You should now see an entry in the &quot;service name&quot; column for the PS3Eye camera that says &quot;libusb0&quot;
+a. If you don't see &quot;libusb0&quot; for the camera, right-click on the entry with the purple dot and select &quot;uninstall selected devices&quot;, then unplug the ps3eye camera, then plug it back in, and try reinstalling the lib usb driver.</li>
+<li>Close usbdeview</li>
+</ol>
+<p><a href="/m/psmoveservice/PSMoveService/wiki/images/USBCameraPostInstall.jpg">images/USBCameraPostInstall.jpg</a></p>
+<h2><a href="#testing" aria-hidden="true" class="anchor" id="testing"></a>Testing</h2>
+<p>Now that the camera drivers are installed you should be able to run <code>test_camera.exe</code> and see a video feed (640x480/60Hz) for each camera you have plugged in (up to 3 cameras max).</p>
+<p>If <code>test_camera.exe</code> closes immediately, or the video feed is stuck on a solid color, don't panic. This is sadly a common occurrence, especially on a initial setup. It's quite likely that you have to <a href="https://github.com/cboulay/PSMoveService/wiki/Troubleshooting-%28Windows%29#cameras-arent-showing-up-using-libusb-driver" rel="nofollow ugc">do some driver shenanigans in zadig</a> to make this work.</p>
+<p>If that worked the first time, please take a moment to celebrate your good fortune. Then launch <code>PSMoveService.exe</code>. You should see messages about any attached cameras getting opened in the log window.</p>
+<p>Then launch the <code>PSMoveConfigTool.exe</code> and open the &quot;Tracker Settings&quot; and &quot;Test Video Feed&quot; sub menu. If your camera is set up properly then this should show you the images from the camera at 640x480/60Hz. While you have the video feed up, it's also a good time to grab the move controller and see if the frame encompasses enough of your intended interaction area with the controller.</p>
+<p>Also when the PS Eye camera is recording you should see the red LED turn on. Sometimes this light will get stuck on in the event of an application crash. Most of the time it won't matter, but you can reset the camera simply by unplugging it and then plugging it back in again.</p>
+<p><a href="/m/psmoveservice/PSMoveService/wiki/images/Recording.jpg">images/Recording.jpg</a></p>
+<h1><a href="#proceed-to-the-next-step" aria-hidden="true" class="anchor" id="proceed-to-the-next-step"></a>Proceed to the next step</h1>
+<p><a href="/m/psmoveservice/PSMoveService/wiki/PSMove-Bluetooth-Pairing">PSMove-Bluetooth-Pairing</a></p>
+ </div>
+        </article>
+        <nav id="index">
+            <a href="/m/psmoveservice/PSMoveService/wiki_index">🗂️ Page Index for this GitHub Wiki</a>
+        </nav>
+    </div>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"4645764ca8384bfc86034b71f1dafd76","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+
+</html>

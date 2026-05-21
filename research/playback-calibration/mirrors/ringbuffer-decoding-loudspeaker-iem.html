@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html prefix="og: http://ogp.me/ns# article: http://ogp.me/ns/article# " lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decoding to Loudspeaker Setups | RingBuffer</title>
+<link href="../../../assets/css/all-nocdn.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/ipython.min.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_ipython.css" rel="stylesheet" type="text/css">
+<link href="https://fonts.googleapis.com/css?family=Playfair+Display:700,900" rel="stylesheet">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" href="../../../rss.xml">
+<link rel="canonical" href="http://ringbuffer.org/spatial_audio/iem-reaper/decoding-loudspeaker-iem/">
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+    tex2jax: {
+        inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+        displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
+        processEscapes: true
+    },
+    displayAlign: 'center', // Change this to 'left' if you want left-aligned equations.
+    "HTML-CSS": {
+        styles: {'.MathJax_Display': {"margin": 0}}
+    }
+});
+</script><!--[if lt IE 9]><script src="../../../assets/js/html5.js"></script><![endif]--><link rel="stylesheet" href="../../../assets/hvc/pkgindex.css">
+<meta name="author" content="Paul Schuladen">
+<link rel="prev" href="../../../faust/physical_modeling/faust-waveguide-input/" title="Waveguide with Excitation Input" type="text/html">
+<link rel="next" href="../../../sound_synthesis_introduction/Additive_Spectral/additive-spectral-parabolic-interpolation/" title="Additive &amp; Spectral: Parabolic Interpolation" type="text/html">
+<meta property="og:site_name" content="RingBuffer">
+<meta property="og:title" content="Decoding to Loudspeaker Setups">
+<meta property="og:url" content="http://ringbuffer.org/spatial_audio/iem-reaper/decoding-loudspeaker-iem/">
+<meta property="og:description" content='Creating a Decoder
+Decoder can be created using the allrad decoder. In there the coordinats for each speaker can be set. The decoder requires a "body" meaning that a purely two dimensional speaker set'>
+<meta property="og:type" content="article">
+<!-- <meta property="article:published_time" content="2022-05-06T14:00:00Z"> -->
+</head>
+<body>
+<a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+
+<!-- Header and menu bar -->
+<div class="container">
+      <header class="blog-header py-3"><div class="row nbb-header align-items-center">
+          <div class="col-md-3 col-xs-2 col-sm-2" style="width: auto;">
+            <button class="navbar-toggler navbar-light bg-light nbb-navbar-toggler" type="button" data-toggle="collapse" data-target=".bs-nav-collapsible" aria-controls="bs-navbar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse bs-nav-collapsible bootblog4-search-form-holder">
+                
+            </div>
+        </div>
+          <div class="col-md-6 col-xs-10 col-sm-10 bootblog4-brand" style="width: auto;">
+            <a class="navbar-brand blog-header-logo text-dark" href="http://ringbuffer.org/">
+
+            <!-- <span id="blog-title">RingBuffer</span> -->
+             <img src="../../../images/ringbuffer_BANNER.png" alt="LOGO" class="center"></a>
+          </div>
+            <div class="col-md-3 justify-content-end align-items-center bs-nav-collapsible collapse flex-collapse bootblog4-right-nav">
+            <nav class="navbar navbar-light bg-white"><ul class="navbar-nav bootblog4-right-nav"></ul></nav>
+</div>
+    </div>
+</header><nav class="navbar navbar-expand-md navbar-light bg-white static-top"><div class="collapse navbar-collapse bs-nav-collapsible" id="bs-navbar">
+            <ul class="navbar-nav nav-fill d-flex w-100">
+<li class="nav-item">
+<a href="../../../teaching/computer-music-basics" class="nav-link">Computer Music Basics</a>
+                </li>
+<li class="nav-item">
+<a href="../../../teaching/sound-synthesis-introduction" class="nav-link">Sound Synthesis Introduction</a>
+                </li>
+<li class="nav-item">
+<a href="../../../teaching/spatial-audio" class="nav-link">Spatial Audio</a>
+                </li>
+<li class="nav-item">
+<a href="../../../teaching/building-instruments-in-faust" class="nav-link">Faust</a>
+                </li>
+<li class="nav-item">
+<a href="../../../teaching/sound-synthesis-cpp" class="nav-link">C++</a>
+                </li>
+<li class="nav-item">
+<a href="../../../teaching/misc-tools" class="nav-link">Misc Tools</a>
+
+                
+            </li>
+</ul>
+</div>
+<!-- /.navbar-collapse -->
+</nav>
+</div>
+
+<div class="container" id="content" role="main">
+    <div class="body-content">
+        <!--Body content-->
+        
+        
+<article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title" itemprop="headline name"><a href="." class="u-url">Decoding to Loudspeaker Setups</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/paul-schuladen/">Paul Schuladen</a>
+            </span></p>
+            <!-- <p class="dateline">
+            <a href="/spatial_audio/iem-reaper/decoding-loudspeaker-iem/" rel="bookmark">
+            <time class="published dt-published" datetime="2022-05-06T14:00:00Z" itemprop="datePublished" title="2022-05-06 14:00">2022-05-06 14:00</time>
+            </a>
+            </p> -->
+            
+
+        </div>
+        
+
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+    <div class="section" id="creating-a-decoder">
+<h2>Creating a Decoder</h2>
+<p>Decoder can be created using the allrad decoder. In there the coordinats for each speaker can be set. The decoder requires a "body" meaning that a purely two dimensional speaker setup will not work. For that Imaginary speaker can be placed. Audio that is rendered on it is send to all connected speakers. To avoid this a gain factor can be applied.</p>
+</div>
+<div class="section" id="using-a-decoder">
+<h2>Using a Decoder</h2>
+<p>Route an ambisonics signal into the decoder channel. Make sure to send all channels (and not just 1/2).</p>
+<p>Allrad Decoder itself can already process and decode ambisonics. But you can also export the created decoder and speakerlayouts for use in other IEM-Plugins.</p>
+<p>The "SimpleDecoder" can import decoder files. With this plugin you are able to use a discrete subwoofer without extra signal splitting and processing and also a so called virtual subwoofer which sends the low frequency audio to all speakers.</p>
+</div>
+<div class="section" id="distance-compensator">
+<h2>Distance Compensator</h2>
+<p>A normal ambisonics decoder does only decode the direction of the incoming soundfield. So this would only work cleanly on a perfect sphere or circle. In realworld scenario this is barely the case, the distance from the speaker to the listener might diverge leading to different level and delays of the signal at the listeners position. To compensate for that effect the "DistanceCompensator" can be used. You can load the speaker layout file into it or adjust the distance manually.</p>
+</div>
+    </div>
+    <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<!-- <li class="previous"> --><!-- <a href="/faust/physical_modeling/faust-waveguide-input/" rel="prev" title="Waveguide with Excitation Input">Previous post</a> --><!-- </li> --><!-- <li class="next">
+                <a href="/sound_synthesis_introduction/Additive_Spectral/additive-spectral-parabolic-interpolation/" rel="next" title="Additive &amp; Spectral: Parabolic Interpolation">Next post</a>
+            </li> -->
+</ul></nav></aside><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML" integrity="sha384-3lJUsx1TJHt7BA4udB5KPnDrlkO8T6J6v/op7ui0BbCjvZ9WqV4Xm6DTP6kQ/iBH" crossorigin="anonymous"></script><script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+    tex2jax: {
+        inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+        displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
+        processEscapes: true
+    },
+    displayAlign: 'center', // Change this to 'left' if you want left-aligned equations.
+    "HTML-CSS": {
+        styles: {'.MathJax_Display': {"margin": 0}}
+    }
+});
+</script></article><!--End of body content--><footer id="footer"><center>
+<hr>
+<br>
+Contents © Henrik von Coler 2022 - <a href="../../../contact"> Contact</a>
+</center>
+<br></footer>
+</div>
+</div>
+
+
+        <script src="../../../assets/js/all-nocdn.js"></script><script>
+    baguetteBox.run('div#content', {
+        ignoreClass: 'islink',
+        captions: function(element) {
+            return element.getElementsByTagName('img')[0].alt;
+    }});
+    </script>
+</body>
+</html>

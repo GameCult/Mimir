@@ -76,9 +76,10 @@ current_status:
   summary: >
     The repo owns a C# Mimir app/runtime scaffold, a native reservoir crate, OBS
     bridge scripts, and persistence surfaces. Script-era packages, tests,
-    helper tools, dependency manifests, and archived mirrors have been removed from the
-    working tree. The next useful cut is direct driver ingest, not reviving old
-    diagnostic machinery.
+    helper tools, dependency manifests, and stale docs have been removed from
+    the working tree. Research archives remain as reference-only memory for raw
+    native/GPU implementation shape. The next useful cut is direct driver
+    ingest, not reviving old diagnostic machinery.
   next_action: >
     Feed Leap stereo IR frames through `IMimirVideoCaptureDriver` into
     `MimirSynchronizationHub`, measure sustained cadence over the default

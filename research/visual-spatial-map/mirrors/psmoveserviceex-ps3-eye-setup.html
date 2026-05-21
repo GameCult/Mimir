@@ -1,0 +1,279 @@
+<html>
+
+<head>
+    <title> Setting up the PlayStation 3 Eye Camera - Timocop/PSMoveServiceEx GitHub Wiki </title>
+    <style>
+        #main {
+            max-width: 38rem;
+            margin: auto;
+            overflow-wrap: break-word;
+            min-width: 0;
+            background-color: white;
+        }
+
+        body {
+            background-image: url('/callToAction.svg');
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        #header_button {
+            position: sticky;
+            top: 0;
+            padding: 10px;
+            border-style: ridge;
+            border-color: lightgrey;
+            border-width: thin;
+            color: red;
+            font-weight: bold;
+            background-color: honeydew;
+            font-size: large;
+        }
+
+        #header_button p {
+            margin-bottom: 0;
+            margin-top: 10px;
+        }
+
+        #header_info {
+            padding: 10px;
+            border-style: ridge;
+            border-color: lightgrey;
+            border-width: thin;
+            color: red;
+            font-weight: bold;
+            background-color: honeydew;
+            font-size: large;
+        }
+
+        #content,
+        #index {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        #footer_info {
+            position: sticky;
+            bottom: 0;
+            padding: 10px;
+            border-style: ridge;
+            border-color: lightgrey;
+            border-width: thin;
+            color: red;
+            font-weight: bold;
+            background-color: honeydew;
+        }
+
+        #footer_info .blocks {
+            background: black;
+            color: white;
+            /* outline: 1px solid blue; */
+            padding: .1em .2em;
+        }
+
+        /* Hide useless-parts of transcluded HTML */
+        .width-full.input-group {
+            display: none;
+        }
+
+        h5:nth-last-child(2) {
+            display: none;
+        }
+
+        .Box-row.wiki-more-pages-link {
+            display: none;
+        }
+
+        .filter-bar {
+            display: none;
+        }
+
+        .Box-title>.octicon {
+            display: none;
+        }
+
+        .anchor {
+            display: none;
+        }
+
+        pre {
+            overflow: auto;
+        }
+
+        #main {
+            word-wrap: break-word;
+        }
+
+        .Counter {
+            background-color: lightgray;
+            border-radius: 20px;
+            padding: 0 10px;
+        }
+
+        table {
+            max-width: 100%;
+            overflow: auto;
+            width: 100%;
+            display: block;
+        }
+
+        .js-wiki-sidebar-toc-toggle-chevron-button {
+            display: none;
+        }
+
+        a.visit_url_original {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2em; /* adjust as needed */
+            max-height: 1.2em; /* should match line-height */
+            display: block;
+        }
+
+        /* White background for span */
+        /* Rounded corners */
+        /* Black border */
+        .visit_url_pillbar {
+            background-color: white;
+            border-radius: 10px;
+            padding: 5px;
+            margin: 5px;
+            display: block;
+            border: 1px solid black;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Broken Images */
+        img:before {
+            content: "⚠️ MISSING OR BROKEN IMAGE RENDERING ERROR: PLEASE VIEW ORIGINAL PAGE ON GITHUB.COM ⚠️";
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        @font-face {
+            font-family: "color-emoji";
+            src: local("Apple Color Emoji"),
+                local("Segoe UI Emoji"),
+                local("Segoe UI Symbol"),
+                local("Noto Color Emoji");
+        }
+
+        .emoji {
+            font-family: "color-emoji";
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid black;
+        }
+
+        .visit_url_link {
+            font-size: xx-large;
+        }
+
+        .why_exist {
+            position: relative;
+            text-align: center;
+            /* italics */
+            font-style: italic;
+        }
+
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Not used, did not want to risk non-indexing. -->
+    <!-- <meta property="og:url" content="https://github.com/Timocop/PSMoveServiceEx/wiki/Setting-up-the-PlayStation-3-Eye-Camera"> -->
+    <!-- Did not want to risk contaminating content to be indexed. -->
+    <!-- <meta property="og:description" content="not used"> -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Setting up the PlayStation 3 Eye Camera - Timocop/PSMoveServiceEx GitHub Wiki">
+</head>
+
+<body>
+    <div id="main">
+        <nav id="header_button">
+            <p>Content mirrored for search engine indexing from:</p>
+            <div>
+                <span class="visit_url_pillbar">
+                    <a href="https://github.com/Timocop/PSMoveServiceEx/wiki/Setting-up-the-PlayStation-3-Eye-Camera" class="visit_url_original">https://github.com/Timocop/PSMoveServiceEx/wiki/Setting-up-the-PlayStation-3-Eye-Camera</a>
+                </span>
+
+            </div>
+            <div class="why_exist">
+                <a href="/">Why does this service exist?</a>
+            </div>
+        </nav>
+        <aside id="header_info">
+            <!-- Last Modified Date added around here from redirect checker-->
+        <p>📅 Last Modified: Thu, 07 May 2026 22:16:43 GMT</p></aside>
+        <article id="content">
+            <h1>Setting up the PlayStation 3 Eye Camera - Timocop/PSMoveServiceEx GitHub Wiki</h1>
+            <div id="mirrored"> <blockquote>
+<p>[!WARNING]
+Before connecting or acquiring PlayStation 3 Eye cameras, first take a look at <a href="https://github.com/Timocop/PSMoveServiceEx/wiki/Compatible-Devices" rel="nofollow ugc">Compatible Devices</a> and <a href="https://github.com/Timocop/PSMoveServiceEx/wiki/Hardware-Requirements" rel="nofollow ugc">Hardware Requirements</a>!</p>
+</blockquote>
+<h1><a href="#-playstation-3-eye" aria-hidden="true" class="anchor" id="-playstation-3-eye"></a>📷 PlayStation 3 Eye</h1>
+<p><img src="https://github.com/user-attachments/assets/ec9a8cef-30d4-4b9e-9ec8-48bf7d70a98e" alt="ps3eye" /></p>
+<h1><a href="#-connection" aria-hidden="true" class="anchor" id="-connection"></a>🔌 Connection</h1>
+<p>Simply connect the PlayStation 3 Eye with any USB port on your Computer.</p>
+<p>Do not exceed 5 meters of total cable length (including the 1 meter USB cable of the PlayStation 3 Eye camera), if you are using passive USB extensions cables. If you need to lay out cables over longer distances, its required to get active repeater USB cables or place USB Hub between them to repeat the data signals to avoid signal loss. Externally powered active USB repeater cables are not required as PlayStation 3 Eye cameras can still run at a very low USB voltage (<code>~3.3v</code>).</p>
+<h1><a href="#-installation" aria-hidden="true" class="anchor" id="-installation"></a>💿 Installation</h1>
+<p>To use the PlayStation 3 Eye camera, you will need LibUSB drivers in order for <strong>PSMoveServiceEx</strong> to receive image streams and change settings from the camera. You can use <strong><a href="https://github.com/Timocop/PSMoveServiceEx-Virtual-Device-Manager" rel="nofollow ugc">PSMoveServiceEx - Virtual Device Manager</a></strong> to install all necessary camera drivers.</p>
+<p>Navigate to <code>VDM - Service Management</code> and click <code>Install PlayStation Eye Drivers</code> to install the drivers for the PlayStation 3 Eye camera.</p>
+<blockquote>
+<p>[!NOTE]
+Those drivers are not compatible with DirectShow and PlayStation 3 Eye cameras will not show as Webcams in Microsoft Windows. Decreasing the risk of other applications accessing them.</p>
+</blockquote>
+<p><img src="https://github.com/Timocop/PSMoveServiceEx/assets/22834512/831ca78a-8a2a-4b0a-89c1-4355d9b2ea81" alt="" /></p>
+<h1><a href="#️-configuration" aria-hidden="true" class="anchor" id="️-configuration"></a>⚙️ Configuration</h1>
+<p>Use <strong>PSMoveServiceEx Config Tool</strong> to configure the PlayStation 3 Eye camera. You can find all camera settings when calibrating controller or head-mounted display colors in <code>Config Tool &gt; Tracker Settings &gt; Color Calibration</code></p>
+<table>
+<thead>
+<tr>
+<th>Steps</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><img src="https://github.com/Timocop/PSMoveServiceEx/assets/22834512/6d18eff6-aa38-467c-bed5-14deceb7a36a" alt="" /></td>
+</tr>
+<tr>
+<td><img src="https://github.com/Timocop/PSMoveServiceEx/assets/22834512/3b1f11e0-36ee-493f-befa-1077382cd775" alt="" /></td>
+</tr>
+<tr>
+<td><img src="https://github.com/Timocop/PSMoveServiceEx/assets/22834512/478f5ad9-393a-4ef6-923b-0938e7a98897" alt="" /></td>
+</tr>
+</tbody>
+</table>
+<h1><a href="#-troubleshooting" aria-hidden="true" class="anchor" id="-troubleshooting"></a>🧰 Troubleshooting</h1>
+<h3><a href="#-psmoveserviceex-config-tool-stream-shows-tracker-timed-out-or-has-a-unstable-framerate" aria-hidden="true" class="anchor" id="-psmoveserviceex-config-tool-stream-shows-tracker-timed-out-or-has-a-unstable-framerate"></a>📌 PSMoveServiceEx Config Tool stream shows 'Tracker timed out.' or has a unstable framerate.</h3>
+<p>This means PSMoveServiceEx did not receive any image from the camera in a while or the image could not be received in time from the camera.
+This can be caused by the following reasons:</p>
+<ul>
+<li>USB cable too long (signal loss).</li>
+<li>Too many heavy-duty devices connected (such as cameras) to one USB Host Controller causing insufficient bandwidth.</li>
+<li>Device disconnected.</li>
+<li>Improper configuration (such as too high framerate).</li>
+<li>Bad or broken cable.</li>
+</ul>
+<blockquote>
+<p>[!NOTE]
+Please check <a href="https://github.com/Timocop/PSMoveServiceEx/wiki/Compatible-Devices" rel="nofollow ugc">Compatible Devices</a> and <a href="https://github.com/Timocop/PSMoveServiceEx/wiki/Hardware-Requirements" rel="nofollow ugc">Hardware Requirements</a> to properly connect your PlayStation 3 Eye camera.</p>
+</blockquote>
+<h3><a href="#-playstation-eye-3-cameras-do-not-show-in-psmoveserviceex-config-tool" aria-hidden="true" class="anchor" id="-playstation-eye-3-cameras-do-not-show-in-psmoveserviceex-config-tool"></a>📌 PlayStation Eye 3 Cameras do not show in PSMoveServiceEx Config Tool.</h3>
+<p>Check if all camera drivers are installed properly as seen in <a href="https://github.com/Timocop/PSMoveServiceEx/wiki/Setting-up-the-PlayStation-3-Eye-Camera#-installation" rel="nofollow ugc"><strong>💿 Installation</strong></a> section of this page or restart PSMoveServiceEx. If they are installed properly and they still wont show up, check troubleshooting section <a href="https://github.com/Timocop/PSMoveServiceEx/wiki/Setting-up-the-PlayStation-3-Eye-Camera#-psmoveserviceex-config-tool-stream-shows-tracker-timed-out-or-has-a-unstable-framerate" rel="nofollow ugc"><strong>📌 PlayStation Eye 3 Cameras do not show in PSMoveServiceEx Config Tool.</strong></a>.</p>
+ </div>
+        </article>
+        <nav id="index">
+            <a href="/m/Timocop/PSMoveServiceEx/wiki_index">🗂️ Page Index for this GitHub Wiki</a>
+        </nav>
+    </div>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"4645764ca8384bfc86034b71f1dafd76","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+
+</html>
