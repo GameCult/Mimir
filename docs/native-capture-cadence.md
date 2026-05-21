@@ -457,3 +457,37 @@ Conclusion: Raven's PS3 Eye driver binding is fixed enough to open the device,
 but the current Raven USB path/device state is not delivering usable cadence.
 Next Raven work is port/controller isolation and a clean single-process cadence
 run before treating the Eye as a usable remote timing witness.
+
+## 2026-05-22: Restored Local Five-Device Pull
+
+After moving the Raven PS3 Eye back to the Mimir host, local enumeration showed:
+
+- LeapUVC stereo IR pair;
+- regular Razer Kiyo;
+- two PS3 Eyes;
+- Focusrite Scarlett Solo moved away from the Leap USB neighborhood.
+
+The Kiyo Pro was not local for this run.
+
+Simultaneous local results with both PS3 Eyes at `320x240@187`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 106.07 |
+| Kiyo | 1920x1080 MJPG | 30.33 |
+| PS3 Eye 0 | 320x240 Bayer | 186.57 |
+| PS3 Eye 1 | 320x240 Bayer | 186.14 |
+
+Simultaneous local results with both PS3 Eyes at `640x480@60`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 108.07 |
+| Kiyo | 1920x1080 MJPG | 30.34 |
+| PS3 Eye 0 | 640x480 Bayer | 57.79 |
+| PS3 Eye 1 | 640x480 Bayer | 58.08 |
+
+Conclusion: the current local topology can run all local sensors in parallel:
+Leap stereo plus regular Kiyo plus both PS3 Eyes. With the Focusrite out of the
+Leap neighborhood and the Kiyo Pro absent, Leap stays close to its previous
+best cadence instead of falling into the old ~81 fps band.

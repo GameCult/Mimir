@@ -130,7 +130,12 @@ current_status:
     now has the same libwdi WinUSB binding as the local Eye and can be opened by
     the copied cadence probe, but Raven Eye cadence is currently unusable:
     320x240@187 delivered 132.24 fps then 78.93 fps, and 640x480@60 delivered
-    6.32 fps with multi-second gaps.
+    6.32 fps with multi-second gaps. Moving that Eye back to the Mimir host
+    produced the current clean local topology: LeapUVC, regular Kiyo, and two
+    PS3 Eyes run in parallel while Kiyo Pro stays off-host. With both Eyes at
+    320x240@187, Leap delivered 106.07 fps, Kiyo 30.33 fps, and the Eyes 186.57
+    / 186.14 fps. With both Eyes at 640x480@60, Leap delivered 108.07 fps, Kiyo
+    30.34 fps, and the Eyes 57.79 / 58.08 fps.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
     runtime capture driver, then isolate Raven's PS3 Eye port/controller until
