@@ -832,6 +832,101 @@ void printUsbVideoDescriptors(USHORT vendorId, USHORT productId)
     }
 }
 
+void printUsbHubInventory()
+{
+    const auto hubPaths = enumerateInterfacePaths(UsbHubInterfaceGuid, "GUID_DEVINTERFACE_USB_HUB");
+    std::printf("USB hub interfaces: %zu\n", hubPaths.size());
+    ULONG totalPorts = 0;
+    ULONG usb3AdvertisedPorts = 0;
+
+    for (const auto& hubPath : hubPaths)
+    {
+        Handle hub(CreateFileA(
+            hubPath.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr));
+        if (!hub)
+        {
+            std::printf("  hub=%s open=failed %s\n", hubPath.c_str(), lastErrorText().c_str());
+            continue;
+        }
+
+        USB_NODE_INFORMATION nodeInfo{};
+        nodeInfo.NodeType = UsbHub;
+        DWORD returned = 0;
+        if (!DeviceIoControl(
+                hub.value,
+                IOCTL_USB_GET_NODE_INFORMATION,
+                &nodeInfo,
+                sizeof(nodeInfo),
+                &nodeInfo,
+                sizeof(nodeInfo),
+                &returned,
+                nullptr))
+        {
+            std::printf("  hub=%s info=failed %s\n", hubPath.c_str(), lastErrorText().c_str());
+            continue;
+        }
+
+        const ULONG ports = nodeInfo.u.HubInformation.HubDescriptor.bNumberOfPorts;
+        const bool advertisedUsb3 =
+            hubPath.find("root_hub30") != std::string::npos ||
+            hubPath.find("pid_0626") != std::string::npos;
+        totalPorts += ports;
+        if (advertisedUsb3)
+        {
+            usb3AdvertisedPorts += ports;
+        }
+
+        ULONG occupiedPorts = 0;
+        ULONG superSpeedDevices = 0;
+        for (ULONG port = 1; port <= ports; ++port)
+        {
+            std::vector<std::uint8_t> connectionStorage(sizeof(USB_NODE_CONNECTION_INFORMATION_EX));
+            auto* connection = reinterpret_cast<USB_NODE_CONNECTION_INFORMATION_EX*>(connectionStorage.data());
+            connection->ConnectionIndex = port;
+            if (!DeviceIoControl(
+                    hub.value,
+                    IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX,
+                    connection,
+                    static_cast<DWORD>(connectionStorage.size()),
+                    connection,
+                    static_cast<DWORD>(connectionStorage.size()),
+                    &returned,
+                    nullptr))
+            {
+                continue;
+            }
+
+            if (connection->DeviceDescriptor.idVendor != 0 || connection->DeviceDescriptor.idProduct != 0)
+            {
+                ++occupiedPorts;
+            }
+            if (connection->Speed == UsbSuperSpeed)
+            {
+                ++superSpeedDevices;
+            }
+        }
+
+        std::printf(
+            "  hub=%s ports=%lu advertisedUsb3=%s occupied=%lu superSpeedDevices=%lu\n",
+            hubPath.c_str(),
+            static_cast<unsigned long>(ports),
+            advertisedUsb3 ? "yes" : "no",
+            static_cast<unsigned long>(occupiedPorts),
+            static_cast<unsigned long>(superSpeedDevices));
+    }
+
+    std::printf(
+        "USB hub port totals: all=%lu advertisedUsb3=%lu\n",
+        static_cast<unsigned long>(totalPorts),
+        static_cast<unsigned long>(usb3AdvertisedPorts));
+}
+
 std::vector<SavedControl> saveControls(HANDLE filter, const ControlScenario& scenario)
 {
     std::vector<SavedControl> saved;
@@ -1393,6 +1488,12 @@ int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     const std::string targetVid = argc > 1 ? argv[1] : "vid_f182";
+    if (targetVid == "--usb-hubs")
+    {
+        printUsbHubInventory();
+        return 0;
+    }
+
     bool controlsOnly = false;
     bool baselineOnly = false;
     bool allWebcamFormats = false;
