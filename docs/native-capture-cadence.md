@@ -158,3 +158,38 @@ manual exposure is forced shorter. Kiyo Pro advertises 60 fps modes but the
 current KS path delivers about 25 fps regardless of manual exposure, so it needs
 a separate driver/control investigation before it should be trusted for high
 cadence capture.
+
+Online follow-up:
+
+- Razer's support page for the Kiyo Pro confirms `1080p @ 60/30/24FPS`,
+  `720p @ 60FPS`, USB 3.0 connectivity, and HDR support, but also says HDR must
+  be toggled off to keep output aligned with the selected frame rate.
+- Razer's firmware updater page lists `v1.5.0.1_r1` as the current RZ19-0364
+  updater lineage and includes a factory-default reset command in that firmware.
+- Razer's flicker/banding guidance says capture frame rate and powerline
+  frequency can interact, and points users to the anti-flicker/powerline
+  setting.
+- Microsoft documents `KSPROPERTY_CAMERACONTROL_AUTO_EXPOSURE_PRIORITY` as the
+  UVC low-light compensation control, and says it allows the device to vary
+  frame rate under lighting conditions.
+- Razer community reports show other users seeing Kiyo Pro firmware or control
+  states stuck below 60 fps, including one report that Linux and Windows both
+  failed to reach 60 fps after a firmware update.
+
+Local follow-up after that research:
+
+| Device | Mode | Scenario | Result |
+| --- | --- | --- | ---: |
+| Kiyo Pro | 1280x720 MJPG | baseline, low-light priority value `1`, powerline `50Hz` | 127 frames / 5.009s = 25.35 fps |
+| Kiyo Pro | 1280x720 MJPG | low-light compensation off | 125 frames / 5.039s = 24.81 fps |
+| Kiyo Pro | 1280x720 MJPG | powerline `60Hz` | 145 frames / 5.008s = 28.95 fps |
+| Kiyo Pro | 1920x1080 MJPG | baseline, low-light priority value `1`, powerline `50Hz` | 126 frames / 5.006s = 25.17 fps |
+| Kiyo Pro | 1920x1080 MJPG | low-light compensation off | 126 frames / 5.006s = 25.17 fps |
+| Kiyo Pro | 1920x1080 MJPG | powerline `60Hz` | 145 frames / 5.020s = 28.88 fps |
+
+Conclusion: the Kiyo Pro's 25 fps result matches the kind of low-light /
+anti-flicker / firmware trouble reported elsewhere, but the standard KS
+properties are not enough to recover 60 fps locally. Powerline `60Hz` moves the
+needle only to about 29 fps. The next investigation should compare this direct
+KS path with Synapse/OBS and inspect whether the firmware exposes a vendor or
+extension control that selects the real 60 fps profile.

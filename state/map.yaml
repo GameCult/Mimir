@@ -89,9 +89,12 @@ current_status:
     usable through KS when manual exposure is forced shorter: 1080p MJPG reaches
     about 30 fps and 720p MJPG reaches about 51.5 fps. Kiyo Pro advertises 60
     fps MJPG at 720p/1080p but currently delivers only about 25 fps through the
-    same KS path even with manual exposure tuning.
+    same KS path even with manual exposure tuning. Online reports and local
+    control tests point at Kiyo Pro firmware/Synapse/anti-flicker or extension
+    control state: standard KS low-light compensation off does not restore 60
+    fps, and powerline 60Hz only raises Pro cadence to about 29 fps.
   next_action: >
     Turn the warmed, queued Leap KS path into an `IMimirVideoCaptureDriver`,
     preserve direct control hooks for timing-camera state, and decide whether
-    Kiyo Pro needs a separate UVC/control path before it joins the six-camera
-    capture set.
+    Kiyo Pro needs Synapse/OBS comparison, vendor extension control inspection,
+    or firmware reset before it joins the six-camera capture set.

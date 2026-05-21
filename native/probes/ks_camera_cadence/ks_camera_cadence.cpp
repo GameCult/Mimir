@@ -215,11 +215,13 @@ void printKnownControls(HANDLE filter)
     const ControlWrite controls[] = {
         {"camera.zoom/exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_ZOOM, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
         {"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
+        {"camera.auto-exposure-priority/low-light", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_AUTO_EXPOSURE_PRIORITY, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
         {"procamp.contrast/hdr-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
         {"procamp.gamma", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAMMA, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
         {"procamp.brightness/digital-gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_BRIGHTNESS, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
         {"procamp.gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
         {"procamp.whitebalance/dark-frame", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_WHITEBALANCE, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
+        {"procamp.powerline-frequency", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
     };
 
     std::printf("known LeapUVC-ish controls:\n");
@@ -882,12 +884,19 @@ int main(int argc, char** argv)
             const ULONG procManual = KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL;
             const std::vector<ControlScenario> webcamScenarios = {
                 {"baseline", {}},
+                {"low-light compensation off", {{"camera.auto-exposure-priority/low-light", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_AUTO_EXPOSURE_PRIORITY, 0, camManual}}},
+                {"powerline disabled", {{"procamp.powerline-frequency", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY, 0, procManual}}},
+                {"powerline 50hz", {{"procamp.powerline-frequency", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY, 1, procManual}}},
+                {"powerline 60hz", {{"procamp.powerline-frequency", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY, 2, procManual}}},
                 {"manual exposure -5", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -5, camManual}}},
                 {"manual exposure -6", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -6, camManual}}},
                 {"manual exposure -7", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -7, camManual}}},
                 {"manual exposure -8", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -8, camManual}}},
                 {"manual exposure -9", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -9, camManual}}},
                 {"manual exposure -10", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -10, camManual}}},
+                {"low-light off + exposure -8", {
+                    {"camera.auto-exposure-priority/low-light", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_AUTO_EXPOSURE_PRIORITY, 0, camManual},
+                    {"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -8, camManual}}},
                 {"gain minimum", {{"procamp.gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 0, procManual}}},
             };
             bool measuredAny = false;
