@@ -85,8 +85,13 @@ current_status:
     frame processing; after discarding a two-second warm-up, the useful 640x240
     stereo IR mode advertises 115 fps and currently measures about 110.8 fps
     with eight queued asynchronous KS reads. The half-height 640x120 mode
-    advertises 214 fps and currently measures about 205.9 fps.
+    advertises 214 fps and currently measures about 205.9 fps. Plain Kiyo is
+    usable through KS when manual exposure is forced shorter: 1080p MJPG reaches
+    about 30 fps and 720p MJPG reaches about 51.5 fps. Kiyo Pro advertises 60
+    fps MJPG at 720p/1080p but currently delivers only about 25 fps through the
+    same KS path even with manual exposure tuning.
   next_action: >
     Turn the warmed, queued Leap KS path into an `IMimirVideoCaptureDriver`,
-    preserving the direct control hooks for exposure, gamma, HDR/LED, gain, and
-    dark-frame settings so Aquarium can inspect and tune timing-camera state.
+    preserve direct control hooks for timing-camera state, and decide whether
+    Kiyo Pro needs a separate UVC/control path before it joins the six-camera
+    capture set.

@@ -67,7 +67,7 @@ Probe path:
 
 Probe source:
 
-- `native/probes/leap_ks_cadence`
+- `native/probes/ks_camera_cadence`
 
 Advertised modes and measured queued KS pull rates:
 
@@ -120,3 +120,41 @@ measurement window. Once the Leap is hot, the useful stereo mode is close to its
 advertised cadence through the current KS path. The half-height mode can beat
 the PS3 Eyes on raw frame rate, but the PS3 Eyes still win when comparing their
 full 320x240 frames against Leap's useful 640x240 stereo stream.
+
+## 2026-05-21: Razer Kiyo Kernel Streaming Probe
+
+Installed device state:
+
+- `Razer Kiyo` camera: `VID_1532&PID_0E03&MI_00`;
+- `Razer Kiyo Pro` camera: `VID_1532&PID_0E05&MI_00`;
+- both expose UVC camera interfaces through the Windows Kernel Streaming
+  capture category.
+
+Probe path:
+
+- Windows Kernel Streaming capture interface for `KSCATEGORY_CAPTURE`;
+- no Media Foundation;
+- no DirectShow graph;
+- no OpenCV;
+- eight queued asynchronous reads;
+- two-second warm-up discarded before each five-second measurement.
+
+Kiyo Pro advertised `MJPG` modes and measured cadence:
+
+| Device | Mode | Advertised FPS | Best Measured FPS | Note |
+| --- | --- | ---: | ---: | --- |
+| Kiyo Pro | 1280x720 MJPG | 60.00 | 25.20 | manual exposure did not improve cadence |
+| Kiyo Pro | 1920x1080 MJPG | 60.00 | 25.18 | manual exposure did not improve cadence |
+
+Plain Kiyo advertised `MJPG` modes and measured cadence:
+
+| Device | Mode | Advertised FPS | Best Measured FPS | Best Setting |
+| --- | --- | ---: | ---: | --- |
+| Kiyo | 1920x1080 MJPG | 30.00 | 30.27 | manual exposure `-9` or `-10` |
+| Kiyo | 1280x720 MJPG | 60.00 | 51.51 | gain minimum after manual exposure sweep |
+
+Conclusion: plain Kiyo is exposure-limited by default and becomes usable once
+manual exposure is forced shorter. Kiyo Pro advertises 60 fps modes but the
+current KS path delivers about 25 fps regardless of manual exposure, so it needs
+a separate driver/control investigation before it should be trusted for high
+cadence capture.

@@ -839,19 +839,21 @@ bool measureScenario(HANDLE filter, const PinCandidate& candidate, const Control
 }
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    const std::string targetVid = argc > 1 ? argv[1] : "vid_f182";
+    const bool leapMode = targetVid == "vid_f182" || targetVid == "VID_F182";
     const auto paths = enumerateCapturePaths();
     std::printf("capture interfaces: %zu\n", paths.size());
 
     for (const auto& path : paths)
     {
-        if (path.find("vid_f182") == std::string::npos && path.find("VID_F182") == std::string::npos)
+        if (path.find(targetVid) == std::string::npos)
         {
             continue;
         }
 
-        std::printf("Leap KS interface: %s\n", path.c_str());
+        std::printf("KS interface: %s\n", path.c_str());
         Handle filter(CreateFileA(
             path.c_str(),
             GENERIC_READ | GENERIC_WRITE,
@@ -870,7 +872,54 @@ int main()
         if (candidates.empty())
         {
             std::printf("No capture pin candidate found.\n");
-            return 3;
+            continue;
+        }
+
+        if (!leapMode)
+        {
+            printKnownControls(filter.value);
+            const ULONG camManual = KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL;
+            const ULONG procManual = KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL;
+            const std::vector<ControlScenario> webcamScenarios = {
+                {"baseline", {}},
+                {"manual exposure -5", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -5, camManual}}},
+                {"manual exposure -6", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -6, camManual}}},
+                {"manual exposure -7", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -7, camManual}}},
+                {"manual exposure -8", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -8, camManual}}},
+                {"manual exposure -9", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -9, camManual}}},
+                {"manual exposure -10", {{"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, -10, camManual}}},
+                {"gain minimum", {{"procamp.gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 0, procManual}}},
+            };
+            bool measuredAny = false;
+            for (const auto& candidate : candidates)
+            {
+                const double targetFps = candidate.interval100ns > 0
+                    ? 10000000.0 / static_cast<double>(candidate.interval100ns)
+                    : 0.0;
+                const bool interesting =
+                    ((candidate.width == 1920 && candidate.height == 1080) ||
+                     (candidate.width == 1280 && candidate.height == 720)) &&
+                    targetFps >= 25.0 &&
+                    fourccOrGuid(candidate.subtype) == "MJPG";
+                if (!interesting)
+                {
+                    continue;
+                }
+
+                std::printf(
+                    "measuring pin %lu %ldx%ld %ld-bit %s target %.2f fps\n",
+                    static_cast<unsigned long>(candidate.pinId),
+                    candidate.width,
+                    candidate.height,
+                    candidate.bitCount,
+                    fourccOrGuid(candidate.subtype).c_str(),
+                    targetFps);
+                for (const auto& scenario : webcamScenarios)
+                {
+                    measuredAny = measureScenario(filter.value, candidate, scenario) || measuredAny;
+                }
+            }
+            return measuredAny ? 0 : 5;
         }
 
         printKnownControls(filter.value);
@@ -954,6 +1003,6 @@ int main()
         return measuredAny ? 0 : 5;
     }
 
-    std::printf("Leap VID_F182 capture interface not found.\n");
+    std::printf("target capture interface not found for %s.\n", targetVid.c_str());
     return 1;
 }
