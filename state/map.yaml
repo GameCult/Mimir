@@ -78,9 +78,11 @@ current_status:
     bridge scripts, and persistence surfaces. Script-era packages, tests,
     helper tools, dependency manifests, and stale docs have been removed from
     the working tree. Research archives remain as reference-only memory for raw
-    native/GPU implementation shape. The next useful cut is direct driver
-    ingest, not reviving old diagnostic machinery.
+    native/GPU implementation shape. A raw PS3 Eye libusb/WinUSB cadence probe
+    measured both PS3 Eyes simultaneously at about 183 fps each at 320x240 and
+    57-59 fps each at 640x480. Leap is present in LeapUVC/UVC mode but still
+    needs a raw UVC/KS cadence probe.
   next_action: >
-    Feed Leap stereo IR frames through `IMimirVideoCaptureDriver` into
-    `MimirSynchronizationHub`, measure sustained cadence over the default
-    five-second window, and expose the result in Aquarium runtime state.
+    Build the LeapUVC/UVC cadence probe, then turn the PS3 Eye raw USB probe
+    shape into an `IMimirVideoCaptureDriver` implementation that feeds measured
+    frames into `MimirSynchronizationHub`.
