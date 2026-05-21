@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <thread>
 
 namespace
 {
@@ -90,6 +91,38 @@ struct PinCandidate
     GUID subtype{};
 };
 
+enum class ControlSet
+{
+    Camera,
+    VideoProcAmp
+};
+
+struct SavedControl
+{
+    ControlSet set;
+    ULONG id = 0;
+    LONG value = 0;
+    ULONG flags = 0;
+    bool valid = false;
+};
+
+struct ControlWrite
+{
+    const char* name = "";
+    ControlSet set;
+    ULONG id = 0;
+    LONG value = 0;
+    ULONG flags = 0;
+};
+
+struct ControlScenario
+{
+    const char* name = "";
+    std::vector<ControlWrite> writes;
+};
+
+std::string lastErrorText();
+
 bool ksProperty(HANDLE handle, void* property, DWORD propertyBytes, void* output, DWORD outputBytes, DWORD* returned = nullptr)
 {
     DWORD bytes = 0;
@@ -107,6 +140,142 @@ bool ksProperty(HANDLE handle, void* property, DWORD propertyBytes, void* output
         *returned = bytes;
     }
     return ok != FALSE;
+}
+
+bool getVideoProcAmp(HANDLE filter, ULONG id, LONG& value, ULONG& flags)
+{
+    KSPROPERTY_VIDEOPROCAMP_S property{};
+    property.Property.Set = PROPSETID_VIDCAP_VIDEOPROCAMP;
+    property.Property.Id = id;
+    property.Property.Flags = KSPROPERTY_TYPE_GET;
+    if (!ksProperty(filter, &property, sizeof(property), &property, sizeof(property)))
+    {
+        return false;
+    }
+
+    value = property.Value;
+    flags = property.Flags;
+    return true;
+}
+
+bool setVideoProcAmp(HANDLE filter, ULONG id, LONG value, ULONG flags)
+{
+    KSPROPERTY_VIDEOPROCAMP_S property{};
+    property.Property.Set = PROPSETID_VIDCAP_VIDEOPROCAMP;
+    property.Property.Id = id;
+    property.Property.Flags = KSPROPERTY_TYPE_SET;
+    property.Value = value;
+    property.Flags = flags;
+    return ksProperty(filter, &property, sizeof(property), &property, sizeof(property));
+}
+
+bool getCameraControl(HANDLE filter, ULONG id, LONG& value, ULONG& flags)
+{
+    KSPROPERTY_CAMERACONTROL_S property{};
+    property.Property.Set = PROPSETID_VIDCAP_CAMERACONTROL;
+    property.Property.Id = id;
+    property.Property.Flags = KSPROPERTY_TYPE_GET;
+    if (!ksProperty(filter, &property, sizeof(property), &property, sizeof(property)))
+    {
+        return false;
+    }
+
+    value = property.Value;
+    flags = property.Flags;
+    return true;
+}
+
+bool setCameraControl(HANDLE filter, ULONG id, LONG value, ULONG flags)
+{
+    KSPROPERTY_CAMERACONTROL_S property{};
+    property.Property.Set = PROPSETID_VIDCAP_CAMERACONTROL;
+    property.Property.Id = id;
+    property.Property.Flags = KSPROPERTY_TYPE_SET;
+    property.Value = value;
+    property.Flags = flags;
+    return ksProperty(filter, &property, sizeof(property), &property, sizeof(property));
+}
+
+bool getControl(HANDLE filter, ControlSet set, ULONG id, LONG& value, ULONG& flags)
+{
+    return set == ControlSet::Camera
+        ? getCameraControl(filter, id, value, flags)
+        : getVideoProcAmp(filter, id, value, flags);
+}
+
+bool setControl(HANDLE filter, ControlSet set, ULONG id, LONG value, ULONG flags)
+{
+    return set == ControlSet::Camera
+        ? setCameraControl(filter, id, value, flags)
+        : setVideoProcAmp(filter, id, value, flags);
+}
+
+void printKnownControls(HANDLE filter)
+{
+    const ControlWrite controls[] = {
+        {"camera.zoom/exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_ZOOM, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
+        {"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
+        {"procamp.contrast/hdr-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
+        {"procamp.gamma", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAMMA, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
+        {"procamp.brightness/digital-gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_BRIGHTNESS, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
+        {"procamp.gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
+        {"procamp.whitebalance/dark-frame", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_WHITEBALANCE, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
+    };
+
+    std::printf("known LeapUVC-ish controls:\n");
+    for (const auto& control : controls)
+    {
+        LONG value = 0;
+        ULONG flags = 0;
+        if (getControl(filter, control.set, control.id, value, flags))
+        {
+            std::printf("  %s: value=%ld flags=0x%lx\n", control.name, value, static_cast<unsigned long>(flags));
+        }
+        else
+        {
+            std::printf("  %s: unavailable (%s)\n", control.name, lastErrorText().c_str());
+        }
+    }
+}
+
+std::vector<SavedControl> saveControls(HANDLE filter, const ControlScenario& scenario)
+{
+    std::vector<SavedControl> saved;
+    for (const auto& write : scenario.writes)
+    {
+        bool alreadySaved = false;
+        for (const auto& entry : saved)
+        {
+            if (entry.set == write.set && entry.id == write.id)
+            {
+                alreadySaved = true;
+                break;
+            }
+        }
+        if (alreadySaved)
+        {
+            continue;
+        }
+
+        SavedControl entry{};
+        entry.set = write.set;
+        entry.id = write.id;
+        entry.valid = getControl(filter, write.set, write.id, entry.value, entry.flags);
+        saved.push_back(entry);
+    }
+
+    return saved;
+}
+
+void restoreControls(HANDLE filter, const std::vector<SavedControl>& saved)
+{
+    for (const auto& entry : saved)
+    {
+        if (entry.valid)
+        {
+            setControl(filter, entry.set, entry.id, entry.value, entry.flags);
+        }
+    }
 }
 
 template <typename T>
@@ -525,8 +694,10 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
     };
 
     const auto start = std::chrono::steady_clock::now();
-    const auto deadline = start + std::chrono::seconds(5);
+    const auto measureStart = start + std::chrono::seconds(2);
+    const auto deadline = measureStart + std::chrono::seconds(5);
     std::uint64_t frames = 0;
+    std::uint64_t warmupFrames = 0;
     bool usingPendingReads = false;
 
     for (auto& slot : slots)
@@ -542,7 +713,14 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
         }
         else
         {
-            ++frames;
+            if (std::chrono::steady_clock::now() >= measureStart)
+            {
+                ++frames;
+            }
+            else
+            {
+                ++warmupFrames;
+            }
         }
     }
 
@@ -559,7 +737,14 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
                 usingPendingReads = true;
                 break;
             }
-            ++frames;
+            if (std::chrono::steady_clock::now() >= measureStart)
+            {
+                ++frames;
+            }
+            else
+            {
+                ++warmupFrames;
+            }
         }
     }
 
@@ -589,7 +774,14 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
             break;
         }
 
-        ++frames;
+        if (std::chrono::steady_clock::now() >= measureStart)
+        {
+            ++frames;
+        }
+        else
+        {
+            ++warmupFrames;
+        }
         if (std::chrono::steady_clock::now() < deadline)
         {
             if (!submit(slot, frames))
@@ -610,17 +802,40 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
         }
     }
 
-    const double elapsed = std::chrono::duration<double>(end - start).count();
+    const double elapsed = std::chrono::duration<double>(end - measureStart).count();
     const double fps = static_cast<double>(frames) / elapsed;
     std::printf(
-        "measured: %llu frames in %.3fs = %.2f fps, queueDepth=%d, async=%s, bytes/frame=%lu\n",
+        "measured: %llu frames in %.3fs = %.2f fps, warmup=%llu, queueDepth=%d, async=%s, bytes/frame=%lu\n",
         static_cast<unsigned long long>(frames),
         elapsed,
         fps,
+        static_cast<unsigned long long>(warmupFrames),
         queueDepth,
         usingPendingReads ? "yes" : "no",
         static_cast<unsigned long>(frameBytes));
     return true;
+}
+
+bool measureScenario(HANDLE filter, const PinCandidate& candidate, const ControlScenario& scenario)
+{
+    std::printf("scenario: %s\n", scenario.name);
+    auto saved = saveControls(filter, scenario);
+    for (const auto& write : scenario.writes)
+    {
+        const bool ok = setControl(filter, write.set, write.id, write.value, write.flags);
+        std::printf(
+            "  set %s=%ld flags=0x%lx -> %s\n",
+            write.name,
+            write.value,
+            static_cast<unsigned long>(write.flags),
+            ok ? "ok" : lastErrorText().c_str());
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    const bool measured = measureCandidate(filter, candidate, 8);
+    restoreControls(filter, saved);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    return measured;
 }
 }
 
@@ -658,21 +873,85 @@ int main()
             return 3;
         }
 
-        bool measuredAny = false;
+        printKnownControls(filter.value);
+
+        const PinCandidate* target = nullptr;
+        const PinCandidate* fastTarget = nullptr;
         for (const auto& candidate : candidates)
         {
-            std::printf(
-                "measuring pin %lu %ldx%ld %ld-bit %s target %.2f fps\n",
-                static_cast<unsigned long>(candidate.pinId),
-                candidate.width,
-                candidate.height,
-                candidate.bitCount,
-                fourccOrGuid(candidate.subtype).c_str(),
-                candidate.interval100ns > 0 ? 10000000.0 / static_cast<double>(candidate.interval100ns) : 0.0);
-            measuredAny = measureCandidate(filter.value, candidate, 8) || measuredAny;
+            if (candidate.width == 640 && candidate.height == 240)
+            {
+                target = &candidate;
+            }
+            else if (candidate.width == 640 && candidate.height == 120)
+            {
+                fastTarget = &candidate;
+            }
         }
 
-        return measuredAny ? 0 : 4;
+        if (!target)
+        {
+            std::printf("No 640x240 Leap stereo candidate found.\n");
+            return 4;
+        }
+
+        std::printf(
+            "targeting pin %lu %ldx%ld %ld-bit %s target %.2f fps\n",
+            static_cast<unsigned long>(target->pinId),
+            target->width,
+            target->height,
+            target->bitCount,
+            fourccOrGuid(target->subtype).c_str(),
+            target->interval100ns > 0 ? 10000000.0 / static_cast<double>(target->interval100ns) : 0.0);
+
+        const ULONG camManual = KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL;
+        const ULONG procManual = KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL;
+        const std::vector<ControlScenario> scenarios = {
+            {"baseline", {}},
+            {"zoom/exposure 10us", {{"camera.zoom/exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_ZOOM, 10, camManual}}},
+            {"gamma off", {{"procamp.gamma", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAMMA, 0, procManual}}},
+            {"hdr off", {{"procamp.contrast/hdr", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 0, procManual}}},
+            {"leds on", {
+                {"procamp.contrast/left-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 66, procManual},
+                {"procamp.contrast/center-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 67, procManual},
+                {"procamp.contrast/right-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 68, procManual}}},
+            {"leds off", {
+                {"procamp.contrast/left-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 2, procManual},
+                {"procamp.contrast/center-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 3, procManual},
+                {"procamp.contrast/right-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 4, procManual}}},
+            {"gain minimum", {{"procamp.gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 16, procManual}}},
+            {"digital gain minimum", {{"procamp.brightness/digital-gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_BRIGHTNESS, 0, procManual}}},
+            {"old fps-ratio selector 1000", {{"procamp.gain/fps-ratio", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 0x8000 | 1000, procManual}}},
+            {"dark-frame interval 0", {{"procamp.whitebalance/dark-frame", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_WHITEBALANCE, 0, procManual}}},
+            {"fast combined", {
+                {"camera.zoom/exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_ZOOM, 10, camManual},
+                {"procamp.gamma", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAMMA, 0, procManual},
+                {"procamp.contrast/hdr", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 0, procManual},
+                {"procamp.brightness/digital-gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_BRIGHTNESS, 0, procManual},
+                {"procamp.gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAIN, 16, procManual},
+                {"procamp.whitebalance/dark-frame", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_WHITEBALANCE, 0, procManual}}},
+        };
+
+        bool measuredAny = false;
+        for (const auto& scenario : scenarios)
+        {
+            measuredAny = measureScenario(filter.value, *target, scenario) || measuredAny;
+        }
+
+        if (fastTarget)
+        {
+            std::printf(
+                "fast-mode check pin %lu %ldx%ld %ld-bit %s target %.2f fps\n",
+                static_cast<unsigned long>(fastTarget->pinId),
+                fastTarget->width,
+                fastTarget->height,
+                fastTarget->bitCount,
+                fourccOrGuid(fastTarget->subtype).c_str(),
+                fastTarget->interval100ns > 0 ? 10000000.0 / static_cast<double>(fastTarget->interval100ns) : 0.0);
+            measuredAny = measureScenario(filter.value, *fastTarget, scenarios.front()) || measuredAny;
+        }
+
+        return measuredAny ? 0 : 5;
     }
 
     std::printf("Leap VID_F182 capture interface not found.\n");

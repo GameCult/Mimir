@@ -86,3 +86,37 @@ cadence. The useful stereo IR mode is `640x240 YUY2`, advertised at 115 fps and
 currently measured at about 83 fps. The next cut should either tune LeapUVC
 controls that affect exposure/frame interval or deliberately rebind to a
 WinUSB/libusb UVC path if we decide the Windows UVC stack is the bottleneck.
+
+Follow-up control sweep:
+
+- the probe now reports known LeapUVC-ish controls directly through KS;
+- it discards a two-second warm-up before the five-second measurement window;
+- `640x240 YUY2` steady-state cadence lands at about 110.7 fps;
+- `640x120 YUY2` steady-state cadence lands at about 205.9 fps.
+
+Steady-state `640x240 YUY2` control sweep:
+
+| Scenario | Result |
+| --- | ---: |
+| baseline | 554 frames / 5.007s = 110.65 fps |
+| exposure 10us | 554 frames / 5.006s = 110.68 fps |
+| gamma off | 554 frames / 5.002s = 110.76 fps |
+| HDR off | 554 frames / 5.003s = 110.73 fps |
+| LEDs on | 554 frames / 5.003s = 110.72 fps |
+| LEDs off | 554 frames / 5.006s = 110.68 fps |
+| gain minimum | 554 frames / 5.007s = 110.64 fps |
+| dark-frame interval 0 | 555 frames / 5.009s = 110.80 fps |
+| fast combined | 554 frames / 5.001s = 110.77 fps |
+
+Rejected controls:
+
+- digital gain via `KSPROPERTY_VIDEOPROCAMP_BRIGHTNESS = 0` returned
+  `ERROR_INVALID_PARAMETER`;
+- the old LeapUVC FPS-ratio selector through `KSPROPERTY_VIDEOPROCAMP_GAIN`
+  returned `ERROR_INVALID_PARAMETER`.
+
+Conclusion: the earlier 83 fps number was mostly startup drag inside the short
+measurement window. Once the Leap is hot, the useful stereo mode is close to its
+advertised cadence through the current KS path. The half-height mode can beat
+the PS3 Eyes on raw frame rate, but the PS3 Eyes still win when comparing their
+full 320x240 frames against Leap's useful 640x240 stereo stream.
