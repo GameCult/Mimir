@@ -2,7 +2,35 @@
   "bufferSeconds": 5.0,
   "streams": [
     {
-      "sourceId": "kiyo-primary",
+      "sourceId": "leap-stereo-ir",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "native"
+    },
+    {
+      "sourceId": "kiyo-pro-rgb",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "native"
+    },
+    {
+      "sourceId": "kiyo-rgb",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "native"
+    },
+    {
+      "sourceId": "ps3-eye-0",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "native"
+    },
+    {
+      "sourceId": "ps3-eye-1",
       "kind": "Video",
       "origin": "LocalDevice",
       "enabled": true,
@@ -12,8 +40,28 @@
       "sourceId": "leap-stereo-ir",
       "kind": "Video",
       "origin": "LocalDevice",
-      "enabled": true,
-      "adapter": "native"
+      "enabled": false,
+      "adapter": "frame-events",
+      "command": "native/probes/ks_camera_cadence/build/Release/ks_camera_cadence.exe",
+      "arguments": [
+        "--multi-ks-baseline",
+        "--emit-json-frames"
+      ]
+    },
+    {
+      "sourceId": "ps3-eye-0",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": false,
+      "adapter": "frame-events",
+      "command": "native/probes/ps3eye_cadence/build/Release/ps3eye_dual_cadence.exe",
+      "arguments": [
+        "320",
+        "240",
+        "187",
+        "30",
+        "--emit-json-frames"
+      ]
     },
     {
       "sourceId": "host-focusrite",

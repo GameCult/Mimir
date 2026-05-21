@@ -54,12 +54,18 @@ separately controllable audio stems.
 - `IMimirStreamSource`;
 - `MimirNativeIngestStreamSource`;
 - `MimirProcessStreamSource`;
+- `MimirFrameEventProcessStreamSource`;
 - `MimirVideoFrameDescriptor`;
 - `IMimirVideoCaptureDriver`;
 - `MimirVideoCaptureDriverSource`.
 
 Process-backed sources are bridge/network edges. Local cameras should feed
 native descriptors with device timestamps and optional native/GPU handles.
+The `frame-events`/`json-lines` adapter is a diagnostic witness only: native
+probes can emit per-frame JSON metadata so Aquarium sees real sensor cadence in
+the rolling buffers while the direct ABI driver is being cut. It does not carry
+pixels and does not own the final six-camera hot path. Multi-camera probes are
+one process with declared accepted source ids, not one process per camera.
 
 ## OBS Bridge Utility
 

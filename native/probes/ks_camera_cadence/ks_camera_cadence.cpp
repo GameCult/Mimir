@@ -17,6 +17,7 @@
 #include <vector>
 #include <thread>
 #include <utility>
+#include <mutex>
 
 namespace
 {
@@ -99,6 +100,7 @@ struct PinCandidate
 struct MultiKsProfile
 {
     const char* pathNeedle = "";
+    const char* sourceId = "";
     const char* label = "";
     LONG width = 0;
     LONG height = 0;
@@ -141,6 +143,14 @@ struct ControlScenario
 std::string lastErrorText();
 std::string wideToUtf8(const wchar_t* value);
 std::string guidText(const GUID& guid);
+
+std::mutex stdoutMutex;
+
+long long nowNs()
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 constexpr GUID UsbHubInterfaceGuid =
     {0xf18a0e88, 0xc30c, 0x11d0, {0x88, 0x15, 0x00, 0xa0, 0xc9, 0x06, 0xbe, 0xd8}};
@@ -1223,7 +1233,13 @@ std::vector<PinCandidate> inspectPins(HANDLE filter)
     return candidates;
 }
 
-bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDepth, std::atomic<bool>* startGate = nullptr)
+bool measureCandidate(
+    HANDLE filter,
+    const PinCandidate& candidate,
+    int queueDepth,
+    std::atomic<bool>* startGate = nullptr,
+    const char* eventSourceId = nullptr,
+    bool emitJsonFrames = false)
 {
     const ULONG connectBytes = sizeof(KSPIN_CONNECT) + static_cast<ULONG>(candidate.format.size());
     std::vector<std::uint8_t> connectStorage(connectBytes);
@@ -1366,6 +1382,26 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
     std::uint64_t frames = 0;
     std::uint64_t warmupFrames = 0;
     bool usingPendingReads = false;
+    const std::string pixelFormat = fourccOrGuid(candidate.subtype);
+
+    auto emitFrameEvent = [&](std::uint64_t sequence, ULONG byteLength) {
+        if (!emitJsonFrames || eventSourceId == nullptr || eventSourceId[0] == '\0')
+        {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(stdoutMutex);
+        std::printf(
+            "{\"type\":\"video-frame\",\"sourceId\":\"%s\",\"timestampNs\":%lld,\"sequence\":%llu,\"width\":%ld,\"height\":%ld,\"pixelFormat\":\"%s\",\"strideBytes\":%ld,\"byteLength\":%lu}\n",
+            eventSourceId,
+            nowNs(),
+            static_cast<unsigned long long>(sequence),
+            candidate.width,
+            candidate.height,
+            pixelFormat.c_str(),
+            candidate.imageBytes > 0 && candidate.height > 0 ? candidate.imageBytes / candidate.height : 0,
+            static_cast<unsigned long>(byteLength));
+    };
 
     for (auto& slot : slots)
     {
@@ -1383,6 +1419,7 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
             if (std::chrono::steady_clock::now() >= measureStart)
             {
                 ++frames;
+                emitFrameEvent(frames, slot.header.DataUsed);
             }
             else
             {
@@ -1407,6 +1444,7 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
             if (std::chrono::steady_clock::now() >= measureStart)
             {
                 ++frames;
+                emitFrameEvent(frames, slots.front().header.DataUsed);
             }
             else
             {
@@ -1444,6 +1482,7 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDep
         if (std::chrono::steady_clock::now() >= measureStart)
         {
             ++frames;
+            emitFrameEvent(frames, slot.header.DataUsed);
         }
         else
         {
@@ -1537,12 +1576,12 @@ const PinCandidate* findCandidate(
     return nullptr;
 }
 
-int runMultiKsBaseline()
+int runMultiKsBaseline(bool emitJsonFrames = false)
 {
     const MultiKsProfile profiles[] = {
-        {"vid_f182&pid_0003&mi_00", "LeapUVC full stereo IR", 640, 240, "YUY2", 100.0, false},
-        {"vid_1532&pid_0e05&mi_00", "Kiyo Pro RGB", 1920, 1080, "MJPG", 25.0, false},
-        {"vid_1532&pid_0e03&mi_00", "Kiyo RGB", 1920, 1080, "MJPG", 25.0, true},
+        {"vid_f182&pid_0003&mi_00", "leap-stereo-ir", "LeapUVC full stereo IR", 640, 240, "YUY2", 100.0, false},
+        {"vid_1532&pid_0e05&mi_00", "kiyo-pro-rgb", "Kiyo Pro RGB", 1920, 1080, "MJPG", 25.0, false},
+        {"vid_1532&pid_0e03&mi_00", "kiyo-rgb", "Kiyo RGB", 1920, 1080, "MJPG", 25.0, true},
     };
 
     struct Worker
@@ -1582,7 +1621,7 @@ int runMultiKsBaseline()
     std::atomic<bool> startGate(false);
     for (auto& worker : workers)
     {
-        worker.thread = std::thread([&startGate, &worker]() {
+        worker.thread = std::thread([&startGate, &worker, emitJsonFrames]() {
             std::printf("multi-ks preparing: %s path=%s\n", worker.profile.label, worker.path.c_str());
             Handle filter(CreateFileA(
                 worker.path.c_str(),
@@ -1631,7 +1670,13 @@ int runMultiKsBaseline()
                 candidate->height,
                 fourccOrGuid(candidate->subtype).c_str(),
                 candidate->interval100ns > 0 ? 10000000.0 / static_cast<double>(candidate->interval100ns) : 0.0);
-            worker.measured = measureCandidate(filter.value, *candidate, 8, &startGate);
+            worker.measured = measureCandidate(
+                filter.value,
+                *candidate,
+                8,
+                &startGate,
+                worker.profile.sourceId,
+                emitJsonFrames);
         });
     }
 
@@ -1677,7 +1722,12 @@ int main(int argc, char** argv)
     }
     if (targetVid == "--multi-ks-baseline")
     {
-        return runMultiKsBaseline();
+        bool emitJsonFrames = false;
+        for (int arg = 2; arg < argc; ++arg)
+        {
+            emitJsonFrames = emitJsonFrames || std::string(argv[arg]) == "--emit-json-frames";
+        }
+        return runMultiKsBaseline(emitJsonFrames);
     }
 
     bool controlsOnly = false;

@@ -53,6 +53,9 @@ accepted_design:
     direct native ingest, process bridge ingest, and video capture driver seams.
   - `MimirVideoFrameDescriptor` carries width, height, pixel format, stride,
     device timestamp, and optional native/GPU handle.
+  - `MimirFrameEventProcessStreamSource` is a temporary diagnostic adapter for
+    JSON-line frame metadata from native probes into runtime rolling buffers; it
+    does not carry pixels or own the final local-camera hot path.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
@@ -149,8 +152,9 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Move the raw PS3 Eye probe into the repo or replace it with the first
-    runtime capture driver using the current viable local USB topology. Keep
-    the Focusrite away from the Leap USB neighborhood, preserve the full local
-    sensor baseline, and treat Kiyo Pro as a ~25 fps source until its
+    Run Mimir with frame-event probe sources enabled so Aquarium can inspect
+    live local sensor cadence in the rolling buffers, then replace the
+    diagnostic JSON-line process bridge with direct native capture drivers that
+    push buffer handles into Mimir.Runtime. Keep the Focusrite away from the
+    Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
     SuperSpeed negotiation is fixed.

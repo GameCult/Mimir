@@ -108,12 +108,23 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Sources", () => $"{synchronization.SourceCount}");
                 panel.Readout("Last poll", () => $"{lastPollCount} samples");
                 panel.Readout("Ingested", () => $"{synchronization.IngestedSamples}");
-                foreach (var buffer in synchronization.Buffers.Buffers)
-                {
-                    panel.Readout(
-                        buffer.Descriptor.SourceId,
-                        () => $"{buffer.Descriptor.Kind}/{buffer.Descriptor.Origin} {buffer.Count} samples edge {buffer.EdgeNs}");
-                }
+                panel.Readout("Buffer details", DescribeBuffers);
             });
+    }
+
+    private string DescribeBuffers()
+    {
+        return string.Join(" | ", synchronization.Buffers.Buffers.Select(DescribeBuffer));
+    }
+
+    private static string DescribeBuffer(MimirRollingStreamBuffer buffer)
+    {
+        var latest = buffer.Latest;
+        if (latest?.VideoFrame is { } frame)
+        {
+            return $"{buffer.Descriptor.SourceId}: {buffer.Count} {frame.Width}x{frame.Height} {frame.PixelFormat} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
+        }
+
+        return $"{buffer.Descriptor.SourceId}: {buffer.Count} edge {buffer.EdgeNs}";
     }
 }

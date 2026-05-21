@@ -37,7 +37,7 @@ public sealed class MimirRuntimeConfiguration
             .Select(ToDescriptor)
             .ToArray();
         var sources = sourceModels
-            .Select(TryCreateSource)
+            .Select(stream => TryCreateSource(stream, Path.GetDirectoryName(path)))
             .Where(source => source != null)
             .Cast<IMimirStreamSource>()
             .ToArray();
@@ -91,11 +91,29 @@ public sealed class MimirRuntimeConfiguration
             stream.Enabled);
     }
 
-    private static IMimirStreamSource? TryCreateSource(MimirStreamConfig stream)
+    private static IMimirStreamSource? TryCreateSource(MimirStreamConfig stream, string? configDirectory)
     {
         if (string.Equals(stream.Adapter, "native", StringComparison.OrdinalIgnoreCase))
         {
             return new MimirNativeIngestStreamSource(ToDescriptor(stream));
+        }
+
+        if (string.Equals(stream.Adapter, "frame-events", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(stream.Adapter, "json-lines", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(stream.Command))
+            {
+                return null;
+            }
+
+            return new MimirFrameEventProcessStreamSource(
+                ToDescriptor(stream),
+                new MimirFrameEventProcessStreamSourceOptions(
+                    ResolveCommand(stream.Command, configDirectory),
+                    stream.Arguments,
+                    stream.AcceptSourceIds.Length > 0
+                        ? new HashSet<string>(stream.AcceptSourceIds, StringComparer.Ordinal)
+                        : null));
         }
 
         if (!string.Equals(stream.Adapter, "process", StringComparison.OrdinalIgnoreCase))
@@ -111,9 +129,21 @@ public sealed class MimirRuntimeConfiguration
         return new MimirProcessStreamSource(
             ToDescriptor(stream),
             new MimirProcessStreamSourceOptions(
-                stream.Command,
+                ResolveCommand(stream.Command, configDirectory),
                 stream.Arguments,
                 Math.Max(1024, stream.ChunkBytes)));
+    }
+
+    private static string ResolveCommand(string command, string? configDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(command)
+            || Path.IsPathRooted(command)
+            || string.IsNullOrWhiteSpace(configDirectory))
+        {
+            return command;
+        }
+
+        return Path.GetFullPath(Path.Combine(configDirectory, command));
     }
 
     private static MimirStreamKind ParseKind(string value)
@@ -153,6 +183,8 @@ public sealed class MimirStreamConfig
     public string Command { get; set; } = "";
 
     public string[] Arguments { get; set; } = [];
+
+    public string[] AcceptSourceIds { get; set; } = [];
 
     public int ChunkBytes { get; set; } = 65_536;
 }

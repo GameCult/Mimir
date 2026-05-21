@@ -5,7 +5,9 @@ promise.
 
 ## 2026-05-21: PS3 Eye Raw USB Probe
 
-Probe location: temp workspace only, outside this repo.
+Original probe location: temp workspace only, outside this repo. The dual-camera
+probe now has a repo-owned copy at `native/probes/ps3eye_cadence` and can emit
+JSON frame events for Mimir's diagnostic rolling-buffer adapter.
 
 Probe path:
 
@@ -46,6 +48,11 @@ Conclusion: the two PS3 Eyes can be treated as roughly 183 fps timing/marker
 witnesses at 320x240 on the current USB topology when using the raw USB path.
 At 640x480 they are roughly 57-59 fps.
 
+Runtime note: `ps3eye_dual_cadence --emit-json-frames` emits one JSON line per
+captured frame with `sourceId` values `ps3-eye-0` and `ps3-eye-1`; Mimir.Runtime
+uses this only as a diagnostic witness until the native capture driver owns the
+buffer handles directly.
+
 The probe reported one unrelated invalid USB descriptor from
 `USB\VID_0000&PID_0002`; it did not prevent PS3 Eye capture.
 
@@ -68,6 +75,8 @@ Probe path:
 Probe source:
 
 - `native/probes/ks_camera_cadence`
+- `--multi-ks-baseline --emit-json-frames` emits JSON frame metadata for
+  `leap-stereo-ir`, `kiyo-pro-rgb`, and `kiyo-rgb`.
 
 Advertised modes and measured queued KS pull rates:
 

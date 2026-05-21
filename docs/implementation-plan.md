@@ -29,6 +29,10 @@ a named invariant that the native runtime cannot protect yet.
   and video streams.
 - `MimirNativeIngestStreamSource` for direct push ingest into runtime buffers.
 - `MimirProcessStreamSource` for bridge/network command edges.
+- `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
+  from native probes into the same rolling buffers Aquarium inspects. One probe
+  process can accept multiple emitted `sourceId` values so it does not reopen
+  the same camera set once per stream.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -48,12 +52,15 @@ a named invariant that the native runtime cannot protect yet.
   testing so OBS can preserve independent controls.
 - Process-backed stream sources are only acceptable for network bridge feeds or
   diagnostics. Six-camera local ingest belongs behind direct capture drivers.
+- Frame-event process sources are diagnostic only. They prove source cadence and
+  runtime plumbing without dragging stdout bytes into the pixel hot loop.
 - Calibration artifacts may remain on disk as evidence, but live state must be
   in memory inside Mimir/Aquarium/native runtime surfaces.
 
 ## Next
 
-1. Implement concrete direct capture drivers for Leap stereo IR first, then the
+1. Replace the frame-event diagnostic bridge with concrete direct capture
+   drivers for Leap stereo IR first, then the
    other cameras.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.

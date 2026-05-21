@@ -9,6 +9,7 @@ tools/obs-spout2-plugin/
 tools/src/
 target/
 native/**/target/
+native/**/build/
 bin/
 obj/
 **/bin/

@@ -1,0 +1,41 @@
+{
+  "bufferSeconds": 5.0,
+  "streams": [
+    {
+      "sourceId": "local-ks-probe",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/ks_camera_cadence/build/Release/ks_camera_cadence.exe",
+      "arguments": [
+        "--multi-ks-baseline",
+        "--emit-json-frames"
+      ],
+      "acceptSourceIds": [
+        "leap-stereo-ir",
+        "kiyo-pro-rgb",
+        "kiyo-rgb"
+      ]
+    },
+    {
+      "sourceId": "local-ps3eye-probe",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/ps3eye_cadence/build/Release/ps3eye_dual_cadence.exe",
+      "arguments": [
+        "320",
+        "240",
+        "187",
+        "30",
+        "--emit-json-frames"
+      ],
+      "acceptSourceIds": [
+        "ps3-eye-0",
+        "ps3-eye-1"
+      ]
+    }
+  ]
+}
