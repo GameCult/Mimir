@@ -100,7 +100,7 @@ The sender FFmpeg build does not expose a native `wasapi` input device, so it
 cannot directly capture primary playback by itself. `scripts\wasapi-loopback-capture.ps1`
 is the direct Core Audio loopback path. It works when launched in the logged-in
 console session and audio is actually rendering; SSH-only launches can open the
-endpoint but receive no render packets. `scripts\capture_co_streamer_surfaces.py`
+endpoint but receive no render packets. The native/co-streamer capture path
 therefore schedules the WASAPI loopback leg into the interactive session and
 pulls the resulting raw float PCM back for alignment.
 

@@ -1,221 +1,31 @@
-﻿# Sensor Fusion Architecture
+# Sensor Fusion Architecture
 
-## Objective
+Visual fusion belongs in Aquarium over current Mimir runtime buffers.
 
-Produce an aligned, timestamped point cloud from the local visual rig while allowing latency, buffering, and cache convergence. The live render path can lag behind capture; it may not lie about coordinate ownership.
-
-## Current Mechanism
-
-The rig currently has usable capture surfaces:
-
-- PS3 Eyes through FFmpeg DirectShow device names `PS3 Eye Universal` and `PS3 Eye Universal2`, verified at dual `320x240@60`.
-- Kiyo-class RGB cameras through native Windows camera APIs such as Media
-  Foundation or DirectShow for color evidence.
-- LeapUVC raw IR through native LeapUVC/libusb or LeapC image APIs for
-  near-field timing evidence.
-- ChArUco tooling for intrinsics capture, but no shared fusion state yet.
-
-That is capture. Capture is not a world model. The previous live producer also
-painted camera colors onto guessed body and room surfaces. That was useful
-deadline scaffolding, but it is not enough for detailed reconstruction.
-
-## Invariants
-
-- World coordinates own truth.
-- Capture adapters emit timestamped observations; they do not own fusion semantics.
-- Fusion core is pure and testable: calibrated camera models plus 2D observations in, 3D points/confidence out.
-- Point clouds and later brush/splat packets are cached render lowerings, not the canonical scene.
-- A missing high-detail update renders stale-but-bounded state until better evidence arrives.
-- The live temporal reservoir is five seconds wide, measured backward from the newest shared sample. Every camera, Leap, audio-derived calibration point, and LOD claim must either land inside that window or leave the live cache.
-
-## Intended Change
-
-The live pipeline now has two measurement-quality paths: sparse marker fusion
-for calibrated tracked objects and GPU-owned dense RGB stereo/flow for surface
-detail. A CPU dense stereo matcher exists only as a debug reference and is
-opt-in through `--cpu-dense-stereo`; production dense fusion may not route
-through Python loops. The provisional Kiyo geometry remains a lie detector, not
-truth, until `config/sensor-fusion.json` carries measured extrinsics.
-
-The first pipeline slice adds these boundaries:
+## Live Flow
 
 ```mermaid
 flowchart TD
-    A["Capture adapters"] --> B["FramePacket ring"]
-    B --> C["Camera quality controller"]
-    C --> D["manual exposure/gain/focus commands"]
-    B --> E["Detection adapter"]
-    E --> F["Observation2D"]
-    B --> G["Dense stereo matcher"]
-    H["SensorRig calibration"] --> I["Fusion core"]
-    F --> I
-    I --> J["TrackCache"]
-    F --> Q["stochastic transient matcher"]
-    Q --> R["scene-ray / LOD cache"]
-    G --> K["RGB surface claims"]
-    J --> L["PointCloud PLY"]
-    J --> M["CultCache RenderFrame document"]
-    R --> M
-    K --> M
-    M --> N["Spout sink / Aquarium GPU renderer"]
-    N --> O["Spout2 sender texture"]
-    O --> P["OBS Spout2 source"]
+    A["direct camera drivers"] --> B["Mimir.Runtime video buffers"]
+    C["Leap stereo IR driver"] --> B
+    B --> D["native reservoir handles"]
+    D --> E["Aquarium GPU feature extraction"]
+    E --> F["cross-view matching + flow"]
+    F --> G["surface/material claims"]
+    G --> H["brush/splat render budget"]
+    H --> I["Spout2/program video"]
 ```
 
-## Ownership
+## Invariants
 
-- `localcast.sensor_fusion.core` owns calibrated camera models, 2D observations, DLT triangulation, reprojection gating, confidence scoring, point-cloud export, and track cache expiry.
-- `localcast.sensor_fusion.adapters` owns driver-facing frame ingress. Its first concrete adapter is an FFmpeg raw BGR reader for the PS3 Eye DirectShow path.
-- `localcast.sensor_fusion.calibration_space` owns fixed-board common-space calibration: ChArUco corner observations plus intrinsics become `CameraModel.world_from_sensor` transforms in one room frame.
-- `localcast.sensor_fusion.surface_features` owns cross-view feature observations, descriptor matching, and triangulated surface tracks. It consumes calibrated cameras; it does not invent camera geometry.
-- `localcast.sensor_fusion.stochastic_mapping` owns transient feature hypothesis sampling, image-pixel to scene-ray lowering, learned image-ray bias cells, and multi-LOD scene cache packets for later compute-shader reconciliation.
-- `localcast.sensor_fusion.camera_control` owns measurement-quality policy: luminance, clipping, contrast, and sharpness in; normalized exposure/gain/focus commands out. Driver adapters own translating those commands to native camera APIs, vendor tools, or no-op mocks.
-- `localcast.sensor_fusion.dense_stereo` owns a debug CPU reference for dense calibrated RGB surface claims. It is useful for tests and shader parity, but the live million-splat path belongs to Aquarium/GPU compute.
-- `localcast.sensor_fusion.active_illumination` owns deliberate light pulses as calibration telemetry. A Tuya bulb is an optional local-network actuator, not a rendering authority; its pulse timestamps are evidence for camera exposure/depth response.
-- `localcast.sensor_fusion.clap_calibration` owns deliberate clap detection: chirplet-synced audio transients nominate oracle timestamps, camera frame windows around that oracle look for motion derivatives, calibrated camera peaks triangulate the impact point, and only audio-plus-visual agreement becomes a clap calibration event.
-- `localcast.sensor_fusion.render_bridge` owns the in-process render-frame ABI: cached point claims plus target dimensions, Spout sender name, source timestamp range, intended visual presentation time, and ambisonic/audio alignment time.
-- `localcast.diagnostics.visual_cache` owns the typed CultCache document shape
-  used by diagnostic visual-state files. Production visual state should cross
-  the native/CultNet boundary directly, not through this Python file adapter.
-- `localcast.diagnostics.render_math` owns pure diagnostic render budgeting,
-  camera projection, brush lowering, and CPU rasterization. It has unit tests
-  and does not require a GPU context.
-- `scripts/sensor_fusion.py` owns CLI composition for offline observation files.
-- The Python/OpenGL Spout publisher has been deleted. No Mimir Python
-  module owns OBS publication.
-- `config/sensor-fusion.example.json` owns the declarative rig shape: capture hints, intrinsics, extrinsics, latency, and fusion thresholds.
-
-## Cache Discipline
-
-This follows the same architectural lesson as `fractal-domains-cache-that-bites.md`: state begins as semantic claims in a named domain, then lowers into cheaper packets.
-
-For this project:
-
-```text
-sensor observation
--> calibrated world ray
--> triangulated marker claim
--> stochastic transient hypothesis
--> multi-LOD scene cache
--> cached track
--> render frame packet
--> Aquarium brush/splat packet
--> Spout sender texture
--> OBS source
-```
-
-The cache is not a bucket. `TrackCache` has a TTL and confidence update rule so the system can buffer and converge without pretending stale points are fresh. The live frame reservoir is explicitly five seconds wide: frame history expires from the newest shared sample, LOD evidence is clipped to that same interval, and each `RenderFramePacket` reports the exact source window. Later GPU buffers should mirror this shape: observation SoA, track SoA, material/BRDF estimate SoA, brush packet SoA.
-
-`visual-lod-cache.json` is the diagnostic CPU-authored shape for the next
-compute pass. JSON serialization lives under `localcast.diagnostics.lod_json`,
-not in the mapping model. It groups stochastic/fused scene claims into multiple
-world-space voxel sizes, carrying center, radius, confidence, count, source-time
-bounds, and first-pass material estimates. The material channel is deliberately
-modest: weighted albedo plus roughness/metallic hints so Aquarium can start
-relighting brush/splat packets without treating screen-space color as the whole
-truth. A later shader pass should replace those hints with multi-view BRDF
-fitting inside the same reservoir.
-
-## Test Boundaries
-
-The core can be tested without cameras:
-
-- synthetic cameras triangulate a known point
-- timestamp windows reject stale pairs
-- track cache expiry is deterministic
-- raw-frame adapter can be tested from an in-memory byte stream
-- fixed-board ChArUco observations solve camera poses into the expected common frame
-- matched surface descriptors triangulate to a known 3D point
-- stochastic transient matches triangulate descriptor-consistent rays and lower them into a multi-LOD scene cache
-- adaptive camera control responds to overexposure without live hardware
-- dense stereo turns shifted textured camera pairs into calibrated RGB surface claims
-
-Those tests matter because camera drivers are not unit-test dependencies. They are weather.
-
-## OBS And Spout Boundary
-
-OBS should see a named Spout sender, not a camera window, file tail, or desktop capture. Current references confirm the ordinary Windows path: the Off World Live OBS Spout2 plugin receives Spout shared textures, while the Spout2 SDK is the app-side texture sharing surface.
-
-The intended production handoff is:
-
-```text
-Mimir TrackCache
--> CultCache render-frame document
--> Aquarium Engine typed runtime state
--> GPU point/brush/splat buffer
--> D3D render target
--> Spout2 sender named "Mimir Point Cloud"
--> OBS Spout2 Capture source
-```
-
-`RenderFramePacket` is the diagnostic Python in-process shape. The diagnostic
-file boundary is a typed CultCache MessagePack document. Compatibility JSON
-read/write now lives under `localcast.diagnostics.render_frame_json`; the
-production packet module does not own file serialization. The production live
-boundary is native typed state plus CultNet `document_put`.
-
-Clap calibration events use the same typed-state rule. A clap is not every sharp
-audio transient. The detector first finds a sharp broadband audio onset in the
-audio oracle timeline, then opens a short camera window around that timestamp
-and looks for high frame-derivative peaks per camera. At least the configured
-minimum number of cameras must agree; when a calibrated rig is available, their
-motion centroids are triangulated into a world-space impact point. The typed
-`localcast.calibration.clap_events` document carries stable event id, acoustic
-oracle time, visual observed time, timing uncertainty, confidence, world
-position, and the contributing camera peaks. Aquarium consumes those events as
-high-confidence calibration constraints beside ultrasonic chirplet room evidence.
-
-The current streamable cut is:
-
-```text
-CultCache render-frame document
--> Aquarium typed runtime state
--> D3D render target
--> Spout2 sender
--> OBS Spout2 Capture source
-```
-
-This is deliberately a sink boundary, not a competing world model. Aquarium should replace the renderer body, not the capture/fusion/timing contract.
-
-## Latency Contract
-
-Latency is allowed. Drift is not.
-
-Each render frame carries:
-
-- `source_time_min_ns` and `source_time_max_ns`: the observation window that produced the cached points.
-- `present_time_ns`: when the visual frame wants to be presented after visual buffering.
-- `audio_alignment_time_ns`: the corresponding ambisonic output time.
-
-That lets the final stream compositor buffer point-cloud visuals until they align with the bounded audio-field cache. The renderer may show a slightly older world if the packet is coherent and labeled. It may not quietly mix fresh audio with stale visual geometry and call that sync.
-
-Current live deadline rule: `source_time_max_ns - source_time_min_ns` is five seconds. Late-arriving samples can fill the reservoir while they are inside that window; anything older is evidence for offline calibration, not the live program surface.
-
-The Spout/audio overlay applies the same rule at the consumer boundary. If the visual producer or a camera driver stalls, OBS receives a packet clamped to the current audio edge with stale points removed. The current live fallback mode uses cached/synthetic RGB and Leap frames because the old diagnostic capture path measured slower than the reservoir; real cameras need nonblocking native-driver ingress feeding the same reservoir instead of blocking the producer loop.
+- Device timestamps beat arrival timestamps when available.
+- Leap is the first timing-camera candidate.
+- Process capture is a bridge edge, not the local six-camera foundation.
+- Aquarium owns GPU extraction, fusion, material fitting, and render budgeting.
+- Runtime buffers own retention and stream health, not scene reconstruction.
 
 ## Next Cut
 
-1. Capture ChArUco intrinsics for each camera with `scripts/charuco_calibration.py calibrate`.
-2. Capture fixed-board observations from every camera and solve shared extrinsics with `scripts/solve_common_camera_space.py`.
-3. Use `scripts/triangulate_surface_features.py` on calibrated image pairs to prove real cross-view surface tracks before promoting the matcher into the live producer.
-4. Replace the synthetic stochastic transient observations in
-   `localcast.diagnostics.visual_producer` with real native/Aquarium ORB/flow
-   observations from driver-ingested PS3 Eye/Kiyo/Leap frames, then delete the
-   Python diagnostic producer.
-5. Move dense matching and LOD reconciliation from CPU block search/JSON to GPU-resident stereo/flow and compute-shader cache reduction so the million-sample target is not murdered by Python loops.
-6. If a Tuya light is available on the local network, run `scripts/pulse_tuya_light.py` with its local key and align pulse timestamps against camera brightness response.
-7. Add detector adapters that turn PS3 Eye frames into `Observation2D` marker detections.
-8. Record an observation run from the two PS3 Eyes into typed CultCache docs.
-9. Feed `RenderFramePacket` and the multi-LOD scene cache into Aquarium Engine.
-10. Publish the render target as a Spout2 sender and receive it in OBS.
-11. Delete compatibility JSON render-frame paths once no diagnostic script depends on them.
-
-## References
-
-- Multi-camera calibration and triangulation are the geometry spine. OpenCV may
-  remain an offline calibration library; it is not live frame ingest. See
-  `research/visual-spatial-map/summary.md`.
-- Jacob and Haeb-Umbach 2015 motivates audio-visual coordinate alignment. See `research/visual-spatial-map/mirrors/krekovic-2015-audio-visual-geometry-calibration.pdf`.
-- Kerbl et al. 2023 and RTG-SLAM motivate splats as render packets, not state ownership. See `research/visual-spatial-map/summary.md` and `research/gpu-fusion-splatting/summary.md`.
-- Spout2 and the OBS Spout2 plugin are the Windows/OBS texture-sharing bridge. See `research/spout-obs-bridge/summary.md`.
-- `E:\Projects\gamecult-site\GameCult\Blog\fractal-domains-cache-that-bites.md` supplies the cache discipline: semantic authority first, backend packet lowering second.
+Implement one concrete direct capture driver, feed `MimirVideoFrameDescriptor`
+samples into `MimirVideoCaptureDriverSource`, and measure sustained cadence over
+the default five-second window.

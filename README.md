@@ -7,8 +7,8 @@ The public job is simple: make the physical room available as a synchronized
 OBS-facing program surface. The actual machine stays disciplined. Mimir owns
 configuration, calibration, launch, status, and typed contracts; Aquarium owns
 GPU fusion and Spout publication; Faust owns hot audio DSP; OBS owns broadcast
-composition. The old SRT bridge is compatibility scaffolding over the same
-boring truth: stable endpoints beat theatrical plumbing.
+composition. The SRT bridge is compatibility scaffolding over the same boring
+truth: stable endpoints beat theatrical plumbing.
 
 Start with `docs/perfect-machine.md` for the live architecture.
 
@@ -58,11 +58,11 @@ That path is stricter than the OBS endpoint path: microphones feeding the Ambiso
 
 ## Current Status
 
-This repo is the first coherent scaffold for Mimir: architecture docs,
-persistence machinery, and Windows scripts for device discovery, config
-validation, and FFmpeg command generation. The deeper target is the native
-five-second reservoir feeding Aquarium and Faust; the bridge scripts remain the
-plain, inspectable path into OBS while the field machine grows teeth.
+This repo now has a C# app/runtime surface plus the first native reservoir
+crate. `src/Mimir.Runtime` owns the rolling synchronization buffers and direct
+driver ingest seams; `src/Mimir.App` hosts the Aquarium Engine window/render
+bridge. The Windows scripts remain a plain LAN bridge into OBS while the native
+field machine grows teeth.
 
 ## Quick Start
 
@@ -98,11 +98,13 @@ OBS documents SRT playback through VLC Source or Media Source, and Media Source 
 
 ## Repo State
 
-Rehydrate with the bundled Python from this Codex workstation, or any normal Python 3:
+Rehydrate with the map, handoff, and git. No helper runtime is required:
 
 ```powershell
-& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\localcast_state.py status
+git status --short --branch
+git log --oneline -5
 Get-Content .\state\map.yaml
 Get-Content .\notes\fresh-workspace-handoff.md
 Get-Content .\notes\current-system-map.md
+Get-Content .\state\evidence.jsonl -Tail 8
 ```

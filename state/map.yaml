@@ -1,14 +1,13 @@
-﻿workspace:
+workspace:
   name: Mimir
   status: active
-  focus: perfect-machine-native-reservoir
-  implementation_name: Mimir public surface / localcast implementation contracts
+  focus: direct-driver-aquarium-stream-app
+  implementation_name: Mimir public surface / native runtime contracts
   premise: >
-    Mimir is the public name for the local realtime field machine: a roomful of
-    cameras, microphones, speakers, and timing signals becomes one coherent
-    OBS-facing volumetric program surface. The synchronized program path now
-    cuts away the Python/OpenGL deadline bridge and rebuilds around one native
-    rolling reservoir feeding Aquarium, Faust, CultNet, and OBS.
+    Mimir is the local realtime field machine: cameras, microphones, speakers,
+    network feeds, and timing signals become one coherent OBS-facing volumetric
+    program surface. The live path is a C# Aquarium-hosted app with in-memory
+    rolling buffers and native capture/runtime boundaries.
 
 objective:
   primary: >
@@ -16,428 +15,71 @@ objective:
     microphones, two speakers, Leap timing, Aquarium GPU rendering, Faust DSP,
     and OBS output.
   current: >
-    Carve out Python live producers, the OpenGL Spout sink, JSON live stores,
-    and duplicated reservoir windows. Rebuild the live path around one native
-    rolling buffer with typed indexes/views and CultNet typed documents. The
-    immediate viable stream app is Aquarium-hosted: local and networked
-    video/audio feeds append into one five-second in-memory runtime, Aquarium
-    provides debug/settings/output UI, and OBS receives synchronized program
-    outputs. Mimir owns its own C# solution and references Aquarium Engine as
-    the windowing/rendering library and D3D12 bridge.
+    Implement direct camera/audio capture into Mimir.Runtime buffers, starting
+    with Leap stereo IR as the timing-camera candidate, then expose runtime
+    health/settings/output controls through Aquarium UI.
 
 constraints:
   - Sender is Windows.
   - Receiver uses OBS.
-  - Video encode must happen on the sender using NVENC when available.
+  - Video encode must use NVENC when the bridge path is active.
   - Audio sources must remain separately controllable in OBS.
-  - V1 is LAN-only.
+  - V1 bridge is LAN-only.
   - Persistent state must clarify rehydrate, not become transcript tax.
-  - No Python live hot path.
-  - No OpenGL production Spout sink.
-  - Edge JSON is schema/diagnostic only; live network/process data is typed
-    CultNet documents.
+  - Live ingest belongs to Mimir.Runtime, native drivers, Aquarium, and
+    Faust/native DSP.
+  - Edge JSON is schema/diagnostic only; live process data is typed or in
+    memory.
   - Networked feeds are producers into the live runtime, not independent clock
-    or synchronization authorities.
+    authorities.
 
 invariants:
   - OBS composition authority stays in OBS.
-  - FFmpeg owns capture, encoding, and transport.
-  - One stable port equals one OBS source endpoint.
-  - Video endpoint uses H.264 over MPEG-TS/SRT.
-  - Audio endpoints default to AAC over MPEG-TS/SRT for broad OBS/FFmpeg compatibility.
-  - Local secrets remain untracked.
-  - One native rolling reservoir owns the live edge and expiry.
+  - FFmpeg owns capture, encoding, and transport only for bridge utilities.
+  - One stable bridge port equals one OBS source endpoint.
+  - One rolling live window owns the timing edge and expiry.
   - Typed views may index the rolling buffer, but no per-kind ring owns
     retention.
-  - Aquarium owns production Spout publication; Faust/native DSP owns hot audio.
-  - Python and JSON may diagnose or test the machine, not run it.
-  - Aquarium owns the viable stream app UI for runtime debugging, settings, and
-    output management.
+  - Aquarium owns production UI, GPU fusion, D3D12 interop, and Spout2 output.
+  - Faust/native DSP owns hot audio alignment, separation, spatialization, and
+    stems.
+  - Local secrets remain untracked.
 
 accepted_design:
-  - `docs/mimir-face.md`, `.voidbot/voice/identity.json`, and
-    `.voidbot/state/mimir.cc` define Mimir as this repo's persistent Face:
-    VoidBot supplies the Discord mouth/scheduler/heartbeat transport, while
-    Mimir owns repo-progress heraldry, public story continuity, and memory
-    stewardship.
-  - `docs/native-rebuild-plan.md` is the current cut plan. It supersedes the
-    deadline Python/OpenGL bridge as a foundation and defines the next coherent
-    rebuild target.
-  - `docs/perfect-machine.md` and `config/perfect-machine.example.json` define the native target: one five-second spatiotemporal reservoir, Aquarium GPU fusion/rendering, Faust DSP, OBS output controls, and Mimir tooling.
-  - `docs/viable-stream-app.md` defines the near-term application cut: Aquarium
-    hosts the five-second in-memory `LocalcastRuntime`, local/networked feeds
-    append as producers, Aquarium exposes debug/settings/output controls, and
-    OBS receives synchronized program video plus controllable audio stems.
-  - `Mimir.slnx` owns the app surface. `src/Mimir.App` launches Aquarium Engine
-    as the host/window/D3D12 library, and `src/Mimir.Runtime` provides Mimir's
-    Aquarium client runtime factory.
-  - `Mimir.Runtime` owns the first synchronization spine:
-    `MimirSynchronizationHub`, `MimirRollingStreamBuffer`, stream descriptors,
-    and `IMimirStreamSource`. It initializes one bounded rolling buffer per
-    configured audio/video stream and drains registered local/network sources
-    into those buffers each Aquarium update.
-  - Local six-camera ingest should use native push sources such as
-    `MimirNativeIngestStreamSource`, carrying native payload handles and
-    optional memory spans into Mimir buffers. `MimirProcessStreamSource` is a
-    compatibility path for network SRT or diagnostics, not the local camera
-    foundation.
-  - `MimirVideoFrameDescriptor` is the first native video-frame descriptor for
-    the C# runtime: width, height, pixel format, stride, device timestamp, and
-    optional native/GPU handle. Leap stereo IR should use this path as the
-    timing-camera candidate instead of OpenCV arrival timing.
-  - `IMimirVideoCaptureDriver` plus `MimirVideoCaptureDriverSource` is the live
-    driver-facing seam. LeapUVC/libusb, LeapC images, Media Foundation,
-    DirectShow, or GPU shared textures should plug in there; OpenCV remains
-    offline calibration/diagnostic tooling, not live ingest.
-  - `native/reservoir` is the first native Rust crate. It now uses one
-    time-ordered rolling buffer with typed views, so retention has exactly one
-    owner while Aquarium/Faust still get kind-scoped queries.
-  - `LocalcastRuntime` exposes typed producer pushes plus total/typed window
-    reads. `LocalcastProducer` owns source identity and sequence assignment
-    before hardware adapters append live sample handles.
-  - `localcast_hash_source_id` owns stable native source-id hashing so capture
-    workers do not each invent incompatible sensor hashes.
-  - `localcast_producer_create_for_source` keeps the preferred adapter path from
-    bypassing native source-id hashing.
-  - `LocalcastAudioBlockDescriptor` is the first typed payload descriptor for
-    caller-owned float32 interleaved audio blocks; the reservoir stores only the
-    descriptor pointer as a payload handle and does not own DSP memory.
-  - `LocalcastRenderPacketDescriptor` gives render packets the same typed
-    payload boundary for caller-owned point buffers and presentation timing;
-    Aquarium still owns decoding, upload, and rendering.
-  - `LocalcastRenderPoint` is the first native point-buffer element ABI, kept
-    small to replace file-backed render-frame transport before richer material
-    and brush descriptors exist.
-  - Aquarium-Engine commit `0f610d0` wires native render packets into the GPU
-    fusion path without managed point-list materialization: the native source
-    exposes caller-owned `LocalcastRenderPoint` memory as an
-    `AquariumGpuFusionPointBuffer`, D3D12 uploads those bytes into a structured
-    buffer, and the LocalCast fusion compute shader lowers points into temporal
-    gaussians on GPU.
-  - `config/localcast.example.json` defines receiver address, base port, video encode settings, and audio sources.
-  - `scripts/sender-discover.ps1` lists FFmpeg devices, protocols, and encoders.
-  - `scripts/sender-start.ps1` launches one FFmpeg process per enabled source.
-  - OBS receives each source through Media Source URLs documented in `docs/obs-receiver-setup.md`.
-  - `scripts/obs_smoke_test.py`, `localcast.obs_smoke`, and
-    `docs/obs-v1-smoke-test.md` define the v1 OBS smoke-test witness ledger.
-    The ledger must record `sender_capture`, `srt_receive`, and `obs_present`
-    timestamp evidence for every planned endpoint, summarize endpoint drift and
-    end-to-end latency, and emit confidence before receiver/plugin/native
-    expansion is justified.
-  - Persistence follows the active repo pattern: map, scratch, evidence, branches, handoff, system map, implementation plan, state helpers.
+  - `Mimir.slnx` owns the app surface.
+  - `src/Mimir.App` launches Aquarium Engine as host/window/D3D12 library.
+  - `src/Mimir.Runtime` owns `MimirSynchronizationHub`,
+    `MimirRollingStreamBuffer`, stream descriptors, `IMimirStreamSource`,
+    direct native ingest, process bridge ingest, and video capture driver seams.
+  - `MimirVideoFrameDescriptor` carries width, height, pixel format, stride,
+    device timestamp, and optional native/GPU handle.
+  - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
+    seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
+    texture capture.
+  - `native/reservoir` owns the lower shared-edge rolling-buffer invariant for
+    Aquarium/Faust integration.
+  - `config/perfect-machine.example.json` declares live owners, sensors,
+    reservoir views, and runtime policy.
+  - `.voidbot` state is part of repo memory and must be committed separately
+    whenever dirty.
 
 active_subgoals:
-  - Build the viable Aquarium-hosted stream app around one five-second
-    `LocalcastRuntime`: ingest local/networked video and audio producers,
-    expose runtime UI, and emit synchronized OBS program outputs.
-  - Implement concrete local device and network `IMimirStreamSource` adapters
-    that feed the Mimir runtime buffers with live audio/video samples.
-  - Build the local camera adapter close to the driver/GPU capture surface;
-    avoid FFmpeg stdout for the six local camera streams unless used only as a
-    temporary diagnostic witness.
-  - Bind Aquarium/Faust to the rolling-buffer `LocalcastRuntime` and
-    `LocalcastProducer` C ABI described by
-    `native/reservoir/include/localcast_reservoir.h`.
-  - Delete or quarantine Python live producers and the OpenGL Spout sink before
-    adding new live features.
-  - Bind Aquarium/Faust to `LocalcastRuntime`/`LocalcastProducer` in the native
-    reservoir C ABI described by `native/reservoir/include/localcast_reservoir.h`.
-  - Move dense visual fusion/material fitting/brush generation into Aquarium GPU compute.
-  - Move hot audio DSP/voice separation/room suppression/spatialization into Faust/native runtime.
-  - Validate the actual sender FFmpeg build and capture device names.
-  - Smoke-test the video endpoint in OBS.
-  - Smoke-test each audio endpoint in OBS and tune latency.
-  - Run the v1 OBS smoke-test witness ledger against the actual sender/receiver
-    setup; no OBS source generator or plugin investigation is justified until
-    the ledger passes.
-  - Evaluate the Ambisonic AquaSynth path as a separate synchronized multichannel audio pipeline; do not treat heterogeneous mic feeds as raw first-order ambisonic A-format without geometry, calibration, and a shared clock.
-  - Build the six-microphone/two-speaker audio-field sidecar around the actual distributed camera/Focusrite clocks, explicit geometry, speaker calibration, bounded buffering, delay/SRO alignment, testable pipeline seams, and FOA AmbiX output.
-  - Build the visual sensor-fusion sidecar around timestamped observations, calibrated sensor models, bounded track caches, sparse point-cloud output, and later brush/splat packet lowering.
-
-research:
-  ambisonic_aquasynth:
-    summary: research/ambisonic-aquasynth/summary.md
-    bibliography: research/ambisonic-aquasynth/bibliography.md
-    key_decision: >
-      A spatial field must be built from one clocked multichannel capture path
-      feeding a declared ambisonic bus. The existing one-audio-source-per-SRT
-      endpoint design remains valid for plain OBS mixing, but it is not the
-      authority for synchronized ambisonic DSP.
-  live_adaptive_sync:
-    summary: research/live-adaptive-sync/summary.md
-    bibliography: research/live-adaptive-sync/bibliography.md
-    key_decision: >
-      If independent mic clocks must be used, sync needs two explicit loops:
-      slow sampling-rate-offset estimation driving variable-rate resampling,
-      and faster delay/TDOA tracking for current alignment and localization.
-      Prove this with a two-mic harness before connecting it to Ambisonics.
-  playback_calibration:
-    summary: research/playback-calibration/summary.md
-    bibliography: research/playback-calibration/bibliography.md
-    key_decision: >
-      Speaker output is a layout-specific render stage, not a generic sink.
-      The system needs a playback profile with decoder matrix/layout,
-      output-device latency, channel mapping, per-speaker delay/gain/response
-      correction, and a latency ledger. Keep playback calibration separate from
-      capture-side adaptive sync.
-  feedback_calibration:
-    summary: research/feedback-calibration/summary.md
-    bibliography: research/feedback-calibration/bibliography.md
-    key_decision: >
-      Speaker feedback is also a calibration signal when the outgoing audio is
-      known. Model it with an online speaker-to-mic transfer matrix and expose
-      confidence/convergence state. Keep this estimator separate from clock
-      sync, localization, and Ambisonic decoding.
-  visual_spatial_map:
-    summary: research/visual-spatial-map/summary.md
-    bibliography: research/visual-spatial-map/bibliography.md
-    brushstroke_rendering: research/visual-spatial-map/brushstroke-fusion-rendering.md
-    key_decision: >
-      The visual rig is two PlayStation Eye / PS3 Eye cameras as high-rate
-      low-resolution marker trackers, two Razer Kiyo-class RGB/mic cameras
-      including one Kiyo Pro, and one Leap Motion/LeapUVC stereo IR sensor for
-      near-field fusion. LeapUVC driver mode makes Leap appear as a generic UVC
-      device and should be treated as mutually exclusive with Ultraleap software
-      tracking unless proven otherwise. Build one canonical world coordinate
-      system for all visual sensors, microphones, speakers, props, virtual
-      camera pose, and ambisonic listener pose. Prove sparse calibrated tracking
-      before adding RGB projection or Gaussian splat rendering. For a
-      Dreams-like volumetric brushstroke look, keep the world model as truth and
-      lower semantic scene claims into cached brush/splat packets under budget.
-  gpu_fusion_splatting:
-    summary: research/gpu-fusion-splatting/summary.md
-    bibliography: research/gpu-fusion-splatting/bibliography.md
-    key_decision: >
-      The live visual fusion/render hot path should be GPU-resident: pinned host
-      frame rings, async CUDA uploads, GPU marker/stereo/feature extraction,
-      GPU-shaped observation and brush packet buffers, and CUDA/Vulkan/D3D
-      splat rendering with minimal readback. CPU owns orchestration and
-      semantics; kernels do not own calibration truth.
-  spout_obs_bridge:
-    summary: research/spout-obs-bridge/summary.md
-    bibliography: research/spout-obs-bridge/bibliography.md
-    key_decision: >
-      OBS should receive a named Spout2 shared texture from Aquarium Engine,
-      not desktop capture or file polling. Mimir emits typed
-      render-frame packets with source timestamps, intended presentation time,
-      audio-alignment time, target size, Spout sender name, and point/brush
-      claims. The deadline Spout sink now defaults to a `kiyo-mid-deru`
-      virtual camera, with the eye halfway between the two Kiyo-class cameras
-      and the target on the co-streamer body volume. Its point budget is
-      temporal: stable high-confidence anchors plus a frame-varying remainder
-      for TAA/supersampling. Aquarium owns GPU rendering and Spout publication.
-  live_spout_deadline_sink:
-    summary: docs/obs-spout-streaming.md
-    key_decision: >
-      The deadline OBS surface proved the need for a named Spout sender, but it
-      is not a foundation. The Python/OpenGL Spout publisher is now deleted;
-      Python render-frame production and JSON heartbeat stores are diagnostics
-      or migration fossils only. Production Spout publication belongs in
-      Aquarium, fed by the native rolling reservoir and typed CultNet documents.
-  live_audio_phase_meaning:
-    summary: docs/audio-field.md
-    key_decision: >
-      Phase/chirplet evidence now has a live semantic boundary:
-      `audio_field.phase_meaning` keeps raw phase internal and publishes
-      `localcast.audio.phase_field` with delay correction, coherence,
-      confidence, distance-equivalent delta, reference-bleed/suppression
-      weights, correction energy, and active-probe need. `audio_field.active_probe`
-      closes the next loop by feeding that confidence state into
-      ActiveProbeOptimizer and emitting bounded chirplet WAVs/manifests, with
-      optional playback. Probe artifacts rotate through fixed slots and the
-      manifest rotates at a byte cap. The old Python AmbiX, phase, live-local,
-      and Faust audio publishers now live under `localcast.diagnostics.*` and
-      are diagnostic replay or experiment paths only. Production mic, loopback,
-      phase, stem, and spatial-bed ingest belongs in native/Faust workers that
-      append typed sample handles through `LocalcastProducer`.
-      This is learned audio-field state, not a phase display.
-  faust_voice_separation:
-    summary: docs/aquarium-spatial-audio.md
-    key_decision: >
-      Voice separation should run in Aquarium's Faust DSP, not as Python hot
-      audio math after the mic field has already collapsed to AmbiX.
-      Mimir now publishes `localcast.audio.mic_field` with six
-      aligned mic channels, roles, controls, and graph id
-      `localcast.faust.voice_separation.v1`; the matching Faust graph lives at
-      `faust/localcast_voice_separation.dsp`.
-  sensor_fusion_architecture:
-    summary: docs/sensor-fusion-architecture.md
-    key_decision: >
-      The visual world model begins as timestamped sensor observations and
-      calibrated camera transforms, not render packets. The first sidecar keeps
-      capture adapters, detection, triangulation, track caching, and point-cloud
-      export as separate testable authorities. This follows the fractal-domain
-      cache rule: semantic claims first, cached backend lowerings second.
-      Stochastic transient matching now lowers descriptor-consistent image
-      observations into scene-ray hypotheses and a multi-LOD world-space cache
-      for Aquarium compute-shader reconciliation. Leap evidence is the
-      highest-priority temporal/spatial source when live Leap frames are present;
-      fallback Leap frames stay tagged as fallback evidence and must not be
-      treated as ground truth. Live clap calibration now uses the Kiyo stereo
-      pair for the first rough 3D impact solve and includes Leap motion as the
-      high-precision visual timing witness; Leap should become a geometric
-      camera authority after shared calibration. Clap peaks update per-camera
-      clock offsets, allowing history buffers to be sampled at
-      `oracle_time - camera_offset` for coherent point-cloud construction.
-      `localcast.sensor_fusion.chirp_pose` converts live phase-field delay
-      meaning for Kiyo/PS Eye microphone sources into camera-body range
-      constraints and per-camera pose-correction estimates, which the live
-      producer emits as `camera-chirp:*` and `camera-pose-correction:*` render
-      points plus `chirp-camera-pose` LOD evidence. It can load geometry from
-      the audio-field profile, falling back to the example/default geometry
-      until measured local coordinates exist. These constraints augment visual
-      calibration; they do not own image geometry. The Spout point-budget policy
-      pins calibration and cross-modal constraints before spending adaptive LOD
-      budget on stable high-priority surfaces and frame-rotated samples, and
-      its JSON heartbeat reports budgeted point prefix counts. The live fusion
-      producer now has an explicit five-second spatiotemporal reservoir:
-      RGB/Leap frame history expires from the newest shared sample, LOD evidence
-      is clipped to the same window, and each RenderFramePacket declares that
-      source window for Aquarium/OBS synchronization. Multi-LOD cells now carry
-      first-pass material estimates, weighted albedo plus roughness/metallic
-      hints, so Aquarium can relight/refine brush packets from reservoir state
-      instead of scraping screen-space color. The Spout/audio overlay boundary
-      clamps stale visual packets to the current audio reservoir edge before
-      OBS sees them. Current live deadline mode uses fallback-only RGB/Leap
-      because synchronous OpenCV camera reads measured slower than the reservoir;
-      the next coherent cut is nonblocking camera ingress that continuously
-      fills the five-second reservoir with real samples. `LatestFramePump` now
-      moves blocking OpenCV reads off the fusion hot loop; the running deadline
-      mode uses lower per-frame sample density so Spout can render visual points
-      inside the five-second budget while TAA/reservoir accumulation carries
-      detail over time.
-  typed_visual_state:
-    summary: docs/typed-visual-state.md
-    key_decision: >
-      Diagnostic visual state can still be exported as typed CultCache
-      MessagePack documents: `localcast.visual.render_frame` in
-      `calibration/runs/visual-state.msgpack` and
-      `localcast.visual.stream_status` in
-      `calibration/runs/visual-stream-status.msgpack`. Production visual state
-      crosses native/CultNet typed document boundaries; the Python file adapter
-      is not live authority. Diagnostic JSON render-frame and LOD writers live
-      under `localcast.diagnostics`; model modules do not own file
-      serialization. Edge JSON may define schemas or export diagnostics, but
-      runtime data should remain typed documents because every networked
-      subsystem is under our control.
+  - Implement the first concrete Leap direct capture driver and measure cadence.
+  - Add remaining local camera drivers through `IMimirVideoCaptureDriver`.
+  - Add native audio capture workers for mic, loopback, and network audio feeds.
+  - Bind Aquarium UI to stream health, buffer depth, source timestamps,
+    settings, and output management.
+  - Keep PowerShell/FFmpeg/SRT as bridge utilities until direct program output
+    replaces them.
 
 current_status:
   summary: >
-    Mimir is now the public brand and repo Face. The 256px repixelized avatar
-    lives at `Mimir.png`, is copied to
-    `assets/branding/mimir-avatar-256.png`, and is registered for the VoidBot
-    repo-Face pipe at `.voidbot/voice/mimir.png`. VoidBot's private
-    `repo-discord-identities.json` now includes Mimir beside Nibu and Aqua, and
-    `.voidbot/state/mimir.cc` has typed birth memories for identity,
-    native-reservoir target, ownership boundaries, audio-field discipline, and
-    heartbeat agency pressure. A forced VoidBot heartbeat dry-run reconciled
-    Mimir as an active `repo_face` participant in the shared initiative
-    scheduler.
-    First repo scaffold is in place and deployed to the neighbor sender at
-    C:\Meta\Mimir. FFmpeg 8.1.1 with SRT and h264_nvenc is installed
-    there, direct WASAPI console-session capture now owns system-output loopback, Madman's desktop has
-    start/stop launchers, the sender script has launcher-safe FFmpeg arguments
-    and repo-root logs, desktop launchers use absolute tool paths, and the
-    receiver OBS scene has matching Media Sources. Local calibration harness now
-    has first physical-device access: LeapUVC raw IR video, two Razer Kiyo-class
-    RGB cameras, all expected microphones, and Scarlett speaker output are
-    accessible. LeapUVC MSMF mode probing accepts a 320x240x120 request and
-    reports about 115 fps, though measured OpenCV throughput is lower in the
-    first rough probe. The opentrack/libusb PS3 Eye path still enumerates modes
-    but fails frame reads across libusb-win32, libusbK, and WinUSB. The
-    AllanCat PS3 Eye Universal Driver / PS3EyeDirectShow path now exposes both
-    PS3 Eyes as DirectShow indices 3 and 4 after registering the source filter
-    for two cameras. OpenCV index capture is reliable at default 640x480 near
-    30 fps but does not negotiate high-rate modes correctly. FFmpeg DirectShow
-    capture by device name negotiates the filter pins properly: both Eyes can
-    run simultaneously at 320x240@60, and dual 640x480@60 lands around 54-56
-    fps per Eye. Requests above 60 do not increase delivered frame rate through
-    the installed filter. Audio-field scaffolding now exists as a separate sidecar
-    for the actual distributed rig: two Kiyo mics, two PS Eye mics, local
-    Focusrite ADC with a shielded cardioid near the host's face, neighbor
-    Focusrite ADC with a shotgun mic pointed at the co-streamer, and two local
-    speakers. The Focusrite mics are high-quality dialogue anchors; camera mics
-    provide spatial/context evidence. The tool refuses to treat independent
-    USB/network clocks as an Ambisonic field until they have been aligned and
-    resampled into one six-channel reference timeline. Local PortAudio/WASAPI
-    probe shows the Scarlett input accepts 48 kHz but rejects 96 kHz, while the
-    Scarlett output accepts 44.1 kHz and rejects 48/96 kHz on this path; check
-    ASIO/native Focusrite access before relying on high-rate calibration. Audio
-    latency is now an explicit bounded-buffering policy: output may run behind
-    live input while delay/SRO estimates settle, but cache depth must converge
-    toward real-time. Core audio modules now expose testable boundaries for
-    buffering, latency convergence, injectable capture/alignment/encode/sink
-    ports, and pipeline orchestration. Calibration analysis now has a local
-    chirplet refinement pass: coarse sweep match followed by fractional-delay
-    and chirp-rate grid search around the detected arrival. Runtime sync is now
-    modeled as per-block known-speaker chirplet telemetry updating delay, SRO,
-    phase, and confidence state; low-confidence observations freeze rather than
-    poisoning alignment. Active probe optimization owns extra chirplet emission
-    when sync confidence drops, bounded by spacing, level, and audibility budget.
-    The first visual
-    sensor-fusion sidecar is
-    in place: `localcast.sensor_fusion.core` owns calibrated camera models,
-    timestamped 2D observations, DLT triangulation, reprojection/confidence
-    gating, a TTL track cache, and PLY point-cloud export; adapters own
-    FFmpeg/raw-frame ingress; `scripts/sensor_fusion.py fuse-file` can turn an
-    observation file into a sparse PLY. The render bridge now lowers cached
-    points into `localcast.sensor_fusion.render_frame.v1` packets carrying
-    source time ranges, intended visual presentation time, audio-alignment
-    time, target render size, Spout sender name, and point draw metadata for
-    Aquarium/Spout. `localcast.diagnostics.visual_producer` is now diagnostic
-    orchestration for the old Python visual producer, while reservoir-window
-    clipping, Leap packed transforms, RGB reference splats, and diagnostic clap
-    calibration have separate owners. The old Python/OpenGL diagnostic Spout
-    sender has been deleted; only pure diagnostic render math remains under
-    `localcast.diagnostics.render_math`.
-    OBS synchronized program setup now derives six
-    per-channel stems from the aligned program audio timeline, creates/updates
-    OBS Media Sources for host voice, co-streamer voice, ambient, transients,
-    co-streamer loopback, and local loopback, and can disable every scene item
-    except synchronized Mimir program surfaces. Co-streamer surface
-    capture now records neighbor Focusrite and neighbor loopback while recording
-    local loopback ground truth, then writes aligned co-streamer surface WAVs
-    for the stem packer. Live phase-field meaning now writes
-    `localcast.audio.phase_field` to `calibration/runs/audio-phase-field.msgpack`
-    from internal chirplet/phase evidence so downstream code sees delay,
-    coherence, confidence, suppression, correction, and probe-control state
-    instead of raw phases. The neighbor desktop launcher no longer uses
-    Voicemeeter; it restores the Focusrite speakers as the primary playback
-    device and the Focusrite analogue input as the default capture device. A
-    direct Core Audio WASAPI loopback shim now works when launched in the
-    neighbor's interactive console session; SSH-only launches can see the
-    endpoint but receive no render packets.
-    Missing synchronized neighbor feeds are explicit
-    silent placeholders, not raw unsynchronized substitutes. The live producer currently uses synthetic calibrated
-    observations through the real `SensorRig.fuse` path until camera detector
-    observations replace them. The RGB path now has a debug-only CPU dense
-    stereo reference: the two Kiyo-class frames can be block-matched as a
-    provisional calibrated pair and triangulated into `dense-rgb:*` surface
-    claims, but production dense reconstruction must move to Aquarium/GPU
-    compute rather than Python loops. A separate
-    adaptive camera-control policy measures luminance, clipping, contrast, and
-    sharpness, then emits normalized exposure/gain/focus commands through the
-    OpenCV capture adapter when the driver accepts them. Active illumination now
-    has an optional Tuya local-network pulse hook for deliberately modulating
-    room light as calibration telemetry; pulse timestamps can be aligned against
-    camera brightness/depth response. Common-space calibration now has a real
-    owner: fixed-board ChArUco observations plus intrinsics solve
-    `CameraModel.world_from_sensor` transforms, and cross-view surface-feature
-    observations can be descriptor-matched and triangulated into world-space
-    tracks. Unit tests inject
-    synthetic cameras and frames so the core does not depend on live camera
-    drivers. The multi-LOD visual cache now carries source kind and source
-    priority so Aquarium can prefer real Leap evidence over RGB surfaces,
-    stochastic transient hypotheses, and synthetic fusion support while still
-    seeing lower-priority fallback diagnostics when the Leap capture path stalls.
-    The v1 OBS bridge now has a bounded smoke-test harness and runbook:
-    endpoint plans come from `config/localcast.json`, event templates collect
-    `sender_capture`/`srt_receive`/`obs_present` timestamps, and the summary
-    ledger records endpoint drift, matched end-to-end latency, confidence, and
-    whether plugin/native receiver expansion remains blocked.
+    The repo owns a C# Mimir app/runtime scaffold, a native reservoir crate, OBS
+    bridge scripts, and persistence surfaces. Script-era packages, tests,
+    helper tools, dependency manifests, and archived mirrors have been removed from the
+    working tree. The next useful cut is direct driver ingest, not reviving old
+    diagnostic machinery.
   next_action: >
-    Run the v1 OBS smoke-test witness ledger against the actual sender/receiver
-    setup before any receiver/plugin/native expansion. After that clocked
-    evidence exists, resume the native worker cut: fill typed buffers through
-    `LocalcastProducer`, then delete the remaining diagnostic Python producer
-    surfaces.
+    Feed Leap stereo IR frames through `IMimirVideoCaptureDriver` into
+    `MimirSynchronizationHub`, measure sustained cadence over the default
+    five-second window, and expose the result in Aquarium runtime state.

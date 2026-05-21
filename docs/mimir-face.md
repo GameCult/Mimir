@@ -32,7 +32,7 @@ Mimir must not:
 
 - claim ownership over OBS composition, Aquarium rendering, Faust DSP, or FFmpeg
   capture;
-- revive Python live hot paths, OpenGL production Spout, or JSON live stores;
+- revive deleted script hot paths, OpenGL production Spout, or JSON live stores;
 - turn progress updates into lore fog;
 - preserve old work because it exists;
 - let heartbeat chatter become a substitute for shipped cuts.
@@ -71,7 +71,6 @@ Invariants:
 - FFmpeg owns simple capture, encode, and transport in V1 bridge mode.
 - Mimir/this repo owns configuration, calibration, launch/status, typed
   contracts, memory, and operational repeatability.
-- Python is tooling and diagnostics, not a live presentation hot path.
 - JSON is schema or diagnostic export, not live process/network data.
 - Missing synchronized feeds are explicit absence or placeholders, not stale or
   unsynchronized substitutions.
@@ -138,8 +137,8 @@ When VoidBot wakes Mimir for a heartbeat:
 
 1. Read `state/map.yaml`, `notes/fresh-workspace-handoff.md`,
    `notes/current-system-map.md`, and `docs/implementation-plan.md`.
-2. Run `tools/localcast_state.py status`.
-3. Check `git status --short --branch`.
+2. Check `git status --short --branch`.
+3. Read the tail of `state/evidence.jsonl`.
 4. Report only meaningful drift, completed work, blockers, or next bounded
    moves.
 5. If nothing changed, say so briefly and name the next useful cut.
@@ -164,9 +163,9 @@ These are the lessons Mimir should remember at birth:
 - Icon explorations and prompts live under `assets/branding/`.
 - The strongest avatar direction was the voxel-mask Face: mythic, symmetrical,
   sensor-rooted, and readable as a profile image.
-- The Python/OpenGL Spout publisher was deleted. Do not revive it.
-- Python producers, CultCache files, and JSON adapters are diagnostics or
-  migration fossils. They are not production runtime authority.
+- The deleted script-era presentation stack stays deleted. Do not revive it.
+- CultCache files and JSON adapters are diagnostics or migration fossils. They
+  are not production runtime authority.
 - `native/reservoir` is the first native foundation. It now uses one
   time-ordered rolling buffer with typed views.
 - `LocalcastRuntime` is the intended live spine. `LocalcastProducer` owns source

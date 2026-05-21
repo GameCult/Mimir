@@ -52,7 +52,7 @@ flowchart TD
   private buffers, or a parallel synchronization model.
 - Missing feeds become explicit absence or silent/blank placeholders inside the
   program model. Stale samples do not get stretched into looking current.
-- Python may inspect, calibrate, and test. It does not run the live hot path.
+- Calibration and diagnostics do not run the live hot path.
 
 ## First Viable Cut
 
@@ -126,7 +126,7 @@ to the driver, GPU, and capture APIs.
 
 Leap should be treated as the timing-camera candidate only when the native
 adapter preserves device timestamps or captures a monotonic timestamp
-immediately on frame receipt. Do not put OpenCV in the live ingest path.
+immediately on frame receipt.
 
 ## Cut Line
 

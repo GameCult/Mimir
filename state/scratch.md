@@ -20,6 +20,6 @@ No active scratch subgoal.
 - `MimirVideoFrameDescriptor` is the hot-path video descriptor for native camera
   workers. Leap stereo IR should push device timestamps/handles through it.
 - `IMimirVideoCaptureDriver` is the live driver seam. Future Leap/Windows
-  camera adapters should target that, not OpenCV.
+  camera adapters should target that.
 - Keep scratch short and disposable.
 - Promote only durable lessons into `state/evidence.jsonl` or the map.

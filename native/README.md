@@ -2,9 +2,6 @@
 
 This directory is for the hot path.
 
-Mimir Python remains useful for calibration, launch, status, contract
-tests, and offline analysis. It does not own dense live fusion or DSP.
-
 ## Crates
 
 - `reservoir`: the first native five-second spatiotemporal reservoir core. It
@@ -38,8 +35,7 @@ The reservoir ABI is intentionally small:
 
 ## Runtime ABI
 
-`LocalcastRuntime` is the live spine that should replace the Python file-cache
-runtime path:
+`LocalcastRuntime` is the live spine for Aquarium/Faust integration:
 
 - it owns one native reservoir;
 - it exposes typed producer functions for camera frames, camera features, scene

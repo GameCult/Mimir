@@ -87,16 +87,15 @@
       ]
     }
   },
-  "bridgeDemotion": {
-    "python": [
-      "calibration",
-      "contract-tests",
-      "device-discovery",
-      "status",
-      "compatibility-spout-diagnostics",
-      "offline-analysis"
+  "runtimePolicy": {
+    "liveOnlyIn": [
+      "Mimir.Runtime",
+      "native-driver-workers",
+      "native-reservoir",
+      "Aquarium.Engine",
+      "Faust"
     ],
-    "notPython": [
+    "neverInCompatibilityEdges": [
       "dense-feature-extraction",
       "reservoir-reconciliation",
       "hot-dsp",

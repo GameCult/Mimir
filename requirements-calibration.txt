@@ -1,9 +1,0 @@
-opencv-contrib-python
-tinytuya
-sounddevice
-soundcard
-scipy
-imageio-ffmpeg
-PyOpenGL
-SpoutGL
-msgpack
