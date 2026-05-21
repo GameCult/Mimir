@@ -554,3 +554,27 @@ Conclusion: the current USB topology can run the full intended local optical
 set: Leap stereo, Kiyo Pro, regular Kiyo, and both PS3 Eyes. The remaining
 limitation is Kiyo Pro cadence from high-speed USB negotiation, not whole-rig
 USB collapse.
+
+Follow-up with the regular Kiyo moved from the front panel to a rear port and a
+mouse moved into the Leap's USB neighborhood produced the same healthy full-set
+shape. The mouse did not disturb Leap cadence.
+
+Full local result with both PS3 Eyes at `320x240@187`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 110.84 |
+| Kiyo Pro | 1920x1080 MJPG | 25.08 |
+| Kiyo | 1920x1080 MJPG | 30.18 |
+| PS3 Eye 0 | 320x240 Bayer | 187.59 |
+| PS3 Eye 1 | 320x240 Bayer | 187.02 |
+
+Full local result with both PS3 Eyes at `640x480@60`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 110.76 |
+| Kiyo Pro | 1920x1080 MJPG | 25.14 |
+| Kiyo | 1920x1080 MJPG | 30.18 |
+| PS3 Eye 0 | 640x480 Bayer | 59.66 |
+| PS3 Eye 1 | 640x480 Bayer | 59.95 |

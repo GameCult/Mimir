@@ -146,7 +146,8 @@ current_status:
     Eyes at 320x240@187, the full set delivered Leap 110.84 fps, Kiyo Pro 25.08
     fps, Kiyo 30.18 fps, PS3 Eye 0 187.59 fps, and PS3 Eye 1 187.02 fps. With
     both Eyes at 640x480@60, it delivered Leap 110.76 fps, Kiyo Pro 25.14 fps,
-    Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps.
+    Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
+    the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
     runtime capture driver using the current viable local USB topology. Keep
