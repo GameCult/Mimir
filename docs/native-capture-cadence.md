@@ -393,3 +393,20 @@ Conclusion: isolating Leap at the root-hub level did not restore its solo
 loss is likely broader xHCI/controller scheduling, interrupt/CPU pressure, or
 the KS/usbvideo path under multi-device load rather than only a same-row port
 collision.
+
+After splitting cameras across Mimir and Raven, the local Mimir host had only
+LeapUVC, regular Kiyo, and one PS3 Eye enumerated. The local split did not
+restore Leap cadence:
+
+| Local active set | Leap FPS | Other delivered FPS |
+| --- | ---: | --- |
+| Leap + Kiyo + one PS3 Eye at 320x240@187 | 81.34 | Kiyo 30.27, PS3 Eye 185.56 |
+| Leap + Kiyo only | 82.77 | Kiyo 16.83 |
+| Leap only, baseline control scenario | 84.18 | n/a |
+| Leap only, best fast-combined scenario in that pass | 92.87 | n/a |
+
+Conclusion: offloading the Kiyo Pro and one PS3 Eye to Raven did not by itself
+cure the local Leap cadence loss. In this port/controller state, Leap is below
+its previous ~110.8 fps result even when measured alone, so the next check is
+Leap physical/controller state rather than assuming total local camera bandwidth
+was the only problem.

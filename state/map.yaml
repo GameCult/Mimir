@@ -117,6 +117,11 @@ current_status:
     root_hub30#7&18eea21b and one visible PS3 Eye used root_hub30#7&124f193f;
     Leap still delivered only 80.99 fps with the other visible cameras active,
     so the remaining loss is not explained by same-root-hub contention alone.
+    Splitting Kiyo Pro and one PS3 Eye to Raven left the Mimir host with
+    LeapUVC, regular Kiyo, and one PS3 Eye, but local cadence still stayed low:
+    Leap delivered 81.34 fps with Kiyo+Eye, 82.77 fps with Kiyo only, and only
+    84.18 fps in a same-session Leap-only baseline. The previous ~110.8 fps
+    Leap result is not currently reproduced.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
     runtime capture driver, then rerun the six-optical-sensor pull from repo
