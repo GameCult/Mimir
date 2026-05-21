@@ -112,7 +112,11 @@ current_status:
     57.60 fps. With both Eyes at 320x240@187, it delivered Leap stereo 81.05
     fps, Kiyo Pro 24.97 fps, Kiyo 30.28 fps, PS3 Eye 0 187.60 fps, and PS3
     Eye 1 187.03 fps. Kiyo Pro still negotiates high-speed USB, and Leap
-    remains topology-sensitive under shared load.
+    remains topology-sensitive under shared load. A follow-up moved Leap alone
+    onto the blue rear USB3 group/root_hub30#5 while both Kiyos shared
+    root_hub30#7&18eea21b and one visible PS3 Eye used root_hub30#7&124f193f;
+    Leap still delivered only 80.99 fps with the other visible cameras active,
+    so the remaining loss is not explained by same-root-hub contention alone.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
     runtime capture driver, then rerun the six-optical-sensor pull from repo

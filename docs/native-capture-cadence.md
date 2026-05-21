@@ -367,3 +367,29 @@ through the current direct-driver probes, with the Leap stereo pair delivered
 as one packed UVC frame. The PS3 Eyes are healthiest at `320x240@187`; at
 `640x480@60` they stay near target, but Leap drops farther. Leap is not yet a
 stable ground-truth timing camera under this shared USB topology.
+
+Follow-up port isolation test:
+
+- Leap was moved to be the only camera on the blue rear USB3 group.
+- Both Kiyos were moved to the red rear USB3 group.
+- The PS3 Eyes were moved to remaining front/back USB-A ports.
+- Windows then showed only one PS3 Eye enumerated.
+- Leap was on `root_hub30#5` port 3.
+- Kiyo Pro and regular Kiyo were both on `root_hub30#7&18eea21b`.
+- The visible PS3 Eye was on `root_hub30#7&124f193f` port 4.
+
+Visible-sensor simultaneous result with the isolated Leap topology and one PS3
+Eye at `320x240@187`:
+
+| Device | Mode | Delivered FPS |
+| --- | --- | ---: |
+| LeapUVC | 640x240 YUY2 | 80.99 |
+| Kiyo Pro | 1920x1080 MJPG | 24.93 |
+| Kiyo | 1920x1080 MJPG | 30.37 |
+| PS3 Eye 0 | 320x240 Bayer | 185.85 |
+
+Conclusion: isolating Leap at the root-hub level did not restore its solo
+~110 fps cadence while the other visible cameras were active. The remaining
+loss is likely broader xHCI/controller scheduling, interrupt/CPU pressure, or
+the KS/usbvideo path under multi-device load rather than only a same-row port
+collision.
