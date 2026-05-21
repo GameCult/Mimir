@@ -94,7 +94,8 @@ struct PinCandidate
 enum class ControlSet
 {
     Camera,
-    VideoProcAmp
+    VideoProcAmp,
+    ExtendedVideoHdr
 };
 
 struct SavedControl
@@ -198,16 +199,92 @@ bool setCameraControl(HANDLE filter, ULONG id, LONG value, ULONG flags)
 
 bool getControl(HANDLE filter, ControlSet set, ULONG id, LONG& value, ULONG& flags)
 {
-    return set == ControlSet::Camera
-        ? getCameraControl(filter, id, value, flags)
-        : getVideoProcAmp(filter, id, value, flags);
+    if (set == ControlSet::Camera)
+    {
+        return getCameraControl(filter, id, value, flags);
+    }
+
+    if (set == ControlSet::VideoProcAmp)
+    {
+        return getVideoProcAmp(filter, id, value, flags);
+    }
+
+    struct ExtendedVideoHdrProperty
+    {
+        KSCAMERA_EXTENDEDPROP_HEADER header;
+        KSCAMERA_EXTENDEDPROP_VALUE value;
+    };
+
+    KSPROPERTY property{};
+    property.Set = KSPROPERTYSETID_ExtendedCameraControl;
+    property.Id = KSPROPERTY_CAMERACONTROL_EXTENDED_VIDEOHDR;
+    property.Flags = KSPROPERTY_TYPE_GET;
+
+    ExtendedVideoHdrProperty data{};
+    bool ok = false;
+    const ULONG extendedPinIds[] = {KSCAMERA_EXTENDEDPROP_FILTERSCOPE, 0UL};
+    for (const ULONG pinId : extendedPinIds)
+    {
+        data = {};
+        data.header.Version = 1;
+        data.header.PinId = pinId;
+        data.header.Size = sizeof(data);
+        if (ksProperty(filter, &property, sizeof(property), &data, sizeof(data)))
+        {
+            ok = true;
+            break;
+        }
+    }
+
+    if (!ok)
+    {
+        return false;
+    }
+
+    value = static_cast<LONG>(data.header.Flags);
+    flags = static_cast<ULONG>(data.header.Capability);
+    return true;
 }
 
 bool setControl(HANDLE filter, ControlSet set, ULONG id, LONG value, ULONG flags)
 {
-    return set == ControlSet::Camera
-        ? setCameraControl(filter, id, value, flags)
-        : setVideoProcAmp(filter, id, value, flags);
+    if (set == ControlSet::Camera)
+    {
+        return setCameraControl(filter, id, value, flags);
+    }
+
+    if (set == ControlSet::VideoProcAmp)
+    {
+        return setVideoProcAmp(filter, id, value, flags);
+    }
+
+    struct ExtendedVideoHdrProperty
+    {
+        KSCAMERA_EXTENDEDPROP_HEADER header;
+        KSCAMERA_EXTENDEDPROP_VALUE value;
+    };
+
+    KSPROPERTY property{};
+    property.Set = KSPROPERTYSETID_ExtendedCameraControl;
+    property.Id = KSPROPERTY_CAMERACONTROL_EXTENDED_VIDEOHDR;
+    property.Flags = KSPROPERTY_TYPE_SET;
+
+    ExtendedVideoHdrProperty data{};
+    const ULONG extendedPinIds[] = {KSCAMERA_EXTENDEDPROP_FILTERSCOPE, 0UL};
+    for (const ULONG pinId : extendedPinIds)
+    {
+        data = {};
+        data.header.Version = 1;
+        data.header.PinId = pinId;
+        data.header.Size = sizeof(data);
+        data.header.Flags = static_cast<ULONGLONG>(value);
+        if (ksProperty(filter, &property, sizeof(property), &data, sizeof(data)))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void printKnownControls(HANDLE filter)
@@ -216,6 +293,7 @@ void printKnownControls(HANDLE filter)
         {"camera.zoom/exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_ZOOM, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
         {"camera.exposure", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_EXPOSURE, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
         {"camera.auto-exposure-priority/low-light", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_AUTO_EXPOSURE_PRIORITY, 0, KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL},
+        {"extended.video-hdr", ControlSet::ExtendedVideoHdr, KSPROPERTY_CAMERACONTROL_EXTENDED_VIDEOHDR, 0, 0},
         {"procamp.contrast/hdr-led", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_CONTRAST, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
         {"procamp.gamma", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_GAMMA, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
         {"procamp.brightness/digital-gain", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_BRIGHTNESS, 0, KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL},
@@ -884,6 +962,7 @@ int main(int argc, char** argv)
             const ULONG procManual = KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL;
             const std::vector<ControlScenario> webcamScenarios = {
                 {"baseline", {}},
+                {"extended video HDR off", {{"extended.video-hdr", ControlSet::ExtendedVideoHdr, KSPROPERTY_CAMERACONTROL_EXTENDED_VIDEOHDR, static_cast<LONG>(KSCAMERA_EXTENDEDPROP_VIDEOHDR_OFF), 0}}},
                 {"low-light compensation off", {{"camera.auto-exposure-priority/low-light", ControlSet::Camera, KSPROPERTY_CAMERACONTROL_AUTO_EXPOSURE_PRIORITY, 0, camManual}}},
                 {"powerline disabled", {{"procamp.powerline-frequency", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY, 0, procManual}}},
                 {"powerline 50hz", {{"procamp.powerline-frequency", ControlSet::VideoProcAmp, KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY, 1, procManual}}},

@@ -193,3 +193,18 @@ properties are not enough to recover 60 fps locally. Powerline `60Hz` moves the
 needle only to about 29 fps. The next investigation should compare this direct
 KS path with Synapse/OBS and inspect whether the firmware exposes a vendor or
 extension control that selects the real 60 fps profile.
+
+HDR follow-up:
+
+- the probe now tries `KSPROPERTY_CAMERACONTROL_EXTENDED_VIDEOHDR` with both
+  filter-scope and pin-0 extended-property headers;
+- the Kiyo Pro reports `ERROR_FILE_NOT_FOUND` / `Element not found`;
+- setting extended Video HDR off also reports `Element not found`;
+- measured cadence is unchanged at about 25 fps for both `720p MJPG` and
+  `1080p MJPG`.
+
+Conclusion: HDR may still be part of the Razer/Synapse control story, but it is
+not exposed through the standard Windows extended Video HDR KS property on this
+device path. The next useful cut is vendor-extension enumeration or an
+OBS/Synapse comparison to see whether Razer flips a private UVC extension before
+opening the real 60 fps stream.

@@ -92,9 +92,10 @@ current_status:
     same KS path even with manual exposure tuning. Online reports and local
     control tests point at Kiyo Pro firmware/Synapse/anti-flicker or extension
     control state: standard KS low-light compensation off does not restore 60
-    fps, and powerline 60Hz only raises Pro cadence to about 29 fps.
+    fps, powerline 60Hz only raises Pro cadence to about 29 fps, and standard
+    extended Video HDR is not exposed on this KS path.
   next_action: >
     Turn the warmed, queued Leap KS path into an `IMimirVideoCaptureDriver`,
     preserve direct control hooks for timing-camera state, and decide whether
-    Kiyo Pro needs Synapse/OBS comparison, vendor extension control inspection,
-    or firmware reset before it joins the six-camera capture set.
+    Kiyo Pro needs Synapse/OBS comparison, vendor extension enumeration, or
+    firmware reset before it joins the six-camera capture set.
