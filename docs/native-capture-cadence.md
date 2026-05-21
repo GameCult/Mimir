@@ -264,3 +264,16 @@ cadence. Because Windows still reports `UsbHighSpeed`, verify the cable and
 port path before assuming the private firmware selectors are guilty. If the
 same 25 fps lock remains after `UsbSuperSpeed` is confirmed, the next cut is
 explicit frame-interval negotiation or cautious vendor-selector tracing.
+
+Second motherboard USB3 port check:
+
+- Moving the Kiyo Pro to another motherboard USB3 port changed the composite
+  device to `Port_#0008.Hub_#0003` on the same AMD `ROOT_HUB30`.
+- The descriptor path remains `bcdUSB=0x0320`, but the negotiated connection
+  speed is still `UsbHighSpeed(2)`, not `UsbSuperSpeed(3)`.
+- The full cadence run was not repeated because the link state is still the
+  same high-speed fallback state that measured about 25 fps across formats.
+
+Conclusion: two motherboard USB3 ports have now failed to negotiate SuperSpeed
+with the Kiyo Pro's stock cable. The next useful physical test is a known-good
+USB3 data cable or a known-good SuperSpeed device on the same ports.
