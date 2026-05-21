@@ -126,10 +126,14 @@ current_status:
     95.48 fps, best full-height scenario to 101.67 fps, and the local split set
     delivered Leap 105.10 fps, regular Kiyo 30.17 fps, and one PS3 Eye 185.81
     fps. The split-host layout is viable if the Leap's USB neighborhood stays
-    free of the Focusrite and other heavy devices.
+    free of the Focusrite and other heavy devices. Raven's PS3 Eye raw interface
+    now has the same libwdi WinUSB binding as the local Eye and can be opened by
+    the copied cadence probe, but Raven Eye cadence is currently unusable:
+    320x240@187 delivered 132.24 fps then 78.93 fps, and 640x480@60 delivered
+    6.32 fps with multi-second gaps.
   next_action: >
     Move the raw PS3 Eye probe into the repo or replace it with the first
-    runtime capture driver, then rerun the six-optical-sensor pull from repo
-    probes after deliberate USB topology changes. Keep high-rate cameras split
-    across controllers/hubs deliberately, because current shared-load tests show
-    Leap is no longer a stable timing authority under the present USB topology.
+    runtime capture driver, then isolate Raven's PS3 Eye port/controller until
+    its raw WinUSB cadence is stable. Keep high-rate cameras split across
+    controllers/hubs deliberately, because current shared-load tests show Leap
+    and the Eyes are sensitive to non-camera USB neighbors.

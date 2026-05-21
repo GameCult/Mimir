@@ -425,3 +425,35 @@ Conclusion: the split-host local set is viable when the Focusrite is not on the
 Leap's USB neighborhood. Full-height Leap stereo is still a little below the
 old ~110.8 fps best result, but the catastrophic ~81 fps band was caused by the
 local USB layout, not by needing every camera off the machine.
+
+## 2026-05-21: Raven PS3 Eye Driver Bring-Up
+
+Raven initially enumerated the PS3 Eye composite and media interfaces, but the
+raw `VID_1415&PID_2000&MI_00` camera interface had no driver binding and showed
+`Error`.
+
+The working Mimir host binding was exported and installed on Raven:
+
+- provider: `libwdi`;
+- service: `WinUSB`;
+- local source INF: `oem26.inf`;
+- Raven published INF: `oem34.inf`;
+- device interface GUID from the INF: `{6ACBF2FC-1246-418C-A63D-0FE38B45129B}`.
+
+The libwdi self-signed catalog certificate had to be copied to Raven and added
+to both `Root` and `TrustedPublisher` before `pnputil /add-driver ... /install`
+would accept the package.
+
+After binding, Raven's raw Eye interface reported `OK` and the copied
+`ps3eye_dual_cadence.exe` could open the camera. Cadence is not yet viable:
+
+| Raven PS3 Eye Mode | Delivered FPS | Notes |
+| --- | ---: | --- |
+| 320x240@187 | 132.24 | first run, max gap 202.841 ms |
+| 320x240@187 | 78.93 | second run, max gap 283.247 ms |
+| 640x480@60 | 6.32 | max gap 2998.965 ms |
+
+Conclusion: Raven's PS3 Eye driver binding is fixed enough to open the device,
+but the current Raven USB path/device state is not delivering usable cadence.
+Next Raven work is port/controller isolation and a clean single-process cadence
+run before treating the Eye as a usable remote timing witness.
