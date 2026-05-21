@@ -69,20 +69,20 @@ Probe source:
 
 - `native/probes/leap_ks_cadence`
 
-Advertised modes and measured single-buffer pull rates:
+Advertised modes and measured queued KS pull rates:
 
 | Mode | Advertised FPS | Frames | Elapsed | Delivered FPS | Bytes / Frame |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 752x480 YUY2 | 50.00 | 173 | 5.002s | 34.58 | 721,920 |
-| 640x480 YUY2 | 57.50 | 203 | 5.019s | 40.45 | 614,400 |
-| 640x240 YUY2 | 115.00 | 415 | 5.003s | 82.95 | 307,200 |
-| 640x120 YUY2 | 214.00 | 778 | 5.006s | 155.40 | 153,600 |
-| 752x240 YUY2 | 100.00 | 293 | 5.004s | 58.55 | 360,960 |
-| 752x120 YUY2 | 190.00 | 592 | 5.006s | 118.27 | 180,480 |
+| 752x480 YUY2 | 50.00 | 173 | 5.008s | 34.55 | 721,920 |
+| 640x480 YUY2 | 57.50 | 204 | 5.017s | 40.66 | 614,400 |
+| 640x240 YUY2 | 115.00 | 415 | 5.004s | 82.93 | 307,200 |
+| 640x120 YUY2 | 214.00 | 777 | 5.000s | 155.39 | 153,600 |
+| 752x240 YUY2 | 100.00 | 308 | 5.013s | 61.44 | 360,960 |
+| 752x120 YUY2 | 190.00 | 589 | 5.008s | 117.62 | 180,480 |
 
 Conclusion: the current direct KS probe can pull real frames from LeapUVC, but
-the simple one-buffer blocking read loop does not reach the device's advertised
+even eight queued asynchronous reads do not reach the device's advertised
 cadence. The useful stereo IR mode is `640x240 YUY2`, advertised at 115 fps and
-currently measured at about 83 fps with this minimal read loop. The next cut
-should implement a proper queued KS/AVStream worker, or deliberately rebind to a
+currently measured at about 83 fps. The next cut should either tune LeapUVC
+controls that affect exposure/frame interval or deliberately rebind to a
 WinUSB/libusb UVC path if we decide the Windows UVC stack is the bottleneck.

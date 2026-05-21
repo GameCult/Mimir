@@ -3,13 +3,12 @@
 #include <setupapi.h>
 #include <ks.h>
 #include <ksmedia.h>
+#include <winternl.h>
 
 #include <chrono>
-#include <atomic>
 #include <cstring>
 #include <cstdint>
 #include <cstdio>
-#include <thread>
 #include <string>
 #include <vector>
 
@@ -39,15 +38,29 @@ struct Handle
 
     void close()
     {
-        if (value != INVALID_HANDLE_VALUE)
+        if (value != INVALID_HANDLE_VALUE && value != nullptr)
         {
             CloseHandle(value);
             value = INVALID_HANDLE_VALUE;
         }
     }
 
-    explicit operator bool() const { return value != INVALID_HANDLE_VALUE; }
+    explicit operator bool() const { return value != INVALID_HANDLE_VALUE && value != nullptr; }
 };
+
+using NtDeviceIoControlFileFn = NTSTATUS(NTAPI*)(
+    HANDLE FileHandle,
+    HANDLE Event,
+    PIO_APC_ROUTINE ApcRoutine,
+    PVOID ApcContext,
+    PIO_STATUS_BLOCK IoStatusBlock,
+    ULONG IoControlCode,
+    PVOID InputBuffer,
+    ULONG InputBufferLength,
+    PVOID OutputBuffer,
+    ULONG OutputBufferLength);
+
+constexpr NTSTATUS StatusPending = static_cast<NTSTATUS>(0x00000103L);
 
 struct DeviceInfoSet
 {
@@ -382,7 +395,7 @@ std::vector<PinCandidate> inspectPins(HANDLE filter)
     return candidates;
 }
 
-bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int readerCount)
+bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int queueDepth)
 {
     const ULONG connectBytes = sizeof(KSPIN_CONNECT) + static_cast<ULONG>(candidate.format.size());
     std::vector<std::uint8_t> connectStorage(connectBytes);
@@ -424,75 +437,188 @@ bool measureCandidate(HANDLE filter, const PinCandidate& candidate, int readerCo
         return false;
     }
 
-    const DWORD frameBytes = static_cast<DWORD>(candidate.imageBytes > 0 ? candidate.imageBytes : candidate.width * candidate.height * 2);
-    const auto start = std::chrono::steady_clock::now();
-    const auto deadline = start + std::chrono::seconds(5);
-    std::atomic<std::uint64_t> frames = 0;
-    std::atomic<bool> failed = false;
-    std::vector<std::thread> readers;
-
-    for (int reader = 0; reader < readerCount; ++reader)
+    auto* ntDeviceIoControlFile = reinterpret_cast<NtDeviceIoControlFileFn>(
+        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtDeviceIoControlFile"));
+    if (!ntDeviceIoControlFile)
     {
-        readers.emplace_back([&, reader]()
-        {
-            std::vector<std::uint8_t> frame(frameBytes);
-            KSSTREAM_HEADER header{};
-            header.Size = sizeof(header);
-            header.FrameExtent = frameBytes;
-            header.Data = frame.data();
-            header.PresentationTime.Numerator = 1;
-            header.PresentationTime.Denominator = 1;
-
-            while (!failed.load(std::memory_order_relaxed) && std::chrono::steady_clock::now() < deadline)
-            {
-                header.DataUsed = 0;
-                header.OptionsFlags = 0;
-                DWORD returned = 0;
-                const BOOL ok = DeviceIoControl(
-                    pin.value,
-                    IOCTL_KS_READ_STREAM,
-                    &header,
-                    sizeof(header),
-                    &header,
-                    sizeof(header),
-                    &returned,
-                    nullptr);
-                if (!ok || header.DataUsed == 0)
-                {
-                    failed.store(true, std::memory_order_relaxed);
-                    std::printf(
-                        "reader %d failed after %llu frames: ok=%d dataUsed=%lu bytesReturned=%lu error=%s\n",
-                        reader,
-                        static_cast<unsigned long long>(frames.load()),
-                        ok != FALSE,
-                        static_cast<unsigned long>(header.DataUsed),
-                        static_cast<unsigned long>(returned),
-                        lastErrorText().c_str());
-                    break;
-                }
-
-                frames.fetch_add(1, std::memory_order_relaxed);
-            }
-        });
+        std::printf("NtDeviceIoControlFile lookup failed.\n");
+        return false;
     }
 
-    for (auto& reader : readers)
+    const DWORD frameBytes = static_cast<DWORD>(candidate.imageBytes > 0 ? candidate.imageBytes : candidate.width * candidate.height * 2);
+
+    struct ReadSlot
     {
-        reader.join();
+        Handle event;
+        IO_STATUS_BLOCK status{};
+        KSSTREAM_HEADER header{};
+        std::vector<std::uint8_t> frame;
+        bool pending = false;
+    };
+
+    std::vector<ReadSlot> slots(static_cast<std::size_t>(queueDepth));
+    std::vector<HANDLE> waitEvents(static_cast<std::size_t>(queueDepth));
+    for (int index = 0; index < queueDepth; ++index)
+    {
+        auto& slot = slots[static_cast<std::size_t>(index)];
+        slot.event = Handle(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        if (!slot.event)
+        {
+            std::printf("CreateEvent failed: %s\n", lastErrorText().c_str());
+            return false;
+        }
+
+        slot.frame.resize(frameBytes);
+        slot.header.Size = sizeof(KSSTREAM_HEADER);
+        slot.header.FrameExtent = frameBytes;
+        slot.header.Data = slot.frame.data();
+        slot.header.PresentationTime.Numerator = 1;
+        slot.header.PresentationTime.Denominator = 1;
+        waitEvents[static_cast<std::size_t>(index)] = slot.event.value;
+    }
+
+    auto submit = [&](ReadSlot& slot, std::uint64_t frameCount) -> bool
+    {
+        ResetEvent(slot.event.value);
+        slot.status = {};
+        slot.header.DataUsed = 0;
+        slot.header.OptionsFlags = 0;
+        const NTSTATUS status = ntDeviceIoControlFile(
+            pin.value,
+            slot.event.value,
+            nullptr,
+            nullptr,
+            &slot.status,
+            IOCTL_KS_READ_STREAM,
+            &slot.header,
+            sizeof(slot.header),
+            &slot.header,
+            sizeof(slot.header));
+
+        if (status == StatusPending)
+        {
+            slot.pending = true;
+            return true;
+        }
+
+        if (status >= 0)
+        {
+            slot.pending = false;
+            if (slot.header.DataUsed == 0)
+            {
+                std::printf(
+                    "NtDeviceIoControlFile returned no payload after %llu frames; status=0x%08lx information=%llu\n",
+                    static_cast<unsigned long long>(frameCount),
+                    static_cast<unsigned long>(status),
+                    static_cast<unsigned long long>(slot.status.Information));
+                return false;
+            }
+            return true;
+        }
+
+        slot.pending = false;
+        std::printf(
+            "NtDeviceIoControlFile failed after %llu frames: status=0x%08lx\n",
+            static_cast<unsigned long long>(frameCount),
+            static_cast<unsigned long>(status));
+        return false;
+    };
+
+    const auto start = std::chrono::steady_clock::now();
+    const auto deadline = start + std::chrono::seconds(5);
+    std::uint64_t frames = 0;
+    bool usingPendingReads = false;
+
+    for (auto& slot : slots)
+    {
+        if (!submit(slot, frames))
+        {
+            setState(pin.value, KSSTATE_STOP);
+            return frames > 0;
+        }
+        if (slot.pending)
+        {
+            usingPendingReads = true;
+        }
+        else
+        {
+            ++frames;
+        }
+    }
+
+    if (!usingPendingReads)
+    {
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            if (!submit(slots.front(), frames))
+            {
+                break;
+            }
+            if (slots.front().pending)
+            {
+                usingPendingReads = true;
+                break;
+            }
+            ++frames;
+        }
+    }
+
+    while (usingPendingReads && std::chrono::steady_clock::now() < deadline)
+    {
+        const DWORD waitResult = WaitForMultipleObjects(
+            static_cast<DWORD>(waitEvents.size()),
+            waitEvents.data(),
+            FALSE,
+            1000);
+        if (waitResult < WAIT_OBJECT_0 || waitResult >= WAIT_OBJECT_0 + waitEvents.size())
+        {
+            std::printf("WaitForMultipleObjects failed or timed out after %llu frames: result=0x%08lx error=%s\n", static_cast<unsigned long long>(frames), static_cast<unsigned long>(waitResult), lastErrorText().c_str());
+            break;
+        }
+
+        auto& slot = slots[static_cast<std::size_t>(waitResult - WAIT_OBJECT_0)];
+        slot.pending = false;
+        if (slot.status.Status < 0 || slot.header.DataUsed == 0)
+        {
+            std::printf(
+                "queued read failed after %llu frames: status=0x%08lx dataUsed=%lu information=%llu\n",
+                static_cast<unsigned long long>(frames),
+                static_cast<unsigned long>(slot.status.Status),
+                static_cast<unsigned long>(slot.header.DataUsed),
+                static_cast<unsigned long long>(slot.status.Information));
+            break;
+        }
+
+        ++frames;
+        if (std::chrono::steady_clock::now() < deadline)
+        {
+            if (!submit(slot, frames))
+            {
+                break;
+            }
+        }
     }
 
     const auto end = std::chrono::steady_clock::now();
     setState(pin.value, KSSTATE_STOP);
+    for (auto& slot : slots)
+    {
+        if (slot.pending)
+        {
+            WaitForSingleObject(slot.event.value, 100);
+            slot.pending = false;
+        }
+    }
 
     const double elapsed = std::chrono::duration<double>(end - start).count();
-    const auto frameCount = frames.load(std::memory_order_relaxed);
-    const double fps = static_cast<double>(frameCount) / elapsed;
+    const double fps = static_cast<double>(frames) / elapsed;
     std::printf(
-        "measured: %llu frames in %.3fs = %.2f fps, readers=%d, bytes/frame=%lu\n",
-        static_cast<unsigned long long>(frameCount),
+        "measured: %llu frames in %.3fs = %.2f fps, queueDepth=%d, async=%s, bytes/frame=%lu\n",
+        static_cast<unsigned long long>(frames),
         elapsed,
         fps,
-        readerCount,
+        queueDepth,
+        usingPendingReads ? "yes" : "no",
         static_cast<unsigned long>(frameBytes));
     return true;
 }
@@ -543,7 +669,7 @@ int main()
                 candidate.bitCount,
                 fourccOrGuid(candidate.subtype).c_str(),
                 candidate.interval100ns > 0 ? 10000000.0 / static_cast<double>(candidate.interval100ns) : 0.0);
-            measuredAny = measureCandidate(filter.value, candidate, 1) || measuredAny;
+            measuredAny = measureCandidate(filter.value, candidate, 8) || measuredAny;
         }
 
         return measuredAny ? 0 : 4;

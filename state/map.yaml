@@ -83,9 +83,9 @@ current_status:
     57-59 fps each at 640x480. A native Kernel Streaming LeapUVC probe can pull
     frames through usbvideo.sys without Media Foundation, DirectShow, OpenCV, or
     frame processing; the useful 640x240 stereo IR mode advertises 115 fps and
-    currently measures about 83 fps with a minimal one-buffer blocking read.
+    currently measures about 83 fps even with eight queued asynchronous KS reads.
   next_action: >
-    Replace the minimal Leap KS read loop with a proper queued streaming worker,
-    then turn the proven Leap and PS3 Eye capture shapes into
-    `IMimirVideoCaptureDriver` implementations that feed measured frames into
-    `MimirSynchronizationHub`.
+    Test LeapUVC control tuning for exposure/frame interval, then either turn
+    the queued KS path into an `IMimirVideoCaptureDriver` or make an explicit
+    WinUSB/libusb UVC driver-rebind decision if usbvideo.sys remains the
+    bottleneck.
