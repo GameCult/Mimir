@@ -49,13 +49,40 @@ At 640x480 they are roughly 57-59 fps.
 The probe reported one unrelated invalid USB descriptor from
 `USB\VID_0000&PID_0002`; it did not prevent PS3 Eye capture.
 
-## Leap Status
+## 2026-05-21: LeapUVC Kernel Streaming Probe
 
 The Leap Motion Controller is currently present as `VID_F182&PID_0003` and bound
 to `usbvideo.sys`, which means the active mode is LeapUVC/UVC. That mode is
 mutually exclusive with the Ultraleap SDK path for this device.
 
-No close-to-metal Leap frame number has been measured in Mimir yet. The next
-probe should use UVC/KS or a deliberately chosen LeapUVC route and should record
-delivered stereo IR frames, device/embedded timestamps when available, and
-arrival jitter over the same five-second window.
+Probe path:
+
+- Windows Kernel Streaming capture interface for `KSCATEGORY_CAPTURE`;
+- LeapUVC through `usbvideo.sys`;
+- no Media Foundation;
+- no DirectShow graph;
+- no OpenCV;
+- no frame processing;
+- five-second measurement window per advertised mode.
+
+Probe source:
+
+- `native/probes/leap_ks_cadence`
+
+Advertised modes and measured single-buffer pull rates:
+
+| Mode | Advertised FPS | Frames | Elapsed | Delivered FPS | Bytes / Frame |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 752x480 YUY2 | 50.00 | 173 | 5.002s | 34.58 | 721,920 |
+| 640x480 YUY2 | 57.50 | 203 | 5.019s | 40.45 | 614,400 |
+| 640x240 YUY2 | 115.00 | 415 | 5.003s | 82.95 | 307,200 |
+| 640x120 YUY2 | 214.00 | 778 | 5.006s | 155.40 | 153,600 |
+| 752x240 YUY2 | 100.00 | 293 | 5.004s | 58.55 | 360,960 |
+| 752x120 YUY2 | 190.00 | 592 | 5.006s | 118.27 | 180,480 |
+
+Conclusion: the current direct KS probe can pull real frames from LeapUVC, but
+the simple one-buffer blocking read loop does not reach the device's advertised
+cadence. The useful stereo IR mode is `640x240 YUY2`, advertised at 115 fps and
+currently measured at about 83 fps with this minimal read loop. The next cut
+should implement a proper queued KS/AVStream worker, or deliberately rebind to a
+WinUSB/libusb UVC path if we decide the Windows UVC stack is the bottleneck.

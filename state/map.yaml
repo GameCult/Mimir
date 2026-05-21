@@ -80,9 +80,12 @@ current_status:
     the working tree. Research archives remain as reference-only memory for raw
     native/GPU implementation shape. A raw PS3 Eye libusb/WinUSB cadence probe
     measured both PS3 Eyes simultaneously at about 183 fps each at 320x240 and
-    57-59 fps each at 640x480. Leap is present in LeapUVC/UVC mode but still
-    needs a raw UVC/KS cadence probe.
+    57-59 fps each at 640x480. A native Kernel Streaming LeapUVC probe can pull
+    frames through usbvideo.sys without Media Foundation, DirectShow, OpenCV, or
+    frame processing; the useful 640x240 stereo IR mode advertises 115 fps and
+    currently measures about 83 fps with a minimal one-buffer blocking read.
   next_action: >
-    Build the LeapUVC/UVC cadence probe, then turn the PS3 Eye raw USB probe
-    shape into an `IMimirVideoCaptureDriver` implementation that feeds measured
-    frames into `MimirSynchronizationHub`.
+    Replace the minimal Leap KS read loop with a proper queued streaming worker,
+    then turn the proven Leap and PS3 Eye capture shapes into
+    `IMimirVideoCaptureDriver` implementations that feed measured frames into
+    `MimirSynchronizationHub`.
