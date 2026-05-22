@@ -12,4 +12,5 @@ target_compile_definitions(wasapi_audio_cadence PRIVATE
     _WIN32_WINNT=0x0A00)
 target_link_libraries(wasapi_audio_cadence PRIVATE
     ole32
-    avrt)
+    avrt
+    crypt32)

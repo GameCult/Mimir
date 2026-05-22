@@ -153,6 +153,8 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
         }
         var sequence = frameEvent.Sequence ?? fallbackSequence++;
 
+        var data = DecodePayload(frameEvent.SamplesBase64, byteLength);
+
         sample = new MimirStreamSample(
             sourceId,
             sampleKind,
@@ -162,10 +164,28 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
             sequence,
             payloadHandle,
             byteLength,
-            default,
+            data,
             videoFrame,
             audioBlock);
         return true;
+    }
+
+    private static ReadOnlyMemory<byte> DecodePayload(string? base64, int expectedBytes)
+    {
+        if (string.IsNullOrWhiteSpace(base64))
+        {
+            return default;
+        }
+
+        try
+        {
+            var data = Convert.FromBase64String(base64);
+            return expectedBytes <= 0 || data.Length == expectedBytes ? data : default;
+        }
+        catch (FormatException)
+        {
+            return default;
+        }
     }
 
     private bool AcceptsSourceId(string sourceId)
@@ -307,6 +327,8 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
         public string SampleFormat { get; set; } = "";
 
         public int FrameCount { get; set; }
+
+        public string? SamplesBase64 { get; set; }
 
         public ulong NativeHandle { get; set; }
 

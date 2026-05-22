@@ -109,6 +109,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Last poll", () => $"{lastPollCount} samples");
                 panel.Readout("Ingested", () => $"{synchronization.IngestedSamples}");
                 panel.Readout("Buffer details", DescribeBuffers);
+                panel.Readout("Audio sync", DescribeAudioSync);
             });
     }
 
@@ -131,5 +132,13 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         return $"{buffer.Descriptor.SourceId}: {buffer.Count} edge {buffer.EdgeNs}";
+    }
+
+    private string DescribeAudioSync()
+    {
+        var reports = synchronization.AnalyzeAudioSynchronization("mic-focusrite-local");
+        return reports.Count == 0
+            ? "no payload windows"
+            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.DelaySamples} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00}"));
     }
 }

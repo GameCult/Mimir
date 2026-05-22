@@ -39,6 +39,9 @@ a named invariant that the native runtime cannot protect yet.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter.
+- `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
+  sample-bearing audio blocks can be cross-correlated against
+  `mic-focusrite-local` to estimate current delay and confidence.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -72,11 +75,13 @@ a named invariant that the native runtime cannot protect yet.
    frame cadence in the rolling buffers.
 3. Replace the WASAPI frame-event diagnostic bridge with native audio capture
    workers for local mic, loopback, and network audio feeds.
-4. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
+4. Add the synchronization actuator: smooth delay/SRO estimates, then drive a
+   variable-rate resampler and fractional delay line per non-reference stream.
+5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-5. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+6. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Aquarium.
-6. Move mic alignment, room suppression, voice separation, spatialization, and
+7. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-7. Keep the OBS bridge witness ledger as evidence before expanding receiver
+8. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

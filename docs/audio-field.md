@@ -42,6 +42,12 @@ USB Camera / PS3 Eye mics, and Scarlett speaker loopback in rolling buffers when
 loopback audio is actively playing. One PS3 Eye mic previously enumerated but
 produced zero WASAPI packets until that Eye was unplugged and replugged.
 
+`config/mimir-runtime.sync-smoke.example.json` enables sample-bearing blocks for
+the Focusrite reference and one PS3 Eye mic. `MimirAudioSynchronizationAnalyzer`
+uses those payloads to estimate current delay by normalized cross-correlation.
+This is the measurement half of the old synchronization machine; adaptive
+resampling and fractional-delay correction are still the next cut.
+
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
 delay estimates, and stem routing in Aquarium UI.

@@ -59,6 +59,10 @@ accepted_design:
     JSON-line video frame and audio block metadata from native probes into
     runtime rolling buffers; it does not carry pixels/audio payloads or own the
     final local-device hot path.
+  - The diagnostic audio path can optionally carry base64 float sample payloads
+    for sync smoke tests. `MimirAudioSynchronizationAnalyzer` estimates current
+    delay against `mic-focusrite-local` from those payload-bearing rolling
+    buffers.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
@@ -155,13 +159,17 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Replace the diagnostic JSON-line process bridge with direct native capture
-    drivers that push buffer handles into Mimir.Runtime. Current
+    Add the synchronization actuator after the current measurement loop:
+    smooth delay/SRO estimates, then drive variable-rate resampling and
+    fractional-delay correction per non-reference stream. Replace the diagnostic
+    JSON-line process bridge with direct native capture drivers that push buffer
+    handles into Mimir.Runtime. Current
     Mimir.BufferSmoke with `--require-samples` proves all five declared local
     optical buffers plus Focusrite mic, Kiyo Pro mic, Kiyo mic, one USB Camera
     mic, both PS3 Eye mics, and active Scarlett speaker loopback receive
     samples. One PS3 Eye mic previously enumerated OK but emitted zero WASAPI
     packets; unplug/replug fixed the audio stream without changing that Eye's
-    MI_00 camera binding from WinUSB/libwdi to libusbK. Keep the Focusrite away
-    from the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until
-    its SuperSpeed negotiation is fixed.
+    MI_00 camera binding from WinUSB/libwdi to libusbK. A two-mic payload sync
+    smoke reports live Focusrite-to-PS3-Eye delay by cross-correlation. Keep the
+    Focusrite away from the Leap USB neighborhood and treat Kiyo Pro as a ~25
+    fps source until its SuperSpeed negotiation is fixed.

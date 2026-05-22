@@ -4,6 +4,7 @@
 #include <functiondiscoverykeys_devpkey.h>
 #include <avrt.h>
 #include <ksmedia.h>
+#include <wincrypt.h>
 
 #include <chrono>
 #include <cstdio>
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <cwchar>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -147,6 +149,33 @@ const char* option(int argc, char** argv, const char* name, const char* fallback
     return fallback;
 }
 
+std::string base64(const BYTE* data, DWORD byteLength)
+{
+    DWORD chars = 0;
+    if (byteLength == 0)
+    {
+        return {};
+    }
+
+    if (!CryptBinaryToStringA(data, byteLength, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &chars) || chars == 0)
+    {
+        return {};
+    }
+
+    std::string encoded(chars, '\0');
+    if (!CryptBinaryToStringA(data, byteLength, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded.data(), &chars))
+    {
+        return {};
+    }
+
+    if (!encoded.empty() && encoded.back() == '\0')
+    {
+        encoded.pop_back();
+    }
+
+    return encoded;
+}
+
 void listEndpoints(IMMDeviceEnumerator* enumerator)
 {
     for (const auto flow : { eCapture, eRender })
@@ -243,6 +272,7 @@ int main(int argc, char** argv)
     const char* sourceId = option(argc, argv, "--source-id", loopback ? "host-loopback" : "host-mic");
     const double seconds = std::atof(option(argc, argv, "--seconds", "0"));
     const bool emitJsonBlocks = hasArg(argc, argv, "--emit-json-blocks");
+    const bool includeSamples = hasArg(argc, argv, "--include-samples");
     const EDataFlow flow = loopback ? eRender : eCapture;
 
     ComPtr<IMMDevice> device;
@@ -338,8 +368,17 @@ int main(int argc, char** argv)
             ++sequence;
             if (emitJsonBlocks)
             {
+                std::vector<BYTE> silentBytes;
+                const BYTE* payload = data;
+                if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0)
+                {
+                    silentBytes.assign(static_cast<std::size_t>(byteLength), 0);
+                    payload = silentBytes.data();
+                }
+
+                const std::string encoded = includeSamples ? base64(payload, static_cast<DWORD>(byteLength)) : std::string();
                 std::printf(
-                    "{\"type\":\"audio-block\",\"sourceId\":\"%s\",\"timestampNs\":%lld,\"sequence\":%llu,\"sampleRate\":%lu,\"channels\":%u,\"sampleFormat\":\"%s\",\"frameCount\":%u,\"byteLength\":%d}\n",
+                    "{\"type\":\"audio-block\",\"sourceId\":\"%s\",\"timestampNs\":%lld,\"sequence\":%llu,\"sampleRate\":%lu,\"channels\":%u,\"sampleFormat\":\"%s\",\"frameCount\":%u,\"byteLength\":%d",
                     sourceId,
                     nowNs(),
                     sequence,
@@ -348,6 +387,11 @@ int main(int argc, char** argv)
                     format.c_str(),
                     static_cast<unsigned>(frames),
                     byteLength);
+                if (includeSamples)
+                {
+                    std::printf(",\"samplesBase64\":\"%s\"", encoded.c_str());
+                }
+                std::printf("}\n");
             }
 
             captureClient->ReleaseBuffer(frames);

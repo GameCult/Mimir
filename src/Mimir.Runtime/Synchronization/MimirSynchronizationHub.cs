@@ -3,6 +3,7 @@ namespace Mimir.Runtime.Synchronization;
 public sealed class MimirSynchronizationHub : IDisposable
 {
     private readonly List<IMimirStreamSource> sources = [];
+    private readonly MimirAudioSynchronizationAnalyzer audioSynchronization = new();
     private ulong ingestedSamples;
 
     public MimirSynchronizationHub(MimirSynchronizationSettings settings)
@@ -55,6 +56,12 @@ public sealed class MimirSynchronizationHub : IDisposable
         var audio = Buffers.Buffers.Count(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio);
         var video = Buffers.Buffers.Count(buffer => buffer.Descriptor.Kind == MimirStreamKind.Video);
         return $"{video} video / {audio} audio buffers";
+    }
+
+    public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronization(string referenceSourceId)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        return audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId);
     }
 
     private bool disposed;

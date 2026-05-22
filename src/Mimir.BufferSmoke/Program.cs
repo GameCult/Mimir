@@ -47,6 +47,13 @@ foreach (var buffer in hub.Buffers.Buffers.OrderBy(buffer => buffer.Descriptor.S
     }
 }
 
+var reports = hub.AnalyzeAudioSynchronization("mic-focusrite-local");
+foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
+{
+    Console.WriteLine(
+        $"sync {report.ReferenceSourceId}->{report.SourceId}: delaySamples={report.DelaySamples} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} compared={report.ComparedSamples}");
+}
+
 if (requireSamples && emptyBuffers.Count > 0)
 {
     Console.Error.WriteLine($"empty buffers: {string.Join(", ", emptyBuffers)}");

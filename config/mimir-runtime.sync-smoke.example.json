@@ -1,0 +1,41 @@
+{
+  "bufferSeconds": 5.0,
+  "streams": [
+    {
+      "sourceId": "mic-focusrite-local",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--source-id",
+        "mic-focusrite-local",
+        "--endpoint",
+        "{0.0.1.00000000}.{16af9455-4539-4de2-8172-563d991d9e34}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks",
+        "--include-samples"
+      ]
+    },
+    {
+      "sourceId": "mic-usb-camera-0",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--source-id",
+        "mic-usb-camera-0",
+        "--endpoint",
+        "{0.0.1.00000000}.{57befef3-599c-4c73-a0cd-9539ffc2f54f}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks",
+        "--include-samples"
+      ]
+    }
+  ]
+}
