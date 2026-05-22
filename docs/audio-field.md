@@ -49,24 +49,22 @@ loopback audio is actively playing. One PS3 Eye mic previously enumerated but
 produced zero WASAPI packets until that Eye was unplugged and replugged.
 
 The full probe runtime config now enables sample-bearing blocks for every local
-audio source. `MimirChirpletCalibrationPhrase` owns the emitted calibration
-phrase and the matched-filter shape used to analyze it. The default timeline is
-a stateless 16-phrase cycle. Phrase `N` is generated directly from `N`, with no
-registry or remembered random state. Each phrase is a spread-out asymmetric
-motif: six short chirplets over about 0.85 seconds, with nonuniform gaps and
-high-frequency bands. A new phrase fires every 2.25 seconds through Aquarium
-audio. The point is not ornament. The timing code is carried by both frequency
-and rhythm, so it behaves more like a small birdsong signature than a repeated
-sweep. The indexed phrase sequence has lower ambiguity when remote feeds add
-network/encoding latency.
+audio source. `MimirChirpletTimeline` owns the emitted calibration stream and
+the matched-filter shape used to analyze it. The default timeline is
+deterministic and unbounded: event `N` is generated directly from `N`, with no
+registry, remembered random state, or repeat cycle. Mimir queues half-second PCM
+segments ahead of the audio cursor, and each segment contains short asymmetric
+chirplets chosen from a harmonic high-frequency vocabulary. The point is not
+ornament. The timing code is carried by both frequency and rhythm, so it behaves
+more like a quiet birdsong texture than a repeated sweep.
 
 `MimirAudioSynchronizationAnalyzer` resamples candidate mic windows into the
-loopback sample-rate timeline, projects loopback and candidate windows through
-the same phrase, contrast-normalizes the resulting energy traces, and estimates
-current delay against `loopback-scarlett-speakers`. The lag search is wide
-enough for ordinary remote/network delay, not just local speaker-to-mic delay.
-Reports carry both rounded integer delay and fractional delay from parabolic
-peak interpolation over the chirplet correlation peak.
+loopback sample-rate timeline, projects loopback and candidate windows through a
+continuous chirplet atom bank, contrast-normalizes the resulting energy traces,
+and estimates current delay against `loopback-scarlett-speakers`. The lag search
+is wide enough for ordinary remote/network delay, not just local speaker-to-mic
+delay. Reports carry both rounded integer delay and fractional delay from
+parabolic peak interpolation over the chirplet correlation peak.
 
 `MimirSynchronizationHub.BuildAlignedAudioFrame` returns a provisional aligned
 mono frame: loopback is always channel zero, and other channels enter only when
@@ -77,32 +75,33 @@ candidate mic is late relative to loopback. The current chirplet trace uses a
 still rounds to integer samples; the fractional estimate exists so the next
 actuator can drive a real fractional-delay line.
 
-The same phrase also starts the frequency-response path. Each report includes
-per-band matched energy for the phrase tones. That is not a finished room/mic
+The same timeline also starts the frequency-response path. Each report includes
+per-band matched energy for the chirplet atoms. That is not a finished room/mic
 normalizer yet, but it is the live surface that will become response-curve
 estimation: loopback carries what was emitted, each mic carries what survived
-speaker, air, room, and capsule, and the ratio over repeated chirplet phrases
-becomes gain/phase correction evidence.
+speaker, air, room, and capsule, and the ratio over the continuous chirplet
+timeline becomes gain/phase correction evidence.
 
-`MimirAudioSynchronizationStateTracker` turns per-phrase observations into
+`MimirAudioSynchronizationStateTracker` turns continuous observations into
 state. It confidence-gates reports, smooths fractional delay per source, and
 estimates delay slope as sampling-rate offset in ppm. This is the control input
 for the coming actuator. The state can survive a brief weak report, but it is
-not a license to run blind: loopback must keep receiving the emitted phrase or
+not a license to run blind: loopback must keep receiving the emitted timeline or
 fresh reports will stop.
 
-The actual Mimir app path now runs this online: `MimirRuntime.Update` emits the
-phrase sequence, polls sources, and updates sync analysis on a fixed cadence.
+The actual Mimir app path now runs this online: `MimirRuntime.Update` keeps the
+chirplet timeline queued, polls sources, and updates sync analysis on a fixed cadence.
 `MIMIR_SYNC_TELEMETRY_SECONDS` enables console telemetry for live tests. Current
-runtime testing proves Aquarium output wakes the Scarlett loopback and the mic
-buffers stay live, but the app has not yet produced a confident acoustic lock.
-That next failure is calibration, not plumbing.
+runtime testing proves Aquarium output wakes the Scarlett loopback, the mic
+buffers stay live, and the continuous timeline can produce confident online sync
+states in the app. The next failure is no longer lock/no-lock; it is stabilizing
+state filtering enough for the actuator.
 
 ## Chirplet Calibration Model
 
 ```mermaid
 flowchart TD
-    A["MimirChirpletCalibrationPhrase"] --> B["Aquarium audio output"]
+    A["MimirChirpletTimeline"] --> B["Aquarium audio output"]
     B --> C["Scarlett speaker loopback"]
     B --> D["room + speakers + mics"]
     C --> E["loopback rolling buffer"]
@@ -116,26 +115,18 @@ flowchart TD
     I --> K["frequency response normalization"]
 ```
 
-The calibration phrase owns three facts:
+The chirplet timeline owns three facts:
 
 - **Emission**: the PCM that Aquarium sends to the speakers.
-- **Timing witness**: the matched-filter kernel used to find the phrase in
+- **Timing witness**: the matched-filter atom bank used to find the stream in
   loopback and mic buffers.
-- **Response witness**: the per-tone kernels used to measure how strongly each
+- **Response witness**: the per-band atoms used to measure how strongly each
   mic hears each emitted band.
 
-One chirplet phrase gives a delay estimate. Repeated phrases give drift/SRO by
-watching delay change over time. Per-band energy over many phrases gives the
+Continuous chirplet evidence gives both the current delay and the drift/SRO by
+watching delay change over time. Per-band energy over the same stream gives the
 normalization curve. The important constraint is that all three measurements
-must be tied to the same emitted phrase, not three separately invented probes.
-
-The phrase is no longer static. Mimir currently rotates a deterministic
-16-phrase cycle and the analyzer searches that cycle. That is enough for a
-first timeline fingerprint and ordinary remote/network delay. For higher-latency
-or recorded/replayed sources, the next extension should lengthen the code or
-make the phrase index explicitly recoverable from the chirplet rhythm so Mimir
-can distinguish phrase N from phrase N+16 without relying only on wall-clock
-arrival.
+must be tied to the same emitted timeline, not three separately invented probes.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,

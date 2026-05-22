@@ -65,13 +65,13 @@ accepted_design:
     runtime rolling buffers; it does not carry pixels/audio payloads or own the
     final local-device hot path.
   - The diagnostic audio path can optionally carry base64 float sample payloads
-    for sync smoke tests. `MimirChirpletCalibrationPhrase` owns the structured
-    birdsong-like timeline fingerprint: a stateless 16-phrase cycle where
-    phrase `N` is generated from `N`, plus PCM rendering, matched timing kernel,
-    and per-band response kernels. `MimirAudioSynchronizationAnalyzer` now
-    treats `loopback-scarlett-speakers` as timing authority, resamples candidate
-    mic windows into that timeline, projects loopback and mic windows through
-    the emitted chirplet phrase cycle, and estimates current delay from
+    for sync smoke tests. `MimirChirpletTimeline` owns the structured
+    birdsong-like timeline fingerprint: deterministic unbounded chirplet events
+    where event `N` is generated from `N`, plus PCM segment rendering, matched
+    timing atoms, and per-band response kernels. `MimirAudioSynchronizationAnalyzer`
+    now treats `loopback-scarlett-speakers` as timing authority, resamples
+    candidate mic windows into that timeline, projects loopback and mic windows
+    through continuous chirplet energy traces, and estimates current delay from
     chirplet-energy traces at a shared timestamp edge. Positive delay means the
     candidate mic is late relative to loopback. Reports include rounded delay,
     fractional delay, confidence, and per-band matched energy. `MimirAudioSynchronizationStateTracker`
@@ -178,14 +178,14 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Make the actual Mimir.App path produce a confident online acoustic lock from
-    the chirplet timeline before adding the synchronization actuator. Current
-    app testing proves Aquarium WASAPI output wakes Scarlett speaker loopback,
-    live mic buffers stay populated, and runtime sync analysis runs on cadence,
-    but the live acoustic report has not cleared the confidence gate. Once that
-    lock is real, drive variable-rate resampling and fractional-delay correction
-    per non-reference stream. Replace the diagnostic JSON-line process bridge
-    with direct native capture drivers that push buffer handles into
+    Harden the online state filter before adding the synchronization actuator.
+    Current app testing proves Aquarium WASAPI output wakes Scarlett speaker
+    loopback, live mic buffers stay populated, runtime sync analysis runs on
+    cadence, and the continuous chirplet timeline can produce confident sync
+    states in the app. Delay estimates are still jumpy, so the actuator needs
+    outlier rejection and better SRO smoothing before it drives variable-rate
+    resampling and fractional-delay correction per non-reference stream. Replace
+    the diagnostic JSON-line process bridge with direct native capture drivers that push buffer handles into
     Mimir.Runtime. Mimir.BufferSmoke still proves loopback-referenced aligned
     audio for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
     9-16 kHz calibration chirplets are playing. Treat PS3 Eye audio as

@@ -20,9 +20,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private float runtimeSeconds;
     private float nextAudioSyncSeconds = AudioSyncUpdateIntervalSeconds;
     private float nextTelemetrySeconds;
-    private float nextCalibrationChirpSeconds = (float)MimirChirpletCalibrationPhrase.Default.FirstFireSeconds;
-    private ulong calibrationPhraseIndex;
-    private readonly Dictionary<ulong, string> calibrationPhraseCache = new();
+    private ulong calibrationSegmentIndex;
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
 
     public MimirRuntime(AquariumRuntimeOptions options)
@@ -90,7 +88,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     public void Update(float deltaSeconds, InputState input)
     {
         runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
-        QueueCalibrationChirps();
+        QueueCalibrationTimeline();
         lastPollCount = synchronization.PollSources();
         UpdateAudioSynchronization();
         EmitTelemetry();
@@ -132,37 +130,26 @@ public sealed class MimirRuntime : IAquariumRuntime
             });
     }
 
-    private void QueueCalibrationChirps()
+    private void QueueCalibrationTimeline()
     {
-        while (runtimeSeconds >= nextCalibrationChirpSeconds)
+        var queuedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
+        var targetSeconds = runtimeSeconds + (float)MimirChirpletTimeline.QueueLeadSeconds;
+        while (queuedUntilSeconds < targetSeconds)
         {
-            var cycleIndex = calibrationPhraseIndex % MimirChirpletCalibrationPhrase.PhraseCycleLength;
-            var phrase = MimirChirpletCalibrationPhrase.ForIndex(cycleIndex);
             visualRuntime.Audio.EnqueuePcm16Base64(
-                Pcm16Base64ForPhrase(cycleIndex, phrase),
-                phrase.SampleRate,
+                MimirChirpletTimeline.Default.RenderSegmentPcm16Base64(calibrationSegmentIndex),
+                MimirChirpletTimeline.SampleRate,
                 channels: 1,
                 gain: 1.0f);
-            calibrationPhraseIndex++;
-            nextCalibrationChirpSeconds += (float)phrase.IntervalSeconds;
+            calibrationSegmentIndex++;
+            queuedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
         }
-    }
-
-    private string Pcm16Base64ForPhrase(ulong cycleIndex, MimirChirpletCalibrationPhrase phrase)
-    {
-        if (!calibrationPhraseCache.TryGetValue(cycleIndex, out var pcm16Base64))
-        {
-            pcm16Base64 = phrase.RenderPcm16Base64();
-            calibrationPhraseCache[cycleIndex] = pcm16Base64;
-        }
-
-        return pcm16Base64;
     }
 
     private string DescribeChirpletReference()
     {
-        var phrase = MimirChirpletCalibrationPhrase.Default;
-        return $"{DefaultAudioSyncReference} every {phrase.IntervalSeconds:0.00}s code {calibrationPhraseIndex % MimirChirpletCalibrationPhrase.PhraseCycleLength}/{MimirChirpletCalibrationPhrase.PhraseCycleLength}";
+        var queuedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
+        return $"{DefaultAudioSyncReference} continuous timeline {MimirChirpletTimeline.SegmentSeconds:0.00}s segments queued to {queuedUntilSeconds:0.00}s";
     }
 
     private string DescribeBuffers()

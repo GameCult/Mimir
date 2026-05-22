@@ -63,22 +63,22 @@ Get-Content .\state\evidence.jsonl -Tail 8
   640x480@60, and 81.10 fps when the PS3 Eye runs 320x240@187. The regular
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
 - Current chirplet-backed smoke uses Scarlett speaker loopback as timing
-  authority. `MimirChirpletCalibrationPhrase` owns the structured birdsong-like
-  timeline fingerprint: a stateless 16-phrase cycle where phrase `N` is
-  generated from `N`; each phrase has six asymmetric chirplets over about 0.85
-  seconds and fires every 2.25 seconds. The phrase owns Aquarium PCM rendering,
-  matched timing trace, and per-band response hooks. Sync reports now include
+  authority. `MimirChirpletTimeline` owns the structured birdsong-like timeline
+  fingerprint: deterministic unbounded chirplet events where event `N` is
+  generated from `N`, with no repeat cycle or remembered random state. The
+  timeline owns Aquarium PCM segment rendering, matched timing trace, and
+  per-band response hooks. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
   now tracks smoothed delay and delay-slope/SRO ppm. Actual Mimir.App testing
-  proves Aquarium audio wakes Scarlett loopback and keeps mic buffers live, but
-  the online acoustic report has not cleared the confidence gate yet. PS3 Eye audio is
+  proves Aquarium audio wakes Scarlett loopback, keeps mic buffers live, and
+  produces confident online sync states, but delay estimates are still jumpy.
+  PS3 Eye audio is
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.
 
 ## Immediate Re-entry Instruction
 
-Make the actual Mimir.App path produce a confident online acoustic lock from the
-chirplet timeline, then turn those delay reports into a smoothed
-SRO/fractional-delay actuator. Keep loopback as timing authority. Do not restore
-deleted script infrastructure because a stale doc once missed it.
+Harden the online sync state filter, then turn those delay reports into a
+smoothed SRO/fractional-delay actuator. Keep loopback as timing authority. Do
+not restore deleted script infrastructure because a stale doc once missed it.

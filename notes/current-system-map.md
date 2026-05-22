@@ -91,20 +91,20 @@ not become the synchronized program authority.
 
 The six-microphone path is separate from the bridge. Scarlett speaker loopback
 is the current timing authority when calibration chirplets are playing.
-`MimirChirpletCalibrationPhrase` owns the birdsong-like timeline fingerprint:
-a stateless 16-phrase cycle where phrase `N` is generated from `N`; each phrase
-spreads six asymmetric chirplets across about 0.85 seconds and fires every 2.25
-seconds. Mimir emits that phrase sequence through Aquarium audio, compares mic
-buffers against loopback by chirplet-energy delay estimation, and can build a
-provisional aligned mono frame for channels that clear the confidence gate.
+`MimirChirpletTimeline` owns the birdsong-like timeline fingerprint: a
+deterministic unbounded chirplet stream where event `N` is generated from `N`,
+with no repeat cycle or remembered random state. Mimir continuously queues that
+timeline through Aquarium audio, compares mic buffers against loopback by
+chirplet-energy delay estimation, and can build a provisional aligned mono
+frame for channels that clear the confidence gate.
 Reports now carry fractional delay and per-band matched energy. The hub also
 owns smoothed per-source sync state with delay-slope/SRO in ppm. `MimirRuntime`
 runs the analysis online and can print live telemetry with
-`MIMIR_SYNC_TELEMETRY_SECONDS`. Current app testing proves loopback wakeup and
-live mic buffers, but not yet a confident acoustic lock. Camera mics are
-spatial/context witnesses; Focusrite devices are dialogue anchors. The current
-aligned frame is integer-delay only; fractional delay and the hot resampler
-still belong in Faust/native DSP.
+`MIMIR_SYNC_TELEMETRY_SECONDS`. Current app testing proves loopback wakeup, live
+mic buffers, and confident online sync states, but delay estimates are still
+jumpy. Camera mics are spatial/context witnesses; Focusrite devices are dialogue
+anchors. The current aligned frame is integer-delay only; fractional delay and
+the hot resampler still belong in Faust/native DSP.
 
 ## Visual Fusion
 
