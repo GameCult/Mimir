@@ -44,9 +44,11 @@ a named invariant that the native runtime cannot protect yet.
   adapter.
 - `MimirChirpletTimeline` owns the structured birdsong-like calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
-  The default timeline is an order-3 de Bruijn symbol sequence over 32 separated
-  chirp symbols, so any three consecutive correctly detected symbols identify a
-  timeline event inside the current operating horizon.
+  The default timeline is an order-3 de Bruijn symbol sequence over 32
+  time/frequency constellation symbols, so any three consecutive correctly
+  detected symbols identify a timeline event inside the current operating
+  horizon. Symbol identity is carried by start band, glide shape, duration, and
+  following inter-chirp gap.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline
   and compared by chirplet-energy delay estimation with fractional peak

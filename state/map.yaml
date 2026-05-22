@@ -67,10 +67,11 @@ accepted_design:
   - The diagnostic audio path can optionally carry base64 float sample payloads
     for sync smoke tests. `MimirChirpletTimeline` owns the structured
     birdsong-like timeline fingerprint: an order-3 de Bruijn sequence over 32
-    separated chirp symbols, plus PCM segment rendering, matched timing atoms,
-    symbol/event decoding, and per-band response kernels. Any three consecutive
-    correctly detected symbols identify a timeline event within the current
-    operating horizon. `MimirAudioSynchronizationAnalyzer` now treats
+    time/frequency constellation symbols, plus PCM segment rendering, matched
+    timing atoms, symbol/event decoding, and per-band response kernels. Symbol
+    identity is carried by start band, glide shape, duration, and following
+    inter-chirp gap. Any three consecutive correctly detected symbols identify a
+    timeline event within the current operating horizon. `MimirAudioSynchronizationAnalyzer` now treats
     `loopback-scarlett-speakers` as timing authority, uses coarse chirplet
     energy for acquisition, and refines delay from matched timeline event
     indices when symbol decoding succeeds. Positive delay means the

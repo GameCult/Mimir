@@ -55,10 +55,11 @@ deterministic order-3 de Bruijn symbol sequence over 32 chirp symbols. Any three
 consecutive correctly detected symbols identify the event index inside the
 current operating horizon, so a receiver can place its audio window on the
 canonical timeline without being handed Mimir's runtime clock. Mimir queues
-half-second PCM segments ahead of the audio cursor, and each segment contains
-short asymmetric chirplets chosen from separated high-frequency slots. The point
-is not ornament. The timing code is carried by both frequency and rhythm, so it
-behaves more like a quiet birdsong texture than a repeated sweep.
+half-second PCM segments ahead of the audio cursor. Each symbol is a small
+time/frequency constellation: start band, glide direction/range, duration, and
+the following inter-chirp gap all carry code. The point is not ornament. The
+timing code is carried by both frequency and rhythm, so it behaves more like a
+quiet birdsong texture than a repeated sweep.
 
 `MimirAudioSynchronizationAnalyzer` resamples candidate mic windows into the
 loopback sample-rate timeline, uses cheap coarse chirplet energy for acquisition,
@@ -130,13 +131,13 @@ watching delay change over time. Per-band energy over the same stream gives the
 normalization curve. The important constraint is that all three measurements
 must be tied to the same emitted timeline, not three separately invented probes.
 
-The symbol layer is intentionally blunt. Chirp symbols use separated frequency
-slots instead of subtle variants sharing the same center frequency, because a
-wrong symbol is worse than a noisy delay. A synthetic runtime check rendered two
-seconds of canonical timeline audio and decoded events 0, 1, and 2 back to a
-window start within about 1.5 ms. Real device runs still depend on loopback
-capture staying live; the local Scarlett loopback has intermittently stopped
-advancing during short headless sniffs.
+The symbol layer is intentionally redundant. It does not rely on one fixed
+frequency shelf: timing gaps, chirp duration, start band, and glide shape all
+contribute so poor mic frequency response does not erase the whole code. A
+synthetic runtime check rendered two seconds of canonical timeline audio and
+decoded events 9, 10, and 11 back to a zero-second window start. Real device
+runs still depend on loopback capture staying live; the local Scarlett loopback
+has intermittently stopped advancing during short headless sniffs.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,

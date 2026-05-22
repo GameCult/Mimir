@@ -42,12 +42,15 @@ public sealed class MimirChirpletTimeline
     public static readonly int TimelinePeriod = (int)Math.Pow(SymbolCount, TimelineOrder);
 
     private const double FirstEventSeconds = 0.08;
-    private const double EventStrideSeconds = 0.118;
-    private const double MaxEventDurationSeconds = 0.082;
+    private const double MinEventGapSeconds = 0.088;
+    private const double MaxEventGapSeconds = 0.162;
+    private const double MaxEventDurationSeconds = 0.078;
     private const double Gain = 0.090;
 
     private static readonly int[] TimelineSymbols = RotateToDistinctOpening(BuildDeBruijn(SymbolCount, TimelineOrder));
     private static readonly Dictionary<int, int> TripleToIndex = BuildTripleIndex(TimelineSymbols);
+    private static readonly double[] PeriodEventStarts = BuildPeriodEventStarts(TimelineSymbols);
+    private static readonly double PeriodDurationSeconds = PeriodEventStarts[^1] + GapSecondsForSymbol(TimelineSymbols[^1]);
     private static readonly MimirChirpletTone[] SymbolTones = BuildSymbolTones();
     private static readonly MimirChirpletTone[] CoarseTones =
     [
@@ -200,8 +203,8 @@ public sealed class MimirChirpletTimeline
     public IReadOnlyList<MimirChirpletTimelineEvent> EventsOverlapping(double startSeconds, double durationSeconds)
     {
         var endSeconds = startSeconds + durationSeconds;
-        var firstIndex = Math.Max(0, (long)Math.Floor((startSeconds - FirstEventSeconds - MaxEventDurationSeconds) / EventStrideSeconds) - 2);
-        var lastIndex = Math.Max(firstIndex, (long)Math.Ceiling((endSeconds - FirstEventSeconds) / EventStrideSeconds) + 2);
+        var firstIndex = Math.Max(0, (long)Math.Floor((startSeconds - FirstEventSeconds - MaxEventDurationSeconds) / MaxEventGapSeconds) - 2);
+        var lastIndex = Math.Max(firstIndex, (long)Math.Ceiling((endSeconds - FirstEventSeconds) / MinEventGapSeconds) + 2);
         var events = new List<MimirChirpletTimelineEvent>((int)(lastIndex - firstIndex + 1));
         for (var eventIndex = firstIndex; eventIndex <= lastIndex; eventIndex++)
         {
@@ -298,7 +301,7 @@ public sealed class MimirChirpletTimeline
             return [];
         }
 
-        var minimumSpacingSamples = EventStrideSeconds * sampleRate * 0.55;
+        var minimumSpacingSamples = MinEventGapSeconds * sampleRate * 0.55;
         var kept = new List<MimirChirpletEventObservation>();
         foreach (var observation in observations.OrderByDescending(observation => observation.Energy))
         {
@@ -366,7 +369,7 @@ public sealed class MimirChirpletTimeline
         int sampleRate)
     {
         var seconds = (second.SampleOffset - first.SampleOffset) / sampleRate;
-        return seconds >= EventStrideSeconds * 0.55 && seconds <= EventStrideSeconds * 1.45;
+        return seconds >= MinEventGapSeconds * 0.55 && seconds <= MaxEventGapSeconds * 1.45;
     }
 
     private static MimirChirpletEventObservation PlaceObservation(
@@ -457,22 +460,31 @@ public sealed class MimirChirpletTimeline
         TimelineSymbols[(int)(eventIndex % (ulong)TimelineSymbols.Length)];
 
     private static double EventStartSeconds(ulong eventIndex) =>
-        FirstEventSeconds + eventIndex * EventStrideSeconds;
+        FirstEventSeconds +
+        (eventIndex / (ulong)TimelineSymbols.Length) * PeriodDurationSeconds +
+        PeriodEventStarts[(int)(eventIndex % (ulong)TimelineSymbols.Length)];
 
     private static MimirChirpletTone[] BuildSymbolTones()
     {
         var tones = new MimirChirpletTone[SymbolCount];
         for (var symbol = 0; symbol < tones.Length; symbol++)
         {
-            var baseHz = 6_500.0 * Math.Pow(16_400.0 / 6_500.0, symbol / (double)(SymbolCount - 1));
-            var duration = 0.055;
-            var width = 190.0;
-            var descending = (symbol & 1) != 0;
-            var low = Math.Clamp(baseHz - width * 0.5, 6_300.0, 16_200.0);
-            var high = Math.Clamp(baseHz + width * 0.5, 6_400.0, 16_500.0);
-            tones[symbol] = descending
-                ? new MimirChirpletTone(0.0, duration, high, low, 0.85)
-                : new MimirChirpletTone(0.0, duration, low, high, 0.85);
+            var startBand = symbol & 7;
+            var glideClass = (symbol >> 3) & 3;
+            var durationClass = (symbol >> 1) & 3;
+            var startHz = 6_500.0 * Math.Pow(15_800.0 / 6_500.0, startBand / 7.0);
+            var duration = 0.042 + durationClass * 0.009;
+            var glideSemitones = glideClass switch
+            {
+                0 => 1.75,
+                1 => -2.25,
+                2 => 3.50,
+                _ => -4.00,
+            };
+            var endHz = startHz * Math.Pow(2.0, glideSemitones / 12.0);
+            startHz = Math.Clamp(startHz, 6_300.0, 16_500.0);
+            endHz = Math.Clamp(endHz, 6_300.0, 16_500.0);
+            tones[symbol] = new MimirChirpletTone(0.0, duration, startHz, endHz, 0.82);
         }
 
         return tones;
@@ -509,6 +521,31 @@ public sealed class MimirChirpletTimeline
 
         Db(1, 1);
         return sequence.ToArray();
+    }
+
+    private static double[] BuildPeriodEventStarts(IReadOnlyList<int> symbols)
+    {
+        var starts = new double[symbols.Count];
+        var cursor = 0.0;
+        for (var index = 0; index < symbols.Count; index++)
+        {
+            starts[index] = cursor;
+            cursor += GapSecondsForSymbol(symbols[index]);
+        }
+
+        return starts;
+    }
+
+    private static double GapSecondsForSymbol(int symbol)
+    {
+        var gapClass = (symbol >> 2) & 3;
+        return gapClass switch
+        {
+            0 => 0.094,
+            1 => 0.112,
+            2 => 0.137,
+            _ => 0.158,
+        };
     }
 
     private static int[] RotateToDistinctOpening(int[] sequence)
