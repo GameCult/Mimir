@@ -45,8 +45,8 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirChirpletCalibrationPhrase` owns the structured birdsong-like calibration
   phrase, PCM rendering, matched timing trace, and per-band response kernels.
   The default timeline is a stateless 16-phrase cycle; phrase `N` is generated
-  from `N`, spreads six chirplets across about 1.38 seconds, and fires every
-  3.25 seconds to reduce repeated-sweep ambiguity.
+  from `N`, spreads six chirplets across about 0.85 seconds, and fires every
+  2.25 seconds to reduce repeated-sweep ambiguity.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline
   and compared by chirplet-energy delay estimation with fractional peak
@@ -57,6 +57,8 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirAudioSynchronizationStateTracker` owns the first smoothed per-source
   sync state: latest fractional delay, smoothed delay, confidence, per-band
   response evidence, and delay-slope/SRO estimate in ppm.
+- `MimirRuntime` updates audio sync analysis online and can emit live sync
+  telemetry with `MIMIR_SYNC_TELEMETRY_SECONDS`.
 - `MimirRuntime` emits short calibration chirplets through Aquarium audio so the
   loopback and acoustic mic buffers carry a shared timing witness.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
@@ -96,6 +98,8 @@ a named invariant that the native runtime cannot protect yet.
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. The current aligned frame is integer-delay
    only and should not pretend to be the final DSP path.
+   First, make the live app acoustic lock robust enough to populate sync state
+   from the online chirplet timeline, not just from smoke harnesses.
 5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 6. Move GPU feature extraction, fusion, material fitting, render budgeting, and

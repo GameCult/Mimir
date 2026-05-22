@@ -77,7 +77,9 @@ accepted_design:
     fractional delay, confidence, and per-band matched energy. `MimirAudioSynchronizationStateTracker`
     owns the smoothed per-source belief: latest delay, smoothed delay,
     confidence, per-band response evidence, and delay-slope/SRO estimate in
-    ppm. `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
+    ppm. `MimirRuntime` now runs this analysis online on a fixed cadence and
+    `MIMIR_SYNC_TELEMETRY_SECONDS` prints live buffer/report/state telemetry.
+    `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
     provisional loopback-referenced aligned mono frame for channels that clear
     the confidence gate.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
@@ -176,16 +178,17 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Add the synchronization actuator after the current chirplet measurement
-    loop: smooth delay/SRO estimates, then drive variable-rate resampling and
-    fractional-delay correction per non-reference stream. Replace the
-    diagnostic JSON-line process bridge with direct native capture drivers that
-    push buffer handles into Mimir.Runtime. Current chirplet-backed
-    Mimir.BufferSmoke proves loopback-referenced aligned audio for Scarlett
-    loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when 9-16 kHz
-    calibration chirplets are playing. After a later replug, both PS3 Eye audio
-    endpoints emitted 480-frame WASAPI blocks into runtime buffers again while
-    both PS3 Eye camera buffers were live. Treat PS3 Eye audio as
+    Make the actual Mimir.App path produce a confident online acoustic lock from
+    the chirplet timeline before adding the synchronization actuator. Current
+    app testing proves Aquarium WASAPI output wakes Scarlett speaker loopback,
+    live mic buffers stay populated, and runtime sync analysis runs on cadence,
+    but the live acoustic report has not cleared the confidence gate. Once that
+    lock is real, drive variable-rate resampling and fractional-delay correction
+    per non-reference stream. Replace the diagnostic JSON-line process bridge
+    with direct native capture drivers that push buffer handles into
+    Mimir.Runtime. Mimir.BufferSmoke still proves loopback-referenced aligned
+    audio for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
+    9-16 kHz calibration chirplets are playing. Treat PS3 Eye audio as
     enumeration/runtime-fragile, not unavailable. Keep the Focusrite away from
     the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
     SuperSpeed negotiation is fixed.

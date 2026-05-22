@@ -48,7 +48,7 @@ public sealed class MimirChirpletCalibrationPhrase
 
     public static MimirChirpletCalibrationPhrase ForIndex(ulong phraseIndex) => new(
         sampleRate: 48_000,
-        intervalSeconds: 3.25,
+        intervalSeconds: 2.25,
         firstFireSeconds: 0.75,
         gain: 0.13,
         tones: GenerateTones(phraseIndex));
@@ -161,12 +161,12 @@ public sealed class MimirChirpletCalibrationPhrase
     {
         var baseTones = new[]
         {
-            new MimirChirpletTone(0.000, 0.070, 7_040.0, 7_680.0, 0.80),
-            new MimirChirpletTone(0.190, 0.060, 9_600.0, 8_800.0, 0.75),
-            new MimirChirpletTone(0.410, 0.080, 11_800.0, 12_800.0, 0.90),
-            new MimirChirpletTone(0.735, 0.065, 8_200.0, 9_000.0, 0.60),
-            new MimirChirpletTone(0.980, 0.095, 14_500.0, 15_800.0, 0.80),
-            new MimirChirpletTone(1.310, 0.070, 10_800.0, 10_200.0, 0.70),
+            new MimirChirpletTone(0.000, 0.060, 7_040.0, 7_680.0, 0.80),
+            new MimirChirpletTone(0.125, 0.055, 9_600.0, 8_800.0, 0.75),
+            new MimirChirpletTone(0.260, 0.065, 11_800.0, 12_800.0, 0.90),
+            new MimirChirpletTone(0.435, 0.055, 8_200.0, 9_000.0, 0.60),
+            new MimirChirpletTone(0.610, 0.075, 14_500.0, 15_800.0, 0.80),
+            new MimirChirpletTone(0.790, 0.060, 10_800.0, 10_200.0, 0.70),
         };
         var tones = new List<MimirChirpletTone>(baseTones.Length);
         var previousEnd = -1.0;
@@ -174,7 +174,7 @@ public sealed class MimirChirpletCalibrationPhrase
         {
             var baseTone = baseTones[index];
             var seed = Mix(phraseIndex ^ ((ulong)index * 0x9E3779B97F4A7C15UL));
-            var timeJitter = Unit(seed) * 0.050 - 0.025;
+            var timeJitter = Unit(seed) * 0.030 - 0.015;
             var durationJitter = Unit(seed >> 11) * 0.020 - 0.010;
             var bandJitter = Unit(seed >> 22) * 480.0 - 240.0;
             var glideScale = 0.88 + Unit(seed >> 33) * 0.24;

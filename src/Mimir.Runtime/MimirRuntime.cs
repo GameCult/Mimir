@@ -11,14 +11,19 @@ namespace Mimir.Runtime;
 public sealed class MimirRuntime : IAquariumRuntime
 {
     private const string DefaultAudioSyncReference = "loopback-scarlett-speakers";
+    private const float AudioSyncUpdateIntervalSeconds = 0.5f;
     private readonly LocalCastRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
+    private readonly float telemetryIntervalSeconds;
     private int lastPollCount;
     private float runtimeSeconds;
+    private float nextAudioSyncSeconds = AudioSyncUpdateIntervalSeconds;
+    private float nextTelemetrySeconds;
     private float nextCalibrationChirpSeconds = (float)MimirChirpletCalibrationPhrase.Default.FirstFireSeconds;
     private ulong calibrationPhraseIndex;
     private readonly Dictionary<ulong, string> calibrationPhraseCache = new();
+    private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -43,6 +48,8 @@ public sealed class MimirRuntime : IAquariumRuntime
         Options = options;
         visualRuntime = new LocalCastRuntime(options);
         synchronization = new MimirSynchronizationHub(settings);
+        telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
+        nextTelemetrySeconds = telemetryIntervalSeconds;
         foreach (var source in streamSources)
         {
             synchronization.AddSource(source);
@@ -85,6 +92,8 @@ public sealed class MimirRuntime : IAquariumRuntime
         runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
         QueueCalibrationChirps();
         lastPollCount = synchronization.PollSources();
+        UpdateAudioSynchronization();
+        EmitTelemetry();
         visualRuntime.Update(deltaSeconds, input);
     }
 
@@ -159,6 +168,60 @@ public sealed class MimirRuntime : IAquariumRuntime
     private string DescribeBuffers()
     {
         return string.Join(" | ", synchronization.Buffers.Buffers.Select(DescribeBuffer));
+    }
+
+    private void UpdateAudioSynchronization()
+    {
+        if (runtimeSeconds < nextAudioSyncSeconds)
+        {
+            return;
+        }
+
+        lastAudioSynchronizationReports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference);
+        nextAudioSyncSeconds += AudioSyncUpdateIntervalSeconds;
+    }
+
+    private void EmitTelemetry()
+    {
+        if (telemetryIntervalSeconds <= 0.0f || runtimeSeconds < nextTelemetrySeconds)
+        {
+            return;
+        }
+
+        var loopback = synchronization.Buffers.Buffers.FirstOrDefault(buffer =>
+            string.Equals(buffer.Descriptor.SourceId, DefaultAudioSyncReference, StringComparison.Ordinal));
+        var states = synchronization.AudioSynchronizationStates;
+        Console.WriteLine(
+            $"mimir-sync-telemetry t={runtimeSeconds:0.00}s loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} aligned={DescribeAlignedAudio()}");
+        Console.WriteLine($"mimir-sync-buffers {DescribeAudioBuffers()}");
+        foreach (var report in lastAudioSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
+        {
+            Console.WriteLine(
+                $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} delaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000}");
+        }
+
+        foreach (var state in states)
+        {
+            Console.WriteLine(
+                $"mimir-sync-state {state.ReferenceSourceId}->{state.SourceId} delaySamples={state.SmoothedDelaySamples:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000}");
+        }
+
+        nextTelemetrySeconds += telemetryIntervalSeconds;
+    }
+
+    private static float ParseTelemetryIntervalSeconds()
+    {
+        return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_SYNC_TELEMETRY_SECONDS"), out var seconds)
+            ? Math.Clamp(seconds, 0.0f, 60.0f)
+            : 0.0f;
+    }
+
+    private string DescribeAudioBuffers()
+    {
+        return string.Join(" | ", synchronization.Buffers.Buffers
+            .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio)
+            .OrderBy(buffer => buffer.Descriptor.SourceId, StringComparer.Ordinal)
+            .Select(buffer => $"{buffer.Descriptor.SourceId}:{buffer.Count}@{buffer.EdgeNs}"));
     }
 
     private static string DescribeBuffer(MimirRollingStreamBuffer buffer)

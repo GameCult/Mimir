@@ -53,8 +53,8 @@ audio source. `MimirChirpletCalibrationPhrase` owns the emitted calibration
 phrase and the matched-filter shape used to analyze it. The default timeline is
 a stateless 16-phrase cycle. Phrase `N` is generated directly from `N`, with no
 registry or remembered random state. Each phrase is a spread-out asymmetric
-motif: six short chirplets over about 1.38 seconds, with nonuniform gaps and
-high-frequency bands. A new phrase fires every 3.25 seconds through Aquarium
+motif: six short chirplets over about 0.85 seconds, with nonuniform gaps and
+high-frequency bands. A new phrase fires every 2.25 seconds through Aquarium
 audio. The point is not ornament. The timing code is carried by both frequency
 and rhythm, so it behaves more like a small birdsong signature than a repeated
 sweep. The indexed phrase sequence has lower ambiguity when remote feeds add
@@ -90,6 +90,13 @@ estimates delay slope as sampling-rate offset in ppm. This is the control input
 for the coming actuator. The state can survive a brief weak report, but it is
 not a license to run blind: loopback must keep receiving the emitted phrase or
 fresh reports will stop.
+
+The actual Mimir app path now runs this online: `MimirRuntime.Update` emits the
+phrase sequence, polls sources, and updates sync analysis on a fixed cadence.
+`MIMIR_SYNC_TELEMETRY_SECONDS` enables console telemetry for live tests. Current
+runtime testing proves Aquarium output wakes the Scarlett loopback and the mic
+buffers stay live, but the app has not yet produced a confident acoustic lock.
+That next failure is calibration, not plumbing.
 
 ## Chirplet Calibration Model
 

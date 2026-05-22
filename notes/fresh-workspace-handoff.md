@@ -65,18 +65,20 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Current chirplet-backed smoke uses Scarlett speaker loopback as timing
   authority. `MimirChirpletCalibrationPhrase` owns the structured birdsong-like
   timeline fingerprint: a stateless 16-phrase cycle where phrase `N` is
-  generated from `N`; each phrase has six asymmetric chirplets over about 1.38
-  seconds and fires every 3.25 seconds. The phrase owns Aquarium PCM rendering,
+  generated from `N`; each phrase has six asymmetric chirplets over about 0.85
+  seconds and fires every 2.25 seconds. The phrase owns Aquarium PCM rendering,
   matched timing trace, and per-band response hooks. Sync reports now include
-  fractional delay and per-band matched energy. `MimirAudioSynchronizationState` now tracks smoothed delay and
-  delay-slope/SRO ppm. PS3 Eye audio is
+  fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
+  now tracks smoothed delay and delay-slope/SRO ppm. Actual Mimir.App testing
+  proves Aquarium audio wakes Scarlett loopback and keeps mic buffers live, but
+  the online acoustic report has not cleared the confidence gate yet. PS3 Eye audio is
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.
 
 ## Immediate Re-entry Instruction
 
-Replace the diagnostic audio JSON process bridge with native audio capture
-workers, then turn chirplet delay reports into a smoothed SRO/fractional-delay
-actuator. Keep loopback as timing authority. Do not restore deleted script
-infrastructure because a stale doc once missed it.
+Make the actual Mimir.App path produce a confident online acoustic lock from the
+chirplet timeline, then turn those delay reports into a smoothed
+SRO/fractional-delay actuator. Keep loopback as timing authority. Do not restore
+deleted script infrastructure because a stale doc once missed it.
