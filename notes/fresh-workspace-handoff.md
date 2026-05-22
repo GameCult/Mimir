@@ -71,10 +71,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
   timeline owns Aquarium PCM segment rendering, coarse acquisition,
   symbol/event decoding, and per-band response hooks. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
-  now tracks smoothed delay and delay-slope/SRO ppm. Actual Mimir.App testing
-  proves Aquarium audio wakes Scarlett loopback, keeps mic buffers live, and
-  produces confident online sync states, but delay estimates are still jumpy.
-  PS3 Eye audio is
+  now tracks smoothed delay and delay-slope/SRO ppm. `MimirRuntime` runs sync
+  analysis as a bounded rotating service and caches reports/states for UI and
+  telemetry; readouts must stay passive. Actual Mimir.App testing proves
+  Aquarium audio wakes Scarlett loopback, keeps mic buffers live, and produces
+  confident online sync states, but delay estimates are still jumpy. PS3 Eye
+  audio is
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.
@@ -83,4 +85,5 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 Harden the online sync state filter, then turn those delay reports into a
 smoothed SRO/fractional-delay actuator. Keep loopback as timing authority. Do
-not restore deleted script infrastructure because a stale doc once missed it.
+not call synchronization analysis from UI/telemetry readouts. Do not restore
+deleted script infrastructure because a stale doc once missed it.

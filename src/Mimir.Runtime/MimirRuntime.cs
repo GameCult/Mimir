@@ -11,7 +11,7 @@ namespace Mimir.Runtime;
 public sealed class MimirRuntime : IAquariumRuntime
 {
     private const string DefaultAudioSyncReference = "loopback-scarlett-speakers";
-    private const float AudioSyncUpdateIntervalSeconds = 0.5f;
+    private const float AudioSyncUpdateIntervalSeconds = 0.1f;
     private readonly LocalCastRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
@@ -164,7 +164,8 @@ public sealed class MimirRuntime : IAquariumRuntime
             return;
         }
 
-        lastAudioSynchronizationReports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference, runtimeSeconds);
+        synchronization.AnalyzeAudioSynchronizationStep(DefaultAudioSyncReference, runtimeSeconds);
+        lastAudioSynchronizationReports = synchronization.AudioSynchronizationReports;
         nextAudioSyncSeconds += AudioSyncUpdateIntervalSeconds;
     }
 
@@ -229,7 +230,7 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private string DescribeAudioSync()
     {
-        var reports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference, runtimeSeconds);
+        var reports = synchronization.AudioSynchronizationReports;
         return reports.Count == 0
             ? "no payload windows"
             : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.0} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00} events={report.TimelineMatchedEvents}"));
@@ -237,10 +238,10 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private string DescribeAlignedAudio()
     {
-        var frame = synchronization.BuildAlignedAudioFrame(DefaultAudioSyncReference);
-        return frame == null
-            ? "no aligned frame"
-            : $"{frame.Channels.Count}ch {frame.SampleRate}Hz {frame.FrameCount} frames";
+        var states = synchronization.AudioSynchronizationStates;
+        return states.Count == 0
+            ? "no aligned state"
+            : $"{states.Count + 1}ch state-ready";
     }
 
     private string DescribeAudioSyncState()

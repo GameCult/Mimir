@@ -11,7 +11,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
     public IReadOnlyList<MimirAudioSynchronizationReport> Analyze(
         IEnumerable<MimirRollingStreamBuffer> buffers,
         string referenceSourceId,
-        double approximateTimelineSeconds)
+        double approximateTimelineSeconds,
+        IReadOnlySet<string>? candidateSourceIds = null)
     {
         var audioBuffers = buffers
             .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio)
@@ -43,6 +44,11 @@ public sealed class MimirAudioSynchronizationAnalyzer
         foreach (var buffer in audioBuffers)
         {
             if (ReferenceEquals(buffer, reference))
+            {
+                continue;
+            }
+
+            if (candidateSourceIds != null && !candidateSourceIds.Contains(buffer.Descriptor.SourceId))
             {
                 continue;
             }
@@ -363,7 +369,11 @@ public sealed class MimirAudioSynchronizationAnalyzer
             return (0.0, 0.0, 0);
         }
 
-        var candidateByEvent = candidateObservations.ToDictionary(observation => observation.EventIndex);
+        var candidateByEvent = candidateObservations
+            .GroupBy(observation => observation.EventIndex)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderByDescending(observation => observation.Energy).First());
         var delays = new List<(double Delay, double Weight)>();
         foreach (var reference in referenceObservations)
         {

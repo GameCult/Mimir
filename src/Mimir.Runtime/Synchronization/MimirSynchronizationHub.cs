@@ -5,7 +5,9 @@ public sealed class MimirSynchronizationHub : IDisposable
     private readonly List<IMimirStreamSource> sources = [];
     private readonly MimirAudioSynchronizationAnalyzer audioSynchronization = new();
     private readonly MimirAudioSynchronizationStateTracker audioSynchronizationState = new();
+    private readonly Dictionary<string, MimirAudioSynchronizationReport> audioSynchronizationReports = new(StringComparer.Ordinal);
     private ulong ingestedSamples;
+    private int nextAudioSynchronizationCandidate;
 
     public MimirSynchronizationHub(MimirSynchronizationSettings settings)
     {
@@ -27,6 +29,9 @@ public sealed class MimirSynchronizationHub : IDisposable
 
     public IReadOnlyList<MimirAudioSynchronizationState> AudioSynchronizationStates =>
         audioSynchronizationState.States;
+
+    public IReadOnlyList<MimirAudioSynchronizationReport> AudioSynchronizationReports =>
+        audioSynchronizationReports.Values.OrderBy(report => report.SourceId, StringComparer.Ordinal).ToArray();
 
     public void AddSource(IMimirStreamSource source)
     {
@@ -68,7 +73,42 @@ public sealed class MimirSynchronizationHub : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId, approximateTimelineSeconds);
-        audioSynchronizationState.Update(reports);
+        StoreAudioSynchronizationReports(reports);
+        return reports;
+    }
+
+    public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronizationStep(
+        string referenceSourceId,
+        double approximateTimelineSeconds,
+        int maxCandidates = 1)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var candidates = Buffers.Buffers
+            .Where(buffer =>
+                buffer.Descriptor.Kind == MimirStreamKind.Audio &&
+                !string.Equals(buffer.Descriptor.SourceId, referenceSourceId, StringComparison.Ordinal) &&
+                buffer.Latest?.AudioBlock != null)
+            .OrderBy(buffer => buffer.Descriptor.SourceId, StringComparer.Ordinal)
+            .Select(buffer => buffer.Descriptor.SourceId)
+            .ToArray();
+        if (candidates.Length == 0)
+        {
+            return [];
+        }
+
+        var selected = new HashSet<string>(StringComparer.Ordinal);
+        for (var count = 0; count < Math.Min(maxCandidates, candidates.Length); count++)
+        {
+            selected.Add(candidates[nextAudioSynchronizationCandidate % candidates.Length]);
+            nextAudioSynchronizationCandidate++;
+        }
+
+        var reports = audioSynchronization.Analyze(
+            Buffers.Buffers,
+            referenceSourceId,
+            approximateTimelineSeconds,
+            selected);
+        StoreAudioSynchronizationReports(reports);
         return reports;
     }
 
@@ -86,6 +126,16 @@ public sealed class MimirSynchronizationHub : IDisposable
     }
 
     private bool disposed;
+
+    private void StoreAudioSynchronizationReports(IReadOnlyList<MimirAudioSynchronizationReport> reports)
+    {
+        foreach (var report in reports)
+        {
+            audioSynchronizationReports[report.SourceId] = report;
+        }
+
+        audioSynchronizationState.Update(reports);
+    }
 
     public void Dispose()
     {

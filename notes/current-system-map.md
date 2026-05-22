@@ -100,13 +100,15 @@ Aquarium audio, uses coarse chirplet energy for acquisition, refines delay from
 matched event indices when the symbol decoder succeeds, and can build a
 provisional aligned mono frame for channels that clear the confidence gate.
 Reports now carry fractional delay and per-band matched energy. The hub also
-owns smoothed per-source sync state with delay-slope/SRO in ppm. `MimirRuntime`
-runs the analysis online and can print live telemetry with
-`MIMIR_SYNC_TELEMETRY_SECONDS`. Current app testing proves loopback wakeup, live
-mic buffers, and confident online sync states, but delay estimates are still
-jumpy. Camera mics are spatial/context witnesses; Focusrite devices are dialogue
-anchors. The current aligned frame is integer-delay only; fractional delay and
-the hot resampler still belong in Faust/native DSP.
+owns cached reports plus smoothed per-source sync state with delay-slope/SRO in
+ppm. `MimirRuntime` runs analysis online as a bounded rotating service and can
+print live telemetry with `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are
+passive readers of cached sync state; they must not invoke the analyzer. Current
+app testing proves loopback wakeup, live mic buffers, and confident online sync
+states, but delay estimates are still jumpy. Camera mics are spatial/context
+witnesses; Focusrite devices are dialogue anchors. The current aligned frame is
+integer-delay only; fractional delay and the hot resampler still belong in
+Faust/native DSP.
 
 ## Visual Fusion
 

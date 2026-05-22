@@ -60,8 +60,10 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirAudioSynchronizationStateTracker` owns the first smoothed per-source
   sync state: latest fractional delay, smoothed delay, confidence, per-band
   response evidence, and delay-slope/SRO estimate in ppm.
-- `MimirRuntime` updates audio sync analysis online and can emit live sync
-  telemetry with `MIMIR_SYNC_TELEMETRY_SECONDS`.
+- `MimirRuntime` updates audio sync analysis online as a bounded rotating
+  service and can emit live sync telemetry with
+  `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
+  they do not run synchronization analysis.
 - `MimirRuntime` continuously queues chirplet timeline PCM through Aquarium
   audio so the loopback and acoustic mic buffers carry a shared timing witness.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
@@ -102,7 +104,9 @@ a named invariant that the native runtime cannot protect yet.
    `MimirAudioSynchronizationState`. The current aligned frame is integer-delay
    only and should not pretend to be the final DSP path.
    First, harden the online state filter so the continuous chirplet lock stops
-   producing jumpy delay estimates.
+   producing jumpy delay estimates. The runtime sync cadence is now bounded and
+   survives longer real app runs, but the state filter still accepts outliers
+   too readily.
 5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 6. Move GPU feature extraction, fusion, material fitting, render budgeting, and
