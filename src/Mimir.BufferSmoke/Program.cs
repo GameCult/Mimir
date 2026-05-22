@@ -31,6 +31,11 @@ foreach (var buffer in hub.Buffers.Buffers.OrderBy(buffer => buffer.Descriptor.S
         Console.WriteLine(
             $"{buffer.Descriptor.SourceId}: count={buffer.Count} edgeNs={buffer.EdgeNs} latest={frame.Width}x{frame.Height} {frame.PixelFormat} bytes={latest.Value.ByteLength}");
     }
+    else if (latest?.AudioBlock is { } block)
+    {
+        Console.WriteLine(
+            $"{buffer.Descriptor.SourceId}: count={buffer.Count} edgeNs={buffer.EdgeNs} latest={block.Channels}ch {block.SampleRate}Hz {block.SampleFormat} frames={block.FrameCount} bytes={latest.Value.ByteLength}");
+    }
     else
     {
         Console.WriteLine($"{buffer.Descriptor.SourceId}: count={buffer.Count} edgeNs={buffer.EdgeNs}");

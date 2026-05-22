@@ -103,7 +103,7 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
             return false;
         }
 
-        if (frameEvent == null || !frameEvent.IsVideoFrame)
+        if (frameEvent == null || !frameEvent.IsKnownEvent)
         {
             return false;
         }
@@ -121,23 +121,41 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
             : StopwatchTicksToNs(Stopwatch.GetTimestamp());
         var arrivalNs = StopwatchTicksToNs(Stopwatch.GetTimestamp());
         var byteLength = Math.Max(0, frameEvent.ByteLength);
-        var strideBytes = frameEvent.StrideBytes > 0
-            ? frameEvent.StrideBytes
-            : InferStride(frameEvent.Width, frameEvent.PixelFormat, byteLength, frameEvent.Height);
-        var sequence = frameEvent.Sequence ?? fallbackSequence++;
         var payloadHandle = frameEvent.NativeHandle;
-        var videoFrame = new MimirVideoFrameDescriptor(
-            frameEvent.Width,
-            frameEvent.Height,
-            ParsePixelFormat(frameEvent.PixelFormat),
-            strideBytes,
-            timestampNs,
-            payloadHandle,
-            frameEvent.NativeHandleKind ?? "");
+        var sampleKind = frameEvent.IsAudioBlock ? MimirStreamKind.Audio : Descriptor.Kind;
+        MimirVideoFrameDescriptor? videoFrame = null;
+        MimirAudioBlockDescriptor? audioBlock = null;
+        if (frameEvent.IsVideoFrame)
+        {
+            var strideBytes = frameEvent.StrideBytes > 0
+                ? frameEvent.StrideBytes
+                : InferStride(frameEvent.Width, frameEvent.PixelFormat, byteLength, frameEvent.Height);
+            videoFrame = new MimirVideoFrameDescriptor(
+                frameEvent.Width,
+                frameEvent.Height,
+                ParsePixelFormat(frameEvent.PixelFormat),
+                strideBytes,
+                timestampNs,
+                payloadHandle,
+                frameEvent.NativeHandleKind ?? "");
+        }
+
+        if (frameEvent.IsAudioBlock)
+        {
+            audioBlock = new MimirAudioBlockDescriptor(
+                frameEvent.SampleRate,
+                frameEvent.Channels,
+                ParseSampleFormat(frameEvent.SampleFormat),
+                frameEvent.FrameCount,
+                timestampNs,
+                payloadHandle,
+                frameEvent.NativeHandleKind ?? "");
+        }
+        var sequence = frameEvent.Sequence ?? fallbackSequence++;
 
         sample = new MimirStreamSample(
             sourceId,
-            Descriptor.Kind,
+            sampleKind,
             Descriptor.Origin,
             timestampNs,
             arrivalNs,
@@ -145,7 +163,8 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
             payloadHandle,
             byteLength,
             default,
-            videoFrame);
+            videoFrame,
+            audioBlock);
         return true;
     }
 
@@ -215,6 +234,23 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
         };
     }
 
+    private static MimirAudioSampleFormat ParseSampleFormat(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return MimirAudioSampleFormat.Unknown;
+        }
+
+        return value.Trim().ToUpperInvariant() switch
+        {
+            "FLOAT32" or "IEEE_FLOAT" => MimirAudioSampleFormat.Float32,
+            "INT16" or "PCM16" => MimirAudioSampleFormat.Int16,
+            "INT24" or "PCM24" => MimirAudioSampleFormat.Int24,
+            "INT32" or "PCM32" => MimirAudioSampleFormat.Int32,
+            _ => MimirAudioSampleFormat.Unknown,
+        };
+    }
+
     private static long StopwatchTicksToNs(long ticks)
     {
         return checked((long)(ticks * (1_000_000_000.0 / Stopwatch.Frequency)));
@@ -264,6 +300,14 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
 
         public int ByteLength { get; set; }
 
+        public int SampleRate { get; set; }
+
+        public int Channels { get; set; }
+
+        public string SampleFormat { get; set; } = "";
+
+        public int FrameCount { get; set; }
+
         public ulong NativeHandle { get; set; }
 
         public string? NativeHandleKind { get; set; }
@@ -272,5 +316,13 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
             string.Equals(Type, "video-frame", StringComparison.OrdinalIgnoreCase) &&
             Width > 0 &&
             Height > 0;
+
+        public bool IsAudioBlock =>
+            string.Equals(Type, "audio-block", StringComparison.OrdinalIgnoreCase) &&
+            SampleRate > 0 &&
+            Channels > 0 &&
+            FrameCount > 0;
+
+        public bool IsKnownEvent => IsVideoFrame || IsAudioBlock;
     }
 }

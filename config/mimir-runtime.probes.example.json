@@ -36,6 +36,109 @@
         "ps3-eye-0",
         "ps3-eye-1"
       ]
+    },
+    {
+      "sourceId": "mic-focusrite-local",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--source-id",
+        "mic-focusrite-local",
+        "--endpoint",
+        "{0.0.1.00000000}.{16af9455-4539-4de2-8172-563d991d9e34}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks"
+      ]
+    },
+    {
+      "sourceId": "mic-kiyo-pro",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--source-id",
+        "mic-kiyo-pro",
+        "--endpoint",
+        "{0.0.1.00000000}.{abc7fd11-3b7d-4cfa-82ee-8767dae13fac}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks"
+      ]
+    },
+    {
+      "sourceId": "mic-kiyo",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--source-id",
+        "mic-kiyo",
+        "--endpoint",
+        "{0.0.1.00000000}.{ef1fdd6f-c721-4d5a-b183-5bd81dc57c1f}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks"
+      ]
+    },
+    {
+      "sourceId": "mic-usb-camera-0",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--source-id",
+        "mic-usb-camera-0",
+        "--endpoint",
+        "{0.0.1.00000000}.{57befef3-599c-4c73-a0cd-9539ffc2f54f}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks"
+      ]
+    },
+    {
+      "sourceId": "mic-usb-camera-1",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": false,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--source-id",
+        "mic-usb-camera-1",
+        "--endpoint",
+        "{0.0.1.00000000}.{f26c55af-5018-438a-8cc1-6dbead205a3c}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks"
+      ]
+    },
+    {
+      "sourceId": "loopback-scarlett-speakers",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
+      "arguments": [
+        "--loopback",
+        "--source-id",
+        "loopback-scarlett-speakers",
+        "--endpoint",
+        "{0.0.0.00000000}.{defdb2ab-ea1a-4eba-ab59-57038754f387}",
+        "--seconds",
+        "30",
+        "--emit-json-blocks"
+      ]
     }
   ]
 }

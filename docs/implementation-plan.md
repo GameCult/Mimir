@@ -36,6 +36,9 @@ a named invariant that the native runtime cannot protect yet.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
   empty declared sensor buffer should fail the run.
+- `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
+  block metadata and emits `audio-block` JSON events for the diagnostic runtime
+  adapter.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -67,8 +70,8 @@ a named invariant that the native runtime cannot protect yet.
    other cameras.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Add native audio capture workers for local mic, loopback, and network audio
-   feeds.
+3. Replace the WASAPI frame-event diagnostic bridge with native audio capture
+   workers for local mic, loopback, and network audio feeds.
 4. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 5. Move GPU feature extraction, fusion, material fitting, render budgeting, and

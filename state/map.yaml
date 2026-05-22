@@ -53,9 +53,12 @@ accepted_design:
     direct native ingest, process bridge ingest, and video capture driver seams.
   - `MimirVideoFrameDescriptor` carries width, height, pixel format, stride,
     device timestamp, and optional native/GPU handle.
+  - `MimirAudioBlockDescriptor` carries sample rate, channels, sample format,
+    frame count, timestamp, and optional native handle.
   - `MimirFrameEventProcessStreamSource` is a temporary diagnostic adapter for
-    JSON-line frame metadata from native probes into runtime rolling buffers; it
-    does not carry pixels or own the final local-camera hot path.
+    JSON-line video frame and audio block metadata from native probes into
+    runtime rolling buffers; it does not carry pixels/audio payloads or own the
+    final local-device hot path.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
@@ -155,7 +158,8 @@ current_status:
     Replace the diagnostic JSON-line process bridge with direct native capture
     drivers that push buffer handles into Mimir.Runtime. Current
     Mimir.BufferSmoke with `--require-samples` proves all five declared local
-    optical buffers receive samples after replugging the Kiyo Pro: Leap stereo
-    IR, Kiyo Pro, regular Kiyo, and both PS3 Eyes. Keep the Focusrite away from
-    the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
-    SuperSpeed negotiation is fixed.
+    optical buffers plus Focusrite mic, Kiyo Pro mic, Kiyo mic, one USB Camera
+    mic, and active Scarlett speaker loopback receive samples. A second USB
+    Camera mic endpoint enumerates OK but produces zero WASAPI packets. Keep the
+    Focusrite away from the Leap USB neighborhood and treat Kiyo Pro as a ~25
+    fps source until its SuperSpeed negotiation is fixed.

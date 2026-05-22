@@ -125,6 +125,11 @@ public sealed class MimirRuntime : IAquariumRuntime
             return $"{buffer.Descriptor.SourceId}: {buffer.Count} {frame.Width}x{frame.Height} {frame.PixelFormat} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
         }
 
+        if (latest?.AudioBlock is { } block)
+        {
+            return $"{buffer.Descriptor.SourceId}: {buffer.Count} {block.Channels}ch {block.SampleRate}Hz {block.SampleFormat} frames {block.FrameCount} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
+        }
+
         return $"{buffer.Descriptor.SourceId}: {buffer.Count} edge {buffer.EdgeNs}";
     }
 }

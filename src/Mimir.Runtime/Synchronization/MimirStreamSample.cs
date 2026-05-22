@@ -10,4 +10,5 @@ public readonly record struct MimirStreamSample(
     ulong PayloadHandle,
     int ByteLength = 0,
     ReadOnlyMemory<byte> Data = default,
-    MimirVideoFrameDescriptor? VideoFrame = null);
+    MimirVideoFrameDescriptor? VideoFrame = null,
+    MimirAudioBlockDescriptor? AudioBlock = null);

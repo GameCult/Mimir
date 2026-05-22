@@ -35,6 +35,13 @@ flowchart TD
 
 ## Next Cut
 
-Add native audio capture workers that append typed blocks into
-`Mimir.Runtime`, then expose buffer depth, clock state, delay estimates, and
-stem routing in Aquarium UI.
+The current diagnostic witness is `native/probes/wasapi_audio_cadence`, which
+emits timestamped WASAPI `audio-block` metadata into `Mimir.Runtime` through the
+frame-event adapter. It has proven Focusrite mic, Kiyo Pro mic, Kiyo mic, one
+USB Camera mic, and Scarlett speaker loopback in rolling buffers when loopback
+audio is actively playing. A second USB Camera microphone endpoint enumerates
+but currently produces zero WASAPI packets.
+
+Next, replace the diagnostic bridge with native audio capture workers that
+append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
+delay estimates, and stem routing in Aquarium UI.
