@@ -159,11 +159,9 @@ current_status:
     drivers that push buffer handles into Mimir.Runtime. Current
     Mimir.BufferSmoke with `--require-samples` proves all five declared local
     optical buffers plus Focusrite mic, Kiyo Pro mic, Kiyo mic, one USB Camera
-    mic, and active Scarlett speaker loopback receive samples. The silent USB
-    Camera mic is the PS3 Eye audio endpoint parented to composite
-    `USB\VID_1415&PID_2000\8&2efe0359&0&1`; its MI_01 audio interface reports
-    OK but emits zero WASAPI packets, while its MI_00 camera interface is bound
-    to WinUSB/libwdi. The working Eye mic is parented to
-    `USB\VID_1415&PID_2000\8&29c54ea8&0&4` with MI_00 bound to libusbK. Keep the
-    Focusrite away from the Leap USB neighborhood and treat Kiyo Pro as a ~25
-    fps source until its SuperSpeed negotiation is fixed.
+    mic, both PS3 Eye mics, and active Scarlett speaker loopback receive
+    samples. One PS3 Eye mic previously enumerated OK but emitted zero WASAPI
+    packets; unplug/replug fixed the audio stream without changing that Eye's
+    MI_00 camera binding from WinUSB/libwdi to libusbK. Keep the Focusrite away
+    from the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until
+    its SuperSpeed negotiation is fixed.

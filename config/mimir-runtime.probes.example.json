@@ -109,7 +109,7 @@
       "sourceId": "mic-usb-camera-1",
       "kind": "Audio",
       "origin": "LocalDevice",
-      "enabled": false,
+      "enabled": true,
       "adapter": "frame-events",
       "command": "../native/probes/wasapi_audio_cadence/build/Release/wasapi_audio_cadence.exe",
       "arguments": [
