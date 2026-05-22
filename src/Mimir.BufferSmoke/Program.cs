@@ -5,6 +5,11 @@ if (args.Any(arg => string.Equals(arg, "--chirplet-self-test", StringComparison.
     return RunChirpletSelfTest();
 }
 
+if (args.Any(arg => string.Equals(arg, "--chirp-bin-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunChirpBinSelfTest();
+}
+
 if (args.Any(arg => string.Equals(arg, "--passive-sync-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunPassiveSyncSelfTest();
@@ -156,6 +161,41 @@ static int RunChirpletSelfTest()
     if (decode.ClockFit == null || decode.Anchors.Count < 12 || meanAbsoluteError > 0.25)
     {
         Console.Error.WriteLine("chirplet self-test failed: canonical timeline did not decode to sub-frame anchors");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int RunChirpBinSelfTest()
+{
+    var timeline = MimirChirpBinTimeline.Default;
+    var samples = new List<float>();
+    for (ulong segment = 0; segment < 6; segment++)
+    {
+        samples.AddRange(timeline.RenderSegmentMonoFloat(segment));
+    }
+
+    var decode = timeline.DecodeStreamWindow(samples.ToArray(), MimirChirpBinTimeline.SampleRate);
+    var meanAbsoluteError = decode.ClockFit?.MeanAbsoluteErrorSamples ?? double.PositiveInfinity;
+    Console.WriteLine(
+        $"chirp-bin-self-test frames={decode.Frames.Count} symbols={decode.Symbols.Count} anchors={decode.Anchors.Count} " +
+        $"clock={(decode.ClockFit is null ? "none" : decode.ClockFit.EffectiveSampleRate.ToString("0.000000"))} " +
+        $"confidence={(decode.ClockFit?.Confidence ?? 0.0):0.000} mae={meanAbsoluteError:0.000000}");
+    Console.WriteLine("chirp-bin-expected " + string.Join(",", Enumerable.Range(0, 12).Select(index => timeline.EventForIndex((ulong)index).SymbolId)));
+    Console.WriteLine("chirp-bin-symbols " + string.Join(",", decode.Symbols.Take(12).Select(symbol => $"{symbol.SymbolId}@{symbol.SampleOffset:0}:{symbol.Energy:0.000}")));
+
+    foreach (var anchor in decode.Anchors.Take(16))
+    {
+        var expected = timeline.EventForIndex(anchor.EventIndex).StartSeconds * MimirChirpBinTimeline.SampleRate;
+        Console.WriteLine(
+            $"chirp-bin-anchor event={anchor.EventIndex} actual={anchor.SampleOffset:0.000} expected={expected:0.000} " +
+            $"error={anchor.SampleOffset - expected:0.000} confidence={anchor.Confidence:0.000}");
+    }
+
+    if (decode.ClockFit == null || decode.Anchors.Count < 16 || meanAbsoluteError > 2.0)
+    {
+        Console.Error.WriteLine("chirp-bin self-test failed: dechirp/bin decoder did not recover stable timeline anchors");
         return 1;
     }
 

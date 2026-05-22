@@ -152,8 +152,12 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 }
             }
 
-            var comparedReferenceDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate);
-            var candidateDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate);
+            var comparedReferenceDecode = mode == MimirAudioSyncMode.Hybrid
+                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate)
+                : MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate);
+            var candidateDecode = mode == MimirAudioSyncMode.Hybrid
+                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate)
+                : MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate);
             var deterministicFit = EstimateDelayFromDecodedTimeline(comparedReferenceDecode, candidateDecode);
             lastDecodeTraces.Add(new MimirAudioSynchronizationDecodeTrace(
                 reference.Descriptor.SourceId,
@@ -177,7 +181,9 @@ public sealed class MimirAudioSynchronizationAnalyzer
             }
 
             var decodedDelaySamples = deterministicFit.DelaySamples;
-            var bandResponses = MimirChirpletTimeline.Default.EstimateBandResponse(candidateWindow, activeReferenceBlock.SampleRate);
+            var bandResponses = mode == MimirAudioSyncMode.Hybrid
+                ? []
+                : MimirChirpletTimeline.Default.EstimateBandResponse(candidateWindow, activeReferenceBlock.SampleRate);
             reports.Add(new MimirAudioSynchronizationReport(
                 reference.Descriptor.SourceId,
                 buffer.Descriptor.SourceId,
@@ -193,7 +199,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 buffer.Latest?.Sequence ?? 0,
                 deterministicFit.MatchedEvents,
                 deterministicFit.Confidence,
-                "chirplet"));
+                mode == MimirAudioSyncMode.Hybrid ? "chirp-bin" : "chirplet"));
         }
 
         return reports;

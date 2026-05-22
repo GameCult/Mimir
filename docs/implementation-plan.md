@@ -79,6 +79,10 @@ a named invariant that the native runtime cannot protect yet.
   path. It estimates loopback-to-mic delay with PHAT-weighted cross-spectrum
   correlation so music can act as the default timing witness before any audible
   watermark is needed.
+- `MimirChirpBinTimeline` is the active hybrid watermark path. It renders a
+  fixed-slope chirp-bin codebook and decodes symbols with one dechirp plus
+  fixed Goertzel bins, then feeds the same de Bruijn triplet timeline-anchor
+  machine. Use `--chirp-bin-self-test` to prove this path without hardware.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -118,10 +122,8 @@ a named invariant that the native runtime cannot protect yet.
    decoder through real loopback and microphone paths so every correctly heard
    triplet becomes a deterministic timeline anchor before the actuator moves
    samples.
-5. Replace the active chirplet fallback in hybrid mode with shaped watermark
-   emission when passive confidence drops. The watermark codebook should be
-   designed for dechirp/FFT or Goertzel classification, not dense sliding
-   matched filters.
+5. Prove the chirp-bin hybrid fallback through real loopback and microphones
+   with probe durations long enough to keep loopback and mic windows live.
 6. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 7. Move GPU feature extraction, fusion, material fitting, render budgeting, and

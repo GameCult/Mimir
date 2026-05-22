@@ -156,14 +156,18 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         var segmentCount = audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid ? 1 : CalibrationBatchSegments;
-        var batch = RenderCalibrationBatchPcm16Base64(calibrationSegmentIndex, segmentCount, out var peak);
+        var batch = RenderCalibrationBatchPcm16Base64(
+            calibrationSegmentIndex,
+            segmentCount,
+            audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid,
+            out var peak);
         visualRuntime.Audio.EnqueuePcm16Base64(
             batch,
             MimirChirpletTimeline.SampleRate,
             channels: 1,
             gain: calibrationGain);
         Console.WriteLine(
-            $"mimir-chirplet-batch firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={calibrationGain:0.###} base64Bytes={batch.Length}");
+            $"mimir-chirplet-batch mode={DescribeAudioSyncMode()} firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={calibrationGain:0.###} base64Bytes={batch.Length}");
         calibrationSegmentIndex += (ulong)segmentCount;
     }
 
@@ -178,7 +182,11 @@ public sealed class MimirRuntime : IAquariumRuntime
         return $"{audioSyncSettings.ReferenceSourceId} {DescribeAudioSyncMode()} timeline {MimirChirpletTimeline.SegmentSeconds:0.00}s segments emitted to {emittedUntilSeconds:0.00}s passiveConfidence={lastPassiveSynchronizationConfidence:0.000}";
     }
 
-    private static string RenderCalibrationBatchPcm16Base64(ulong firstSegment, int segmentCount, out float peak)
+    private static string RenderCalibrationBatchPcm16Base64(
+        ulong firstSegment,
+        int segmentCount,
+        bool useChirpBinTimeline,
+        out float peak)
     {
         var samplesPerSegment = (int)Math.Round(MimirChirpletTimeline.SegmentSeconds * MimirChirpletTimeline.SampleRate);
         var bytes = new byte[samplesPerSegment * Math.Max(1, segmentCount) * sizeof(short)];
@@ -186,7 +194,9 @@ public sealed class MimirRuntime : IAquariumRuntime
         peak = 0.0f;
         for (var segment = 0; segment < segmentCount; segment++)
         {
-            var samples = MimirChirpletTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment);
+            var samples = useChirpBinTimeline
+                ? MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment)
+                : MimirChirpletTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment);
             for (var index = 0; index < samples.Length; index++)
             {
                 peak = Math.Max(peak, Math.Abs(samples[index]));

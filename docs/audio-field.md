@@ -51,12 +51,11 @@ timing evidence Mimir is allowed to emit:
   timing witness by estimating delay between the loopback buffer and each mic
   buffer.
 - `hybrid`: prefer passive program-audio evidence when confidence is high, then
-  emit a watermark when confidence falls. Today the passive side uses bounded
-  GCC-PHAT-style phase correlation and the fallback still uses the old active
-  chirplet pilot in half-second chunks. The intended watermark is the
-  dechirp/FFT-friendly chirp-bin codebook from the decoder research notes,
-  shaped and low-gain enough to sit inside the program audio instead of
-  announcing itself like a lab sweep.
+  emit a watermark when confidence falls. The passive side uses bounded
+  GCC-PHAT-style phase correlation. The active fallback now uses
+  `MimirChirpBinTimeline`: a fixed-slope chirp-bin watermark whose symbols are
+  decoded by one dechirp and a fixed Goertzel bin bank instead of dense sliding
+  matched filters.
 
 The mode belongs to the runtime, not the decoder. The decoder should consume
 known timing evidence; it should not decide whether Mimir is allowed to make
@@ -70,6 +69,13 @@ relative to loopback. Negative lags are treated as contradictory passive
 evidence and carry zero confidence. A single passive window is also capped below
 certainty; full confidence belongs to repeated coherent state over time, not
 one attractive correlation peak.
+
+The active watermark path is deliberately receiver-cheap. `MimirChirpBinTimeline`
+uses a common chirp duration, chirp slope, and Hann window for every symbol.
+Symbol identity is the dechirped frequency bin. The synthetic invariant is
+`dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
+it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and
+requires code-valid triplet anchors plus a stable source clock.
 
 ## Next Cut
 
@@ -186,13 +192,10 @@ timeline anchors. Current synthetic proof detects all 15 emitted chirps, keeps
 device runs still depend on loopback capture staying live; the local Scarlett
 loopback has intermittently stopped advancing during short headless sniffs.
 
-This matcher is a proof, not the final hot path. `BuildChirpletEnergyTrace`
-still behaves like a dense sliding matched-filter bank. The current research
-note at `research/chirplet-sync-decoder/summary.md` points at the better
-receiver shape: design the emitted symbol codebook so a mic can dechirp a
-candidate event window and classify symbols by FFT or Goertzel bins. The
-transmitter is ours; do not preserve arbitrary symbol shapes if they force the
-receiver to spend a CPU core proving they exist.
+The older `MimirChirpletTimeline` matcher is now the chirp-only lab path, not
+the hybrid fallback. `BuildChirpletEnergyTrace` still behaves like a dense
+sliding matched-filter bank and should not retake the hot path. The active
+hybrid watermark belongs to the chirp-bin machine.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
