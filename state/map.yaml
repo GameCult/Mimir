@@ -105,7 +105,8 @@ accepted_design:
     `MimirChirpBinTimeline` is the active hybrid watermark path: one fixed chirp
     slope/window, 32 symbol frequency bins, dechirp plus fixed Goertzel bin
     scoring, then the existing de Bruijn triplet anchor and clock-fit machine.
-    The synthetic proof is `dotnet run --project
+    Hybrid emits it as low-gain half-second bursts every two seconds while
+    passive confidence is weak, never as catch-up backlog. The synthetic proof is `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared

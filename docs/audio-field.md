@@ -55,7 +55,8 @@ timing evidence Mimir is allowed to emit:
   GCC-PHAT-style phase correlation. The active fallback now uses
   `MimirChirpBinTimeline`: a fixed-slope chirp-bin watermark whose symbols are
   decoded by one dechirp and a fixed Goertzel bin bank instead of dense sliding
-  matched filters.
+  matched filters. Hybrid emission is pulsed, not continuous: when passive
+  confidence is weak, Mimir emits one half-second coded burst every two seconds.
 
 The mode belongs to the runtime, not the decoder. The decoder should consume
 known timing evidence; it should not decide whether Mimir is allowed to make
@@ -75,7 +76,9 @@ uses a common chirp duration, chirp slope, and Hann window for every symbol.
 Symbol identity is the dechirped frequency bin. The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
 it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and
-requires code-valid triplet anchors plus a stable source clock.
+requires code-valid triplet anchors plus a stable source clock. Default hybrid
+watermark gain is intentionally low (`watermarkGain`, or
+`MIMIR_WATERMARK_GAIN`) and separate from the louder chirp-only lab gain.
 
 ## Next Cut
 

@@ -56,12 +56,15 @@ public sealed class MimirAudioSynchronizationSettings
 {
     public const string DefaultReferenceSourceId = "loopback-scarlett-speakers";
     public const float DefaultCalibrationGain = 2.0f;
+    public const float DefaultWatermarkGain = 0.035f;
 
     public MimirAudioSyncMode Mode { get; init; } = MimirAudioSyncMode.Hybrid;
 
     public string ReferenceSourceId { get; init; } = DefaultReferenceSourceId;
 
     public float CalibrationGain { get; init; } = DefaultCalibrationGain;
+
+    public float WatermarkGain { get; init; } = DefaultWatermarkGain;
 
     public static MimirAudioSynchronizationSettings FromEnvironment()
     {
@@ -75,6 +78,7 @@ public sealed class MimirAudioSynchronizationSettings
             Mode = ParseMode(Environment.GetEnvironmentVariable("MIMIR_AUDIO_SYNC_MODE"), Mode),
             ReferenceSourceId = ReadReferenceSourceId(ReferenceSourceId),
             CalibrationGain = ReadCalibrationGain(CalibrationGain),
+            WatermarkGain = ReadWatermarkGain(WatermarkGain),
         };
     }
 
@@ -106,6 +110,13 @@ public sealed class MimirAudioSynchronizationSettings
     {
         return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_CHIRPLET_GAIN"), out var gain)
             ? Math.Clamp(gain, 0.0f, 4.0f)
+            : fallback;
+    }
+
+    private static float ReadWatermarkGain(float fallback)
+    {
+        return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_WATERMARK_GAIN"), out var gain)
+            ? Math.Clamp(gain, 0.0f, 0.25f)
             : fallback;
     }
 }

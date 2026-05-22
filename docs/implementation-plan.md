@@ -82,7 +82,9 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirChirpBinTimeline` is the active hybrid watermark path. It renders a
   fixed-slope chirp-bin codebook and decodes symbols with one dechirp plus
   fixed Goertzel bins, then feeds the same de Bruijn triplet timeline-anchor
-  machine. Use `--chirp-bin-self-test` to prove this path without hardware.
+  machine. Hybrid emits this as low-gain half-second bursts every two seconds
+  only while passive confidence is weak. Use `--chirp-bin-self-test` to prove
+  this path without hardware.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live

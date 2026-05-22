@@ -15,6 +15,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const double HybridPassiveConfidenceThreshold = 0.12;
     private const double CalibrationStartSeconds = 0.5;
     private const int CalibrationBatchSegments = 120;
+    private const int HybridWatermarkIntervalSegments = 4;
     private readonly LocalCastRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
@@ -22,11 +23,13 @@ public sealed class MimirRuntime : IAquariumRuntime
     private readonly float telemetryIntervalSeconds;
     private readonly float audioSyncUpdateIntervalSeconds;
     private readonly float calibrationGain;
+    private readonly float watermarkGain;
     private int lastPollCount;
     private float runtimeSeconds;
     private float nextAudioSyncSeconds;
     private float nextTelemetrySeconds;
     private ulong calibrationSegmentIndex;
+    private long lastHybridWatermarkSegment = -1;
     private double lastAudioSyncAnalysisMilliseconds;
     private double lastPassiveSynchronizationConfidence;
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
@@ -58,6 +61,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
         calibrationGain = settings.Audio.CalibrationGain;
+        watermarkGain = settings.Audio.WatermarkGain;
         nextAudioSyncSeconds = audioSyncUpdateIntervalSeconds;
         nextTelemetrySeconds = telemetryIntervalSeconds;
         foreach (var source in streamSources)
@@ -149,6 +153,21 @@ public sealed class MimirRuntime : IAquariumRuntime
             return;
         }
 
+        var currentSegmentIndex = CurrentCalibrationSegmentIndex();
+        if (audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid)
+        {
+            calibrationSegmentIndex = currentSegmentIndex;
+            if (calibrationSegmentIndex % HybridWatermarkIntervalSegments != 0UL ||
+                (long)calibrationSegmentIndex == lastHybridWatermarkSegment)
+            {
+                return;
+            }
+        }
+        else if (calibrationSegmentIndex + 1UL < currentSegmentIndex)
+        {
+            calibrationSegmentIndex = currentSegmentIndex;
+        }
+
         var nextSegmentSeconds = CalibrationStartSeconds + calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
         if (runtimeSeconds < nextSegmentSeconds)
         {
@@ -156,6 +175,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         var segmentCount = audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid ? 1 : CalibrationBatchSegments;
+        var outputGain = audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid ? watermarkGain : calibrationGain;
         var batch = RenderCalibrationBatchPcm16Base64(
             calibrationSegmentIndex,
             segmentCount,
@@ -165,10 +185,27 @@ public sealed class MimirRuntime : IAquariumRuntime
             batch,
             MimirChirpletTimeline.SampleRate,
             channels: 1,
-            gain: calibrationGain);
+            gain: outputGain);
         Console.WriteLine(
-            $"mimir-chirplet-batch mode={DescribeAudioSyncMode()} firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={calibrationGain:0.###} base64Bytes={batch.Length}");
-        calibrationSegmentIndex += (ulong)segmentCount;
+            $"mimir-chirplet-batch mode={DescribeAudioSyncMode()} firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={outputGain:0.###} base64Bytes={batch.Length}");
+        if (audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid)
+        {
+            lastHybridWatermarkSegment = (long)calibrationSegmentIndex;
+        }
+        else
+        {
+            calibrationSegmentIndex += (ulong)segmentCount;
+        }
+    }
+
+    private ulong CurrentCalibrationSegmentIndex()
+    {
+        if (runtimeSeconds <= CalibrationStartSeconds)
+        {
+            return 0UL;
+        }
+
+        return (ulong)Math.Floor((runtimeSeconds - CalibrationStartSeconds) / MimirChirpletTimeline.SegmentSeconds);
     }
 
     private string DescribeChirpletReference()

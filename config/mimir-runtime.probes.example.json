@@ -3,7 +3,8 @@
   "audioSync": {
     "mode": "hybrid",
     "referenceSourceId": "loopback-scarlett-speakers",
-    "calibrationGain": 2.0
+    "calibrationGain": 2.0,
+    "watermarkGain": 0.035
   },
   "streams": [
     {
@@ -34,7 +35,7 @@
         "320",
         "240",
         "187",
-        "30",
+        "3600",
         "--emit-json-frames"
       ],
       "acceptSourceIds": [
@@ -55,7 +56,7 @@
         "--endpoint",
         "{0.0.1.00000000}.{16af9455-4539-4de2-8172-563d991d9e34}",
         "--seconds",
-        "30",
+        "3600",
         "--emit-json-blocks",
         "--include-samples"
       ]
@@ -73,7 +74,7 @@
         "--endpoint",
         "{0.0.1.00000000}.{abc7fd11-3b7d-4cfa-82ee-8767dae13fac}",
         "--seconds",
-        "30",
+        "3600",
         "--emit-json-blocks",
         "--include-samples"
       ]
@@ -91,7 +92,7 @@
         "--endpoint",
         "{0.0.1.00000000}.{ef1fdd6f-c721-4d5a-b183-5bd81dc57c1f}",
         "--seconds",
-        "30",
+        "3600",
         "--emit-json-blocks",
         "--include-samples"
       ]
@@ -109,7 +110,7 @@
         "--endpoint",
         "{0.0.1.00000000}.{57befef3-599c-4c73-a0cd-9539ffc2f54f}",
         "--seconds",
-        "30",
+        "3600",
         "--emit-json-blocks",
         "--include-samples"
       ]
@@ -127,7 +128,7 @@
         "--endpoint",
         "{0.0.1.00000000}.{f26c55af-5018-438a-8cc1-6dbead205a3c}",
         "--seconds",
-        "30",
+        "3600",
         "--emit-json-blocks",
         "--include-samples"
       ]
@@ -146,7 +147,7 @@
         "--endpoint",
         "{0.0.0.00000000}.{defdb2ab-ea1a-4eba-ab59-57038754f387}",
         "--seconds",
-        "30",
+        "3600",
         "--emit-json-blocks",
         "--include-samples"
       ]
