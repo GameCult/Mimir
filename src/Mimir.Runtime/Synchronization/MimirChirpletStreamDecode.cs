@@ -1,5 +1,17 @@
 namespace Mimir.Runtime.Synchronization;
 
+public sealed record MimirChirpletSymbolCandidate(
+    int SymbolId,
+    double Energy);
+
+public sealed record MimirChirpletTransformFrame(
+    double SampleOffset,
+    IReadOnlyList<MimirChirpletSymbolCandidate> Candidates)
+{
+    public MimirChirpletSymbolCandidate BestCandidate =>
+        Candidates.OrderByDescending(candidate => candidate.Energy).First();
+}
+
 public sealed record MimirChirpletSymbolObservation(
     int SymbolId,
     double SampleOffset,
@@ -24,6 +36,7 @@ public sealed record MimirChirpletClockFit(
 }
 
 public sealed record MimirChirpletStreamDecode(
+    IReadOnlyList<MimirChirpletTransformFrame> Frames,
     IReadOnlyList<MimirChirpletSymbolObservation> Symbols,
     IReadOnlyList<MimirChirpletTimelineAnchor> Anchors,
     MimirChirpletClockFit? ClockFit);

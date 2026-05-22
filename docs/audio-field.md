@@ -64,10 +64,12 @@ quiet birdsong texture than a repeated sweep.
 The intended decoder is a constrained chirplet transform, not a generic
 time-frequency explorer and not an outlier filter around bad guesses. Mimir owns
 the emitter, so the receiver projects each mic stream against the known chirplet
-dictionary, produces symbol likelihood events, and decodes every valid
-consecutive triplet through the de Bruijn map. A decoded triplet is a canonical
-timeline anchor: observed sample offset `S` corresponds to emitted event time
-`T`. A stream of anchors fits the source clock directly:
+dictionary, produces transform frames with multiple symbol candidates, and
+scores candidate triplets through the de Bruijn map. A triplet only becomes a
+canonical timeline anchor when its symbol likelihoods, measured inter-chirp
+gaps, and neighboring anchors agree on one local sample clock. A decoded anchor
+means observed sample offset `S` corresponds to emitted event time `T`. A stream
+of anchors fits the source clock directly:
 
 ```text
 observed_sample = source_offset + canonical_seconds * effective_sample_rate

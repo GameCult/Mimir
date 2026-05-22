@@ -72,9 +72,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   symbol/event decoding, and per-band response hooks. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
   now tracks smoothed delay and delay-slope/SRO ppm. `MimirChirpletStreamDecoder`
-  is the first constrained chirplet-transform receiver: it emits symbol
-  observations, code-valid triplet anchors, and a source clock fit from a
-  bounded PCM window. `MimirRuntime` runs sync analysis as a bounded rotating
+  is the first constrained chirplet-transform receiver: it emits transform
+  frames with multiple symbol candidates, selects code-valid triplet anchors
+  through gap/clock coherence, and fits a source clock from a bounded PCM
+  window. `MimirRuntime` runs sync analysis as a bounded rotating
   service and caches reports/states for UI and telemetry; readouts must stay
   passive. Actual Mimir.App testing proves Aquarium audio wakes Scarlett
   loopback, keeps mic buffers live, and produces confident online sync states,

@@ -76,7 +76,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
             var referenceDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, referenceBlock.SampleRate);
             var candidateDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, referenceBlock.SampleRate);
             var deterministicFit = EstimateDelayFromDecodedTimeline(referenceDecode, candidateDecode);
-            if (deterministicFit.MatchedEvents >= 1)
+            if (deterministicFit.MatchedEvents >= 3)
             {
                 var decodedDelaySamples = deterministicFit.DelaySamples;
                 var decodedBandResponses = MimirChirpletTimeline.Default.EstimateBandResponse(candidateWindow, referenceBlock.SampleRate);
@@ -189,7 +189,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 Math.Sqrt(referenceAnchor.Confidence * candidateAnchor.Confidence)));
         }
 
-        if (matched.Count >= 1)
+        if (matched.Count >= 3)
         {
             var totalWeight = matched.Sum(pair => Math.Max(1.0e-6, pair.Weight));
             var delay = matched.Sum(pair => pair.Delay * Math.Max(1.0e-6, pair.Weight)) / totalWeight;

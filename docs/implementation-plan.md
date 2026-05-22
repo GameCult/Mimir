@@ -50,9 +50,10 @@ a named invariant that the native runtime cannot protect yet.
   horizon. Symbol identity is carried by start band, glide shape, duration, and
   following inter-chirp gap.
 - `MimirChirpletStreamDecoder` is the first constrained chirplet-transform
-  receiver. It owns a bounded PCM window, emits symbol observations, decodes
-  code-valid triplet anchors onto the canonical timeline, and fits a per-source
-  sample clock from those anchors.
+  receiver. It owns a bounded PCM window, emits transform frames with multiple
+  symbol candidates, decodes code-valid triplet anchors through a local trellis
+  that requires gap and clock coherence, and fits a per-source sample clock from
+  those anchors.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline.
   The analyzer now prefers decoded triplet timeline anchors and derives delay

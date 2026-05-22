@@ -73,9 +73,9 @@ accepted_design:
     inter-chirp gap. Any three consecutive correctly detected symbols identify a
     timeline event within the current operating horizon. `MimirChirpletStreamDecoder`
     is the first constrained chirplet-transform receiver: it owns a bounded PCM
-    window, emits symbol observations, decodes code-valid triplet anchors onto
-    the canonical timeline, and fits a per-source sample clock from those
-    anchors. `MimirAudioSynchronizationAnalyzer` now treats
+    window, emits transform frames with multiple symbol candidates, decodes
+    code-valid triplet anchors through gap/clock coherence, and fits a
+    per-source sample clock from those anchors. `MimirAudioSynchronizationAnalyzer` now treats
     `loopback-scarlett-speakers` as timing authority, prefers delay from matched
     decoded timeline anchors, and keeps the older chirplet-energy lag search as
     a diagnostic fallback while the decoder is cut over. Positive delay means

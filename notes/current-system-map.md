@@ -101,10 +101,11 @@ matched event indices when the symbol decoder succeeds, and can build a
 provisional aligned mono frame for channels that clear the confidence gate.
 Reports now carry fractional delay and per-band matched energy. The first
 `MimirChirpletStreamDecoder` exists as the constrained chirplet-transform
-receiver: it turns a bounded PCM window into symbol observations, every
-code-valid triplet anchor it can prove, and an affine source clock fit. The
-analyzer prefers matched canonical anchors before falling back to the older
-chirplet-energy lag search. The hub also owns cached reports plus smoothed
+receiver: it turns a bounded PCM window into transform frames with multiple
+symbol candidates, code-valid triplet anchors selected through gap/clock
+coherence, and an affine source clock fit. The analyzer prefers matched
+canonical anchors before falling back to the older chirplet-energy lag search.
+The hub also owns cached reports plus smoothed
 per-source sync state with delay-slope/SRO in ppm. `MimirRuntime` runs analysis
 online as a bounded rotating service and can print live telemetry with
 `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are passive readers of cached

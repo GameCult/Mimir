@@ -46,6 +46,7 @@ public sealed class MimirChirpletTimeline
     private const double MaxEventGapSeconds = 0.162;
     private const double MaxEventDurationSeconds = 0.078;
     private const double Gain = 0.090;
+    private const int MaxSymbolCandidatesPerFrame = 8;
 
     private static readonly int[] TimelineSymbols = RotateToDistinctOpening(BuildDeBruijn(SymbolCount, TimelineOrder));
     private static readonly Dictionary<int, int> TripleToIndex = BuildTripleIndex(TimelineSymbols);
@@ -138,18 +139,19 @@ public sealed class MimirChirpletTimeline
     {
         if (samples.Length == 0)
         {
-            return new MimirChirpletStreamDecode([], [], null);
+            return new MimirChirpletStreamDecode([], [], [], null);
         }
 
-        var symbols = DetectSymbolEvents(samples, sampleRate, Math.Max(1, sampleRate / 200))
-            .Select(observation => new MimirChirpletSymbolObservation(
-                observation.SymbolId,
-                observation.SampleOffset,
-                observation.Energy))
+        var frames = DetectTransformFrames(samples, sampleRate, Math.Max(1, sampleRate / 200));
+        var symbols = frames
+            .Select(frame => new MimirChirpletSymbolObservation(
+                frame.BestCandidate.SymbolId,
+                frame.SampleOffset,
+                frame.BestCandidate.Energy))
             .ToArray();
-        var anchors = PlaceAllTripletAnchors(symbols, sampleRate);
+        var anchors = DecodeTrellisAnchors(frames, sampleRate);
         var clock = FitClock(anchors, sampleRate);
-        return new MimirChirpletStreamDecode(symbols, anchors, clock);
+        return new MimirChirpletStreamDecode(frames, symbols, anchors, clock);
     }
 
     public MimirChirpletTimelinePlacement DecodeReferenceWindow(
@@ -277,6 +279,102 @@ public sealed class MimirChirpletTimeline
         return SuppressNearbyDetections(candidates, sampleRate);
     }
 
+    private IReadOnlyList<MimirChirpletTransformFrame> DetectTransformFrames(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        int hopSamples)
+    {
+        if (samples.Length == 0)
+        {
+            return [];
+        }
+
+        var coarse = ContrastNormalize(BuildEnvelopeEnergyTrace(samples, sampleRate, hopSamples));
+        if (coarse.Length <= 2)
+        {
+            return [];
+        }
+
+        var frames = new List<MimirChirpletTransformFrame>();
+        for (var frame = 1; frame < coarse.Length - 1; frame++)
+        {
+            if (coarse[frame] < 0.055 ||
+                coarse[frame] < coarse[frame - 1] ||
+                coarse[frame] < coarse[frame + 1])
+            {
+                continue;
+            }
+
+            var transformFrame = ClassifySymbolsAt(
+                samples,
+                sampleRate,
+                frame * hopSamples,
+                Math.Max(hopSamples * 3, sampleRate / 100));
+            if (transformFrame != null)
+            {
+                frames.Add(transformFrame);
+            }
+        }
+
+        return SuppressNearbyFrames(frames, sampleRate);
+    }
+
+    private MimirChirpletTransformFrame? ClassifySymbolsAt(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        int predictedOffset,
+        int searchRadiusSamples)
+    {
+        var candidates = new List<(MimirChirpletSymbolCandidate Candidate, int Offset)>(SymbolTones.Length);
+        for (var symbol = 0; symbol < SymbolTones.Length; symbol++)
+        {
+            var tone = SymbolTones[symbol];
+            var kernel = sampleRate == SampleRate ? symbolKernels[symbol] : RenderToneKernel(tone, sampleRate);
+            if (kernel.Length == 0 || samples.Length < kernel.Length)
+            {
+                continue;
+            }
+
+            var start = Math.Max(0, predictedOffset - searchRadiusSamples);
+            var end = Math.Min(samples.Length - kernel.Length, predictedOffset + searchRadiusSamples);
+            var bestEnergy = 0.0;
+            var bestOffset = predictedOffset;
+            var step = Math.Max(1, searchRadiusSamples / 8);
+            for (var offset = start; offset <= end; offset += step)
+            {
+                var energy = DirectionalMatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
+                if (energy > bestEnergy)
+                {
+                    bestEnergy = energy;
+                    bestOffset = offset;
+                }
+            }
+
+            if (bestEnergy >= 0.08)
+            {
+                candidates.Add((new MimirChirpletSymbolCandidate(symbol, bestEnergy), bestOffset));
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var ordered = candidates
+            .OrderByDescending(candidate => candidate.Candidate.Energy)
+            .Take(MaxSymbolCandidatesPerFrame)
+            .ToArray();
+        if (ordered[0].Candidate.Energy < 0.25)
+        {
+            return null;
+        }
+
+        return new MimirChirpletTransformFrame(
+            ordered[0].Offset,
+            ordered.Select(candidate => candidate.Candidate).ToArray());
+    }
+
     private MimirChirpletEventObservation? ClassifySymbolAt(
         ReadOnlySpan<float> samples,
         int sampleRate,
@@ -336,6 +434,30 @@ public sealed class MimirChirpletTimeline
         }
 
         return kept.OrderBy(observation => observation.SampleOffset).ToArray();
+    }
+
+    private static IReadOnlyList<MimirChirpletTransformFrame> SuppressNearbyFrames(
+        IReadOnlyList<MimirChirpletTransformFrame> frames,
+        int sampleRate)
+    {
+        if (frames.Count == 0)
+        {
+            return [];
+        }
+
+        var minimumSpacingSamples = MinEventGapSeconds * sampleRate * 0.55;
+        var kept = new List<MimirChirpletTransformFrame>();
+        foreach (var frame in frames.OrderByDescending(frame => frame.BestCandidate.Energy))
+        {
+            if (kept.Any(existing => Math.Abs(existing.SampleOffset - frame.SampleOffset) < minimumSpacingSamples))
+            {
+                continue;
+            }
+
+            kept.Add(frame);
+        }
+
+        return kept.OrderBy(frame => frame.SampleOffset).ToArray();
     }
 
     private static MimirChirpletTimelinePlacement PlaceObservedSymbols(
@@ -442,6 +564,124 @@ public sealed class MimirChirpletTimeline
             .ToArray();
     }
 
+    private static IReadOnlyList<MimirChirpletTimelineAnchor> DecodeTrellisAnchors(
+        IReadOnlyList<MimirChirpletTransformFrame> frames,
+        int sampleRate)
+    {
+        if (frames.Count < TimelineOrder)
+        {
+            return [];
+        }
+
+        var candidates = new List<MimirChirpletTimelineAnchor>();
+        for (var index = 0; index <= frames.Count - TimelineOrder; index++)
+        {
+            var firstFrame = frames[index];
+            var secondFrame = frames[index + 1];
+            var thirdFrame = frames[index + 2];
+            if (!IsConsecutiveByTime(firstFrame, secondFrame, sampleRate) ||
+                !IsConsecutiveByTime(secondFrame, thirdFrame, sampleRate))
+            {
+                continue;
+            }
+
+            foreach (var first in firstFrame.Candidates)
+            foreach (var second in secondFrame.Candidates)
+            foreach (var third in thirdFrame.Candidates)
+            {
+                var code = TripleCode(first.SymbolId, second.SymbolId, third.SymbolId);
+                if (!TripleToIndex.TryGetValue(code, out var eventIndex))
+                {
+                    continue;
+                }
+
+                var firstEvent = Default.EventForIndex((ulong)eventIndex);
+                var secondEvent = Default.EventForIndex((ulong)eventIndex + 1UL);
+                var thirdEvent = Default.EventForIndex((ulong)eventIndex + 2UL);
+                var measuredGapA = (secondFrame.SampleOffset - firstFrame.SampleOffset) / sampleRate;
+                var measuredGapB = (thirdFrame.SampleOffset - secondFrame.SampleOffset) / sampleRate;
+                var expectedGapA = secondEvent.StartSeconds - firstEvent.StartSeconds;
+                var expectedGapB = thirdEvent.StartSeconds - secondEvent.StartSeconds;
+                var gapError = Math.Abs(measuredGapA - expectedGapA) + Math.Abs(measuredGapB - expectedGapB);
+                var gapConfidence = 1.0 / (1.0 + gapError / 0.004);
+                if (gapConfidence < 0.50)
+                {
+                    continue;
+                }
+
+                var energyConfidence = Math.Clamp((first.Energy + second.Energy + third.Energy) / 3.0, 0.0, 1.0);
+                candidates.Add(new MimirChirpletTimelineAnchor(
+                    (ulong)eventIndex,
+                    firstEvent.StartSeconds,
+                    firstFrame.SampleOffset,
+                    gapConfidence * 0.70 + energyConfidence * 0.30,
+                    [
+                        new MimirChirpletSymbolObservation(first.SymbolId, firstFrame.SampleOffset, first.Energy),
+                        new MimirChirpletSymbolObservation(second.SymbolId, secondFrame.SampleOffset, second.Energy),
+                        new MimirChirpletSymbolObservation(third.SymbolId, thirdFrame.SampleOffset, third.Energy),
+                    ]));
+            }
+        }
+
+        return SelectCoherentAnchorPath(candidates, sampleRate);
+    }
+
+    private static IReadOnlyList<MimirChirpletTimelineAnchor> SelectCoherentAnchorPath(
+        IReadOnlyList<MimirChirpletTimelineAnchor> candidates,
+        int sampleRate)
+    {
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        List<MimirChirpletTimelineAnchor> bestPath = [];
+        var bestScore = double.NegativeInfinity;
+        foreach (var seed in candidates.OrderByDescending(anchor => anchor.Confidence).Take(64))
+        {
+            var seedOffset = seed.SampleOffset - seed.TimelineSeconds * sampleRate;
+            var path = candidates
+                .Where(anchor =>
+                    Math.Abs((anchor.SampleOffset - anchor.TimelineSeconds * sampleRate) - seedOffset) <= sampleRate * 0.008)
+                .GroupBy(anchor => anchor.EventIndex)
+                .Select(group => group.OrderByDescending(anchor => anchor.Confidence).First())
+                .OrderBy(anchor => anchor.EventIndex)
+                .ToList();
+            var clock = FitClock(path, sampleRate);
+            if (clock == null)
+            {
+                continue;
+            }
+
+            var score = path.Sum(anchor => anchor.Confidence) +
+                Math.Min(path.Count, 12) * 0.20 -
+                clock.MeanAbsoluteErrorSamples / Math.Max(1.0, sampleRate * 0.001);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestPath = path;
+            }
+        }
+
+        if (bestPath.Count == 0)
+        {
+            return [];
+        }
+
+        var finalClock = FitClock(bestPath, sampleRate);
+        if (finalClock == null)
+        {
+            return [];
+        }
+
+        return bestPath
+            .Where(anchor =>
+                Math.Abs(anchor.SampleOffset - finalClock.SampleForTimelineSeconds(anchor.TimelineSeconds)) <=
+                Math.Max(24.0, sampleRate * 0.002))
+            .OrderBy(anchor => anchor.SampleOffset)
+            .ToArray();
+    }
+
     private static MimirChirpletClockFit? FitClock(
         IReadOnlyList<MimirChirpletTimelineAnchor> anchors,
         int sampleRate)
@@ -513,6 +753,15 @@ public sealed class MimirChirpletTimeline
     private static bool IsConsecutiveByTime(
         MimirChirpletSymbolObservation first,
         MimirChirpletSymbolObservation second,
+        int sampleRate)
+    {
+        var seconds = (second.SampleOffset - first.SampleOffset) / sampleRate;
+        return seconds >= MinEventGapSeconds * 0.55 && seconds <= MaxEventGapSeconds * 1.45;
+    }
+
+    private static bool IsConsecutiveByTime(
+        MimirChirpletTransformFrame first,
+        MimirChirpletTransformFrame second,
         int sampleRate)
     {
         var seconds = (second.SampleOffset - first.SampleOffset) / sampleRate;
