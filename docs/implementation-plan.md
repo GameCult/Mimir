@@ -38,7 +38,9 @@ a named invariant that the native runtime cannot protect yet.
   the same camera set once per stream.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
-  empty declared sensor buffer should fail the run.
+  empty declared sensor buffer should fail the run. Use `--chirplet-self-test`
+  to render the canonical timeline into memory and verify that the constrained
+  decoder recovers sub-frame anchors without hardware.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter.
@@ -53,9 +55,9 @@ a named invariant that the native runtime cannot protect yet.
   a unique chirp shape, with inter-chirp rhythm as additional code evidence.
 - `MimirChirpletStreamDecoder` is the first constrained chirplet-transform
   receiver. It owns a bounded PCM window, emits transform frames with multiple
-  symbol candidates and per-candidate refined sample offsets, decodes code-valid
-  triplet anchors through a local trellis that requires gap and clock coherence,
-  and fits a per-source sample clock from those anchors.
+  phase-invariant symbol candidates and per-candidate refined sample offsets,
+  decodes code-valid triplet anchors through a local trellis that requires gap
+  and clock coherence, and fits a per-source sample clock from those anchors.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline.
   The analyzer derives delay only from matched decoded triplet timeline anchors.
@@ -105,9 +107,10 @@ a named invariant that the native runtime cannot protect yet.
    workers for local mic, loopback, and network audio feeds.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
-   `MimirAudioSynchronizationState`. First, finish the constrained chirplet-transform decoder so every correctly
-   heard triplet becomes a deterministic timeline anchor and the state tracker no
-   longer has to launder ambiguous lag guesses.
+   `MimirAudioSynchronizationState`. First, prove the constrained chirplet
+   decoder through real loopback and microphone paths so every correctly heard
+   triplet becomes a deterministic timeline anchor before the actuator moves
+   samples.
 5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 6. Move GPU feature extraction, fusion, material fitting, render budgeting, and

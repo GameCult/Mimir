@@ -1,5 +1,10 @@
 using Mimir.Runtime.Synchronization;
 
+if (args.Any(arg => string.Equals(arg, "--chirplet-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunChirpletSelfTest();
+}
+
 var duration = TimeSpan.FromSeconds(ParseDoubleOption(args, "--seconds", 10.0));
 var pollDelay = TimeSpan.FromMilliseconds(ParseDoubleOption(args, "--poll-ms", 10.0));
 var requireSamples = args.Any(arg => string.Equals(arg, "--require-samples", StringComparison.OrdinalIgnoreCase));
@@ -110,6 +115,39 @@ static string DescribeBands(IReadOnlyList<MimirChirpletBandResponse> bands)
     return bands.Count == 0
         ? "none"
         : string.Join(",", bands.Select(band => $"{band.CenterHz:0}Hz:{band.Energy:0.000}"));
+}
+
+static int RunChirpletSelfTest()
+{
+    var timeline = MimirChirpletTimeline.Default;
+    var decoder = new MimirChirpletStreamDecoder(windowDuration: TimeSpan.FromSeconds(2));
+    MimirChirpletStreamDecode decode = new([], [], [], null);
+    for (ulong segment = 0; segment < 4; segment++)
+    {
+        decode = decoder.Append(timeline.RenderSegmentMonoFloat(segment));
+    }
+
+    var meanAbsoluteError = decode.ClockFit?.MeanAbsoluteErrorSamples ?? double.PositiveInfinity;
+    Console.WriteLine(
+        $"chirplet-self-test frames={decode.Frames.Count} symbols={decode.Symbols.Count} anchors={decode.Anchors.Count} " +
+        $"clock={(decode.ClockFit is null ? "none" : decode.ClockFit.EffectiveSampleRate.ToString("0.000000"))} " +
+        $"confidence={(decode.ClockFit?.Confidence ?? 0.0):0.000} mae={meanAbsoluteError:0.000000}");
+
+    foreach (var anchor in decode.Anchors)
+    {
+        var expected = timeline.EventForIndex(anchor.EventIndex).StartSeconds * MimirChirpletTimeline.SampleRate;
+        Console.WriteLine(
+            $"chirplet-anchor event={anchor.EventIndex} actual={anchor.SampleOffset:0.000} expected={expected:0.000} " +
+            $"error={anchor.SampleOffset - expected:0.000} confidence={anchor.Confidence:0.000}");
+    }
+
+    if (decode.ClockFit == null || decode.Anchors.Count < 12 || meanAbsoluteError > 0.25)
+    {
+        Console.Error.WriteLine("chirplet self-test failed: canonical timeline did not decode to sub-frame anchors");
+        return 1;
+    }
+
+    return 0;
 }
 
 internal sealed class DisposableConfiguration : IDisposable

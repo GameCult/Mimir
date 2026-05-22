@@ -101,19 +101,21 @@ Reports now carry fractional delay and per-band matched energy. The first
 `MimirChirpletSymbolCodebook` owns separable symbol definitions; every symbol
 has a unique chirp shape, with rhythm as additional evidence. `MimirChirpletStreamDecoder`
 is the constrained chirplet-transform receiver: it turns a bounded PCM window
-into transform frames with multiple symbol candidates and refined per-candidate
-sample offsets, code-valid triplet anchors selected through gap/clock coherence,
-and an affine source clock fit. The analyzer only emits timing reports from
+into transform frames with multiple phase-invariant symbol candidates and
+refined per-candidate sample offsets, code-valid triplet anchors selected
+through gap/clock coherence, and an affine source clock fit. The synthetic
+`Mimir.BufferSmoke --chirplet-self-test` path renders canonical timeline audio
+into memory and currently recovers events 0-12 with a 47999.999990 Hz clock fit
+and 0.000014 sample MAE. The analyzer only emits timing reports from
 matched canonical anchors. The hub also owns cached reports plus smoothed
 per-source sync state with delay-slope/SRO in ppm. `MimirRuntime` runs analysis
 online as a bounded rotating service and can print live telemetry with
 `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are passive readers of cached
 sync state; they must not invoke the analyzer. Current app testing proves
 loopback wakeup, live mic buffers, and confident online sync states, but the
-decoder is not finished until arbitrary valid triplets produce stable anchors in
-real mic streams. Camera mics are spatial/context witnesses; Focusrite devices
-are dialogue anchors. Fractional delay and the hot resampler belong in
-Faust/native DSP.
+next proof is stable canonical anchors through real mic streams. Camera mics are
+spatial/context witnesses; Focusrite devices are dialogue anchors. Fractional
+delay and the hot resampler belong in Faust/native DSP.
 
 ## Visual Fusion
 

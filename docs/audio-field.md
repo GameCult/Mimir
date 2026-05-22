@@ -100,9 +100,10 @@ The actual Mimir app path now runs this online: `MimirRuntime.Update` keeps the
 chirplet timeline queued, polls sources, and updates sync analysis on a fixed cadence.
 `MIMIR_SYNC_TELEMETRY_SECONDS` enables console telemetry for live tests. Current
 runtime testing proves Aquarium output wakes the Scarlett loopback and the mic
-buffers stay live. The next failure is decoder precision: symbol separation and
-sub-frame timing must make canonical anchors stable enough to drive the
-actuator directly.
+buffers stay live. The decoder now uses quadrature chirplet atoms so symbol
+classification is phase-invariant at the transform layer. The next failure is
+physical capture proof: the same canonical anchors need to stay stable through
+loopback, room mics, device clocks, and codec/network paths.
 
 ## Chirplet Calibration Model
 
@@ -143,11 +144,15 @@ contribute so poor mic frequency response does not erase the whole code.
 `MimirChirpletSymbolCodebook` owns the symbol definitions so timeline ordering
 does not smuggle acoustic shape decisions into bit arithmetic. Every symbol has
 a unique chirp shape; rhythm remains additional evidence, not a substitute for
-symbol separability. A synthetic runtime check rendered two seconds of canonical
-timeline audio and decoded all 15 emitted chirps into 13 possible triplet
-anchors, events 0 through 12, with a fitted clock near 48 kHz. Real device runs
-still depend on loopback capture staying live; the local Scarlett loopback has
-intermittently stopped advancing during short headless sniffs.
+symbol separability. The transform uses sine/cosine chirplet kernels for each
+symbol, so timing does not depend on the receiver preserving the emitter's
+absolute phase. Run `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirplet-self-test`
+to render two seconds of canonical timeline audio and decode it back to
+timeline anchors. Current synthetic proof detects all 15 emitted chirps, keeps
+13 possible triplet anchors for events 0 through 12, fits the clock at
+47999.999990 Hz, and holds mean absolute anchor error to 0.000014 samples. Real
+device runs still depend on loopback capture staying live; the local Scarlett
+loopback has intermittently stopped advancing during short headless sniffs.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,

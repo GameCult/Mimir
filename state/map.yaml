@@ -75,9 +75,14 @@ accepted_design:
     owns the 32 symbol definitions so every symbol has a unique chirp shape, with
     rhythm as additional evidence. `MimirChirpletStreamDecoder` is the first
     constrained chirplet-transform receiver: it owns a bounded PCM window, emits
-    transform frames with multiple symbol candidates and refined per-candidate
-    sample offsets, decodes code-valid triplet anchors through gap/clock coherence, and fits a
-    per-source sample clock from those anchors. `MimirAudioSynchronizationAnalyzer`
+    transform frames with multiple phase-invariant symbol candidates and refined
+    per-candidate sample offsets, decodes code-valid triplet anchors through
+    gap/clock coherence, and fits a per-source sample clock from those anchors.
+    The canonical synthetic smoke path is `dotnet run --project
+    .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirplet-self-test`.
+    It currently decodes all 15 emitted chirps in a two-second window into 13
+    anchors for events 0-12 with a 47999.999990 Hz clock fit and 0.000014 sample
+    MAE. `MimirAudioSynchronizationAnalyzer`
     now treats `loopback-scarlett-speakers` as timing authority and derives
     delay only from matched decoded timeline anchors. Positive delay means
     the candidate mic is late relative to loopback. Reports include rounded
@@ -185,8 +190,8 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Finish the constrained chirplet-transform decoder before adding the
-    synchronization actuator.
+    Prove the constrained chirplet-transform decoder through real loopback and
+    microphone paths before adding the synchronization actuator.
     Current app testing proves Aquarium WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the continuous

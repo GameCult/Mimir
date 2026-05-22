@@ -73,9 +73,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
   now tracks smoothed delay and delay-slope/SRO ppm. `MimirChirpletSymbolCodebook`
   owns separable symbol definitions, and `MimirChirpletStreamDecoder` is the
   constrained chirplet-transform receiver: it emits transform frames with
-  multiple symbol candidates and refined per-candidate sample offsets, selects
-  code-valid triplet anchors through gap/clock coherence, and fits a source
-  clock from a bounded PCM window. `MimirRuntime` runs sync analysis as a bounded rotating
+  multiple phase-invariant symbol candidates and refined per-candidate sample
+  offsets, selects code-valid triplet anchors through gap/clock coherence, and
+  fits a source clock from a bounded PCM window. The canonical synthetic check is
+  `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirplet-self-test`;
+  it currently detects all 15 emitted chirps and recovers 13 anchors for events
+  0-12 with a 47999.999990 Hz clock fit and 0.000014 sample MAE. `MimirRuntime` runs sync analysis as a bounded rotating
   service and caches reports/states for UI and telemetry; readouts must stay
   passive. Actual Mimir.App testing proves Aquarium audio wakes Scarlett
   loopback, keeps mic buffers live, and produces confident online sync states,
@@ -87,7 +90,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Immediate Re-entry Instruction
 
-Finish the constrained chirplet-transform decoder, then turn decoded clock fits
-into the SRO/fractional-delay actuator. Keep loopback as timing authority. Do
-not call synchronization analysis from UI/telemetry readouts. Do not restore
-deleted script infrastructure because a stale doc once missed it.
+Prove the constrained chirplet-transform decoder through real loopback and mic
+paths, then turn decoded clock fits into the SRO/fractional-delay actuator. Keep
+loopback as timing authority. Do not call synchronization analysis from
+UI/telemetry readouts. Do not restore deleted script infrastructure because a
+stale doc once missed it.

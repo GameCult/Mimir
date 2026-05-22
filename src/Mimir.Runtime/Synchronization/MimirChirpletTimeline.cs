@@ -41,7 +41,7 @@ public sealed class MimirChirpletTimeline
     private static readonly MimirChirpletSymbolCodebook Codebook = MimirChirpletSymbolCodebook.Default;
     private static readonly double[] PeriodEventStarts = BuildPeriodEventStarts(TimelineSymbols);
     private static readonly double PeriodDurationSeconds = PeriodEventStarts[^1] + Codebook[TimelineSymbols[^1]].GapSeconds;
-    private readonly IReadOnlyList<float[]> symbolKernels;
+    private readonly IReadOnlyList<MimirChirpletToneKernel> symbolKernels;
 
     private MimirChirpletTimeline()
     {
@@ -59,16 +59,9 @@ public sealed class MimirChirpletTimeline
             AddTone(samples, SampleRate, timelineEvent.Tone, segmentStartSeconds);
         }
 
-        var peak = samples.Select(Math.Abs).DefaultIfEmpty(0.0f).Max();
-        if (peak <= 1.0e-9f)
-        {
-            return samples;
-        }
-
-        var scale = (float)(Gain / peak);
         for (var index = 0; index < samples.Length; index++)
         {
-            samples[index] *= scale;
+            samples[index] *= (float)Gain;
         }
 
         return samples;
@@ -215,7 +208,7 @@ public sealed class MimirChirpletTimeline
             var step = Math.Max(4, searchRadiusSamples / 16);
             for (var offset = start; offset <= end; offset += step)
             {
-                var energy = DirectionalMatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
+                var energy = MatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
                 if (energy > bestEnergy)
                 {
                     bestEnergy = energy;
@@ -227,7 +220,7 @@ public sealed class MimirChirpletTimeline
             var localEnd = Math.Min(end, bestOffset + step);
             for (var offset = localStart; offset <= localEnd; offset++)
             {
-                var energy = DirectionalMatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
+                var energy = MatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
                 if (energy > bestEnergy)
                 {
                     bestEnergy = energy;
@@ -238,7 +231,7 @@ public sealed class MimirChirpletTimeline
             if (bestEnergy >= 0.08)
             {
                 var refinedOffset = RefineMatchedOffset(samples, kernel, bestOffset, start, end);
-                var refinedEnergy = DirectionalMatchedEnergy(
+                var refinedEnergy = MatchedEnergy(
                     samples.Slice((int)Math.Round(refinedOffset), kernel.Length),
                     kernel);
                 candidates.Add(new MimirChirpletSymbolCandidate(symbol, refinedOffset, Math.Max(bestEnergy, refinedEnergy)));
@@ -266,7 +259,7 @@ public sealed class MimirChirpletTimeline
 
     private static double RefineMatchedOffset(
         ReadOnlySpan<float> samples,
-        ReadOnlySpan<float> kernel,
+        MimirChirpletToneKernel kernel,
         int offset,
         int start,
         int end)
@@ -277,9 +270,9 @@ public sealed class MimirChirpletTimeline
             return center;
         }
 
-        var left = DirectionalMatchedEnergy(samples.Slice(center - 1, kernel.Length), kernel);
-        var middle = DirectionalMatchedEnergy(samples.Slice(center, kernel.Length), kernel);
-        var right = DirectionalMatchedEnergy(samples.Slice(center + 1, kernel.Length), kernel);
+        var left = MatchedEnergy(samples.Slice(center - 1, kernel.Length), kernel);
+        var middle = MatchedEnergy(samples.Slice(center, kernel.Length), kernel);
+        var right = MatchedEnergy(samples.Slice(center + 1, kernel.Length), kernel);
         var denominator = left - 2.0 * middle + right;
         if (Math.Abs(denominator) <= 1.0e-12)
         {
@@ -596,15 +589,22 @@ public sealed class MimirChirpletTimeline
     private static int TripleCode(int first, int second, int third) =>
         first * SymbolCount * SymbolCount + second * SymbolCount + third;
 
-    private static float[] RenderToneKernel(MimirChirpletTone tone, int sampleRate)
+    private static MimirChirpletToneKernel RenderToneKernel(MimirChirpletTone tone, int sampleRate)
     {
         var frameCount = Math.Max(1, (int)Math.Ceiling(tone.DurationSeconds * sampleRate));
-        var samples = new float[frameCount];
-        AddTone(samples, sampleRate, tone with { StartSeconds = 0.0 }, segmentStartSeconds: 0.0);
-        return samples;
+        var sine = new float[frameCount];
+        var cosine = new float[frameCount];
+        AddTone(sine, sampleRate, tone with { StartSeconds = 0.0 }, segmentStartSeconds: 0.0, phaseOffsetRadians: 0.0);
+        AddTone(cosine, sampleRate, tone with { StartSeconds = 0.0 }, segmentStartSeconds: 0.0, phaseOffsetRadians: Math.PI * 0.5);
+        return new MimirChirpletToneKernel(sine, cosine);
     }
 
-    private static void AddTone(float[] samples, int sampleRate, MimirChirpletTone tone, double segmentStartSeconds)
+    private static void AddTone(
+        float[] samples,
+        int sampleRate,
+        MimirChirpletTone tone,
+        double segmentStartSeconds,
+        double phaseOffsetRadians = 0.0)
     {
         var relativeStartSeconds = tone.StartSeconds - segmentStartSeconds;
         var startFrame = (int)Math.Round(relativeStartSeconds * sampleRate);
@@ -621,11 +621,11 @@ public sealed class MimirChirpletTimeline
             var t = frame / (double)sampleRate;
             var envelope = 0.5 - 0.5 * Math.Cos(2.0 * Math.PI * normalized);
             var phase = 2.0 * Math.PI * (tone.StartHz * t + 0.5 * (tone.EndHz - tone.StartHz) * t * normalized);
-            samples[outputFrame] += (float)(Math.Sin(phase) * envelope * tone.Gain);
+            samples[outputFrame] += (float)(Math.Sin(phase + phaseOffsetRadians) * envelope * tone.Gain);
         }
     }
 
-    private static double MatchedEnergy(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel)
+    private static double MatchedEnergy(ReadOnlySpan<float> samples, MimirChirpletToneKernel kernel)
     {
         var count = Math.Min(samples.Length, kernel.Length);
         if (count == 0)
@@ -633,44 +633,30 @@ public sealed class MimirChirpletTimeline
             return 0.0;
         }
 
-        var dot = 0.0;
+        var sineDot = 0.0;
+        var cosineDot = 0.0;
         var sampleEnergy = 0.0;
-        var kernelEnergy = 0.0;
+        var sineEnergy = 0.0;
+        var cosineEnergy = 0.0;
         for (var index = 0; index < count; index++)
         {
             var sample = samples[index];
-            var basis = kernel[index];
-            dot += sample * basis;
+            var sine = kernel.Sine[index];
+            var cosine = kernel.Cosine[index];
+            sineDot += sample * sine;
+            cosineDot += sample * cosine;
             sampleEnergy += sample * sample;
-            kernelEnergy += basis * basis;
+            sineEnergy += sine * sine;
+            cosineEnergy += cosine * cosine;
         }
 
-        var denominator = Math.Sqrt(sampleEnergy * kernelEnergy);
-        return denominator > 1.0e-12 ? Math.Abs(dot) / denominator : 0.0;
-    }
-
-    private static double DirectionalMatchedEnergy(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel)
-    {
-        var count = Math.Min(samples.Length, kernel.Length);
-        if (count == 0)
+        var denominator = Math.Sqrt(sampleEnergy * Math.Max(sineEnergy, cosineEnergy));
+        if (denominator <= 1.0e-12)
         {
             return 0.0;
         }
 
-        var dot = 0.0;
-        var sampleEnergy = 0.0;
-        var kernelEnergy = 0.0;
-        for (var index = 0; index < count; index++)
-        {
-            var sample = samples[index];
-            var basis = kernel[index];
-            dot += sample * basis;
-            sampleEnergy += sample * sample;
-            kernelEnergy += basis * basis;
-        }
-
-        var denominator = Math.Sqrt(sampleEnergy * kernelEnergy);
-        return denominator > 1.0e-12 ? Math.Max(0.0, dot / denominator) : 0.0;
+        return Math.Min(1.0, Math.Sqrt(sineDot * sineDot + cosineDot * cosineDot) / denominator);
     }
 
     private static float[] BuildEnvelopeEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
@@ -709,7 +695,7 @@ public sealed class MimirChirpletTimeline
         return output;
     }
 
-    private static double MaxMatchedEnergy(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel, int hopSamples)
+    private static double MaxMatchedEnergy(ReadOnlySpan<float> samples, MimirChirpletToneKernel kernel, int hopSamples)
     {
         if (samples.Length < kernel.Length || kernel.Length == 0)
         {
@@ -760,5 +746,10 @@ public sealed class MimirChirpletTimeline
         }
 
         return output;
+    }
+
+    private sealed record MimirChirpletToneKernel(float[] Sine, float[] Cosine)
+    {
+        public int Length => Sine.Length;
     }
 }
