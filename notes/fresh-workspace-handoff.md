@@ -80,7 +80,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   it currently detects all 15 emitted chirps and recovers 13 anchors for events
   0-12 with a 47999.999990 Hz clock fit and 0.000014 sample MAE. `MimirRuntime` runs sync analysis as a bounded rotating
   service and caches reports/states for UI and telemetry; readouts must stay
-  passive. Actual Mimir.App testing proves Aquarium audio wakes Scarlett
+  passive. Audio sync mode is runtime-owned: `chirp-only` emits active
+  calibration, `no-chirp` disables emission and awaits passive program-audio
+  sync, and `hybrid` currently uses the active pilot until shaped watermark
+  confidence gating exists. Actual Mimir.App testing proves Aquarium audio wakes Scarlett
   loopback, keeps mic buffers live, and produces confident online sync states,
   but the decoder still needs stronger symbol likelihoods/codebook distance
   before arbitrary real triplets can drive the actuator directly. PS3 Eye audio is

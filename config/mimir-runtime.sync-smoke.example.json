@@ -1,5 +1,10 @@
 {
   "bufferSeconds": 5.0,
+  "audioSync": {
+    "mode": "chirp-only",
+    "referenceSourceId": "loopback-scarlett-speakers",
+    "calibrationGain": 2.0
+  },
   "streams": [
     {
       "sourceId": "mic-focusrite-local",

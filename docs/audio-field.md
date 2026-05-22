@@ -39,6 +39,30 @@ flowchart TD
 - Probe signals are budgeted telemetry, not a permanent audio bed.
 - Faust/native DSP owns the hot separation and spatialization graph.
 
+## Synchronization Modes
+
+`MimirAudioSynchronizationSettings.Mode` is the runtime authority for what
+timing evidence Mimir is allowed to emit:
+
+- `chirp-only`: emit the deterministic calibration timeline and decode timing
+  only from that active witness. This is the lab/debug mode and the fallback for
+  silent program material.
+- `no-chirp`: do not emit calibration audio. This is the passive/program-audio
+  mode. The runtime exposes it now, but the passive loopback/music estimator is
+  not wired yet, so current code intentionally reports that no-chirp sync is
+  unavailable instead of pretending the chirplet decoder can read arbitrary
+  music.
+- `hybrid`: prefer passive program-audio evidence when confidence is high, then
+  emit a shaped watermark when confidence falls. Today this still behaves as an
+  active pilot because the passive estimator and confidence gate have not been
+  cut. The intended watermark is the dechirp/FFT-friendly chirp-bin codebook
+  from the decoder research notes, shaped and low-gain enough to sit inside the
+  program audio instead of announcing itself like a lab sweep.
+
+The mode belongs to the runtime, not the decoder. The decoder should consume
+known timing evidence; it should not decide whether Mimir is allowed to make
+sound.
+
 ## Next Cut
 
 The current diagnostic witness is `native/probes/wasapi_audio_cadence`, which

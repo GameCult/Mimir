@@ -72,6 +72,10 @@ a named invariant that the native runtime cannot protect yet.
   they do not run synchronization analysis.
 - `MimirRuntime` continuously queues chirplet timeline PCM through Aquarium
   audio so the loopback and acoustic mic buffers carry a shared timing witness.
+  `MimirAudioSynchronizationSettings.Mode` selects `chirp-only`, `no-chirp`, or
+  `hybrid`; no-chirp disables active emission until the passive program-audio
+  estimator exists, and hybrid currently uses the active pilot as the fallback
+  path.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -111,11 +115,15 @@ a named invariant that the native runtime cannot protect yet.
    decoder through real loopback and microphone paths so every correctly heard
    triplet becomes a deterministic timeline anchor before the actuator moves
    samples.
-5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
+5. Replace the active-pilot-only hybrid path with passive loopback/program-audio
+   confidence plus shaped watermark emission when confidence drops. The
+   watermark codebook should be designed for dechirp/FFT or Goertzel
+   classification, not dense sliding matched filters.
+6. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-6. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+7. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Aquarium.
-7. Move mic alignment, room suppression, voice separation, spatialization, and
+8. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-8. Keep the OBS bridge witness ledger as evidence before expanding receiver
+9. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

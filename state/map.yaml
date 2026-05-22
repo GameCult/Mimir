@@ -93,7 +93,11 @@ accepted_design:
     ppm. `MimirRuntime` now runs this analysis online as a bounded rotating
     service on a fixed cadence, while UI and telemetry read cached reports/states
     instead of invoking analysis. `MIMIR_SYNC_TELEMETRY_SECONDS` prints live
-    buffer/report/state telemetry.
+    buffer/report/state telemetry. `MimirAudioSynchronizationSettings.Mode`
+    now owns the active evidence policy: `chirp-only` emits the calibration
+    witness, `no-chirp` stays silent until passive program-audio sync exists,
+    and `hybrid` currently uses the active pilot until the passive confidence
+    gate and shaped watermark are built.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.

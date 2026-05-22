@@ -4,6 +4,8 @@ public sealed class MimirSynchronizationSettings
 {
     public TimeSpan BufferDuration { get; init; } = TimeSpan.FromSeconds(5);
 
+    public MimirAudioSynchronizationSettings Audio { get; init; } = new();
+
     public IReadOnlyList<MimirStreamDescriptor> Streams { get; init; } = [];
 
     public static MimirSynchronizationSettings FromEnvironment()
@@ -18,6 +20,7 @@ public sealed class MimirSynchronizationSettings
         return new MimirSynchronizationSettings
         {
             BufferDuration = duration,
+            Audio = MimirAudioSynchronizationSettings.FromEnvironment(),
             Streams = streams,
         };
     }
@@ -47,4 +50,69 @@ public sealed class MimirSynchronizationSettings
             streams.Add(new MimirStreamDescriptor(sourceId, kind, origin));
         }
     }
+}
+
+public sealed class MimirAudioSynchronizationSettings
+{
+    public const string DefaultReferenceSourceId = "loopback-scarlett-speakers";
+    public const float DefaultCalibrationGain = 2.0f;
+
+    public MimirAudioSyncMode Mode { get; init; } = MimirAudioSyncMode.Hybrid;
+
+    public string ReferenceSourceId { get; init; } = DefaultReferenceSourceId;
+
+    public float CalibrationGain { get; init; } = DefaultCalibrationGain;
+
+    public static MimirAudioSynchronizationSettings FromEnvironment()
+    {
+        return new MimirAudioSynchronizationSettings().WithEnvironmentOverrides();
+    }
+
+    public MimirAudioSynchronizationSettings WithEnvironmentOverrides()
+    {
+        return new MimirAudioSynchronizationSettings
+        {
+            Mode = ParseMode(Environment.GetEnvironmentVariable("MIMIR_AUDIO_SYNC_MODE"), Mode),
+            ReferenceSourceId = ReadReferenceSourceId(ReferenceSourceId),
+            CalibrationGain = ReadCalibrationGain(CalibrationGain),
+        };
+    }
+
+    public static MimirAudioSyncMode ParseMode(string? value, MimirAudioSyncMode fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "chirp-only" or "chirponly" or "chirp" or "active" => MimirAudioSyncMode.ChirpOnly,
+            "no-chirp" or "nochirp" or "passive" or "passive-only" or "passiveonly" => MimirAudioSyncMode.NoChirp,
+            "hybrid" => MimirAudioSyncMode.Hybrid,
+            _ => fallback,
+        };
+    }
+
+    private static string ReadReferenceSourceId(string fallback)
+    {
+        var sourceId = Environment.GetEnvironmentVariable("MIMIR_AUDIO_SYNC_REFERENCE");
+        return string.IsNullOrWhiteSpace(sourceId)
+            ? fallback
+            : sourceId.Trim();
+    }
+
+    private static float ReadCalibrationGain(float fallback)
+    {
+        return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_CHIRPLET_GAIN"), out var gain)
+            ? Math.Clamp(gain, 0.0f, 4.0f)
+            : fallback;
+    }
+}
+
+public enum MimirAudioSyncMode
+{
+    ChirpOnly,
+    NoChirp,
+    Hybrid,
 }

@@ -29,6 +29,8 @@ public sealed class MimirRuntimeConfiguration
         var bufferDuration = model.BufferSeconds > 0.0
             ? TimeSpan.FromSeconds(Math.Clamp(model.BufferSeconds, 0.25, 60.0))
             : MimirSynchronizationSettings.FromEnvironment().BufferDuration;
+        var audio = (model.AudioSync?.ToSettings(new MimirAudioSynchronizationSettings()) ?? new MimirAudioSynchronizationSettings())
+            .WithEnvironmentOverrides();
 
         var sourceModels = model.Streams
             .Where(stream => stream.Enabled)
@@ -47,6 +49,7 @@ public sealed class MimirRuntimeConfiguration
             Settings = new MimirSynchronizationSettings
             {
                 BufferDuration = bufferDuration,
+                Audio = audio,
                 Streams = streams,
             },
             Sources = sources,
@@ -183,7 +186,32 @@ public sealed class MimirRuntimeConfigFile
 {
     public double BufferSeconds { get; set; } = 5.0;
 
+    public MimirAudioSyncConfig? AudioSync { get; set; }
+
     public List<MimirStreamConfig> Streams { get; set; } = [];
+}
+
+public sealed class MimirAudioSyncConfig
+{
+    public string Mode { get; set; } = "";
+
+    public string ReferenceSourceId { get; set; } = "";
+
+    public float CalibrationGain { get; set; } = float.NaN;
+
+    public MimirAudioSynchronizationSettings ToSettings(MimirAudioSynchronizationSettings fallback)
+    {
+        return new MimirAudioSynchronizationSettings
+        {
+            Mode = MimirAudioSynchronizationSettings.ParseMode(Mode, fallback.Mode),
+            ReferenceSourceId = string.IsNullOrWhiteSpace(ReferenceSourceId)
+                ? fallback.ReferenceSourceId
+                : ReferenceSourceId.Trim(),
+            CalibrationGain = float.IsFinite(CalibrationGain)
+                ? Math.Clamp(CalibrationGain, 0.0f, 4.0f)
+                : fallback.CalibrationGain,
+        };
+    }
 }
 
 public sealed class MimirStreamConfig
