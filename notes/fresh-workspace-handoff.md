@@ -65,9 +65,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Current chirplet-backed smoke uses Scarlett speaker loopback as timing
   authority and can build an aligned audio frame containing loopback, Focusrite
   mic, Kiyo mic, and Kiyo Pro mic when 9-16 kHz calibration chirplets are
-  playing. In that run both PS3 Eye mic buffers were empty while both PS3 Eye
-  camera buffers were live; earlier replug evidence proves the endpoints can
-  work, so treat PS3 Eye audio as enumeration/runtime-fragile.
+  playing. PS3 Eye audio is enumeration/runtime-fragile: one run saw both mic
+  buffers empty while both cameras were live, then a replug made both PS3 Eye
+  mic buffers emit 480-frame WASAPI blocks again.
 
 ## Immediate Re-entry Instruction
 

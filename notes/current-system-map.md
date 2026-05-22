@@ -112,6 +112,6 @@ fitting, render budgeting, and publication.
 - OBS SRT reconnection behavior can be fussy.
 - Direct driver work must prove sustained cadence before it becomes timing
   authority.
-- PS3 Eye audio endpoints can enumerate and later emit packets after replug,
-  but the current chirplet smoke saw both PS3 Eye mic buffers empty while their
-  cameras were live.
+- PS3 Eye audio endpoints are enumeration/runtime-fragile. A later replug made
+  both mic buffers emit 480-frame WASAPI blocks again while both PS3 Eye camera
+  buffers were live.

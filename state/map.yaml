@@ -175,9 +175,9 @@ current_status:
     push buffer handles into Mimir.Runtime. Current chirplet-backed
     Mimir.BufferSmoke proves loopback-referenced aligned audio for Scarlett
     loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when 9-16 kHz
-    calibration chirplets are playing; both PS3 Eye audio endpoints were empty
-    in that run despite their camera buffers being live. A prior replug proved
-    both PS3 Eye mics can emit WASAPI packets, so treat current silence as
-    device enumeration/runtime fragility rather than missing endpoint
-    inventory. Keep the Focusrite away from the Leap USB neighborhood and treat
-    Kiyo Pro as a ~25 fps source until its SuperSpeed negotiation is fixed.
+    calibration chirplets are playing. After a later replug, both PS3 Eye audio
+    endpoints emitted 480-frame WASAPI blocks into runtime buffers again while
+    both PS3 Eye camera buffers were live. Treat PS3 Eye audio as
+    enumeration/runtime-fragile, not unavailable. Keep the Focusrite away from
+    the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
+    SuperSpeed negotiation is fixed.
