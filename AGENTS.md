@@ -29,6 +29,18 @@ VoidBot heartbeat contract, read `docs/mimir-face.md`.
   changes. Put it in a separate state commit so Face memory and status do not
   stay stranded as local-only residue.
 
+## Persistence Commands
+
+Use a real Python if the Windows Store alias gets cute. In this Codex
+workstation, the bundled runtime is:
+`C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
+
+```powershell
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\localcast_state.py status
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\localcast_state.py add-evidence --type decision --status ok --note "..."
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\localcast_prepare_compaction.py
+```
+
 ## Session Bootstrap And Re-entry Protocol
 
 On a fresh session, do this before editing:
@@ -39,23 +51,23 @@ On a fresh session, do this before editing:
    - `notes/current-system-map.md`
    - `docs/implementation-plan.md`
 2. run:
-   - `git status --short --branch`
-   - `git log --oneline -5`
-   - `Get-Content .\state\evidence.jsonl -Tail 8`
+   - `& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\localcast_state.py status`
 3. restate the current mechanism, intended change, and next bounded move before broad edits
 
 After compaction, resume, or suspicious continuity loss:
 
-1. rerun `git status --short --branch`
+1. rerun `& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\localcast_state.py status`
 2. reread `state/map.yaml` and `notes/fresh-workspace-handoff.md`
 3. treat the persisted next action as orientation, not permission to wander
 
 When the user says to prepare for imminent compaction:
 
 1. immediately write the hot context into a collision-proof scratch file under `state/`
-2. use `state/map.yaml`, `notes/fresh-workspace-handoff.md`, `notes/current-system-map.md`, `state/scratch.md`, `state/evidence.jsonl`, and git status as the checklist for map, handoff, scratch, evidence, and git hygiene
-3. update only the state that actually changed
-4. commit the completed persistence pass unless the work is deliberately mid-surgery
+2. run `tools/localcast_prepare_compaction.py` before editing persistence surfaces
+3. use its warnings as the checklist for map, handoff, scratch, evidence, and git hygiene
+4. update only the state that actually changed
+5. run `tools/localcast_prepare_compaction.py` again after edits
+6. commit the completed persistence pass unless the work is deliberately mid-surgery
 
 ## Operating Discipline
 
