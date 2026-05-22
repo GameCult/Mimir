@@ -134,6 +134,24 @@ public sealed class MimirChirpletTimeline
         return responses;
     }
 
+    public MimirChirpletStreamDecode DecodeStreamWindow(ReadOnlySpan<float> samples, int sampleRate)
+    {
+        if (samples.Length == 0)
+        {
+            return new MimirChirpletStreamDecode([], [], null);
+        }
+
+        var symbols = DetectSymbolEvents(samples, sampleRate, Math.Max(1, sampleRate / 200))
+            .Select(observation => new MimirChirpletSymbolObservation(
+                observation.SymbolId,
+                observation.SampleOffset,
+                observation.Energy))
+            .ToArray();
+        var anchors = PlaceAllTripletAnchors(symbols, sampleRate);
+        var clock = FitClock(anchors, sampleRate);
+        return new MimirChirpletStreamDecode(symbols, anchors, clock);
+    }
+
     public MimirChirpletTimelinePlacement DecodeReferenceWindow(
         ReadOnlySpan<float> samples,
         int sampleRate,
@@ -245,7 +263,11 @@ public sealed class MimirChirpletTimeline
                 continue;
             }
 
-            var observation = ClassifySymbolAt(samples, sampleRate, frame * hopSamples, Math.Max(1, hopSamples));
+            var observation = ClassifySymbolAt(
+                samples,
+                sampleRate,
+                frame * hopSamples,
+                Math.Max(hopSamples * 3, sampleRate / 100));
             if (observation != null)
             {
                 candidates.Add(observation);
@@ -287,7 +309,7 @@ public sealed class MimirChirpletTimeline
             }
         }
 
-        return bestSymbol < 0 || bestEnergy < 0.055
+        return bestSymbol < 0 || bestEnergy < 0.25
             ? null
             : new MimirChirpletEventObservation(0, bestSymbol, 0.0, bestOffset, bestEnergy);
     }
@@ -363,9 +385,134 @@ public sealed class MimirChirpletTimeline
             : FitTimelinePlacement(best, sampleRate);
     }
 
+    private static IReadOnlyList<MimirChirpletTimelineAnchor> PlaceAllTripletAnchors(
+        IReadOnlyList<MimirChirpletSymbolObservation> symbols,
+        int sampleRate)
+    {
+        if (symbols.Count < TimelineOrder)
+        {
+            return [];
+        }
+
+        var anchors = new List<MimirChirpletTimelineAnchor>();
+        for (var index = 0; index <= symbols.Count - TimelineOrder; index++)
+        {
+            var first = symbols[index];
+            var second = symbols[index + 1];
+            var third = symbols[index + 2];
+            if (!IsConsecutiveByTime(first, second, sampleRate) ||
+                !IsConsecutiveByTime(second, third, sampleRate))
+            {
+                continue;
+            }
+
+            var code = TripleCode(first.SymbolId, second.SymbolId, third.SymbolId);
+            if (!TripleToIndex.TryGetValue(code, out var eventIndex))
+            {
+                continue;
+            }
+
+            var timelineEvent = Default.EventForIndex((ulong)eventIndex);
+            var predictedSecond = Default.EventForIndex((ulong)eventIndex + 1UL);
+            var predictedThird = Default.EventForIndex((ulong)eventIndex + 2UL);
+            var measuredGapA = (second.SampleOffset - first.SampleOffset) / sampleRate;
+            var measuredGapB = (third.SampleOffset - second.SampleOffset) / sampleRate;
+            var expectedGapA = predictedSecond.StartSeconds - timelineEvent.StartSeconds;
+            var expectedGapB = predictedThird.StartSeconds - predictedSecond.StartSeconds;
+            var gapError = Math.Abs(measuredGapA - expectedGapA) + Math.Abs(measuredGapB - expectedGapB);
+            var gapConfidence = 1.0 / (1.0 + gapError / 0.006);
+            if (gapConfidence < 0.45)
+            {
+                continue;
+            }
+
+            var energyConfidence = Math.Clamp((first.Energy + second.Energy + third.Energy) / 3.0, 0.0, 1.0);
+            anchors.Add(new MimirChirpletTimelineAnchor(
+                (ulong)eventIndex,
+                timelineEvent.StartSeconds,
+                first.SampleOffset,
+                gapConfidence * 0.65 + energyConfidence * 0.35,
+                [first, second, third]));
+        }
+
+        return anchors
+            .GroupBy(anchor => anchor.EventIndex)
+            .Select(group => group.OrderByDescending(anchor => anchor.Confidence).First())
+            .OrderBy(anchor => anchor.SampleOffset)
+            .ToArray();
+    }
+
+    private static MimirChirpletClockFit? FitClock(
+        IReadOnlyList<MimirChirpletTimelineAnchor> anchors,
+        int sampleRate)
+    {
+        if (anchors.Count == 0)
+        {
+            return null;
+        }
+
+        if (anchors.Count == 1)
+        {
+            var anchor = anchors[0];
+            return new MimirChirpletClockFit(
+                anchor.SampleOffset - anchor.TimelineSeconds * sampleRate,
+                sampleRate,
+                anchor.Confidence * 0.35,
+                1,
+                0.0);
+        }
+
+        var totalWeight = anchors.Sum(anchor => Math.Max(1.0e-6, anchor.Confidence));
+        var meanTimeline = anchors.Sum(anchor => anchor.TimelineSeconds * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
+        var meanSample = anchors.Sum(anchor => anchor.SampleOffset * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
+        var covariance = 0.0;
+        var variance = 0.0;
+        foreach (var anchor in anchors)
+        {
+            var weight = Math.Max(1.0e-6, anchor.Confidence);
+            var dt = anchor.TimelineSeconds - meanTimeline;
+            covariance += weight * dt * (anchor.SampleOffset - meanSample);
+            variance += weight * dt * dt;
+        }
+
+        var effectiveSampleRate = variance > 1.0e-12 ? covariance / variance : sampleRate;
+        if (!double.IsFinite(effectiveSampleRate) ||
+            effectiveSampleRate < sampleRate * 0.90 ||
+            effectiveSampleRate > sampleRate * 1.10)
+        {
+            effectiveSampleRate = sampleRate;
+        }
+
+        var sourceOffset = meanSample - effectiveSampleRate * meanTimeline;
+        var meanAbsoluteError = anchors.Sum(anchor =>
+        {
+            var weight = Math.Max(1.0e-6, anchor.Confidence);
+            var predicted = sourceOffset + anchor.TimelineSeconds * effectiveSampleRate;
+            return Math.Abs(anchor.SampleOffset - predicted) * weight;
+        }) / totalWeight;
+        var residualConfidence = 1.0 / (1.0 + meanAbsoluteError / Math.Max(1.0, sampleRate * 0.0015));
+        var countConfidence = Math.Clamp(anchors.Count / 12.0, 0.0, 1.0);
+        var anchorConfidence = Math.Clamp(anchors.Average(anchor => anchor.Confidence), 0.0, 1.0);
+        return new MimirChirpletClockFit(
+            sourceOffset,
+            effectiveSampleRate,
+            residualConfidence * 0.45 + countConfidence * 0.25 + anchorConfidence * 0.30,
+            anchors.Count,
+            meanAbsoluteError);
+    }
+
     private static bool IsConsecutiveByTime(
         MimirChirpletEventObservation first,
         MimirChirpletEventObservation second,
+        int sampleRate)
+    {
+        var seconds = (second.SampleOffset - first.SampleOffset) / sampleRate;
+        return seconds >= MinEventGapSeconds * 0.55 && seconds <= MaxEventGapSeconds * 1.45;
+    }
+
+    private static bool IsConsecutiveByTime(
+        MimirChirpletSymbolObservation first,
+        MimirChirpletSymbolObservation second,
         int sampleRate)
     {
         var seconds = (second.SampleOffset - first.SampleOffset) / sampleRate;

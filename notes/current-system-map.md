@@ -99,16 +99,21 @@ current operating horizon. Mimir continuously queues that timeline through
 Aquarium audio, uses coarse chirplet energy for acquisition, refines delay from
 matched event indices when the symbol decoder succeeds, and can build a
 provisional aligned mono frame for channels that clear the confidence gate.
-Reports now carry fractional delay and per-band matched energy. The hub also
-owns cached reports plus smoothed per-source sync state with delay-slope/SRO in
-ppm. `MimirRuntime` runs analysis online as a bounded rotating service and can
-print live telemetry with `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are
-passive readers of cached sync state; they must not invoke the analyzer. Current
-app testing proves loopback wakeup, live mic buffers, and confident online sync
-states, but delay estimates are still jumpy. Camera mics are spatial/context
-witnesses; Focusrite devices are dialogue anchors. The current aligned frame is
-integer-delay only; fractional delay and the hot resampler still belong in
-Faust/native DSP.
+Reports now carry fractional delay and per-band matched energy. The first
+`MimirChirpletStreamDecoder` exists as the constrained chirplet-transform
+receiver: it turns a bounded PCM window into symbol observations, every
+code-valid triplet anchor it can prove, and an affine source clock fit. The
+analyzer prefers matched canonical anchors before falling back to the older
+chirplet-energy lag search. The hub also owns cached reports plus smoothed
+per-source sync state with delay-slope/SRO in ppm. `MimirRuntime` runs analysis
+online as a bounded rotating service and can print live telemetry with
+`MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are passive readers of cached
+sync state; they must not invoke the analyzer. Current app testing proves
+loopback wakeup, live mic buffers, and confident online sync states, but the
+decoder is not finished until arbitrary valid triplets produce stable anchors in
+real mic streams. Camera mics are spatial/context witnesses; Focusrite devices
+are dialogue anchors. The current aligned frame is integer-delay only;
+fractional delay and the hot resampler still belong in Faust/native DSP.
 
 ## Visual Fusion
 

@@ -38,8 +38,6 @@ public sealed class MimirAudioSynchronizationAnalyzer
             return [];
         }
 
-        MimirChirpletTimelinePlacement? referencePlacement = null;
-
         var reports = new List<MimirAudioSynchronizationReport>();
         foreach (var buffer in audioBuffers)
         {
@@ -75,6 +73,31 @@ public sealed class MimirAudioSynchronizationAnalyzer
 
             var referenceWindow = referenceSamples.AsSpan(^compared..);
             var candidateWindow = candidateSamples.AsSpan(^compared..);
+            var referenceDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, referenceBlock.SampleRate);
+            var candidateDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, referenceBlock.SampleRate);
+            var deterministicFit = EstimateDelayFromDecodedTimeline(referenceDecode, candidateDecode);
+            if (deterministicFit.MatchedEvents >= 1)
+            {
+                var decodedDelaySamples = deterministicFit.DelaySamples;
+                var decodedBandResponses = MimirChirpletTimeline.Default.EstimateBandResponse(candidateWindow, referenceBlock.SampleRate);
+                reports.Add(new MimirAudioSynchronizationReport(
+                    reference.Descriptor.SourceId,
+                    buffer.Descriptor.SourceId,
+                    referenceBlock.SampleRate,
+                    (int)Math.Round(decodedDelaySamples),
+                    decodedDelaySamples,
+                    decodedDelaySamples * 1000.0 / referenceBlock.SampleRate,
+                    deterministicFit.Confidence,
+                    decodedBandResponses,
+                    commonEndNs,
+                    compared,
+                    reference.Latest?.Sequence ?? 0,
+                    buffer.Latest?.Sequence ?? 0,
+                    deterministicFit.MatchedEvents,
+                    deterministicFit.Confidence));
+                continue;
+            }
+
             var referenceWindowStartSample = referenceSamples.Length - compared;
             var referenceSync = MimirChirpletTimeline.Default.BuildTimelineEnergyTrace(referenceWindow, referenceBlock.SampleRate, ChirpletHopSamples);
             var candidateSync = MimirChirpletTimeline.Default.BuildTimelineEnergyTrace(candidateWindow, referenceBlock.SampleRate, ChirpletHopSamples);
@@ -90,7 +113,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
             var timelineConfidence = 0.0;
             if (confidence >= 0.03 && double.IsFinite(approximateTimelineSeconds))
             {
-                referencePlacement ??= MimirChirpletTimeline.Default.DecodeReferenceWindow(
+                var referencePlacement = MimirChirpletTimeline.Default.DecodeReferenceWindow(
                     referenceSamples,
                     referenceBlock.SampleRate,
                     approximateTimelineSeconds);
@@ -138,6 +161,61 @@ public sealed class MimirAudioSynchronizationAnalyzer
         }
 
         return reports;
+    }
+
+    private static (double DelaySamples, double Confidence, int MatchedEvents) EstimateDelayFromDecodedTimeline(
+        MimirChirpletStreamDecode reference,
+        MimirChirpletStreamDecode candidate)
+    {
+        if (reference.Anchors.Count == 0 ||
+            candidate.Anchors.Count == 0 ||
+            reference.ClockFit == null ||
+            candidate.ClockFit == null)
+        {
+            return (0.0, 0.0, 0);
+        }
+
+        var candidateByEvent = candidate.Anchors.ToDictionary(anchor => anchor.EventIndex);
+        var matched = new List<(double Delay, double Weight)>();
+        foreach (var referenceAnchor in reference.Anchors)
+        {
+            if (!candidateByEvent.TryGetValue(referenceAnchor.EventIndex, out var candidateAnchor))
+            {
+                continue;
+            }
+
+            matched.Add((
+                candidateAnchor.SampleOffset - referenceAnchor.SampleOffset,
+                Math.Sqrt(referenceAnchor.Confidence * candidateAnchor.Confidence)));
+        }
+
+        if (matched.Count >= 1)
+        {
+            var totalWeight = matched.Sum(pair => Math.Max(1.0e-6, pair.Weight));
+            var delay = matched.Sum(pair => pair.Delay * Math.Max(1.0e-6, pair.Weight)) / totalWeight;
+            var error = matched.Sum(pair => Math.Abs(pair.Delay - delay) * Math.Max(1.0e-6, pair.Weight)) / totalWeight;
+            var residualConfidence = 1.0 / (1.0 + error / 32.0);
+            var countConfidence = Math.Clamp(matched.Count / 12.0, 0.0, 1.0);
+            var energyConfidence = Math.Clamp(totalWeight / matched.Count, 0.0, 1.0);
+            return (delay, residualConfidence * 0.50 + countConfidence * 0.25 + energyConfidence * 0.25, matched.Count);
+        }
+
+        var referenceFirst = reference.Anchors.Min(anchor => anchor.TimelineSeconds);
+        var referenceLast = reference.Anchors.Max(anchor => anchor.TimelineSeconds);
+        var candidateFirst = candidate.Anchors.Min(anchor => anchor.TimelineSeconds);
+        var candidateLast = candidate.Anchors.Max(anchor => anchor.TimelineSeconds);
+        var start = Math.Max(referenceFirst, candidateFirst);
+        var end = Math.Min(referenceLast, candidateLast);
+        if (end <= start)
+        {
+            return (0.0, 0.0, matched.Count);
+        }
+
+        var timelineSeconds = (start + end) * 0.5;
+        var clockDelay = candidate.ClockFit.SampleForTimelineSeconds(timelineSeconds) -
+            reference.ClockFit.SampleForTimelineSeconds(timelineSeconds);
+        var confidence = Math.Sqrt(reference.ClockFit.Confidence * candidate.ClockFit.Confidence) * 0.65;
+        return (clockDelay, confidence, Math.Min(reference.ClockFit.AnchorCount, candidate.ClockFit.AnchorCount));
     }
 
     public MimirAlignedAudioFrame? BuildAlignedFrame(

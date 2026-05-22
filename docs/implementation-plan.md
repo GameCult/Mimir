@@ -49,11 +49,15 @@ a named invariant that the native runtime cannot protect yet.
   detected symbols identify a timeline event inside the current operating
   horizon. Symbol identity is carried by start band, glide shape, duration, and
   following inter-chirp gap.
+- `MimirChirpletStreamDecoder` is the first constrained chirplet-transform
+  receiver. It owns a bounded PCM window, emits symbol observations, decodes
+  code-valid triplet anchors onto the canonical timeline, and fits a per-source
+  sample clock from those anchors.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
-  sample-bearing audio blocks are resampled into the Scarlett loopback timeline
-  and compared by chirplet-energy delay estimation with fractional peak
-  interpolation. When timeline symbols are decoded, matched event indices refine
-  the delay estimate and are exposed in telemetry.
+  sample-bearing audio blocks are resampled into the Scarlett loopback timeline.
+  The analyzer now prefers decoded triplet timeline anchors and derives delay
+  from matched canonical events. The older chirplet-energy lag search remains a
+  diagnostic fallback while the decoder is being cut over.
 - `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
   provisional aligned mono frame for loopback-referenced audio channels that
   clear the confidence gate.
@@ -103,10 +107,9 @@ a named invariant that the native runtime cannot protect yet.
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. The current aligned frame is integer-delay
    only and should not pretend to be the final DSP path.
-   First, harden the online state filter so the continuous chirplet lock stops
-   producing jumpy delay estimates. The runtime sync cadence is now bounded and
-   survives longer real app runs, but the state filter still accepts outliers
-   too readily.
+   First, finish the constrained chirplet-transform decoder so every correctly
+   heard triplet becomes a deterministic timeline anchor and the state tracker no
+   longer has to launder ambiguous lag guesses.
 5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 6. Move GPU feature extraction, fusion, material fitting, render budgeting, and

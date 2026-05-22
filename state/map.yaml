@@ -71,12 +71,16 @@ accepted_design:
     timing atoms, symbol/event decoding, and per-band response kernels. Symbol
     identity is carried by start band, glide shape, duration, and following
     inter-chirp gap. Any three consecutive correctly detected symbols identify a
-    timeline event within the current operating horizon. `MimirAudioSynchronizationAnalyzer`
-    now treats `loopback-scarlett-speakers` as timing authority, uses coarse
-    chirplet energy for acquisition, and refines delay from matched timeline
-    event indices when symbol decoding succeeds. Positive delay means the
-    candidate mic is late relative to loopback. Reports include rounded delay,
-    fractional delay, confidence, and per-band matched energy. `MimirSynchronizationHub`
+    timeline event within the current operating horizon. `MimirChirpletStreamDecoder`
+    is the first constrained chirplet-transform receiver: it owns a bounded PCM
+    window, emits symbol observations, decodes code-valid triplet anchors onto
+    the canonical timeline, and fits a per-source sample clock from those
+    anchors. `MimirAudioSynchronizationAnalyzer` now treats
+    `loopback-scarlett-speakers` as timing authority, prefers delay from matched
+    decoded timeline anchors, and keeps the older chirplet-energy lag search as
+    a diagnostic fallback while the decoder is cut over. Positive delay means
+    the candidate mic is late relative to loopback. Reports include rounded
+    delay, fractional delay, confidence, and per-band matched energy. `MimirSynchronizationHub`
     caches the latest per-source reports and `MimirAudioSynchronizationStateTracker`
     owns the smoothed per-source belief: latest delay, smoothed delay,
     confidence, per-band response evidence, and delay-slope/SRO estimate in
@@ -183,14 +187,15 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Harden the online state filter before adding the synchronization actuator.
+    Finish the constrained chirplet-transform decoder before adding the
+    synchronization actuator.
     Current app testing proves Aquarium WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the continuous
-    chirplet timeline can produce confident sync states in the app. Delay
-    estimates are still jumpy, so the actuator needs outlier rejection and better
-    SRO smoothing before it drives variable-rate resampling and fractional-delay
-    correction per non-reference stream. Replace
+    chirplet timeline can produce confident sync states in the app. The next
+    invariant is code-valid triplets producing stable canonical anchors and clock
+    fits, so the actuator can use decoded time instead of filtered lag guesses.
+    Replace
     the diagnostic JSON-line process bridge with direct native capture drivers that push buffer handles into
     Mimir.Runtime. Mimir.BufferSmoke still proves loopback-referenced aligned
     audio for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when

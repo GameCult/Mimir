@@ -61,13 +61,24 @@ the following inter-chirp gap all carry code. The point is not ornament. The
 timing code is carried by both frequency and rhythm, so it behaves more like a
 quiet birdsong texture than a repeated sweep.
 
-`MimirAudioSynchronizationAnalyzer` resamples candidate mic windows into the
-loopback sample-rate timeline, uses cheap coarse chirplet energy for acquisition,
-then lets the symbol decoder refine delay from matched event indices. The lag
-search is wide enough for ordinary remote/network delay, not just local
-speaker-to-mic delay. Reports carry rounded integer delay, fractional delay from
-parabolic peak interpolation, and the count/confidence of timeline-symbol events
-used to refine the report.
+The intended decoder is a constrained chirplet transform, not a generic
+time-frequency explorer and not an outlier filter around bad guesses. Mimir owns
+the emitter, so the receiver projects each mic stream against the known chirplet
+dictionary, produces symbol likelihood events, and decodes every valid
+consecutive triplet through the de Bruijn map. A decoded triplet is a canonical
+timeline anchor: observed sample offset `S` corresponds to emitted event time
+`T`. A stream of anchors fits the source clock directly:
+
+```text
+observed_sample = source_offset + canonical_seconds * effective_sample_rate
+```
+
+Delay and sampling-rate offset are derived by comparing the loopback clock fit
+to each mic clock fit over common canonical time. Wide cross-correlation is only
+a diagnostic fallback while the transform decoder is being cut over. The state
+tracker is not allowed to launder invalid codewords into plausible timing.
+Reports carry rounded integer delay, fractional delay, and the count/confidence
+of timeline-symbol anchors used to derive the report.
 
 `MimirSynchronizationHub.BuildAlignedAudioFrame` returns a provisional aligned
 mono frame: loopback is always channel zero, and other channels enter only when
@@ -111,10 +122,12 @@ flowchart TD
     D --> F["mic rolling buffers"]
     E --> G["matched chirplet traces"]
     F --> G
-    G --> H["delay observations"]
-    H --> L["smoothed sync state + SRO"]
+    G --> H["symbol likelihood events"]
+    H --> L["triplet timeline anchors"]
+    L --> M["per-source clock fit"]
+    M --> N["delay + SRO"]
     G --> I["per-band response estimates"]
-    L --> J["fractional delay / resampler actuator"]
+    N --> J["fractional delay / resampler actuator"]
     I --> K["frequency response normalization"]
 ```
 
