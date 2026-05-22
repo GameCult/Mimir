@@ -25,8 +25,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
             return [];
         }
 
-        var referenceSamples = ExtractMonoWindow(reference, out var referenceBlock);
-        if (referenceSamples.Length == 0 || referenceBlock == null)
+        var referenceLatest = reference.Latest;
+        if (referenceLatest?.AudioBlock == null)
         {
             return [];
         }
@@ -39,8 +39,15 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 continue;
             }
 
-            var candidateSamples = ExtractMonoWindow(buffer, out var candidateBlock);
+            var commonEndNs = Math.Min(referenceLatest.Value.TimestampNs, buffer.Latest?.TimestampNs ?? 0);
+            var referenceSamples = ExtractMonoWindow(reference, out var referenceBlock, commonEndNs);
+            var candidateSamples = ExtractMonoWindow(buffer, out var candidateBlock, commonEndNs);
             if (candidateSamples.Length == 0 || candidateBlock == null)
+            {
+                continue;
+            }
+
+            if (referenceSamples.Length == 0 || referenceBlock == null)
             {
                 continue;
             }
@@ -107,23 +114,49 @@ public sealed class MimirAudioSynchronizationAnalyzer
         var reports = Analyze(audioBuffers.Values, referenceSourceId)
             .Where(report => report.Confidence >= minimumConfidence)
             .ToDictionary(report => report.SourceId, StringComparer.Ordinal);
+        var alignedReports = reports.Values
+            .OrderBy(report => report.SourceId, StringComparer.Ordinal)
+            .ToArray();
+        var alignedBuffers = alignedReports
+            .Select(report => audioBuffers.TryGetValue(report.SourceId, out var buffer) ? buffer : null)
+            .Where(buffer => buffer != null)
+            .Cast<MimirRollingStreamBuffer>()
+            .ToArray();
+        var commonEndNs = new[] { reference }
+            .Concat(alignedBuffers)
+            .Select(buffer => buffer.Latest?.TimestampNs ?? 0)
+            .Where(timestamp => timestamp > 0)
+            .DefaultIfEmpty(0)
+            .Min();
+        if (commonEndNs <= 0)
+        {
+            return null;
+        }
+
+        referenceSamples = ExtractMonoWindow(reference, out referenceBlock, commonEndNs);
+        if (referenceSamples.Length < frameCount || referenceBlock == null)
+        {
+            return null;
+        }
+
+        var maxPositiveDelay = Math.Max(0, alignedReports.Select(report => report.DelaySamples).DefaultIfEmpty(0).Max());
         var channels = new List<MimirAlignedAudioChannel>
         {
             new(referenceSourceId, 0, 1.0),
         };
         var samples = new List<float[]>
         {
-            Tail(referenceSamples, frameCount),
+            TailEndingBefore(referenceSamples, frameCount, maxPositiveDelay),
         };
 
-        foreach (var report in reports.Values.OrderBy(report => report.SourceId, StringComparer.Ordinal))
+        foreach (var report in alignedReports)
         {
             if (!audioBuffers.TryGetValue(report.SourceId, out var buffer))
             {
                 continue;
             }
 
-            var candidateSamples = ExtractMonoWindow(buffer, out var candidateBlock);
+            var candidateSamples = ExtractMonoWindow(buffer, out var candidateBlock, commonEndNs);
             if (candidateBlock == null ||
                 candidateBlock.SampleFormat != MimirAudioSampleFormat.Float32)
             {
@@ -131,12 +164,13 @@ public sealed class MimirAudioSynchronizationAnalyzer
             }
 
             candidateSamples = ResampleToRate(candidateSamples, candidateBlock.SampleRate, referenceBlock.SampleRate);
-            if (candidateSamples.Length < frameCount + Math.Abs(report.DelaySamples))
+            var trimSamples = maxPositiveDelay - report.DelaySamples;
+            if (trimSamples < 0 || candidateSamples.Length < frameCount + trimSamples)
             {
                 continue;
             }
 
-            samples.Add(AlignedTail(candidateSamples, frameCount, report.DelaySamples));
+            samples.Add(TailEndingBefore(candidateSamples, frameCount, trimSamples));
             channels.Add(new MimirAlignedAudioChannel(report.SourceId, report.DelaySamples, report.Confidence));
         }
 
@@ -148,7 +182,10 @@ public sealed class MimirAudioSynchronizationAnalyzer
             samples.ToArray());
     }
 
-    private static float[] ExtractMonoWindow(MimirRollingStreamBuffer buffer, out MimirAudioBlockDescriptor? latestBlock)
+    private static float[] ExtractMonoWindow(
+        MimirRollingStreamBuffer buffer,
+        out MimirAudioBlockDescriptor? latestBlock,
+        long endNs = long.MaxValue)
     {
         latestBlock = buffer.Latest?.AudioBlock;
         if (latestBlock == null || latestBlock.SampleFormat != MimirAudioSampleFormat.Float32)
@@ -157,7 +194,9 @@ public sealed class MimirAudioSynchronizationAnalyzer
         }
 
         var samples = new List<float>(MaxWindowSamples);
-        foreach (var sample in buffer.Snapshot().Where(sample => sample.AudioBlock != null && !sample.Data.IsEmpty).Reverse())
+        foreach (var sample in buffer.Snapshot()
+                     .Where(sample => sample.AudioBlock != null && !sample.Data.IsEmpty && sample.TimestampNs <= endNs)
+                     .Reverse())
         {
             var block = sample.AudioBlock!;
             if (block.SampleFormat != MimirAudioSampleFormat.Float32 || block.Channels <= 0)
@@ -196,10 +235,17 @@ public sealed class MimirAudioSynchronizationAnalyzer
         return samples;
     }
 
-    private static float[] Tail(float[] samples, int frameCount)
+    private static float[] TailEndingBefore(float[] samples, int frameCount, int trimSamples)
     {
         var output = new float[frameCount];
-        Array.Copy(samples, samples.Length - frameCount, output, 0, frameCount);
+        var endExclusive = samples.Length - trimSamples;
+        var start = endExclusive - frameCount;
+        if (start < 0)
+        {
+            return output;
+        }
+
+        Array.Copy(samples, start, output, 0, frameCount);
         return output;
     }
 
@@ -298,20 +344,6 @@ public sealed class MimirAudioSynchronizationAnalyzer
             output[index] = z > 0.0 ? (float)(z * z) : 0.0f;
         }
 
-        return output;
-    }
-
-    private static float[] AlignedTail(float[] samples, int frameCount, int delaySamples)
-    {
-        var output = new float[frameCount];
-        var endExclusive = samples.Length - Math.Max(0, delaySamples);
-        var start = endExclusive - frameCount;
-        if (start < 0)
-        {
-            return output;
-        }
-
-        Array.Copy(samples, start, output, 0, frameCount);
         return output;
     }
 

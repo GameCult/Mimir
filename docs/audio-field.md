@@ -57,7 +57,9 @@ trace, and estimates current delay against `loopback-scarlett-speakers`.
 
 `MimirSynchronizationHub.BuildAlignedAudioFrame` returns a provisional aligned
 mono frame: loopback is always channel zero, and other channels enter only when
-their chirplet confidence clears the gate. This is still integer-delay
+their chirplet confidence clears the gate. Delay estimates compare loopback and
+candidate mic windows at a shared timestamp edge; positive delay means the
+candidate mic is late relative to loopback. This is still integer-delay
 alignment at 64-sample chirplet-hop granularity. SRO smoothing, fractional-delay
 correction, and the hot resampler are the actuator still ahead of us.
 

@@ -69,9 +69,10 @@ accepted_design:
     `loopback-scarlett-speakers` as timing authority, resamples candidate mic
     windows into that timeline, projects loopback and mic windows through the
     emitted chirplet shape, and estimates current delay from chirplet-energy
-    traces. `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
-    provisional loopback-referenced aligned mono frame for channels that clear
-    the confidence gate.
+    traces at a shared timestamp edge. Positive delay means the candidate mic is
+    late relative to loopback. `MimirSynchronizationHub.BuildAlignedAudioFrame`
+    exposes the first provisional loopback-referenced aligned mono frame for
+    channels that clear the confidence gate.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
