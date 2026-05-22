@@ -12,10 +12,14 @@ public sealed class MimirRuntime : IAquariumRuntime
 {
     private const string DefaultAudioSyncReference = "loopback-scarlett-speakers";
     private const float AudioSyncUpdateIntervalSeconds = 0.1f;
+    private const double CalibrationStartSeconds = 0.5;
+    private const int CalibrationBatchSegments = 120;
+    private const float DefaultCalibrationGain = 2.0f;
     private readonly LocalCastRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
     private readonly float telemetryIntervalSeconds;
+    private readonly float calibrationGain;
     private int lastPollCount;
     private float runtimeSeconds;
     private float nextAudioSyncSeconds = AudioSyncUpdateIntervalSeconds;
@@ -47,6 +51,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         visualRuntime = new LocalCastRuntime(options);
         synchronization = new MimirSynchronizationHub(settings);
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
+        calibrationGain = ParseCalibrationGain();
         nextTelemetrySeconds = telemetryIntervalSeconds;
         foreach (var source in streamSources)
         {
@@ -132,24 +137,48 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private void QueueCalibrationTimeline()
     {
-        var queuedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
-        var targetSeconds = runtimeSeconds + (float)MimirChirpletTimeline.QueueLeadSeconds;
-        while (queuedUntilSeconds < targetSeconds)
+        var nextSegmentSeconds = CalibrationStartSeconds + calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
+        if (runtimeSeconds < nextSegmentSeconds)
         {
-            visualRuntime.Audio.EnqueuePcm16Base64(
-                MimirChirpletTimeline.Default.RenderSegmentPcm16Base64(calibrationSegmentIndex),
-                MimirChirpletTimeline.SampleRate,
-                channels: 1,
-                gain: 1.0f);
-            calibrationSegmentIndex++;
-            queuedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
+            return;
         }
+
+        var batch = RenderCalibrationBatchPcm16Base64(calibrationSegmentIndex, CalibrationBatchSegments, out var peak);
+        visualRuntime.Audio.EnqueuePcm16Base64(
+            batch,
+            MimirChirpletTimeline.SampleRate,
+            channels: 1,
+            gain: calibrationGain);
+        Console.WriteLine(
+            $"mimir-chirplet-batch firstSegment={calibrationSegmentIndex} segments={CalibrationBatchSegments} seconds={CalibrationBatchSegments * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={calibrationGain:0.###} base64Bytes={batch.Length}");
+        calibrationSegmentIndex += CalibrationBatchSegments;
     }
 
     private string DescribeChirpletReference()
     {
-        var queuedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
-        return $"{DefaultAudioSyncReference} continuous timeline {MimirChirpletTimeline.SegmentSeconds:0.00}s segments queued to {queuedUntilSeconds:0.00}s";
+        var emittedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
+        return $"{DefaultAudioSyncReference} continuous timeline {MimirChirpletTimeline.SegmentSeconds:0.00}s segments emitted to {emittedUntilSeconds:0.00}s";
+    }
+
+    private static string RenderCalibrationBatchPcm16Base64(ulong firstSegment, int segmentCount, out float peak)
+    {
+        var samplesPerSegment = (int)Math.Round(MimirChirpletTimeline.SegmentSeconds * MimirChirpletTimeline.SampleRate);
+        var bytes = new byte[samplesPerSegment * Math.Max(1, segmentCount) * sizeof(short)];
+        var byteIndex = 0;
+        peak = 0.0f;
+        for (var segment = 0; segment < segmentCount; segment++)
+        {
+            var samples = MimirChirpletTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment);
+            for (var index = 0; index < samples.Length; index++)
+            {
+                peak = Math.Max(peak, Math.Abs(samples[index]));
+                var sample = (short)Math.Round(Math.Clamp(samples[index], -1.0f, 1.0f) * short.MaxValue);
+                bytes[byteIndex++] = (byte)(sample & 0xff);
+                bytes[byteIndex++] = (byte)((sample >> 8) & 0xff);
+            }
+        }
+
+        return Convert.ToBase64String(bytes);
     }
 
     private string DescribeBuffers()
@@ -194,6 +223,12 @@ public sealed class MimirRuntime : IAquariumRuntime
                 $"mimir-sync-state {state.ReferenceSourceId}->{state.SourceId} delaySamples={state.SmoothedDelaySamples:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000}");
         }
 
+        foreach (var trace in synchronization.AudioSynchronizationDecodeTraces.OrderBy(trace => trace.SourceId, StringComparer.Ordinal))
+        {
+            Console.WriteLine(
+                $"mimir-sync-decode {trace.ReferenceSourceId}->{trace.SourceId} status={trace.Status} compared={trace.ComparedSamples} rate={trace.SampleRate} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} refClock={trace.ReferenceClockConfidence:0.000} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} candClock={trace.CandidateClockConfidence:0.000} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
+        }
+
         nextTelemetrySeconds += telemetryIntervalSeconds;
     }
 
@@ -202,6 +237,13 @@ public sealed class MimirRuntime : IAquariumRuntime
         return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_SYNC_TELEMETRY_SECONDS"), out var seconds)
             ? Math.Clamp(seconds, 0.0f, 60.0f)
             : 0.0f;
+    }
+
+    private static float ParseCalibrationGain()
+    {
+        return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_CHIRPLET_GAIN"), out var gain)
+            ? Math.Clamp(gain, 0.05f, 4.0f)
+            : DefaultCalibrationGain;
     }
 
     private string DescribeAudioBuffers()

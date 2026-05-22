@@ -155,13 +155,27 @@ public sealed class MimirChirpletTimeline
             return [];
         }
 
-        var envelope = ContrastNormalize(BuildEnvelopeEnergyTrace(samples, sampleRate, hopSamples));
-        if (envelope.Length <= 2)
+        var trace = BuildChirpletEnergyTrace(samples, sampleRate, hopSamples);
+        if (trace.Count <= 2)
         {
             return [];
         }
 
         var frames = new List<MimirChirpletTransformFrame>();
+        var candidateOffsets = new SortedSet<int>();
+        for (var frame = 1; frame < trace.Count - 1; frame++)
+        {
+            if (trace[frame] < 0.05 ||
+                trace[frame] < trace[frame - 1] ||
+                trace[frame] < trace[frame + 1])
+            {
+                continue;
+            }
+
+            candidateOffsets.Add(frame * hopSamples);
+        }
+
+        var envelope = ContrastNormalize(BuildEnvelopeEnergyTrace(samples, sampleRate, hopSamples));
         for (var frame = 1; frame < envelope.Length - 1; frame++)
         {
             if (envelope[frame] < 0.055 ||
@@ -171,10 +185,15 @@ public sealed class MimirChirpletTimeline
                 continue;
             }
 
+            candidateOffsets.Add(frame * hopSamples);
+        }
+
+        foreach (var offset in candidateOffsets)
+        {
             var transformFrame = ClassifySymbolsAt(
                 samples,
                 sampleRate,
-                frame * hopSamples,
+                offset,
                 Math.Max(hopSamples * 3, sampleRate / 100));
             if (transformFrame != null)
             {
@@ -228,7 +247,7 @@ public sealed class MimirChirpletTimeline
                 }
             }
 
-            if (bestEnergy >= 0.08)
+            if (bestEnergy >= 0.035)
             {
                 var refinedOffset = RefineMatchedOffset(samples, kernel, bestOffset, start, end);
                 var refinedEnergy = MatchedEnergy(
@@ -247,7 +266,7 @@ public sealed class MimirChirpletTimeline
             .OrderByDescending(candidate => candidate.Energy)
             .Take(MaxSymbolCandidatesPerFrame)
             .ToArray();
-        if (ordered[0].Energy < 0.25)
+        if (ordered[0].Energy < 0.08)
         {
             return null;
         }
@@ -657,6 +676,40 @@ public sealed class MimirChirpletTimeline
         }
 
         return Math.Min(1.0, Math.Sqrt(sineDot * sineDot + cosineDot * cosineDot) / denominator);
+    }
+
+    private IReadOnlyList<double> BuildChirpletEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
+    {
+        var maxKernelLength = Codebook.Symbols
+            .Select(symbol => sampleRate == SampleRate ? symbolKernels[symbol.SymbolId].Length : RenderToneKernel(symbol.Tone, sampleRate).Length)
+            .DefaultIfEmpty(0)
+            .Max();
+        if (samples.Length < maxKernelLength || maxKernelLength == 0)
+        {
+            return [];
+        }
+
+        var output = new double[1 + (samples.Length - maxKernelLength) / hopSamples];
+        for (var frame = 0; frame < output.Length; frame++)
+        {
+            var offset = frame * hopSamples;
+            var best = 0.0;
+            for (var symbol = 0; symbol < Codebook.Symbols.Count; symbol++)
+            {
+                var tone = Codebook[symbol].Tone;
+                var kernel = sampleRate == SampleRate ? symbolKernels[symbol] : RenderToneKernel(tone, sampleRate);
+                if (offset + kernel.Length > samples.Length)
+                {
+                    continue;
+                }
+
+                best = Math.Max(best, MatchedEnergy(samples.Slice(offset, kernel.Length), kernel));
+            }
+
+            output[frame] = best;
+        }
+
+        return output;
     }
 
     private static float[] BuildEnvelopeEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)

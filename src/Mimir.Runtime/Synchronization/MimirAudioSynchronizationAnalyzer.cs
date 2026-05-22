@@ -5,6 +5,9 @@ namespace Mimir.Runtime.Synchronization;
 public sealed class MimirAudioSynchronizationAnalyzer
 {
     private const int MaxWindowSamples = 48_000 * 2;
+    private readonly List<MimirAudioSynchronizationDecodeTrace> lastDecodeTraces = [];
+
+    public IReadOnlyList<MimirAudioSynchronizationDecodeTrace> LastDecodeTraces => lastDecodeTraces;
 
     public IReadOnlyList<MimirAudioSynchronizationReport> Analyze(
         IEnumerable<MimirRollingStreamBuffer> buffers,
@@ -36,6 +39,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
         }
 
         var reports = new List<MimirAudioSynchronizationReport>();
+        lastDecodeTraces.Clear();
         foreach (var buffer in audioBuffers)
         {
             if (ReferenceEquals(buffer, reference))
@@ -73,6 +77,20 @@ public sealed class MimirAudioSynchronizationAnalyzer
             var referenceDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, referenceBlock.SampleRate);
             var candidateDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, referenceBlock.SampleRate);
             var deterministicFit = EstimateDelayFromDecodedTimeline(referenceDecode, candidateDecode);
+            lastDecodeTraces.Add(new MimirAudioSynchronizationDecodeTrace(
+                reference.Descriptor.SourceId,
+                buffer.Descriptor.SourceId,
+                referenceBlock.SampleRate,
+                compared,
+                referenceDecode.Frames.Count,
+                referenceDecode.Anchors.Count,
+                referenceDecode.ClockFit?.Confidence ?? 0.0,
+                candidateDecode.Frames.Count,
+                candidateDecode.Anchors.Count,
+                candidateDecode.ClockFit?.Confidence ?? 0.0,
+                deterministicFit.MatchedEvents,
+                deterministicFit.Confidence,
+                deterministicFit.MatchedEvents >= 3 ? "report" : "insufficient-anchors"));
             if (deterministicFit.MatchedEvents < 3)
             {
                 continue;

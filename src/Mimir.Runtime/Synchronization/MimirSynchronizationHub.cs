@@ -33,6 +33,9 @@ public sealed class MimirSynchronizationHub : IDisposable
     public IReadOnlyList<MimirAudioSynchronizationReport> AudioSynchronizationReports =>
         audioSynchronizationReports.Values.OrderBy(report => report.SourceId, StringComparer.Ordinal).ToArray();
 
+    public IReadOnlyList<MimirAudioSynchronizationDecodeTrace> AudioSynchronizationDecodeTraces =>
+        audioSynchronization.LastDecodeTraces;
+
     public void AddSource(IMimirStreamSource source)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
