@@ -27,7 +27,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `src/Mimir.App` hosts Aquarium Engine as the windowing/rendering/D3D12 bridge.
 - `src/Mimir.Runtime` owns `MimirSynchronizationHub`, configurable five-second
   rolling buffers, stream descriptors, source adapters, direct native ingest,
-  and the video capture driver seam.
+  audio chirplet delay estimation, provisional aligned audio frames, and the
+  video capture driver seam.
 - Local six-camera ingest should use direct driver adapters. Process-backed
   sources are bridge/network edges only.
 - Leap stereo IR is the first timing-camera candidate for direct ingest.
@@ -43,6 +44,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Implement the first concrete Leap direct capture driver and measure cadence.
 - Add remaining camera drivers through `IMimirVideoCaptureDriver`.
 - Add native audio capture workers for mic, loopback, and network audio feeds.
+- Turn the current loopback-referenced chirplet measurement into the real
+  synchronization actuator: smooth delay/SRO, then drive fractional delay and
+  variable-rate resampling.
 - Bind Aquarium UI to stream health, buffer depth, timestamps, settings, and
   output management.
 - Keep PowerShell/FFmpeg/SRT as bridge utilities until native program output
@@ -58,17 +62,16 @@ Get-Content .\state\evidence.jsonl -Tail 8
   but Leap drops hard under shared USB load: 40.12 fps when the PS3 Eye runs
   640x480@60, and 81.10 fps when the PS3 Eye runs 320x240@187. The regular
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
-- After port swapping, five camera devices / six optical sensors were visible
-  and pulled at once: LeapUVC's packed stereo IR pair, Kiyo Pro, regular Kiyo,
-  and two PS3 Eyes. With both Eyes at 320x240@187, the set delivered Leap
-  stereo 81.05 fps, Kiyo Pro 24.97 fps, Kiyo 30.28 fps, PS3 Eye 0 187.60 fps,
-  and PS3 Eye 1 187.03 fps. With both Eyes at 640x480@60, Leap rose compared
-  with the earlier three-device run but still only reached 57.33 fps. Kiyo Pro
-  still reports high-speed USB, not SuperSpeed.
+- Current chirplet-backed smoke uses Scarlett speaker loopback as timing
+  authority and can build an aligned audio frame containing loopback, Focusrite
+  mic, Kiyo mic, and Kiyo Pro mic when 9-16 kHz calibration chirplets are
+  playing. In that run both PS3 Eye mic buffers were empty while both PS3 Eye
+  camera buffers were live; earlier replug evidence proves the endpoints can
+  work, so treat PS3 Eye audio as enumeration/runtime-fragile.
 
 ## Immediate Re-entry Instruction
 
-Move the raw PS3 Eye cadence probe into `native/probes` or cut the first real
-runtime capture driver, then rerun the six-optical-sensor pull from repo probes
-after deliberate USB topology changes. Do not restore deleted script
+Replace the diagnostic audio JSON process bridge with native audio capture
+workers, then turn chirplet delay reports into a smoothed SRO/fractional-delay
+actuator. Keep loopback as timing authority. Do not restore deleted script
 infrastructure because a stale doc once missed it.

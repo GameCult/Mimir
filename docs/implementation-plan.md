@@ -43,8 +43,13 @@ a named invariant that the native runtime cannot protect yet.
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
-  sample-bearing audio blocks can be cross-correlated against
-  `mic-focusrite-local` to estimate current delay and confidence.
+  sample-bearing audio blocks are resampled into the Scarlett loopback timeline
+  and compared by chirplet-energy delay estimation.
+- `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
+  provisional aligned mono frame for loopback-referenced audio channels that
+  clear the confidence gate.
+- `MimirRuntime` emits short calibration chirplets through Aquarium audio so the
+  loopback and acoustic mic buffers carry a shared timing witness.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -80,6 +85,8 @@ a named invariant that the native runtime cannot protect yet.
    workers for local mic, loopback, and network audio feeds.
 4. Add the synchronization actuator: smooth delay/SRO estimates, then drive a
    variable-rate resampler and fractional delay line per non-reference stream.
+   The current aligned frame is integer-delay only and should not pretend to be
+   the final DSP path.
 5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 6. Move GPU feature extraction, fusion, material fitting, render budgeting, and

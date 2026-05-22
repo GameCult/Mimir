@@ -64,6 +64,19 @@ public sealed class MimirSynchronizationHub : IDisposable
         return audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId);
     }
 
+    public MimirAlignedAudioFrame? BuildAlignedAudioFrame(
+        string referenceSourceId,
+        int frameCount = 4_800,
+        double minimumConfidence = 0.10)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        return audioSynchronization.BuildAlignedFrame(
+            Buffers.Buffers,
+            referenceSourceId,
+            frameCount,
+            minimumConfidence);
+    }
+
     private bool disposed;
 
     public void Dispose()

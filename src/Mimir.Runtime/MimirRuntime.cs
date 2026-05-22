@@ -10,10 +10,18 @@ namespace Mimir.Runtime;
 
 public sealed class MimirRuntime : IAquariumRuntime
 {
+    private const string DefaultAudioSyncReference = "loopback-scarlett-speakers";
+    private const int CalibrationChirpSampleRate = 48_000;
+    private const float CalibrationChirpIntervalSeconds = 1.5f;
+    private const float CalibrationChirpDurationSeconds = 0.08f;
+    private const float CalibrationChirpGain = 0.125f;
     private readonly LocalCastRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
     private int lastPollCount;
+    private float runtimeSeconds;
+    private float nextCalibrationChirpSeconds = 0.5f;
+    private string? calibrationChirpPcm16Base64;
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -77,6 +85,8 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     public void Update(float deltaSeconds, InputState input)
     {
+        runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
+        QueueCalibrationChirps();
         lastPollCount = synchronization.PollSources();
         visualRuntime.Update(deltaSeconds, input);
     }
@@ -110,7 +120,43 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Ingested", () => $"{synchronization.IngestedSamples}");
                 panel.Readout("Buffer details", DescribeBuffers);
                 panel.Readout("Audio sync", DescribeAudioSync);
+                panel.Readout("Aligned audio", DescribeAlignedAudio);
+                panel.Readout("Chirp reference", () => $"{DefaultAudioSyncReference} every {CalibrationChirpIntervalSeconds:0.0}s");
             });
+    }
+
+    private void QueueCalibrationChirps()
+    {
+        while (runtimeSeconds >= nextCalibrationChirpSeconds)
+        {
+            visualRuntime.Audio.EnqueuePcm16Base64(
+                calibrationChirpPcm16Base64 ??= BuildCalibrationChirpPcm16Base64(),
+                CalibrationChirpSampleRate,
+                channels: 1,
+                gain: 1.0f);
+            nextCalibrationChirpSeconds += CalibrationChirpIntervalSeconds;
+        }
+    }
+
+    private static string BuildCalibrationChirpPcm16Base64()
+    {
+        var frameCount = Math.Max(1, (int)Math.Round(CalibrationChirpSampleRate * CalibrationChirpDurationSeconds));
+        var bytes = new byte[frameCount * sizeof(short)];
+        const double startHz = 9_000.0;
+        const double endHz = 16_000.0;
+        for (var frame = 0; frame < frameCount; frame++)
+        {
+            var t = frame / (double)CalibrationChirpSampleRate;
+            var normalized = frameCount <= 1 ? 1.0 : frame / (double)(frameCount - 1);
+            var phase = 2.0 * Math.PI * (startHz * t + 0.5 * (endHz - startHz) * t * normalized);
+            var envelope = 0.5 - 0.5 * Math.Cos(2.0 * Math.PI * normalized);
+            var value = Math.Clamp(Math.Sin(phase) * envelope * CalibrationChirpGain, -1.0, 1.0);
+            var sample = (short)Math.Round(value * short.MaxValue);
+            bytes[frame * sizeof(short)] = (byte)(sample & 0xff);
+            bytes[frame * sizeof(short) + 1] = (byte)((sample >> 8) & 0xff);
+        }
+
+        return Convert.ToBase64String(bytes);
     }
 
     private string DescribeBuffers()
@@ -136,9 +182,17 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private string DescribeAudioSync()
     {
-        var reports = synchronization.AnalyzeAudioSynchronization("mic-focusrite-local");
+        var reports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference);
         return reports.Count == 0
             ? "no payload windows"
             : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.DelaySamples} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00}"));
+    }
+
+    private string DescribeAlignedAudio()
+    {
+        var frame = synchronization.BuildAlignedAudioFrame(DefaultAudioSyncReference);
+        return frame == null
+            ? "no aligned frame"
+            : $"{frame.Channels.Count}ch {frame.SampleRate}Hz {frame.FrameCount} frames";
     }
 }

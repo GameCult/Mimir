@@ -65,9 +65,13 @@ accepted_design:
     runtime rolling buffers; it does not carry pixels/audio payloads or own the
     final local-device hot path.
   - The diagnostic audio path can optionally carry base64 float sample payloads
-    for sync smoke tests. `MimirAudioSynchronizationAnalyzer` estimates current
-    delay against `mic-focusrite-local` from those payload-bearing rolling
-    buffers.
+    for sync smoke tests. `MimirAudioSynchronizationAnalyzer` now treats
+    `loopback-scarlett-speakers` as timing authority, resamples candidate mic
+    windows into that timeline, projects loopback and mic windows through the
+    emitted chirplet shape, and estimates current delay from chirplet-energy
+    traces. `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
+    provisional loopback-referenced aligned mono frame for channels that clear
+    the confidence gate.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
@@ -164,17 +168,16 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Add the synchronization actuator after the current measurement loop:
-    smooth delay/SRO estimates, then drive variable-rate resampling and
-    fractional-delay correction per non-reference stream. Replace the diagnostic
-    JSON-line process bridge with direct native capture drivers that push buffer
-    handles into Mimir.Runtime. Current
-    Mimir.BufferSmoke with `--require-samples` proves all five declared local
-    optical buffers plus Focusrite mic, Kiyo Pro mic, Kiyo mic, one USB Camera
-    mic, both PS3 Eye mics, and active Scarlett speaker loopback receive
-    samples. One PS3 Eye mic previously enumerated OK but emitted zero WASAPI
-    packets; unplug/replug fixed the audio stream without changing that Eye's
-    MI_00 camera binding from WinUSB/libwdi to libusbK. A two-mic payload sync
-    smoke reports live Focusrite-to-PS3-Eye delay by cross-correlation. Keep the
-    Focusrite away from the Leap USB neighborhood and treat Kiyo Pro as a ~25
-    fps source until its SuperSpeed negotiation is fixed.
+    Add the synchronization actuator after the current chirplet measurement
+    loop: smooth delay/SRO estimates, then drive variable-rate resampling and
+    fractional-delay correction per non-reference stream. Replace the
+    diagnostic JSON-line process bridge with direct native capture drivers that
+    push buffer handles into Mimir.Runtime. Current chirplet-backed
+    Mimir.BufferSmoke proves loopback-referenced aligned audio for Scarlett
+    loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when 9-16 kHz
+    calibration chirplets are playing; both PS3 Eye audio endpoints were empty
+    in that run despite their camera buffers being live. A prior replug proved
+    both PS3 Eye mics can emit WASAPI packets, so treat current silence as
+    device enumeration/runtime fragility rather than missing endpoint
+    inventory. Keep the Focusrite away from the Leap USB neighborhood and treat
+    Kiyo Pro as a ~25 fps source until its SuperSpeed negotiation is fixed.

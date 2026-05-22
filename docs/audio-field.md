@@ -25,9 +25,12 @@ flowchart TD
 
 ## Invariants
 
+- Scarlett speaker loopback is the timing authority when calibration chirplets
+  are playing.
 - Focusrite dialogue mics are the voice anchors.
 - Camera mics are spatial/context witnesses.
-- Loopback/program audio is timing evidence where available.
+- Loopback/program audio is timing evidence where available; it outranks
+  acoustic mics for clock/timing because it is the emitted program surface.
 - Distributed inputs must be aligned and resampled before they become program
   stems.
 - The five-second runtime window is allowed to be spent on alignment,
@@ -45,11 +48,18 @@ USB Camera / PS3 Eye mics, and Scarlett speaker loopback in rolling buffers when
 loopback audio is actively playing. One PS3 Eye mic previously enumerated but
 produced zero WASAPI packets until that Eye was unplugged and replugged.
 
-`config/mimir-runtime.sync-smoke.example.json` enables sample-bearing blocks for
-the Focusrite reference and one PS3 Eye mic. `MimirAudioSynchronizationAnalyzer`
-uses those payloads to estimate current delay by normalized cross-correlation.
-This is the measurement half of the old synchronization machine; adaptive
-resampling and fractional-delay correction are still the next cut.
+The full probe runtime config now enables sample-bearing blocks for every local
+audio source. `MimirRuntime` emits short 9-16 kHz calibration chirplets through
+Aquarium audio every 1.5 seconds. `MimirAudioSynchronizationAnalyzer` resamples
+candidate mic windows into the loopback sample-rate timeline, projects them
+through the same chirplet shape, contrast-normalizes the resulting energy
+trace, and estimates current delay against `loopback-scarlett-speakers`.
+
+`MimirSynchronizationHub.BuildAlignedAudioFrame` returns a provisional aligned
+mono frame: loopback is always channel zero, and other channels enter only when
+their chirplet confidence clears the gate. This is still integer-delay
+alignment at 64-sample chirplet-hop granularity. SRO smoothing, fractional-delay
+correction, and the hot resampler are the actuator still ahead of us.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,

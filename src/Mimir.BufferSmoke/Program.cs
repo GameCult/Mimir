@@ -3,6 +3,7 @@ using Mimir.Runtime.Synchronization;
 var duration = TimeSpan.FromSeconds(ParseDoubleOption(args, "--seconds", 10.0));
 var pollDelay = TimeSpan.FromMilliseconds(ParseDoubleOption(args, "--poll-ms", 10.0));
 var requireSamples = args.Any(arg => string.Equals(arg, "--require-samples", StringComparison.OrdinalIgnoreCase));
+var syncReference = ParseStringOption(args, "--sync-reference", "loopback-scarlett-speakers");
 using var configuration = new DisposableConfiguration(MimirRuntimeConfiguration.Load());
 using var hub = new MimirSynchronizationHub(configuration.Value.Settings);
 
@@ -47,11 +48,23 @@ foreach (var buffer in hub.Buffers.Buffers.OrderBy(buffer => buffer.Descriptor.S
     }
 }
 
-var reports = hub.AnalyzeAudioSynchronization("mic-focusrite-local");
+var reports = hub.AnalyzeAudioSynchronization(syncReference);
 foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
 {
     Console.WriteLine(
         $"sync {report.ReferenceSourceId}->{report.SourceId}: delaySamples={report.DelaySamples} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} compared={report.ComparedSamples}");
+}
+
+var aligned = hub.BuildAlignedAudioFrame(syncReference);
+if (aligned != null)
+{
+    Console.WriteLine(
+        $"aligned-audio reference={aligned.ReferenceSourceId} sampleRate={aligned.SampleRate} frameCount={aligned.FrameCount} channels={aligned.Channels.Count}");
+    foreach (var channel in aligned.Channels)
+    {
+        Console.WriteLine(
+            $"aligned-channel {channel.SourceId}: delaySamples={channel.DelaySamples} confidence={channel.Confidence:0.000}");
+    }
 }
 
 if (requireSamples && emptyBuffers.Count > 0)
@@ -71,6 +84,20 @@ static double ParseDoubleOption(IReadOnlyList<string> args, string name, double 
             && parsed > 0)
         {
             return parsed;
+        }
+    }
+
+    return fallback;
+}
+
+static string ParseStringOption(IReadOnlyList<string> args, string name, string fallback)
+{
+    for (var index = 0; index < args.Count - 1; index++)
+    {
+        if (string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(args[index + 1]))
+        {
+            return args[index + 1];
         }
     }
 

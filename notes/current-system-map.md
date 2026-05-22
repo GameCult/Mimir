@@ -56,6 +56,8 @@ separately controllable audio stems.
 - `MimirProcessStreamSource`;
 - `MimirFrameEventProcessStreamSource`;
 - `MimirVideoFrameDescriptor`;
+- `MimirAudioSynchronizationAnalyzer`;
+- `MimirAlignedAudioFrame`;
 - `IMimirVideoCaptureDriver`;
 - `MimirVideoCaptureDriverSource`.
 
@@ -87,10 +89,14 @@ not become the synchronized program authority.
 
 ## Audio Field
 
-The six-microphone path is separate from the bridge. The live version aligns mic
-and loopback blocks into one presentation timeline, feeds Faust/native DSP, and
-emits synchronized stems. Camera mics are spatial/context witnesses; Focusrite
-devices are dialogue anchors.
+The six-microphone path is separate from the bridge. Scarlett speaker loopback
+is the current timing authority when calibration chirplets are playing. Mimir
+emits short 9-16 kHz chirplets through Aquarium audio, compares mic buffers
+against loopback by chirplet-energy delay estimation, and can build a
+provisional aligned mono frame for channels that clear the confidence gate.
+Camera mics are spatial/context witnesses; Focusrite devices are dialogue
+anchors. The current aligned frame is integer-delay only; SRO smoothing,
+fractional delay, and the hot resampler still belong in Faust/native DSP.
 
 ## Visual Fusion
 
@@ -106,3 +112,6 @@ fitting, render budgeting, and publication.
 - OBS SRT reconnection behavior can be fussy.
 - Direct driver work must prove sustained cadence before it becomes timing
   authority.
+- PS3 Eye audio endpoints can enumerate and later emit packets after replug,
+  but the current chirplet smoke saw both PS3 Eye mic buffers empty while their
+  cameras were live.
