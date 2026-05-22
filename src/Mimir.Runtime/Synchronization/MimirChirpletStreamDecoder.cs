@@ -75,7 +75,13 @@ public sealed class MimirChirpletStreamDecoder
             ? null
             : decode.ClockFit with { SourceOffsetSamples = decode.ClockFit.SourceOffsetSamples + originSample };
         var frames = decode.Frames
-            .Select(frame => frame with { SampleOffset = frame.SampleOffset + originSample })
+            .Select(frame => frame with
+            {
+                SampleOffset = frame.SampleOffset + originSample,
+                Candidates = frame.Candidates
+                    .Select(candidate => candidate with { SampleOffset = candidate.SampleOffset + originSample })
+                    .ToArray(),
+            })
             .ToArray();
         return new MimirChirpletStreamDecode(frames, symbols, anchors, clock);
     }

@@ -98,11 +98,13 @@ current operating horizon. Mimir continuously queues that timeline through
 Aquarium audio and decodes timing through the constrained chirplet-transform
 path.
 Reports now carry fractional delay and per-band matched energy. The first
-`MimirChirpletStreamDecoder` exists as the constrained chirplet-transform
-receiver: it turns a bounded PCM window into transform frames with multiple
-symbol candidates, code-valid triplet anchors selected through gap/clock
-coherence, and an affine source clock fit. The analyzer only emits timing
-reports from matched canonical anchors. The hub also owns cached reports plus smoothed
+`MimirChirpletSymbolCodebook` owns separable symbol definitions; every symbol
+has a unique chirp shape, with rhythm as additional evidence. `MimirChirpletStreamDecoder`
+is the constrained chirplet-transform receiver: it turns a bounded PCM window
+into transform frames with multiple symbol candidates and refined per-candidate
+sample offsets, code-valid triplet anchors selected through gap/clock coherence,
+and an affine source clock fit. The analyzer only emits timing reports from
+matched canonical anchors. The hub also owns cached reports plus smoothed
 per-source sync state with delay-slope/SRO in ppm. `MimirRuntime` runs analysis
 online as a bounded rotating service and can print live telemetry with
 `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are passive readers of cached

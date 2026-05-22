@@ -70,11 +70,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
   timeline owns Aquarium PCM segment rendering, transform-frame decoding,
   triplet anchor decoding, and per-band response hooks. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
-  now tracks smoothed delay and delay-slope/SRO ppm. `MimirChirpletStreamDecoder`
-  is the first constrained chirplet-transform receiver: it emits transform
-  frames with multiple symbol candidates, selects code-valid triplet anchors
-  through gap/clock coherence, and fits a source clock from a bounded PCM
-  window. `MimirRuntime` runs sync analysis as a bounded rotating
+  now tracks smoothed delay and delay-slope/SRO ppm. `MimirChirpletSymbolCodebook`
+  owns separable symbol definitions, and `MimirChirpletStreamDecoder` is the
+  constrained chirplet-transform receiver: it emits transform frames with
+  multiple symbol candidates and refined per-candidate sample offsets, selects
+  code-valid triplet anchors through gap/clock coherence, and fits a source
+  clock from a bounded PCM window. `MimirRuntime` runs sync analysis as a bounded rotating
   service and caches reports/states for UI and telemetry; readouts must stay
   passive. Actual Mimir.App testing proves Aquarium audio wakes Scarlett
   loopback, keeps mic buffers live, and produces confident online sync states,

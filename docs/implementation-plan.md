@@ -49,11 +49,13 @@ a named invariant that the native runtime cannot protect yet.
   detected symbols identify a timeline event inside the current operating
   horizon. Symbol identity is carried by start band, glide shape, duration, and
   following inter-chirp gap.
+- `MimirChirpletSymbolCodebook` owns the 32 symbol definitions. Each symbol has
+  a unique chirp shape, with inter-chirp rhythm as additional code evidence.
 - `MimirChirpletStreamDecoder` is the first constrained chirplet-transform
   receiver. It owns a bounded PCM window, emits transform frames with multiple
-  symbol candidates, decodes code-valid triplet anchors through a local trellis
-  that requires gap and clock coherence, and fits a per-source sample clock from
-  those anchors.
+  symbol candidates and per-candidate refined sample offsets, decodes code-valid
+  triplet anchors through a local trellis that requires gap and clock coherence,
+  and fits a per-source sample clock from those anchors.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline.
   The analyzer derives delay only from matched decoded triplet timeline anchors.

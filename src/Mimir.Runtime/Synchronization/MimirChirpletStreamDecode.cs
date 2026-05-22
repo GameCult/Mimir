@@ -2,6 +2,7 @@ namespace Mimir.Runtime.Synchronization;
 
 public sealed record MimirChirpletSymbolCandidate(
     int SymbolId,
+    double SampleOffset,
     double Energy);
 
 public sealed record MimirChirpletTransformFrame(

@@ -139,11 +139,15 @@ must be tied to the same emitted timeline, not three separately invented probes.
 
 The symbol layer is intentionally redundant. It does not rely on one fixed
 frequency shelf: timing gaps, chirp duration, start band, and glide shape all
-contribute so poor mic frequency response does not erase the whole code. A
-synthetic runtime check rendered two seconds of canonical timeline audio and
-decoded a coherent path containing events 0 through 9 plus event 16. Real device
-runs still depend on loopback capture staying live; the local Scarlett loopback
-has intermittently stopped advancing during short headless sniffs.
+contribute so poor mic frequency response does not erase the whole code.
+`MimirChirpletSymbolCodebook` owns the symbol definitions so timeline ordering
+does not smuggle acoustic shape decisions into bit arithmetic. Every symbol has
+a unique chirp shape; rhythm remains additional evidence, not a substitute for
+symbol separability. A synthetic runtime check rendered two seconds of canonical
+timeline audio and decoded all 15 emitted chirps into 13 possible triplet
+anchors, events 0 through 12, with a fitted clock near 48 kHz. Real device runs
+still depend on loopback capture staying live; the local Scarlett loopback has
+intermittently stopped advancing during short headless sniffs.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
