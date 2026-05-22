@@ -83,10 +83,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
   passive. Audio sync mode is runtime-owned: `chirp-only` emits active
   calibration, `passive` disables emission and uses program-audio phase
   correlation, and `hybrid` emits active pilot chunks only when passive
-  confidence is weak. Actual Mimir.App testing proves Aquarium audio wakes Scarlett
-  loopback, keeps mic buffers live, and produces confident online sync states,
-  but the decoder still needs stronger symbol likelihoods/codebook distance
-  before arbitrary real triplets can drive the actuator directly. PS3 Eye audio is
+  confidence is weak. Hybrid chirp-bin fallback now has its own short-window
+  analyzer floor instead of inheriting the passive two-second gate, and
+  `Mimir.BufferSmoke --hybrid-sync-self-test` proves a one-second rolling-buffer
+  window recovers a 317-sample delay from code-valid chirp-bin anchors. Actual
+  Mimir.App testing proves Aquarium audio can wake Scarlett
+  loopback, keep mic buffers live, and produce confident online passive sync
+  states. The latest live hybrid smoke did not prove acoustic chirp-bin decode
+  because Scarlett loopback stalled after one block in that run; treat that as
+  loopback freshness evidence, not duration evidence. PS3 Eye audio is
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.

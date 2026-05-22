@@ -15,6 +15,11 @@ if (args.Any(arg => string.Equals(arg, "--passive-sync-self-test", StringCompari
     return RunPassiveSyncSelfTest();
 }
 
+if (args.Any(arg => string.Equals(arg, "--hybrid-sync-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunHybridSyncSelfTest();
+}
+
 var duration = TimeSpan.FromSeconds(ParseDoubleOption(args, "--seconds", 10.0));
 var pollDelay = TimeSpan.FromMilliseconds(ParseDoubleOption(args, "--poll-ms", 10.0));
 var requireSamples = args.Any(arg => string.Equals(arg, "--require-samples", StringComparison.OrdinalIgnoreCase));
@@ -249,6 +254,82 @@ static int RunPassiveSyncSelfTest()
     }
 
     return 0;
+}
+
+static int RunHybridSyncSelfTest()
+{
+    const string referenceSourceId = "loopback-test";
+    const string candidateSourceId = "mic-test";
+    const int delaySamples = 317;
+
+    var firstSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(0);
+    var secondSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(1);
+    var reference = new float[firstSegment.Length + secondSegment.Length];
+    Array.Copy(firstSegment, 0, reference, 0, firstSegment.Length);
+    Array.Copy(secondSegment, 0, reference, firstSegment.Length, secondSegment.Length);
+    var candidate = new float[reference.Length];
+    Array.Copy(reference, 0, candidate, delaySamples, reference.Length - delaySamples);
+
+    var referenceBuffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor(referenceSourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    var candidateBuffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor(candidateSourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+
+    AppendFloatBlock(referenceBuffer, referenceSourceId, reference, MimirChirpBinTimeline.SampleRate);
+    AppendFloatBlock(candidateBuffer, candidateSourceId, candidate, MimirChirpBinTimeline.SampleRate);
+
+    var analyzer = new MimirAudioSynchronizationAnalyzer();
+    var reports = analyzer.Analyze([referenceBuffer, candidateBuffer], referenceSourceId, MimirAudioSyncMode.Hybrid);
+    var report = reports.SingleOrDefault();
+    foreach (var trace in analyzer.LastDecodeTraces)
+    {
+        Console.WriteLine(
+            $"hybrid-sync-trace {trace.ReferenceSourceId}->{trace.SourceId}: status={trace.Status} compared={trace.ComparedSamples} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
+    }
+
+    if (report == null)
+    {
+        Console.Error.WriteLine("hybrid sync self-test failed: analyzer did not report from a short chirp-bin window");
+        return 1;
+    }
+
+    var error = Math.Abs(report.FractionalDelaySamples - delaySamples);
+    Console.WriteLine(
+        $"hybrid-sync-self-test evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000} expected={delaySamples} error={error:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
+    return string.Equals(report.EvidenceKind, "chirp-bin", StringComparison.Ordinal) &&
+        report.TimelineMatchedEvents >= 3 &&
+        report.Confidence > 0.70 &&
+        error < 1.0
+            ? 0
+            : 1;
+}
+
+static void AppendFloatBlock(MimirRollingStreamBuffer buffer, string sourceId, float[] samples, int sampleRate)
+{
+    var bytes = new byte[samples.Length * sizeof(float)];
+    for (var index = 0; index < samples.Length; index++)
+    {
+        BitConverter.TryWriteBytes(bytes.AsSpan(index * sizeof(float), sizeof(float)), samples[index]);
+    }
+
+    buffer.Append(new MimirStreamSample(
+        sourceId,
+        MimirStreamKind.Audio,
+        MimirStreamOrigin.LocalDevice,
+        1_000_000_000L,
+        1_000_000_000L,
+        1,
+        0,
+        bytes.Length,
+        bytes,
+        AudioBlock: new MimirAudioBlockDescriptor(
+            sampleRate,
+            1,
+            MimirAudioSampleFormat.Float32,
+            samples.Length,
+            1_000_000_000L)));
 }
 
 internal sealed class DisposableConfiguration : IDisposable
