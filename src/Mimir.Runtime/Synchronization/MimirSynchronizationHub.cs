@@ -62,10 +62,12 @@ public sealed class MimirSynchronizationHub : IDisposable
         return $"{video} video / {audio} audio buffers";
     }
 
-    public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronization(string referenceSourceId)
+    public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronization(
+        string referenceSourceId,
+        double approximateTimelineSeconds = double.PositiveInfinity)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId);
+        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId, approximateTimelineSeconds);
         audioSynchronizationState.Update(reports);
         return reports;
     }

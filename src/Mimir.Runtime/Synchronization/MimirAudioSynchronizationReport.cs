@@ -12,4 +12,6 @@ public sealed record MimirAudioSynchronizationReport(
     long AnalysisTimestampNs,
     int ComparedSamples,
     ulong ReferenceSequence,
-    ulong SourceSequence);
+    ulong SourceSequence,
+    int TimelineMatchedEvents = 0,
+    double TimelineConfidence = 0.0);

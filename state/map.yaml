@@ -66,13 +66,14 @@ accepted_design:
     final local-device hot path.
   - The diagnostic audio path can optionally carry base64 float sample payloads
     for sync smoke tests. `MimirChirpletTimeline` owns the structured
-    birdsong-like timeline fingerprint: deterministic unbounded chirplet events
-    where event `N` is generated from `N`, plus PCM segment rendering, matched
-    timing atoms, and per-band response kernels. `MimirAudioSynchronizationAnalyzer`
-    now treats `loopback-scarlett-speakers` as timing authority, resamples
-    candidate mic windows into that timeline, projects loopback and mic windows
-    through continuous chirplet energy traces, and estimates current delay from
-    chirplet-energy traces at a shared timestamp edge. Positive delay means the
+    birdsong-like timeline fingerprint: an order-3 de Bruijn sequence over 32
+    separated chirp symbols, plus PCM segment rendering, matched timing atoms,
+    symbol/event decoding, and per-band response kernels. Any three consecutive
+    correctly detected symbols identify a timeline event within the current
+    operating horizon. `MimirAudioSynchronizationAnalyzer` now treats
+    `loopback-scarlett-speakers` as timing authority, uses coarse chirplet
+    energy for acquisition, and refines delay from matched timeline event
+    indices when symbol decoding succeeds. Positive delay means the
     candidate mic is late relative to loopback. Reports include rounded delay,
     fractional delay, confidence, and per-band matched energy. `MimirAudioSynchronizationStateTracker`
     owns the smoothed per-source belief: latest delay, smoothed delay,

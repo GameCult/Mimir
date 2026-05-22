@@ -164,7 +164,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             return;
         }
 
-        lastAudioSynchronizationReports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference);
+        lastAudioSynchronizationReports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference, runtimeSeconds);
         nextAudioSyncSeconds += AudioSyncUpdateIntervalSeconds;
     }
 
@@ -184,7 +184,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         foreach (var report in lastAudioSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
         {
             Console.WriteLine(
-                $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} delaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000}");
+                $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} delaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} timelineEvents={report.TimelineMatchedEvents} timelineConfidence={report.TimelineConfidence:0.000}");
         }
 
         foreach (var state in states)
@@ -229,10 +229,10 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private string DescribeAudioSync()
     {
-        var reports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference);
+        var reports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference, runtimeSeconds);
         return reports.Count == 0
             ? "no payload windows"
-            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.0} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00}"));
+            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.0} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00} events={report.TimelineMatchedEvents}"));
     }
 
     private string DescribeAlignedAudio()

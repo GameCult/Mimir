@@ -91,12 +91,13 @@ not become the synchronized program authority.
 
 The six-microphone path is separate from the bridge. Scarlett speaker loopback
 is the current timing authority when calibration chirplets are playing.
-`MimirChirpletTimeline` owns the birdsong-like timeline fingerprint: a
-deterministic unbounded chirplet stream where event `N` is generated from `N`,
-with no repeat cycle or remembered random state. Mimir continuously queues that
-timeline through Aquarium audio, compares mic buffers against loopback by
-chirplet-energy delay estimation, and can build a provisional aligned mono
-frame for channels that clear the confidence gate.
+`MimirChirpletTimeline` owns the birdsong-like timeline fingerprint: an order-3
+de Bruijn sequence over 32 separated chirp symbols. Any three consecutive
+correctly detected symbols identify the event index inside the current operating
+horizon. Mimir continuously queues that timeline through Aquarium audio, uses
+coarse chirplet energy for acquisition, refines delay from matched event
+indices when the symbol decoder succeeds, and can build a provisional aligned
+mono frame for channels that clear the confidence gate.
 Reports now carry fractional delay and per-band matched energy. The hub also
 owns smoothed per-source sync state with delay-slope/SRO in ppm. `MimirRuntime`
 runs the analysis online and can print live telemetry with

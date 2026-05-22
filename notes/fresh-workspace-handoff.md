@@ -64,10 +64,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
 - Current chirplet-backed smoke uses Scarlett speaker loopback as timing
   authority. `MimirChirpletTimeline` owns the structured birdsong-like timeline
-  fingerprint: deterministic unbounded chirplet events where event `N` is
-  generated from `N`, with no repeat cycle or remembered random state. The
-  timeline owns Aquarium PCM segment rendering, matched timing trace, and
-  per-band response hooks. Sync reports now include
+  fingerprint: an order-3 de Bruijn sequence over 32 separated chirp symbols,
+  so any three consecutive correctly detected symbols identify the event index
+  inside the current operating horizon. The timeline owns Aquarium PCM segment
+  rendering, coarse acquisition, symbol/event decoding, and per-band response
+  hooks. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
   now tracks smoothed delay and delay-slope/SRO ppm. Actual Mimir.App testing
   proves Aquarium audio wakes Scarlett loopback, keeps mic buffers live, and

@@ -50,21 +50,23 @@ produced zero WASAPI packets until that Eye was unplugged and replugged.
 
 The full probe runtime config now enables sample-bearing blocks for every local
 audio source. `MimirChirpletTimeline` owns the emitted calibration stream and
-the matched-filter shape used to analyze it. The default timeline is
-deterministic and unbounded: event `N` is generated directly from `N`, with no
-registry, remembered random state, or repeat cycle. Mimir queues half-second PCM
-segments ahead of the audio cursor, and each segment contains short asymmetric
-chirplets chosen from a harmonic high-frequency vocabulary. The point is not
-ornament. The timing code is carried by both frequency and rhythm, so it behaves
-more like a quiet birdsong texture than a repeated sweep.
+the matched-filter shape used to analyze it. The default timeline is a
+deterministic order-3 de Bruijn symbol sequence over 32 chirp symbols. Any three
+consecutive correctly detected symbols identify the event index inside the
+current operating horizon, so a receiver can place its audio window on the
+canonical timeline without being handed Mimir's runtime clock. Mimir queues
+half-second PCM segments ahead of the audio cursor, and each segment contains
+short asymmetric chirplets chosen from separated high-frequency slots. The point
+is not ornament. The timing code is carried by both frequency and rhythm, so it
+behaves more like a quiet birdsong texture than a repeated sweep.
 
 `MimirAudioSynchronizationAnalyzer` resamples candidate mic windows into the
-loopback sample-rate timeline, projects loopback and candidate windows through a
-continuous chirplet atom bank, contrast-normalizes the resulting energy traces,
-and estimates current delay against `loopback-scarlett-speakers`. The lag search
-is wide enough for ordinary remote/network delay, not just local speaker-to-mic
-delay. Reports carry both rounded integer delay and fractional delay from
-parabolic peak interpolation over the chirplet correlation peak.
+loopback sample-rate timeline, uses cheap coarse chirplet energy for acquisition,
+then lets the symbol decoder refine delay from matched event indices. The lag
+search is wide enough for ordinary remote/network delay, not just local
+speaker-to-mic delay. Reports carry rounded integer delay, fractional delay from
+parabolic peak interpolation, and the count/confidence of timeline-symbol events
+used to refine the report.
 
 `MimirSynchronizationHub.BuildAlignedAudioFrame` returns a provisional aligned
 mono frame: loopback is always channel zero, and other channels enter only when
@@ -127,6 +129,14 @@ Continuous chirplet evidence gives both the current delay and the drift/SRO by
 watching delay change over time. Per-band energy over the same stream gives the
 normalization curve. The important constraint is that all three measurements
 must be tied to the same emitted timeline, not three separately invented probes.
+
+The symbol layer is intentionally blunt. Chirp symbols use separated frequency
+slots instead of subtle variants sharing the same center frequency, because a
+wrong symbol is worse than a noisy delay. A synthetic runtime check rendered two
+seconds of canonical timeline audio and decoded events 0, 1, and 2 back to a
+window start within about 1.5 ms. Real device runs still depend on loopback
+capture staying live; the local Scarlett loopback has intermittently stopped
+advancing during short headless sniffs.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,

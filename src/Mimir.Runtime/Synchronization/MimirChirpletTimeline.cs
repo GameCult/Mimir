@@ -14,44 +14,57 @@ public sealed record MimirChirpletBandResponse(
     double CenterHz,
     double Energy);
 
+public sealed record MimirChirpletTimelineEvent(
+    ulong Index,
+    int SymbolId,
+    double StartSeconds,
+    MimirChirpletTone Tone);
+
+public sealed record MimirChirpletEventObservation(
+    ulong EventIndex,
+    int SymbolId,
+    double TimelineSeconds,
+    double SampleOffset,
+    double Energy);
+
+public sealed record MimirChirpletTimelinePlacement(
+    double TimelineSecondsAtWindowStart,
+    double Confidence,
+    IReadOnlyList<MimirChirpletEventObservation> Observations);
+
 public sealed class MimirChirpletTimeline
 {
     public const int SampleRate = 48_000;
     public const double SegmentSeconds = 0.5;
     public const double QueueLeadSeconds = 1.0;
+    public const int SymbolCount = 32;
+    public const int TimelineOrder = 3;
+    public static readonly int TimelinePeriod = (int)Math.Pow(SymbolCount, TimelineOrder);
+
     private const double FirstEventSeconds = 0.08;
     private const double EventStrideSeconds = 0.118;
-    private const double MaxEventDurationSeconds = 0.110;
-    private const double Gain = 0.095;
+    private const double MaxEventDurationSeconds = 0.082;
+    private const double Gain = 0.090;
 
-    private static readonly MimirChirpletTone[] AnalysisAtoms =
+    private static readonly int[] TimelineSymbols = RotateToDistinctOpening(BuildDeBruijn(SymbolCount, TimelineOrder));
+    private static readonly Dictionary<int, int> TripleToIndex = BuildTripleIndex(TimelineSymbols);
+    private static readonly MimirChirpletTone[] SymbolTones = BuildSymbolTones();
+    private static readonly MimirChirpletTone[] CoarseTones =
     [
-        new(0.0, 0.050, 6_900.0, 7_500.0, 0.70),
-        new(0.0, 0.055, 8_000.0, 8_900.0, 0.75),
-        new(0.0, 0.060, 9_600.0, 8_800.0, 0.75),
-        new(0.0, 0.060, 10_600.0, 11_700.0, 0.85),
-        new(0.0, 0.065, 12_400.0, 13_500.0, 0.90),
-        new(0.0, 0.070, 14_400.0, 15_800.0, 0.80),
+        new(0.0, 0.048, 6_700.0, 7_200.0, 0.75),
+        new(0.0, 0.052, 7_700.0, 8_400.0, 0.80),
+        new(0.0, 0.056, 8_900.0, 9_800.0, 0.85),
+        new(0.0, 0.060, 10_300.0, 11_400.0, 0.85),
+        new(0.0, 0.064, 12_100.0, 13_500.0, 0.90),
+        new(0.0, 0.068, 14_200.0, 15_900.0, 0.80),
     ];
-    private static readonly double[] HarmonicRatios =
-    [
-        1.0,
-        9.0 / 8.0,
-        5.0 / 4.0,
-        4.0 / 3.0,
-        3.0 / 2.0,
-        5.0 / 3.0,
-        15.0 / 8.0,
-        2.0,
-        9.0 / 4.0,
-        5.0 / 2.0,
-    ];
-
-    private readonly IReadOnlyList<float[]> atomKernels;
+    private readonly IReadOnlyList<float[]> symbolKernels;
+    private readonly IReadOnlyList<float[]> coarseKernels;
 
     private MimirChirpletTimeline()
     {
-        atomKernels = AnalysisAtoms.Select(atom => RenderToneKernel(atom, SampleRate)).ToArray();
+        symbolKernels = SymbolTones.Select(symbol => RenderToneKernel(symbol, SampleRate)).ToArray();
+        coarseKernels = CoarseTones.Select(tone => RenderToneKernel(tone, SampleRate)).ToArray();
     }
 
     public static MimirChirpletTimeline Default { get; } = new();
@@ -60,9 +73,9 @@ public sealed class MimirChirpletTimeline
     {
         var segmentStartSeconds = segmentIndex * SegmentSeconds;
         var samples = new float[(int)Math.Round(SegmentSeconds * SampleRate)];
-        foreach (var tone in TonesOverlapping(segmentStartSeconds, SegmentSeconds))
+        foreach (var timelineEvent in EventsOverlapping(segmentStartSeconds, SegmentSeconds))
         {
-            AddTone(samples, SampleRate, tone, segmentStartSeconds);
+            AddTone(samples, SampleRate, timelineEvent.Tone, segmentStartSeconds);
         }
 
         var peak = samples.Select(Math.Abs).DefaultIfEmpty(0.0f).Max();
@@ -96,37 +109,7 @@ public sealed class MimirChirpletTimeline
 
     public float[] BuildTimelineEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
     {
-        var traces = new List<float[]>();
-        for (var index = 0; index < AnalysisAtoms.Length; index++)
-        {
-            var atom = AnalysisAtoms[index];
-            var kernel = sampleRate == SampleRate ? atomKernels[index] : RenderToneKernel(atom, sampleRate);
-            var trace = BuildMatchedEnergyTrace(samples, kernel, hopSamples);
-            if (trace.Length > 0)
-            {
-                traces.Add(trace);
-            }
-        }
-
-        if (traces.Count == 0)
-        {
-            return [];
-        }
-
-        var length = traces.Min(trace => trace.Length);
-        var output = new float[length];
-        for (var frame = 0; frame < length; frame++)
-        {
-            var best = 0.0f;
-            foreach (var trace in traces)
-            {
-                best = Math.Max(best, trace[frame]);
-            }
-
-            output[frame] = best;
-        }
-
-        return ContrastNormalize(output);
+        return ContrastNormalize(BuildCoarseEnergyTrace(samples, sampleRate, hopSamples));
     }
 
     public IReadOnlyList<MimirChirpletBandResponse> EstimateBandResponse(ReadOnlySpan<float> samples, int sampleRate)
@@ -136,63 +119,445 @@ public sealed class MimirChirpletTimeline
             return [];
         }
 
-        var responses = new List<MimirChirpletBandResponse>(AnalysisAtoms.Length);
-        for (var index = 0; index < AnalysisAtoms.Length; index++)
+        var responses = new List<MimirChirpletBandResponse>(SymbolTones.Length);
+        for (var symbol = 0; symbol < SymbolTones.Length; symbol++)
         {
-            var atom = AnalysisAtoms[index];
-            var kernel = sampleRate == SampleRate ? atomKernels[index] : RenderToneKernel(atom, sampleRate);
+            var tone = SymbolTones[symbol];
+            var kernel = sampleRate == SampleRate ? symbolKernels[symbol] : RenderToneKernel(tone, sampleRate);
             var energy = MaxMatchedEnergy(samples, kernel, Math.Max(1, sampleRate / 1_000));
-            responses.Add(new MimirChirpletBandResponse(atom.CenterHz, energy));
+            responses.Add(new MimirChirpletBandResponse(tone.CenterHz, energy));
         }
 
         return responses;
     }
 
-    private static IEnumerable<MimirChirpletTone> TonesOverlapping(double startSeconds, double durationSeconds)
+    public MimirChirpletTimelinePlacement DecodeReferenceWindow(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        double approximateWindowEndTimelineSeconds)
+    {
+        if (samples.Length == 0)
+        {
+            return new MimirChirpletTimelinePlacement(0.0, 0.0, []);
+        }
+
+        var observed = DetectSymbolEvents(samples, sampleRate, Math.Max(1, sampleRate / 200));
+        var placement = PlaceObservedSymbols(observed, sampleRate);
+        if (placement.Observations.Count >= 3 || !double.IsFinite(approximateWindowEndTimelineSeconds))
+        {
+            return placement;
+        }
+
+        var windowSeconds = samples.Length / (double)sampleRate;
+        var approximateStartSeconds = Math.Max(0.0, approximateWindowEndTimelineSeconds - windowSeconds);
+        var fallback = new List<MimirChirpletEventObservation>();
+        foreach (var timelineEvent in EventsOverlapping(approximateStartSeconds - 0.25, windowSeconds + 0.5))
+        {
+            var predictedSample = (timelineEvent.StartSeconds - approximateStartSeconds) * sampleRate;
+            var observation = ObserveEvent(samples, sampleRate, timelineEvent, predictedSample, searchRadiusSamples: Math.Max(8, sampleRate / 2));
+            if (observation != null)
+            {
+                fallback.Add(observation);
+            }
+        }
+
+        if (fallback.Count < 3)
+        {
+            return new MimirChirpletTimelinePlacement(approximateStartSeconds, 0.0, fallback);
+        }
+
+        return FitTimelinePlacement(fallback, sampleRate);
+    }
+
+    public IReadOnlyList<MimirChirpletEventObservation> ObserveKnownEvents(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        IEnumerable<MimirChirpletEventObservation> referenceObservations,
+        double coarseDelaySamples)
+    {
+        var observations = new List<MimirChirpletEventObservation>();
+        foreach (var reference in referenceObservations)
+        {
+            var timelineEvent = EventForIndex(reference.EventIndex);
+            var predictedSample = reference.SampleOffset + coarseDelaySamples;
+            var observation = ObserveEvent(samples, sampleRate, timelineEvent, predictedSample, searchRadiusSamples: Math.Max(16, sampleRate / 10));
+            if (observation != null)
+            {
+                observations.Add(observation);
+            }
+        }
+
+        return observations;
+    }
+
+    public MimirChirpletTimelineEvent EventForIndex(ulong eventIndex)
+    {
+        var symbolId = SymbolForEvent(eventIndex);
+        var tone = SymbolTones[symbolId] with { StartSeconds = EventStartSeconds(eventIndex) };
+        return new MimirChirpletTimelineEvent(eventIndex, symbolId, tone.StartSeconds, tone);
+    }
+
+    public IReadOnlyList<MimirChirpletTimelineEvent> EventsOverlapping(double startSeconds, double durationSeconds)
     {
         var endSeconds = startSeconds + durationSeconds;
         var firstIndex = Math.Max(0, (long)Math.Floor((startSeconds - FirstEventSeconds - MaxEventDurationSeconds) / EventStrideSeconds) - 2);
         var lastIndex = Math.Max(firstIndex, (long)Math.Ceiling((endSeconds - FirstEventSeconds) / EventStrideSeconds) + 2);
+        var events = new List<MimirChirpletTimelineEvent>((int)(lastIndex - firstIndex + 1));
         for (var eventIndex = firstIndex; eventIndex <= lastIndex; eventIndex++)
         {
-            var tone = ToneForEvent((ulong)eventIndex);
-            if (tone.StartSeconds < endSeconds && tone.StartSeconds + tone.DurationSeconds > startSeconds)
+            var timelineEvent = EventForIndex((ulong)eventIndex);
+            if (timelineEvent.StartSeconds < endSeconds &&
+                timelineEvent.StartSeconds + timelineEvent.Tone.DurationSeconds > startSeconds)
             {
-                yield return tone;
+                events.Add(timelineEvent);
             }
         }
+
+        return events;
     }
 
-    private static MimirChirpletTone ToneForEvent(ulong eventIndex)
+    private IReadOnlyList<MimirChirpletEventObservation> DetectSymbolEvents(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        int hopSamples)
     {
-        var seed = Mix(eventIndex);
-        var startJitter = Unit(seed) * 0.034 - 0.017;
-        var duration = 0.045 + Unit(seed >> 10) * 0.052;
-        var octaveJitter = Unit(seed >> 20) * 0.028 - 0.014;
-        var glideScale = 0.72 + Unit(seed >> 31) * 0.66;
-        var gain = 0.72 + Unit(seed >> 42) * 0.34;
-        var descending = ((seed >> 57) & 1UL) != 0;
-        var degree = (int)((seed >> 58) % 10);
-        var center = Math.Clamp(6_800.0 * HarmonicRatios[degree] * (1.0 + octaveJitter), 6_500.0, 16_300.0);
-        var halfWidth = Math.Clamp(center * 0.035 * glideScale, 220.0, 820.0);
-        var low = Math.Clamp(center - halfWidth, 6_300.0, 16_500.0);
-        var high = Math.Clamp(center + halfWidth, 6_300.0, 16_500.0);
-        var start = FirstEventSeconds + eventIndex * EventStrideSeconds + startJitter;
-        return descending
-            ? new MimirChirpletTone(start, duration, high, low, gain)
-            : new MimirChirpletTone(start, duration, low, high, gain);
+        if (samples.Length == 0)
+        {
+            return [];
+        }
+
+        var coarse = ContrastNormalize(BuildEnvelopeEnergyTrace(samples, sampleRate, hopSamples));
+        if (coarse.Length <= 2)
+        {
+            return [];
+        }
+
+        var candidates = new List<MimirChirpletEventObservation>();
+        for (var frame = 1; frame < coarse.Length - 1; frame++)
+        {
+            if (coarse[frame] < 0.055 ||
+                coarse[frame] < coarse[frame - 1] ||
+                coarse[frame] < coarse[frame + 1])
+            {
+                continue;
+            }
+
+            var observation = ClassifySymbolAt(samples, sampleRate, frame * hopSamples, Math.Max(1, hopSamples));
+            if (observation != null)
+            {
+                candidates.Add(observation);
+            }
+        }
+
+        return SuppressNearbyDetections(candidates, sampleRate);
     }
 
-    private static ulong Mix(ulong value)
+    private MimirChirpletEventObservation? ClassifySymbolAt(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        int predictedOffset,
+        int searchRadiusSamples)
     {
-        value += 0x9E3779B97F4A7C15UL;
-        value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9UL;
-        value = (value ^ (value >> 27)) * 0x94D049BB133111EBUL;
-        return value ^ (value >> 31);
+        var bestSymbol = -1;
+        var bestOffset = predictedOffset;
+        var bestEnergy = 0.0;
+        for (var symbol = 0; symbol < SymbolTones.Length; symbol++)
+        {
+            var tone = SymbolTones[symbol];
+            var kernel = sampleRate == SampleRate ? symbolKernels[symbol] : RenderToneKernel(tone, sampleRate);
+            if (kernel.Length == 0 || samples.Length < kernel.Length)
+            {
+                continue;
+            }
+
+            var start = Math.Max(0, predictedOffset - searchRadiusSamples);
+            var end = Math.Min(samples.Length - kernel.Length, predictedOffset + searchRadiusSamples);
+            for (var offset = start; offset <= end; offset += Math.Max(1, searchRadiusSamples / 2))
+            {
+                var energy = DirectionalMatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
+                if (energy > bestEnergy)
+                {
+                    bestEnergy = energy;
+                    bestSymbol = symbol;
+                    bestOffset = offset;
+                }
+            }
+        }
+
+        return bestSymbol < 0 || bestEnergy < 0.055
+            ? null
+            : new MimirChirpletEventObservation(0, bestSymbol, 0.0, bestOffset, bestEnergy);
     }
 
-    private static double Unit(ulong value) =>
-        (value & ((1UL << 53) - 1)) / (double)(1UL << 53);
+    private static IReadOnlyList<MimirChirpletEventObservation> SuppressNearbyDetections(
+        IReadOnlyList<MimirChirpletEventObservation> observations,
+        int sampleRate)
+    {
+        if (observations.Count == 0)
+        {
+            return [];
+        }
+
+        var minimumSpacingSamples = EventStrideSeconds * sampleRate * 0.55;
+        var kept = new List<MimirChirpletEventObservation>();
+        foreach (var observation in observations.OrderByDescending(observation => observation.Energy))
+        {
+            if (kept.Any(existing => Math.Abs(existing.SampleOffset - observation.SampleOffset) < minimumSpacingSamples))
+            {
+                continue;
+            }
+
+            kept.Add(observation);
+        }
+
+        return kept.OrderBy(observation => observation.SampleOffset).ToArray();
+    }
+
+    private static MimirChirpletTimelinePlacement PlaceObservedSymbols(
+        IReadOnlyList<MimirChirpletEventObservation> observations,
+        int sampleRate)
+    {
+        if (observations.Count < 3)
+        {
+            return new MimirChirpletTimelinePlacement(0.0, 0.0, observations);
+        }
+
+        var best = Array.Empty<MimirChirpletEventObservation>();
+        var bestConfidence = 0.0;
+        for (var index = 0; index <= observations.Count - 3; index++)
+        {
+            var first = observations[index];
+            var second = observations[index + 1];
+            var third = observations[index + 2];
+            if (!IsConsecutiveByTime(first, second, sampleRate) ||
+                !IsConsecutiveByTime(second, third, sampleRate))
+            {
+                continue;
+            }
+
+            var code = TripleCode(first.SymbolId, second.SymbolId, third.SymbolId);
+            if (!TripleToIndex.TryGetValue(code, out var eventIndex))
+            {
+                continue;
+            }
+
+            var placed = new[]
+            {
+                PlaceObservation(first, (ulong)eventIndex),
+                PlaceObservation(second, (ulong)eventIndex + 1UL),
+                PlaceObservation(third, (ulong)eventIndex + 2UL),
+            };
+            var confidence = placed.Average(observation => observation.Energy);
+            if (confidence > bestConfidence)
+            {
+                bestConfidence = confidence;
+                best = placed;
+            }
+        }
+
+        return best.Length == 0
+            ? new MimirChirpletTimelinePlacement(0.0, 0.0, observations)
+            : FitTimelinePlacement(best, sampleRate);
+    }
+
+    private static bool IsConsecutiveByTime(
+        MimirChirpletEventObservation first,
+        MimirChirpletEventObservation second,
+        int sampleRate)
+    {
+        var seconds = (second.SampleOffset - first.SampleOffset) / sampleRate;
+        return seconds >= EventStrideSeconds * 0.55 && seconds <= EventStrideSeconds * 1.45;
+    }
+
+    private static MimirChirpletEventObservation PlaceObservation(
+        MimirChirpletEventObservation observation,
+        ulong eventIndex)
+    {
+        var timelineEvent = Default.EventForIndex(eventIndex);
+        return observation with
+        {
+            EventIndex = eventIndex,
+            SymbolId = timelineEvent.SymbolId,
+            TimelineSeconds = timelineEvent.StartSeconds,
+        };
+    }
+
+    private static MimirChirpletTimelinePlacement FitTimelinePlacement(
+        IReadOnlyList<MimirChirpletEventObservation> observations,
+        int sampleRate)
+    {
+        if (observations.Count == 0)
+        {
+            return new MimirChirpletTimelinePlacement(0.0, 0.0, []);
+        }
+
+        var offsets = observations
+            .Select(observation => observation.TimelineSeconds - observation.SampleOffset / sampleRate)
+            .ToArray();
+        var timelineStart = Median(offsets);
+        var residualSeconds = observations
+            .Average(observation => Math.Abs(observation.TimelineSeconds - observation.SampleOffset / sampleRate - timelineStart));
+        var residualConfidence = 1.0 / (1.0 + residualSeconds / 0.004);
+        var countConfidence = Math.Clamp(observations.Count / 6.0, 0.0, 1.0);
+        var energyConfidence = Math.Clamp(observations.Average(observation => observation.Energy), 0.0, 1.0);
+        return new MimirChirpletTimelinePlacement(
+            timelineStart,
+            residualConfidence * 0.45 + countConfidence * 0.25 + energyConfidence * 0.30,
+            observations);
+    }
+
+    private static MimirChirpletEventObservation? ObserveEvent(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        MimirChirpletTimelineEvent timelineEvent,
+        double predictedSample,
+        int searchRadiusSamples)
+    {
+        var kernel = RenderToneKernel(timelineEvent.Tone with { StartSeconds = 0.0 }, sampleRate);
+        if (kernel.Length == 0 || samples.Length < kernel.Length)
+        {
+            return null;
+        }
+
+        var predictedOffset = (int)Math.Round(predictedSample);
+        var start = Math.Max(0, predictedOffset - searchRadiusSamples);
+        var end = Math.Min(samples.Length - kernel.Length, predictedOffset + searchRadiusSamples);
+        if (end < start)
+        {
+            return null;
+        }
+
+        var bestOffset = start;
+        var bestEnergy = 0.0;
+        var step = Math.Max(1, sampleRate / 4_000);
+        for (var offset = start; offset <= end; offset += step)
+        {
+                var energy = DirectionalMatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
+            if (energy > bestEnergy)
+            {
+                bestEnergy = energy;
+                bestOffset = offset;
+            }
+        }
+
+        if (bestEnergy < 0.045)
+        {
+            return null;
+        }
+
+        return new MimirChirpletEventObservation(
+            timelineEvent.Index,
+            timelineEvent.SymbolId,
+            timelineEvent.StartSeconds,
+            bestOffset,
+            bestEnergy);
+    }
+
+    private static int SymbolForEvent(ulong eventIndex) =>
+        TimelineSymbols[(int)(eventIndex % (ulong)TimelineSymbols.Length)];
+
+    private static double EventStartSeconds(ulong eventIndex) =>
+        FirstEventSeconds + eventIndex * EventStrideSeconds;
+
+    private static MimirChirpletTone[] BuildSymbolTones()
+    {
+        var tones = new MimirChirpletTone[SymbolCount];
+        for (var symbol = 0; symbol < tones.Length; symbol++)
+        {
+            var baseHz = 6_500.0 * Math.Pow(16_400.0 / 6_500.0, symbol / (double)(SymbolCount - 1));
+            var duration = 0.055;
+            var width = 190.0;
+            var descending = (symbol & 1) != 0;
+            var low = Math.Clamp(baseHz - width * 0.5, 6_300.0, 16_200.0);
+            var high = Math.Clamp(baseHz + width * 0.5, 6_400.0, 16_500.0);
+            tones[symbol] = descending
+                ? new MimirChirpletTone(0.0, duration, high, low, 0.85)
+                : new MimirChirpletTone(0.0, duration, low, high, 0.85);
+        }
+
+        return tones;
+    }
+
+    private static int[] BuildDeBruijn(int alphabetSize, int order)
+    {
+        var a = new int[alphabetSize * order];
+        var sequence = new List<int>(TimelinePeriod);
+
+        void Db(int t, int p)
+        {
+            if (t > order)
+            {
+                if (order % p == 0)
+                {
+                    for (var index = 1; index <= p; index++)
+                    {
+                        sequence.Add(a[index]);
+                    }
+                }
+
+                return;
+            }
+
+            a[t] = a[t - p];
+            Db(t + 1, p);
+            for (var j = a[t - p] + 1; j < alphabetSize; j++)
+            {
+                a[t] = j;
+                Db(t + 1, t);
+            }
+        }
+
+        Db(1, 1);
+        return sequence.ToArray();
+    }
+
+    private static int[] RotateToDistinctOpening(int[] sequence)
+    {
+        for (var index = 0; index < sequence.Length; index++)
+        {
+            var first = sequence[index];
+            var second = sequence[(index + 1) % sequence.Length];
+            var third = sequence[(index + 2) % sequence.Length];
+            if (first != second && first != third && second != third)
+            {
+                return sequence.Skip(index).Concat(sequence.Take(index)).ToArray();
+            }
+        }
+
+        return sequence;
+    }
+
+    private static Dictionary<int, int> BuildTripleIndex(IReadOnlyList<int> symbols)
+    {
+        var map = new Dictionary<int, int>(symbols.Count);
+        for (var index = 0; index < symbols.Count; index++)
+        {
+            var code = TripleCode(
+                symbols[index],
+                symbols[(index + 1) % symbols.Count],
+                symbols[(index + 2) % symbols.Count]);
+            map[code] = index;
+        }
+
+        return map;
+    }
+
+    private static int TripleCode(int first, int second, int third) =>
+        first * SymbolCount * SymbolCount + second * SymbolCount + third;
+
+    private static double Median(double[] values)
+    {
+        if (values.Length == 0)
+        {
+            return 0.0;
+        }
+
+        Array.Sort(values);
+        var middle = values.Length / 2;
+        return values.Length % 2 == 0
+            ? (values[middle - 1] + values[middle]) * 0.5
+            : values[middle];
+    }
 
     private static float[] RenderToneKernel(MimirChirpletTone tone, int sampleRate)
     {
@@ -223,23 +588,6 @@ public sealed class MimirChirpletTimeline
         }
     }
 
-    private static float[] BuildMatchedEnergyTrace(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel, int hopSamples)
-    {
-        if (samples.Length < kernel.Length || kernel.Length == 0)
-        {
-            return [];
-        }
-
-        var output = new float[1 + (samples.Length - kernel.Length) / hopSamples];
-        for (var frame = 0; frame < output.Length; frame++)
-        {
-            var offset = frame * hopSamples;
-            output[frame] = (float)MatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
-        }
-
-        return output;
-    }
-
     private static double MatchedEnergy(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel)
     {
         var count = Math.Min(samples.Length, kernel.Length);
@@ -262,6 +610,118 @@ public sealed class MimirChirpletTimeline
 
         var denominator = Math.Sqrt(sampleEnergy * kernelEnergy);
         return denominator > 1.0e-12 ? Math.Abs(dot) / denominator : 0.0;
+    }
+
+    private static double DirectionalMatchedEnergy(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel)
+    {
+        var count = Math.Min(samples.Length, kernel.Length);
+        if (count == 0)
+        {
+            return 0.0;
+        }
+
+        var dot = 0.0;
+        var sampleEnergy = 0.0;
+        var kernelEnergy = 0.0;
+        for (var index = 0; index < count; index++)
+        {
+            var sample = samples[index];
+            var basis = kernel[index];
+            dot += sample * basis;
+            sampleEnergy += sample * sample;
+            kernelEnergy += basis * basis;
+        }
+
+        var denominator = Math.Sqrt(sampleEnergy * kernelEnergy);
+        return denominator > 1.0e-12 ? Math.Max(0.0, dot / denominator) : 0.0;
+    }
+
+    private float[] BuildCoarseEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
+    {
+        var traces = new List<float[]>();
+        for (var index = 0; index < CoarseTones.Length; index++)
+        {
+            var tone = CoarseTones[index];
+            var kernel = sampleRate == SampleRate ? coarseKernels[index] : RenderToneKernel(tone, sampleRate);
+            var trace = BuildMatchedEnergyTrace(samples, kernel, hopSamples);
+            if (trace.Length > 0)
+            {
+                traces.Add(trace);
+            }
+        }
+
+        if (traces.Count == 0)
+        {
+            return [];
+        }
+
+        var length = traces.Min(trace => trace.Length);
+        var output = new float[length];
+        for (var frame = 0; frame < output.Length; frame++)
+        {
+            var best = 0.0f;
+            foreach (var trace in traces)
+            {
+                best = Math.Max(best, trace[frame]);
+            }
+
+            output[frame] = best;
+        }
+
+        return output;
+    }
+
+    private static float[] BuildEnvelopeEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
+    {
+        var windowSamples = Math.Max(1, (int)Math.Round(MaxEventDurationSeconds * sampleRate));
+        if (samples.Length < windowSamples)
+        {
+            return [];
+        }
+
+        var output = new float[1 + (samples.Length - windowSamples) / hopSamples];
+        var energy = 0.0;
+        for (var index = 0; index < windowSamples; index++)
+        {
+            energy += samples[index] * samples[index];
+        }
+
+        output[0] = (float)Math.Sqrt(energy / windowSamples);
+        for (var frame = 1; frame < output.Length; frame++)
+        {
+            var previousStart = (frame - 1) * hopSamples;
+            var nextStart = frame * hopSamples;
+            for (var index = previousStart; index < nextStart; index++)
+            {
+                energy -= samples[index] * samples[index];
+            }
+
+            for (var index = previousStart + windowSamples; index < nextStart + windowSamples; index++)
+            {
+                energy += samples[index] * samples[index];
+            }
+
+            output[frame] = (float)Math.Sqrt(Math.Max(0.0, energy) / windowSamples);
+        }
+
+        return output;
+    }
+
+    private static float[] BuildMatchedEnergyTrace(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel, int hopSamples)
+    {
+        if (samples.Length < kernel.Length || kernel.Length == 0)
+        {
+            return [];
+        }
+
+        var output = new float[1 + (samples.Length - kernel.Length) / hopSamples];
+        for (var frame = 0; frame < output.Length; frame++)
+        {
+            var offset = frame * hopSamples;
+            output[frame] = (float)MatchedEnergy(samples.Slice(offset, kernel.Length), kernel);
+        }
+
+        return output;
     }
 
     private static double MaxMatchedEnergy(ReadOnlySpan<float> samples, ReadOnlySpan<float> kernel, int hopSamples)
