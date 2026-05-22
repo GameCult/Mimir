@@ -30,6 +30,9 @@ flowchart TD
 - Loopback/program audio is timing evidence where available.
 - Distributed inputs must be aligned and resampled before they become program
   stems.
+- The five-second runtime window is allowed to be spent on alignment,
+  resampling, separation, and spatial-field extraction. Low latency loses to a
+  coherent volumetric sound field here.
 - Probe signals are budgeted telemetry, not a permanent audio bed.
 - Faust/native DSP owns the hot separation and spatialization graph.
 

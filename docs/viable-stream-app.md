@@ -10,6 +10,11 @@ operator UI.
 The default reservoir horizon is five seconds. That delay is not decoration. It
 is the budget that lets late network packets, independent capture clocks,
 audio/video alignment, and debug controls converge before OBS sees the result.
+Mimir is explicitly trading latency and memory for throughput and extraction
+quality: the app may spend that buffered window lining streams up and crunching
+audio/video data to recover as much of the volumetric sound field as possible.
+Do not optimize the window away unless a replacement invariant preserves that
+alignment and field-reconstruction budget.
 
 ## Current Mechanism
 
@@ -42,6 +47,9 @@ flowchart TD
 ## Invariants
 
 - One in-memory reservoir owns the live timing edge and expiry.
+- The five-second rolling window is a deliberate compute budget, not accidental
+  latency. It exists so capture, sync, GPU fusion, and audio field extraction
+  can choose coherence over immediacy.
 - Aquarium owns the running app, UI, debug state, settings changes, output
   management, GPU fusion/rendering, and Spout/video publication.
 - Faust/native DSP owns audio alignment, voice separation, suppression, stems,

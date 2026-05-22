@@ -10,6 +10,9 @@ machine must be direct-driver and native-buffer first:
 - `src/Mimir.Runtime` owns stream descriptors, source polling, direct push
   ingest, one rolling buffer per configured audio/video stream, and the
   synchronization hub Aquarium can inspect.
+- The default five-second window is an intentional latency/memory trade: use it
+  to line up streams and extract the volumetric audio/video field before OBS
+  sees program output.
 - `native/reservoir` owns the lower native rolling-buffer invariant for
   Aquarium/Faust integration.
 - PowerShell/FFmpeg/SRT remains a bridge utility for LAN OBS feeds. It is not

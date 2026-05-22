@@ -32,12 +32,17 @@ constraints:
     memory.
   - Networked feeds are producers into the live runtime, not independent clock
     authorities.
+  - Mimir explicitly trades latency and memory for throughput and field quality:
+    the default five-second buffer is compute budget for stream alignment,
+    GPU/audio analysis, and volumetric sound-field extraction.
 
 invariants:
   - OBS composition authority stays in OBS.
   - FFmpeg owns capture, encoding, and transport only for bridge utilities.
   - One stable bridge port equals one OBS source endpoint.
   - One rolling live window owns the timing edge and expiry.
+  - The rolling window is not accidental latency. It must preserve enough time
+    to line up feeds and crunch data before OBS-facing output is emitted.
   - Typed views may index the rolling buffer, but no per-kind ring owns
     retention.
   - Aquarium owns production UI, GPU fusion, D3D12 interop, and Spout2 output.
