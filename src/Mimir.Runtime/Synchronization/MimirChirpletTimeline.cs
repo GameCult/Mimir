@@ -112,7 +112,7 @@ public sealed class MimirChirpletTimeline
 
     public float[] BuildTimelineEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
     {
-        return ContrastNormalize(BuildCoarseEnergyTrace(samples, sampleRate, hopSamples));
+        return ContrastNormalize(BuildEnvelopeEnergyTrace(samples, sampleRate, hopSamples));
     }
 
     public IReadOnlyList<MimirChirpletBandResponse> EstimateBandResponse(ReadOnlySpan<float> samples, int sampleRate)
