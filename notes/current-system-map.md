@@ -98,9 +98,9 @@ current operating horizon. Mimir continuously queues that timeline through
 Aquarium audio and decodes timing through the constrained chirplet-transform
 path.
 `MimirAudioSynchronizationSettings.Mode` chooses whether active calibration is
-allowed: `chirp-only` emits the witness, `no-chirp` stays silent and waits for
-the passive program-audio estimator, and `hybrid` currently uses the active
-pilot until the passive confidence gate and shaped watermark are built.
+allowed: `chirp-only` emits the witness, `passive` stays silent and uses
+program-audio phase correlation, and `hybrid` uses passive evidence by default
+while emitting active pilot chunks only when passive confidence is weak.
 Reports now carry fractional delay and per-band matched energy. The first
 `MimirChirpletSymbolCodebook` owns separable symbol definitions; every symbol
 has a unique chirp shape, with rhythm as additional evidence. `MimirChirpletStreamDecoder`

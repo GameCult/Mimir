@@ -14,4 +14,5 @@ public sealed record MimirAudioSynchronizationReport(
     ulong ReferenceSequence,
     ulong SourceSequence,
     int TimelineMatchedEvents = 0,
-    double TimelineConfidence = 0.0);
+    double TimelineConfidence = 0.0,
+    string EvidenceKind = "chirplet");

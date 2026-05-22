@@ -95,9 +95,11 @@ accepted_design:
     instead of invoking analysis. `MIMIR_SYNC_TELEMETRY_SECONDS` prints live
     buffer/report/state telemetry. `MimirAudioSynchronizationSettings.Mode`
     now owns the active evidence policy: `chirp-only` emits the calibration
-    witness, `no-chirp` stays silent until passive program-audio sync exists,
-    and `hybrid` currently uses the active pilot until the passive confidence
-    gate and shaped watermark are built.
+    witness, `passive` stays silent and uses program-audio phase correlation,
+    and `hybrid` emits active pilot chunks only while passive confidence is
+    weak. `MimirPassiveAudioSynchronizationEstimator` is the first passive path:
+    it uses PHAT-weighted cross-spectrum correlation between loopback and mic
+    windows before any watermark is needed.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.

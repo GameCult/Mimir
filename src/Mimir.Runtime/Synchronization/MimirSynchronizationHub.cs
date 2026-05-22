@@ -71,16 +71,18 @@ public sealed class MimirSynchronizationHub : IDisposable
     }
 
     public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronization(
-        string referenceSourceId)
+        string referenceSourceId,
+        MimirAudioSyncMode mode = MimirAudioSyncMode.ChirpOnly)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId);
+        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId, mode);
         StoreAudioSynchronizationReports(reports);
         return reports;
     }
 
     public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronizationStep(
         string referenceSourceId,
+        MimirAudioSyncMode mode = MimirAudioSyncMode.ChirpOnly,
         int maxCandidates = 1)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
@@ -107,6 +109,7 @@ public sealed class MimirSynchronizationHub : IDisposable
         var reports = audioSynchronization.Analyze(
             Buffers.Buffers,
             referenceSourceId,
+            mode,
             selected);
         StoreAudioSynchronizationReports(reports);
         return reports;

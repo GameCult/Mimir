@@ -12,6 +12,7 @@ namespace Mimir.Runtime;
 public sealed class MimirRuntime : IAquariumRuntime
 {
     private const float DefaultAudioSyncUpdateIntervalSeconds = 0.1f;
+    private const double HybridPassiveConfidenceThreshold = 0.12;
     private const double CalibrationStartSeconds = 0.5;
     private const int CalibrationBatchSegments = 120;
     private readonly LocalCastRuntime visualRuntime;
@@ -27,6 +28,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private float nextTelemetrySeconds;
     private ulong calibrationSegmentIndex;
     private double lastAudioSyncAnalysisMilliseconds;
+    private double lastPassiveSynchronizationConfidence;
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
 
     public MimirRuntime(AquariumRuntimeOptions options)
@@ -153,26 +155,27 @@ public sealed class MimirRuntime : IAquariumRuntime
             return;
         }
 
-        var batch = RenderCalibrationBatchPcm16Base64(calibrationSegmentIndex, CalibrationBatchSegments, out var peak);
+        var segmentCount = audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid ? 1 : CalibrationBatchSegments;
+        var batch = RenderCalibrationBatchPcm16Base64(calibrationSegmentIndex, segmentCount, out var peak);
         visualRuntime.Audio.EnqueuePcm16Base64(
             batch,
             MimirChirpletTimeline.SampleRate,
             channels: 1,
             gain: calibrationGain);
         Console.WriteLine(
-            $"mimir-chirplet-batch firstSegment={calibrationSegmentIndex} segments={CalibrationBatchSegments} seconds={CalibrationBatchSegments * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={calibrationGain:0.###} base64Bytes={batch.Length}");
-        calibrationSegmentIndex += CalibrationBatchSegments;
+            $"mimir-chirplet-batch firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={calibrationGain:0.###} base64Bytes={batch.Length}");
+        calibrationSegmentIndex += (ulong)segmentCount;
     }
 
     private string DescribeChirpletReference()
     {
         if (!ShouldEmitCalibrationTimeline())
         {
-            return $"{audioSyncSettings.ReferenceSourceId} no-chirp mode; calibration emission disabled";
+            return $"{audioSyncSettings.ReferenceSourceId} passive mode; calibration emission disabled";
         }
 
         var emittedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
-        return $"{audioSyncSettings.ReferenceSourceId} {DescribeAudioSyncMode()} timeline {MimirChirpletTimeline.SegmentSeconds:0.00}s segments emitted to {emittedUntilSeconds:0.00}s";
+        return $"{audioSyncSettings.ReferenceSourceId} {DescribeAudioSyncMode()} timeline {MimirChirpletTimeline.SegmentSeconds:0.00}s segments emitted to {emittedUntilSeconds:0.00}s passiveConfidence={lastPassiveSynchronizationConfidence:0.000}";
     }
 
     private static string RenderCalibrationBatchPcm16Base64(ulong firstSegment, int segmentCount, out float peak)
@@ -208,19 +211,12 @@ public sealed class MimirRuntime : IAquariumRuntime
             return;
         }
 
-        if (audioSyncSettings.Mode == MimirAudioSyncMode.NoChirp)
-        {
-            lastAudioSyncAnalysisMilliseconds = 0.0;
-            lastAudioSynchronizationReports = [];
-            nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
-            return;
-        }
-
         var stopwatch = Stopwatch.StartNew();
-        synchronization.AnalyzeAudioSynchronizationStep(audioSyncSettings.ReferenceSourceId);
+        synchronization.AnalyzeAudioSynchronizationStep(audioSyncSettings.ReferenceSourceId, audioSyncSettings.Mode);
         stopwatch.Stop();
         lastAudioSyncAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         lastAudioSynchronizationReports = synchronization.AudioSynchronizationReports;
+        UpdatePassiveSynchronizationConfidence(lastAudioSynchronizationReports);
         nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
     }
 
@@ -240,7 +236,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         foreach (var report in lastAudioSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
         {
             Console.WriteLine(
-                $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} delaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} timelineEvents={report.TimelineMatchedEvents} timelineConfidence={report.TimelineConfidence:0.000}");
+                $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} timelineEvents={report.TimelineMatchedEvents} timelineConfidence={report.TimelineConfidence:0.000}");
         }
 
         foreach (var state in states)
@@ -274,7 +270,13 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private bool ShouldEmitCalibrationTimeline()
     {
-        return audioSyncSettings.Mode != MimirAudioSyncMode.NoChirp;
+        return audioSyncSettings.Mode switch
+        {
+            MimirAudioSyncMode.ChirpOnly => true,
+            MimirAudioSyncMode.Passive => false,
+            MimirAudioSyncMode.Hybrid => lastPassiveSynchronizationConfidence < HybridPassiveConfidenceThreshold,
+            _ => true,
+        };
     }
 
     private string DescribeAudioSyncMode()
@@ -282,8 +284,8 @@ public sealed class MimirRuntime : IAquariumRuntime
         return audioSyncSettings.Mode switch
         {
             MimirAudioSyncMode.ChirpOnly => "chirp-only",
-            MimirAudioSyncMode.NoChirp => "no-chirp",
-            MimirAudioSyncMode.Hybrid => "hybrid active-pilot",
+            MimirAudioSyncMode.Passive => "passive",
+            MimirAudioSyncMode.Hybrid => "hybrid",
             _ => audioSyncSettings.Mode.ToString(),
         };
     }
@@ -294,6 +296,18 @@ public sealed class MimirRuntime : IAquariumRuntime
             .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio)
             .OrderBy(buffer => buffer.Descriptor.SourceId, StringComparer.Ordinal)
             .Select(buffer => $"{buffer.Descriptor.SourceId}:{buffer.Count}@{buffer.EdgeNs}"));
+    }
+
+    private void UpdatePassiveSynchronizationConfidence(IReadOnlyList<MimirAudioSynchronizationReport> reports)
+    {
+        var passiveConfidence = reports
+            .Where(report => string.Equals(report.EvidenceKind, "passive", StringComparison.Ordinal))
+            .Select(report => report.Confidence)
+            .DefaultIfEmpty(0.0)
+            .Max();
+        lastPassiveSynchronizationConfidence = passiveConfidence > 0.0
+            ? passiveConfidence
+            : lastPassiveSynchronizationConfidence * 0.95;
     }
 
     private static string DescribeBuffer(MimirRollingStreamBuffer buffer)
@@ -314,15 +328,15 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private string DescribeAudioSync()
     {
-        if (audioSyncSettings.Mode == MimirAudioSyncMode.NoChirp)
+        if (audioSyncSettings.Mode == MimirAudioSyncMode.Passive)
         {
-            return "no-chirp mode; passive estimator not wired yet";
+            return "passive mode; waiting for program-audio coherence";
         }
 
         var reports = synchronization.AudioSynchronizationReports;
         return reports.Count == 0
             ? "no payload windows"
-            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.0} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00} events={report.TimelineMatchedEvents}"));
+            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.0} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00} {report.EvidenceKind} events={report.TimelineMatchedEvents}"));
     }
 
     private string DescribeAlignedAudio()

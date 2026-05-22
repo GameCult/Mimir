@@ -47,21 +47,26 @@ timing evidence Mimir is allowed to emit:
 - `chirp-only`: emit the deterministic calibration timeline and decode timing
   only from that active witness. This is the lab/debug mode and the fallback for
   silent program material.
-- `no-chirp`: do not emit calibration audio. This is the passive/program-audio
-  mode. The runtime exposes it now, but the passive loopback/music estimator is
-  not wired yet, so current code intentionally reports that no-chirp sync is
-  unavailable instead of pretending the chirplet decoder can read arbitrary
-  music.
+- `passive`: do not emit calibration audio. Use loopback/program audio as the
+  timing witness by estimating delay between the loopback buffer and each mic
+  buffer.
 - `hybrid`: prefer passive program-audio evidence when confidence is high, then
-  emit a shaped watermark when confidence falls. Today this still behaves as an
-  active pilot because the passive estimator and confidence gate have not been
-  cut. The intended watermark is the dechirp/FFT-friendly chirp-bin codebook
-  from the decoder research notes, shaped and low-gain enough to sit inside the
-  program audio instead of announcing itself like a lab sweep.
+  emit a watermark when confidence falls. Today the passive side uses bounded
+  GCC-PHAT-style phase correlation and the fallback still uses the old active
+  chirplet pilot in half-second chunks. The intended watermark is the
+  dechirp/FFT-friendly chirp-bin codebook from the decoder research notes,
+  shaped and low-gain enough to sit inside the program audio instead of
+  announcing itself like a lab sweep.
 
 The mode belongs to the runtime, not the decoder. The decoder should consume
 known timing evidence; it should not decide whether Mimir is allowed to make
 sound.
+
+The passive estimator is the first real program-audio path, not the final DSP
+actuator. It removes DC, pre-emphasizes the window, applies a Hann taper, runs a
+PHAT-weighted cross spectrum, and reports the strongest loopback-to-mic lag
+inside a bounded window. Positive delay still means the candidate mic is late
+relative to loopback.
 
 ## Next Cut
 

@@ -88,7 +88,7 @@ public sealed class MimirAudioSynchronizationSettings
         return value.Trim().ToLowerInvariant() switch
         {
             "chirp-only" or "chirponly" or "chirp" or "active" => MimirAudioSyncMode.ChirpOnly,
-            "no-chirp" or "nochirp" or "passive" or "passive-only" or "passiveonly" => MimirAudioSyncMode.NoChirp,
+            "passive" or "passive-only" or "passiveonly" or "no-chirp" or "nochirp" => MimirAudioSyncMode.Passive,
             "hybrid" => MimirAudioSyncMode.Hybrid,
             _ => fallback,
         };
@@ -113,6 +113,6 @@ public sealed class MimirAudioSynchronizationSettings
 public enum MimirAudioSyncMode
 {
     ChirpOnly,
-    NoChirp,
+    Passive,
     Hybrid,
 }

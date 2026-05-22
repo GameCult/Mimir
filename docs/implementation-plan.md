@@ -70,12 +70,15 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis.
-- `MimirRuntime` continuously queues chirplet timeline PCM through Aquarium
-  audio so the loopback and acoustic mic buffers carry a shared timing witness.
-  `MimirAudioSynchronizationSettings.Mode` selects `chirp-only`, `no-chirp`, or
-  `hybrid`; no-chirp disables active emission until the passive program-audio
-  estimator exists, and hybrid currently uses the active pilot as the fallback
-  path.
+- `MimirRuntime` queues chirplet timeline PCM through Aquarium audio when the
+  active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
+  selects `chirp-only`, `passive`, or `hybrid`; passive disables active
+  emission, and hybrid emits the active pilot only while passive confidence is
+  below threshold.
+- `MimirPassiveAudioSynchronizationEstimator` is the first program-audio timing
+  path. It estimates loopback-to-mic delay with PHAT-weighted cross-spectrum
+  correlation so music can act as the default timing witness before any audible
+  watermark is needed.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -115,10 +118,10 @@ a named invariant that the native runtime cannot protect yet.
    decoder through real loopback and microphone paths so every correctly heard
    triplet becomes a deterministic timeline anchor before the actuator moves
    samples.
-5. Replace the active-pilot-only hybrid path with passive loopback/program-audio
-   confidence plus shaped watermark emission when confidence drops. The
-   watermark codebook should be designed for dechirp/FFT or Goertzel
-   classification, not dense sliding matched filters.
+5. Replace the active chirplet fallback in hybrid mode with shaped watermark
+   emission when passive confidence drops. The watermark codebook should be
+   designed for dechirp/FFT or Goertzel classification, not dense sliding
+   matched filters.
 6. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 7. Move GPU feature extraction, fusion, material fitting, render budgeting, and
