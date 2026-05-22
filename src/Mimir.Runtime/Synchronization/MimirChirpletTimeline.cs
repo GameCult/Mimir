@@ -1,5 +1,7 @@
 namespace Mimir.Runtime.Synchronization;
 
+using System.Numerics;
+
 public sealed record MimirChirpletTone(
     double StartSeconds,
     double DurationSeconds,
@@ -35,6 +37,7 @@ public sealed class MimirChirpletTimeline
     private const double MaxEventDurationSeconds = 0.078;
     private const double Gain = 0.090;
     private const int MaxSymbolCandidatesPerFrame = 8;
+    private const double CandidateOffsetBudgetMultiplier = 1.5;
 
     private static readonly int[] TimelineSymbols = RotateToDistinctOpening(BuildDeBruijn(SymbolCount, TimelineOrder));
     private static readonly Dictionary<int, int> TripleToIndex = BuildTripleIndex(TimelineSymbols);
@@ -42,10 +45,12 @@ public sealed class MimirChirpletTimeline
     private static readonly double[] PeriodEventStarts = BuildPeriodEventStarts(TimelineSymbols);
     private static readonly double PeriodDurationSeconds = PeriodEventStarts[^1] + Codebook[TimelineSymbols[^1]].GapSeconds;
     private readonly IReadOnlyList<MimirChirpletToneKernel> symbolKernels;
+    private readonly Dictionary<int, IReadOnlyList<MimirChirpletToneKernel>> symbolKernelsBySampleRate = [];
 
     private MimirChirpletTimeline()
     {
         symbolKernels = Codebook.Symbols.Select(symbol => RenderToneKernel(symbol.Tone, SampleRate)).ToArray();
+        symbolKernelsBySampleRate[SampleRate] = symbolKernels;
     }
 
     public static MimirChirpletTimeline Default { get; } = new();
@@ -89,10 +94,11 @@ public sealed class MimirChirpletTimeline
         }
 
         var responses = new List<MimirChirpletBandResponse>(Codebook.Symbols.Count);
+        var kernels = GetSymbolKernels(sampleRate);
         for (var symbol = 0; symbol < Codebook.Symbols.Count; symbol++)
         {
             var tone = Codebook[symbol].Tone;
-            var kernel = sampleRate == SampleRate ? symbolKernels[symbol] : RenderToneKernel(tone, sampleRate);
+            var kernel = kernels[symbol];
             var energy = MaxMatchedEnergy(samples, kernel, Math.Max(1, sampleRate / 1_000));
             responses.Add(new MimirChirpletBandResponse(tone.CenterHz, energy));
         }
@@ -162,7 +168,7 @@ public sealed class MimirChirpletTimeline
         }
 
         var frames = new List<MimirChirpletTransformFrame>();
-        var candidateOffsets = new SortedSet<int>();
+        var candidateScores = new Dictionary<int, double>();
         for (var frame = 1; frame < trace.Count - 1; frame++)
         {
             if (trace[frame] < 0.05 ||
@@ -172,7 +178,7 @@ public sealed class MimirChirpletTimeline
                 continue;
             }
 
-            candidateOffsets.Add(frame * hopSamples);
+            AddCandidateScore(candidateScores, frame * hopSamples, trace[frame]);
         }
 
         var envelope = ContrastNormalize(BuildEnvelopeEnergyTrace(samples, sampleRate, hopSamples));
@@ -185,16 +191,23 @@ public sealed class MimirChirpletTimeline
                 continue;
             }
 
-            candidateOffsets.Add(frame * hopSamples);
+            AddCandidateScore(candidateScores, frame * hopSamples, envelope[frame]);
         }
 
-        foreach (var offset in candidateOffsets)
+        var maxExpectedEvents = Math.Max(
+            8,
+            (int)Math.Ceiling(samples.Length / (double)sampleRate / MinEventGapSeconds * CandidateOffsetBudgetMultiplier));
+        foreach (var offset in candidateScores
+                     .OrderByDescending(pair => pair.Value)
+                     .Take(maxExpectedEvents)
+                     .Select(pair => pair.Key)
+                     .Order())
         {
             var transformFrame = ClassifySymbolsAt(
                 samples,
                 sampleRate,
                 offset,
-                Math.Max(hopSamples * 3, sampleRate / 100));
+                hopSamples * 3);
             if (transformFrame != null)
             {
                 frames.Add(transformFrame);
@@ -204,17 +217,25 @@ public sealed class MimirChirpletTimeline
         return SuppressNearbyFrames(frames, sampleRate);
     }
 
+    private static void AddCandidateScore(Dictionary<int, double> candidateScores, int offset, double score)
+    {
+        if (!candidateScores.TryGetValue(offset, out var existing) || score > existing)
+        {
+            candidateScores[offset] = score;
+        }
+    }
+
     private MimirChirpletTransformFrame? ClassifySymbolsAt(
         ReadOnlySpan<float> samples,
         int sampleRate,
         int predictedOffset,
         int searchRadiusSamples)
     {
+        var kernels = GetSymbolKernels(sampleRate);
         var candidates = new List<MimirChirpletSymbolCandidate>(Codebook.Symbols.Count);
         for (var symbol = 0; symbol < Codebook.Symbols.Count; symbol++)
         {
-            var tone = Codebook[symbol].Tone;
-            var kernel = sampleRate == SampleRate ? symbolKernels[symbol] : RenderToneKernel(tone, sampleRate);
+            var kernel = kernels[symbol];
             if (kernel.Length == 0 || samples.Length < kernel.Length)
             {
                 continue;
@@ -618,6 +639,18 @@ public sealed class MimirChirpletTimeline
         return new MimirChirpletToneKernel(sine, cosine);
     }
 
+    private IReadOnlyList<MimirChirpletToneKernel> GetSymbolKernels(int sampleRate)
+    {
+        if (symbolKernelsBySampleRate.TryGetValue(sampleRate, out var kernels))
+        {
+            return kernels;
+        }
+
+        kernels = Codebook.Symbols.Select(symbol => RenderToneKernel(symbol.Tone, sampleRate)).ToArray();
+        symbolKernelsBySampleRate[sampleRate] = kernels;
+        return kernels;
+    }
+
     private static void AddTone(
         float[] samples,
         int sampleRate,
@@ -655,9 +688,30 @@ public sealed class MimirChirpletTimeline
         var sineDot = 0.0;
         var cosineDot = 0.0;
         var sampleEnergy = 0.0;
-        var sineEnergy = 0.0;
-        var cosineEnergy = 0.0;
-        for (var index = 0; index < count; index++)
+        var index = 0;
+        if (Vector.IsHardwareAccelerated)
+        {
+            var sineDotVector = Vector<float>.Zero;
+            var cosineDotVector = Vector<float>.Zero;
+            var sampleEnergyVector = Vector<float>.Zero;
+            var width = Vector<float>.Count;
+            for (; index <= count - width; index += width)
+            {
+                var sampleVector = new Vector<float>(samples.Slice(index, width));
+                sineDotVector += sampleVector * new Vector<float>(kernel.Sine.AsSpan(index, width));
+                cosineDotVector += sampleVector * new Vector<float>(kernel.Cosine.AsSpan(index, width));
+                sampleEnergyVector += sampleVector * sampleVector;
+            }
+
+            for (var lane = 0; lane < width; lane++)
+            {
+                sineDot += sineDotVector[lane];
+                cosineDot += cosineDotVector[lane];
+                sampleEnergy += sampleEnergyVector[lane];
+            }
+        }
+
+        for (; index < count; index++)
         {
             var sample = samples[index];
             var sine = kernel.Sine[index];
@@ -665,11 +719,9 @@ public sealed class MimirChirpletTimeline
             sineDot += sample * sine;
             cosineDot += sample * cosine;
             sampleEnergy += sample * sample;
-            sineEnergy += sine * sine;
-            cosineEnergy += cosine * cosine;
         }
 
-        var denominator = Math.Sqrt(sampleEnergy * Math.Max(sineEnergy, cosineEnergy));
+        var denominator = Math.Sqrt(sampleEnergy * kernel.Energy);
         if (denominator <= 1.0e-12)
         {
             return 0.0;
@@ -680,10 +732,8 @@ public sealed class MimirChirpletTimeline
 
     private IReadOnlyList<double> BuildChirpletEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
     {
-        var maxKernelLength = Codebook.Symbols
-            .Select(symbol => sampleRate == SampleRate ? symbolKernels[symbol.SymbolId].Length : RenderToneKernel(symbol.Tone, sampleRate).Length)
-            .DefaultIfEmpty(0)
-            .Max();
+        var kernels = GetSymbolKernels(sampleRate);
+        var maxKernelLength = kernels.Select(kernel => kernel.Length).DefaultIfEmpty(0).Max();
         if (samples.Length < maxKernelLength || maxKernelLength == 0)
         {
             return [];
@@ -694,10 +744,9 @@ public sealed class MimirChirpletTimeline
         {
             var offset = frame * hopSamples;
             var best = 0.0;
-            for (var symbol = 0; symbol < Codebook.Symbols.Count; symbol++)
+            for (var symbol = 0; symbol < kernels.Count; symbol++)
             {
-                var tone = Codebook[symbol].Tone;
-                var kernel = sampleRate == SampleRate ? symbolKernels[symbol] : RenderToneKernel(tone, sampleRate);
+                var kernel = kernels[symbol];
                 if (offset + kernel.Length > samples.Length)
                 {
                     continue;
@@ -804,5 +853,9 @@ public sealed class MimirChirpletTimeline
     private sealed record MimirChirpletToneKernel(float[] Sine, float[] Cosine)
     {
         public int Length => Sine.Length;
+
+        public double Energy { get; } = Math.Max(
+            Sine.Sum(sample => sample * sample),
+            Cosine.Sum(sample => sample * sample));
     }
 }

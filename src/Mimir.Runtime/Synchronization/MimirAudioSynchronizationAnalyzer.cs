@@ -5,6 +5,7 @@ namespace Mimir.Runtime.Synchronization;
 public sealed class MimirAudioSynchronizationAnalyzer
 {
     private const int MaxWindowSamples = 48_000 * 2;
+    private const double MinDecodeWindowSeconds = 2.0;
     private readonly List<MimirAudioSynchronizationDecodeTrace> lastDecodeTraces = [];
 
     public IReadOnlyList<MimirAudioSynchronizationDecodeTrace> LastDecodeTraces => lastDecodeTraces;
@@ -67,27 +68,46 @@ public sealed class MimirAudioSynchronizationAnalyzer
             candidateSamples = ResampleToRate(candidateSamples, candidateBlock.SampleRate, referenceBlock.SampleRate);
 
             var compared = Math.Min(referenceSamples.Length, candidateSamples.Length);
-            if (compared < 256)
+            var minDecodeSamples = Math.Min(MaxWindowSamples, (int)Math.Ceiling(referenceBlock.SampleRate * MinDecodeWindowSeconds));
+            if (compared < minDecodeSamples)
             {
+                lastDecodeTraces.Add(new MimirAudioSynchronizationDecodeTrace(
+                    reference.Descriptor.SourceId,
+                    buffer.Descriptor.SourceId,
+                    referenceBlock.SampleRate,
+                    compared,
+                    0,
+                    0,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    0.0,
+                    0.0,
+                    0,
+                    0.0,
+                    "insufficient-window"));
                 continue;
             }
 
             var referenceWindow = referenceSamples.AsSpan(^compared..);
             var candidateWindow = candidateSamples.AsSpan(^compared..);
-            var referenceDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, referenceBlock.SampleRate);
+            var comparedReferenceDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, referenceBlock.SampleRate);
             var candidateDecode = MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, referenceBlock.SampleRate);
-            var deterministicFit = EstimateDelayFromDecodedTimeline(referenceDecode, candidateDecode);
+            var deterministicFit = EstimateDelayFromDecodedTimeline(comparedReferenceDecode, candidateDecode);
             lastDecodeTraces.Add(new MimirAudioSynchronizationDecodeTrace(
                 reference.Descriptor.SourceId,
                 buffer.Descriptor.SourceId,
                 referenceBlock.SampleRate,
                 compared,
-                referenceDecode.Frames.Count,
-                referenceDecode.Anchors.Count,
-                referenceDecode.ClockFit?.Confidence ?? 0.0,
+                comparedReferenceDecode.Frames.Count,
+                comparedReferenceDecode.Anchors.Count,
+                comparedReferenceDecode.ClockFit?.Confidence ?? 0.0,
+                BestFrameEnergy(comparedReferenceDecode),
                 candidateDecode.Frames.Count,
                 candidateDecode.Anchors.Count,
                 candidateDecode.ClockFit?.Confidence ?? 0.0,
+                BestFrameEnergy(candidateDecode),
                 deterministicFit.MatchedEvents,
                 deterministicFit.Confidence,
                 deterministicFit.MatchedEvents >= 3 ? "report" : "insufficient-anchors"));
@@ -116,6 +136,13 @@ public sealed class MimirAudioSynchronizationAnalyzer
         }
 
         return reports;
+    }
+
+    private static double BestFrameEnergy(MimirChirpletStreamDecode decode)
+    {
+        return decode.Frames.Count == 0
+            ? 0.0
+            : decode.Frames.Max(frame => frame.BestCandidate.Energy);
     }
 
     private static (double DelaySamples, double Confidence, int MatchedEvents) EstimateDelayFromDecodedTimeline(

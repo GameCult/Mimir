@@ -5,13 +5,14 @@ using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
 using Aquarium.LocalCast;
 using Mimir.Runtime.Synchronization;
+using System.Diagnostics;
 
 namespace Mimir.Runtime;
 
 public sealed class MimirRuntime : IAquariumRuntime
 {
     private const string DefaultAudioSyncReference = "loopback-scarlett-speakers";
-    private const float AudioSyncUpdateIntervalSeconds = 0.1f;
+    private const float DefaultAudioSyncUpdateIntervalSeconds = 0.1f;
     private const double CalibrationStartSeconds = 0.5;
     private const int CalibrationBatchSegments = 120;
     private const float DefaultCalibrationGain = 2.0f;
@@ -19,12 +20,14 @@ public sealed class MimirRuntime : IAquariumRuntime
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
     private readonly float telemetryIntervalSeconds;
+    private readonly float audioSyncUpdateIntervalSeconds;
     private readonly float calibrationGain;
     private int lastPollCount;
     private float runtimeSeconds;
-    private float nextAudioSyncSeconds = AudioSyncUpdateIntervalSeconds;
+    private float nextAudioSyncSeconds;
     private float nextTelemetrySeconds;
     private ulong calibrationSegmentIndex;
+    private double lastAudioSyncAnalysisMilliseconds;
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
 
     public MimirRuntime(AquariumRuntimeOptions options)
@@ -51,7 +54,9 @@ public sealed class MimirRuntime : IAquariumRuntime
         visualRuntime = new LocalCastRuntime(options);
         synchronization = new MimirSynchronizationHub(settings);
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
+        audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
         calibrationGain = ParseCalibrationGain();
+        nextAudioSyncSeconds = audioSyncUpdateIntervalSeconds;
         nextTelemetrySeconds = telemetryIntervalSeconds;
         foreach (var source in streamSources)
         {
@@ -193,9 +198,12 @@ public sealed class MimirRuntime : IAquariumRuntime
             return;
         }
 
+        var stopwatch = Stopwatch.StartNew();
         synchronization.AnalyzeAudioSynchronizationStep(DefaultAudioSyncReference);
+        stopwatch.Stop();
+        lastAudioSyncAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         lastAudioSynchronizationReports = synchronization.AudioSynchronizationReports;
-        nextAudioSyncSeconds += AudioSyncUpdateIntervalSeconds;
+        nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
     }
 
     private void EmitTelemetry()
@@ -209,7 +217,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             string.Equals(buffer.Descriptor.SourceId, DefaultAudioSyncReference, StringComparison.Ordinal));
         var states = synchronization.AudioSynchronizationStates;
         Console.WriteLine(
-            $"mimir-sync-telemetry t={runtimeSeconds:0.00}s loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} aligned={DescribeAlignedAudio()}");
+            $"mimir-sync-telemetry t={runtimeSeconds:0.00}s loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} analyzeMs={lastAudioSyncAnalysisMilliseconds:0.0} aligned={DescribeAlignedAudio()}");
         Console.WriteLine($"mimir-sync-buffers {DescribeAudioBuffers()}");
         foreach (var report in lastAudioSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
         {
@@ -226,7 +234,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         foreach (var trace in synchronization.AudioSynchronizationDecodeTraces.OrderBy(trace => trace.SourceId, StringComparer.Ordinal))
         {
             Console.WriteLine(
-                $"mimir-sync-decode {trace.ReferenceSourceId}->{trace.SourceId} status={trace.Status} compared={trace.ComparedSamples} rate={trace.SampleRate} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} refClock={trace.ReferenceClockConfidence:0.000} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} candClock={trace.CandidateClockConfidence:0.000} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
+                $"mimir-sync-decode {trace.ReferenceSourceId}->{trace.SourceId} status={trace.Status} compared={trace.ComparedSamples} rate={trace.SampleRate} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} refClock={trace.ReferenceClockConfidence:0.000} refEnergy={trace.ReferenceBestEnergy:0.000} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} candClock={trace.CandidateClockConfidence:0.000} candEnergy={trace.CandidateBestEnergy:0.000} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
         }
 
         nextTelemetrySeconds += telemetryIntervalSeconds;
@@ -237,6 +245,13 @@ public sealed class MimirRuntime : IAquariumRuntime
         return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_SYNC_TELEMETRY_SECONDS"), out var seconds)
             ? Math.Clamp(seconds, 0.0f, 60.0f)
             : 0.0f;
+    }
+
+    private static float ParseAudioSyncIntervalSeconds()
+    {
+        return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_AUDIO_SYNC_INTERVAL_SECONDS"), out var seconds)
+            ? Math.Clamp(seconds, 0.1f, 10.0f)
+            : DefaultAudioSyncUpdateIntervalSeconds;
     }
 
     private static float ParseCalibrationGain()

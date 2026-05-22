@@ -8,9 +8,11 @@ public sealed record MimirAudioSynchronizationDecodeTrace(
     int ReferenceFrames,
     int ReferenceAnchors,
     double ReferenceClockConfidence,
+    double ReferenceBestEnergy,
     int CandidateFrames,
     int CandidateAnchors,
     double CandidateClockConfidence,
+    double CandidateBestEnergy,
     int MatchedEvents,
     double Confidence,
     string Status);
