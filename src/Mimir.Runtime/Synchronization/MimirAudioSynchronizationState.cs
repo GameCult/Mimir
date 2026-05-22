@@ -54,6 +54,11 @@ public sealed class MimirAudioSynchronizationStateTracker
         }
     }
 
+    public void Remove(string sourceId)
+    {
+        states.Remove(sourceId);
+    }
+
     private static MimirAudioSynchronizationState NewState(
         MimirAudioSynchronizationReport report,
         double smoothedDelaySamples,

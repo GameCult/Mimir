@@ -7,12 +7,14 @@ public sealed record MimirPassiveAudioSynchronizationEstimate(
     double Confidence,
     double Peak,
     double NoiseFloor,
+    double SecondPeak,
     int ComparedSamples,
     string Status);
 
 public sealed class MimirPassiveAudioSynchronizationEstimator
 {
     private const int TargetWindowSamples = 32_768;
+    private const double MaxSingleWindowConfidence = 0.85;
     private const double Preemphasis = 0.97;
 
     public MimirPassiveAudioSynchronizationEstimate Estimate(
@@ -23,7 +25,7 @@ public sealed class MimirPassiveAudioSynchronizationEstimator
         var compared = Math.Min(reference.Length, candidate.Length);
         if (compared < 4096 || sampleRate <= 0)
         {
-            return new MimirPassiveAudioSynchronizationEstimate(0.0, 0.0, 0.0, 0.0, compared, "passive-insufficient-window");
+            return new MimirPassiveAudioSynchronizationEstimate(0.0, 0.0, 0.0, 0.0, 0.0, compared, "passive-insufficient-window");
         }
 
         var windowSamples = Math.Min(TargetWindowSamples, compared);
@@ -63,16 +65,26 @@ public sealed class MimirPassiveAudioSynchronizationEstimator
             }
         }
 
+        var secondBest = FindSecondPeak(referenceSpectrum, -maxLag, maxLag, bestIndex);
         var mean = sum / Math.Max(1, count);
         var variance = Math.Max(0.0, sumSquares / Math.Max(1, count) - mean * mean);
         var sigma = Math.Sqrt(variance);
         var refinedLag = bestIndex + RefinePeak(referenceSpectrum, bestIndex);
         var peakRatio = mean > 1.0e-12 ? best / mean : 0.0;
         var zScore = sigma > 1.0e-12 ? (best - mean) / sigma : 0.0;
+        var peakDominance = secondBest > 1.0e-12 ? (best - secondBest) / best : 1.0;
+        var positiveLagConfidence = refinedLag >= 0.0 ? 1.0 : 0.0;
         var confidence = Math.Clamp((peakRatio - 1.5) / 8.0, 0.0, 1.0) *
-            Math.Clamp(zScore / 16.0, 0.0, 1.0);
-        var status = confidence > 0.08 ? "passive-report" : "passive-low-confidence";
-        return new MimirPassiveAudioSynchronizationEstimate(refinedLag, confidence, best, mean, compared, status);
+            Math.Clamp(zScore / 16.0, 0.0, 1.0) *
+            Math.Clamp(peakDominance / 0.35, 0.0, 1.0) *
+            positiveLagConfidence;
+        confidence = Math.Min(confidence, MaxSingleWindowConfidence);
+        var status = refinedLag < 0.0
+            ? "passive-negative-lag"
+            : confidence > 0.08
+                ? "passive-report"
+                : "passive-low-confidence";
+        return new MimirPassiveAudioSynchronizationEstimate(refinedLag, confidence, best, mean, secondBest, compared, status);
     }
 
     private static void FillWindow(ReadOnlySpan<float> source, Complex[] destination, int count)
@@ -110,6 +122,23 @@ public sealed class MimirPassiveAudioSynchronizationEstimator
         return Math.Abs(denominator) < 1.0e-12
             ? 0.0
             : Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+    }
+
+    private static double FindSecondPeak(Complex[] correlation, int firstLag, int lastLag, int bestLag)
+    {
+        var second = 0.0;
+        var exclusionSamples = 256;
+        for (var lag = firstLag; lag <= lastLag; lag++)
+        {
+            if (Math.Abs(lag - bestLag) <= exclusionSamples)
+            {
+                continue;
+            }
+
+            second = Math.Max(second, Math.Abs(CorrelationAt(correlation, lag)));
+        }
+
+        return second;
     }
 
     private static int NextPowerOfTwo(int value)

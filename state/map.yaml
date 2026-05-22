@@ -99,7 +99,9 @@ accepted_design:
     and `hybrid` emits active pilot chunks only while passive confidence is
     weak. `MimirPassiveAudioSynchronizationEstimator` is the first passive path:
     it uses PHAT-weighted cross-spectrum correlation between loopback and mic
-    windows before any watermark is needed.
+    windows before any watermark is needed. Negative passive lags are
+    contradictory evidence and carry zero confidence; single-window passive
+    confidence is capped below certainty until repeated state earns it.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.

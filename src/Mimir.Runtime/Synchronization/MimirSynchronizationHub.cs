@@ -75,8 +75,15 @@ public sealed class MimirSynchronizationHub : IDisposable
         MimirAudioSyncMode mode = MimirAudioSyncMode.ChirpOnly)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        var candidates = Buffers.Buffers
+            .Where(buffer =>
+                buffer.Descriptor.Kind == MimirStreamKind.Audio &&
+                !string.Equals(buffer.Descriptor.SourceId, referenceSourceId, StringComparison.Ordinal) &&
+                buffer.Latest?.AudioBlock != null)
+            .Select(buffer => buffer.Descriptor.SourceId)
+            .ToArray();
         var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId, mode);
-        StoreAudioSynchronizationReports(reports);
+        StoreAudioSynchronizationReports(reports, candidates);
         return reports;
     }
 
@@ -111,20 +118,39 @@ public sealed class MimirSynchronizationHub : IDisposable
             referenceSourceId,
             mode,
             selected);
-        StoreAudioSynchronizationReports(reports);
+        StoreAudioSynchronizationReports(reports, selected);
         return reports;
     }
 
     private bool disposed;
 
-    private void StoreAudioSynchronizationReports(IReadOnlyList<MimirAudioSynchronizationReport> reports)
+    private void StoreAudioSynchronizationReports(
+        IReadOnlyList<MimirAudioSynchronizationReport> reports,
+        IEnumerable<string> analyzedCandidateIds)
     {
+        var reportIds = new HashSet<string>(reports.Select(report => report.SourceId), StringComparer.Ordinal);
+        foreach (var sourceId in analyzedCandidateIds)
+        {
+            if (!reportIds.Contains(sourceId))
+            {
+                audioSynchronizationReports.Remove(sourceId);
+            }
+        }
+
         foreach (var report in reports)
         {
             audioSynchronizationReports[report.SourceId] = report;
         }
 
         audioSynchronizationState.Update(reports);
+        foreach (var trace in audioSynchronization.LastDecodeTraces)
+        {
+            if (string.Equals(trace.Status, "passive-negative-lag", StringComparison.Ordinal))
+            {
+                audioSynchronizationReports.Remove(trace.SourceId);
+                audioSynchronizationState.Remove(trace.SourceId);
+            }
+        }
     }
 
     public void Dispose()

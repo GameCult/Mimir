@@ -66,7 +66,10 @@ The passive estimator is the first real program-audio path, not the final DSP
 actuator. It removes DC, pre-emphasizes the window, applies a Hann taper, runs a
 PHAT-weighted cross spectrum, and reports the strongest loopback-to-mic lag
 inside a bounded window. Positive delay still means the candidate mic is late
-relative to loopback.
+relative to loopback. Negative lags are treated as contradictory passive
+evidence and carry zero confidence. A single passive window is also capped below
+certainty; full confidence belongs to repeated coherent state over time, not
+one attractive correlation peak.
 
 ## Next Cut
 

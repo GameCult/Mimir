@@ -169,12 +169,20 @@ static int RunPassiveSyncSelfTest()
     const int sampleCount = 48_000;
     var reference = new float[sampleCount];
     var candidate = new float[sampleCount];
+    var random = new Random(1729);
+    var noise = new double[sampleCount];
+    for (var index = 0; index < sampleCount; index++)
+    {
+        noise[index] = random.NextDouble() * 2.0 - 1.0;
+    }
+
     for (var index = 0; index < sampleCount; index++)
     {
         reference[index] = (float)(
             0.45 * Math.Sin(2.0 * Math.PI * 611.0 * index / sampleRate) +
             0.28 * Math.Sin(2.0 * Math.PI * 1471.0 * index / sampleRate) +
-            0.12 * Math.Sin(2.0 * Math.PI * 3253.0 * index / sampleRate));
+            0.12 * Math.Sin(2.0 * Math.PI * 3253.0 * index / sampleRate) +
+            0.08 * noise[index]);
         var source = index - delaySamples;
         candidate[index] = source >= 0 ? reference[source] : 0.0f;
     }
@@ -184,10 +192,19 @@ static int RunPassiveSyncSelfTest()
     var error = estimate.DelaySamples - delaySamples;
     Console.WriteLine(
         $"passive-sync-self-test delaySamples={estimate.DelaySamples:0.000} expected={delaySamples} " +
-        $"error={error:0.000} confidence={estimate.Confidence:0.000} peak={estimate.Peak:0.000000} floor={estimate.NoiseFloor:0.000000} status={estimate.Status}");
-    if (Math.Abs(error) > 1.0 || estimate.Confidence < 0.08)
+        $"error={error:0.000} confidence={estimate.Confidence:0.000} peak={estimate.Peak:0.000000} secondPeak={estimate.SecondPeak:0.000000} floor={estimate.NoiseFloor:0.000000} status={estimate.Status}");
+    if (Math.Abs(error) > 1.0 || estimate.Confidence < 0.08 || estimate.Confidence >= 1.0)
     {
         Console.Error.WriteLine("passive sync self-test failed: delayed program signal did not produce a confident passive estimate");
+        return 1;
+    }
+
+    var impossible = estimator.Estimate(candidate, reference, sampleRate);
+    Console.WriteLine(
+        $"passive-sync-negative-test delaySamples={impossible.DelaySamples:0.000} confidence={impossible.Confidence:0.000} status={impossible.Status}");
+    if (impossible.DelaySamples < 0.0 && impossible.Confidence > 0.0)
+    {
+        Console.Error.WriteLine("passive sync self-test failed: negative lag kept confidence");
         return 1;
     }
 
