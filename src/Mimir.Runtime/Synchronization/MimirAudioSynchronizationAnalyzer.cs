@@ -6,10 +6,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
 {
     private const int MaxWindowSamples = 48_000 * 5;
     private const int MaxLagSamples = 2_400;
-    private const int ChirpletHopSamples = 64;
-    private const double ChirpletDurationSeconds = 0.08;
-    private const double ChirpletStartHz = 9_000.0;
-    private const double ChirpletEndHz = 16_000.0;
+    private const int ChirpletHopSamples = 16;
+    private readonly MimirChirpletCalibrationPhrase chirpletPhrase = MimirChirpletCalibrationPhrase.Default;
 
     public IReadOnlyList<MimirAudioSynchronizationReport> Analyze(
         IEnumerable<MimirRollingStreamBuffer> buffers,
@@ -66,23 +64,29 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 continue;
             }
 
-            var referenceSync = BuildChirpletEnergyTrace(referenceSamples.AsSpan(^compared..), referenceBlock.SampleRate);
-            var candidateSync = BuildChirpletEnergyTrace(candidateSamples.AsSpan(^compared..), referenceBlock.SampleRate);
+            var referenceWindow = referenceSamples.AsSpan(^compared..);
+            var candidateWindow = candidateSamples.AsSpan(^compared..);
+            var referenceSync = chirpletPhrase.BuildEnergyTrace(referenceWindow, referenceBlock.SampleRate, ChirpletHopSamples);
+            var candidateSync = chirpletPhrase.BuildEnergyTrace(candidateWindow, referenceBlock.SampleRate, ChirpletHopSamples);
             if (referenceSync.Length < 16 || candidateSync.Length < 16)
             {
                 continue;
             }
 
             var maxLag = Math.Min(MaxLagSamples / ChirpletHopSamples, Math.Min(referenceSync.Length, candidateSync.Length) / 2);
-            var (delaySamples, confidence) = EstimateDelay(referenceSync, candidateSync, maxLag);
-            delaySamples *= ChirpletHopSamples;
+            var (delayHops, confidence) = EstimateDelay(referenceSync, candidateSync, maxLag);
+            var fractionalDelaySamples = delayHops * ChirpletHopSamples;
+            var delaySamples = (int)Math.Round(fractionalDelaySamples);
+            var bandResponses = chirpletPhrase.EstimateBandResponse(candidateWindow, referenceBlock.SampleRate);
             reports.Add(new MimirAudioSynchronizationReport(
                 reference.Descriptor.SourceId,
                 buffer.Descriptor.SourceId,
                 referenceBlock.SampleRate,
                 delaySamples,
-                delaySamples * 1000.0 / referenceBlock.SampleRate,
+                fractionalDelaySamples,
+                fractionalDelaySamples * 1000.0 / referenceBlock.SampleRate,
                 confidence,
+                bandResponses,
                 compared,
                 reference.Latest?.Sequence ?? 0,
                 buffer.Latest?.Sequence ?? 0));
@@ -142,7 +146,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
         var maxPositiveDelay = Math.Max(0, alignedReports.Select(report => report.DelaySamples).DefaultIfEmpty(0).Max());
         var channels = new List<MimirAlignedAudioChannel>
         {
-            new(referenceSourceId, 0, 1.0),
+            new(referenceSourceId, 0, 0.0, 1.0),
         };
         var samples = new List<float[]>
         {
@@ -171,7 +175,11 @@ public sealed class MimirAudioSynchronizationAnalyzer
             }
 
             samples.Add(TailEndingBefore(candidateSamples, frameCount, trimSamples));
-            channels.Add(new MimirAlignedAudioChannel(report.SourceId, report.DelaySamples, report.Confidence));
+            channels.Add(new MimirAlignedAudioChannel(
+                report.SourceId,
+                report.DelaySamples,
+                report.FractionalDelaySamples,
+                report.Confidence));
         }
 
         return new MimirAlignedAudioFrame(
@@ -276,81 +284,12 @@ public sealed class MimirAudioSynchronizationAnalyzer
         return output;
     }
 
-    private static float[] BuildChirpletEnergyTrace(ReadOnlySpan<float> samples, int sampleRate)
-    {
-        var kernelLength = Math.Max(8, (int)Math.Round(sampleRate * ChirpletDurationSeconds));
-        if (samples.Length < kernelLength)
-        {
-            return [];
-        }
-
-        var output = new float[1 + (samples.Length - kernelLength) / ChirpletHopSamples];
-        for (var frame = 0; frame < output.Length; frame++)
-        {
-            var offset = frame * ChirpletHopSamples;
-            var real = 0.0;
-            var imag = 0.0;
-            var energy = 0.0;
-            for (var index = 0; index < kernelLength; index++)
-            {
-                var normalized = kernelLength <= 1 ? 1.0 : index / (double)(kernelLength - 1);
-                var time = index / (double)sampleRate;
-                var envelope = 0.5 - 0.5 * Math.Cos(2.0 * Math.PI * normalized);
-                var phase = 2.0 * Math.PI * (ChirpletStartHz * time + 0.5 * (ChirpletEndHz - ChirpletStartHz) * time * normalized);
-                var sample = samples[offset + index] * envelope;
-                real += sample * Math.Cos(phase);
-                imag -= sample * Math.Sin(phase);
-                energy += sample * sample;
-            }
-
-            var magnitude = Math.Sqrt(real * real + imag * imag);
-            output[frame] = energy > 1.0e-12 ? (float)(magnitude / Math.Sqrt(energy)) : 0.0f;
-        }
-
-        return ContrastNormalize(output);
-    }
-
-    private static float[] ContrastNormalize(float[] samples)
-    {
-        if (samples.Length == 0)
-        {
-            return samples;
-        }
-
-        var mean = 0.0;
-        for (var index = 0; index < samples.Length; index++)
-        {
-            mean += samples[index];
-        }
-
-        mean /= samples.Length;
-        var variance = 0.0;
-        for (var index = 0; index < samples.Length; index++)
-        {
-            var centered = samples[index] - mean;
-            variance += centered * centered;
-        }
-
-        var deviation = Math.Sqrt(variance / samples.Length);
-        if (deviation <= 1.0e-12)
-        {
-            return samples;
-        }
-
-        var output = new float[samples.Length];
-        for (var index = 0; index < samples.Length; index++)
-        {
-            var z = (samples[index] - mean) / deviation;
-            output[index] = z > 0.0 ? (float)(z * z) : 0.0f;
-        }
-
-        return output;
-    }
-
-    private static (int DelaySamples, double Confidence) EstimateDelay(ReadOnlySpan<float> reference, ReadOnlySpan<float> candidate, int maxLag)
+    private static (double DelaySamples, double Confidence) EstimateDelay(ReadOnlySpan<float> reference, ReadOnlySpan<float> candidate, int maxLag)
     {
         var bestLag = 0;
         var best = double.NegativeInfinity;
+        var previous = double.NegativeInfinity;
+        var next = double.NegativeInfinity;
         for (var lag = -maxLag; lag <= maxLag; lag++)
         {
             var score = NormalizedCorrelation(reference, candidate, lag);
@@ -361,7 +300,34 @@ public sealed class MimirAudioSynchronizationAnalyzer
             }
         }
 
-        return (bestLag, Math.Max(0.0, Math.Min(1.0, best)));
+        if (bestLag > -maxLag)
+        {
+            previous = NormalizedCorrelation(reference, candidate, bestLag - 1);
+        }
+
+        if (bestLag < maxLag)
+        {
+            next = NormalizedCorrelation(reference, candidate, bestLag + 1);
+        }
+
+        var offset = ParabolicPeakOffset(previous, best, next);
+        return (bestLag + offset, Math.Max(0.0, Math.Min(1.0, best)));
+    }
+
+    private static double ParabolicPeakOffset(double left, double center, double right)
+    {
+        if (!double.IsFinite(left) || !double.IsFinite(center) || !double.IsFinite(right))
+        {
+            return 0.0;
+        }
+
+        var denominator = left - 2.0 * center + right;
+        if (Math.Abs(denominator) <= 1.0e-12)
+        {
+            return 0.0;
+        }
+
+        return Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
     }
 
     private static double NormalizedCorrelation(ReadOnlySpan<float> reference, ReadOnlySpan<float> candidate, int lag)

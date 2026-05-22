@@ -90,13 +90,16 @@ not become the synchronized program authority.
 ## Audio Field
 
 The six-microphone path is separate from the bridge. Scarlett speaker loopback
-is the current timing authority when calibration chirplets are playing. Mimir
-emits short 9-16 kHz chirplets through Aquarium audio, compares mic buffers
-against loopback by chirplet-energy delay estimation, and can build a
-provisional aligned mono frame for channels that clear the confidence gate.
-Camera mics are spatial/context witnesses; Focusrite devices are dialogue
-anchors. The current aligned frame is integer-delay only; SRO smoothing,
-fractional delay, and the hot resampler still belong in Faust/native DSP.
+is the current timing authority when calibration chirplets are playing.
+`MimirChirpletCalibrationPhrase` owns the harmonic-ish calibration phrase around
+8 kHz, 10 kHz, 12 kHz, and 16 kHz, plus the matched timing and response kernels.
+Mimir emits that phrase through Aquarium audio, compares mic buffers against
+loopback by chirplet-energy delay estimation, and can build a provisional
+aligned mono frame for channels that clear the confidence gate. Reports now
+carry fractional delay and per-band matched energy. Camera mics are
+spatial/context witnesses; Focusrite devices are dialogue anchors. The current
+aligned frame is integer-delay only; SRO smoothing, fractional delay, and the
+hot resampler still belong in Faust/native DSP.
 
 ## Visual Fusion
 

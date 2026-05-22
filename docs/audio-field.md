@@ -49,19 +49,64 @@ loopback audio is actively playing. One PS3 Eye mic previously enumerated but
 produced zero WASAPI packets until that Eye was unplugged and replugged.
 
 The full probe runtime config now enables sample-bearing blocks for every local
-audio source. `MimirRuntime` emits short 9-16 kHz calibration chirplets through
-Aquarium audio every 1.5 seconds. `MimirAudioSynchronizationAnalyzer` resamples
-candidate mic windows into the loopback sample-rate timeline, projects them
-through the same chirplet shape, contrast-normalizes the resulting energy
-trace, and estimates current delay against `loopback-scarlett-speakers`.
+audio source. `MimirChirpletCalibrationPhrase` owns the emitted calibration
+phrase and the matched-filter shape used to analyze it. The default phrase is a
+short harmonic-ish pattern around 8 kHz, 10 kHz, 12 kHz, and 16 kHz, repeated
+every 1.5 seconds through Aquarium audio. That makes the telemetry less like a
+single sterile squeal and more like a small, identifiable timing signature.
+
+`MimirAudioSynchronizationAnalyzer` resamples candidate mic windows into the
+loopback sample-rate timeline, projects loopback and candidate windows through
+the same phrase, contrast-normalizes the resulting energy traces, and estimates
+current delay against `loopback-scarlett-speakers`. Reports carry both rounded
+integer delay and fractional delay from parabolic peak interpolation over the
+chirplet correlation peak.
 
 `MimirSynchronizationHub.BuildAlignedAudioFrame` returns a provisional aligned
 mono frame: loopback is always channel zero, and other channels enter only when
 their chirplet confidence clears the gate. Delay estimates compare loopback and
 candidate mic windows at a shared timestamp edge; positive delay means the
-candidate mic is late relative to loopback. This is still integer-delay
-alignment at 64-sample chirplet-hop granularity. SRO smoothing, fractional-delay
-correction, and the hot resampler are the actuator still ahead of us.
+candidate mic is late relative to loopback. The current chirplet trace uses a
+16-sample hop and parabolic peak interpolation. The aligned-frame application
+still rounds to integer samples; the fractional estimate exists so the next
+actuator can drive a real fractional-delay line.
+
+The same phrase also starts the frequency-response path. Each report includes
+per-band matched energy for the phrase tones. That is not a finished room/mic
+normalizer yet, but it is the live surface that will become response-curve
+estimation: loopback carries what was emitted, each mic carries what survived
+speaker, air, room, and capsule, and the ratio over repeated chirplet phrases
+becomes gain/phase correction evidence.
+
+## Chirplet Calibration Model
+
+```mermaid
+flowchart TD
+    A["MimirChirpletCalibrationPhrase"] --> B["Aquarium audio output"]
+    B --> C["Scarlett speaker loopback"]
+    B --> D["room + speakers + mics"]
+    C --> E["loopback rolling buffer"]
+    D --> F["mic rolling buffers"]
+    E --> G["matched chirplet traces"]
+    F --> G
+    G --> H["delay + SRO estimates"]
+    G --> I["per-band response estimates"]
+    H --> J["fractional delay / resampler actuator"]
+    I --> K["frequency response normalization"]
+```
+
+The calibration phrase owns three facts:
+
+- **Emission**: the PCM that Aquarium sends to the speakers.
+- **Timing witness**: the matched-filter kernel used to find the phrase in
+  loopback and mic buffers.
+- **Response witness**: the per-tone kernels used to measure how strongly each
+  mic hears each emitted band.
+
+One chirplet phrase gives a delay estimate. Repeated phrases give drift/SRO by
+watching delay change over time. Per-band energy over many phrases gives the
+normalization curve. The important constraint is that all three measurements
+must be tied to the same emitted phrase, not three separately invented probes.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,

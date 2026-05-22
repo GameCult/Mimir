@@ -11,17 +11,14 @@ namespace Mimir.Runtime;
 public sealed class MimirRuntime : IAquariumRuntime
 {
     private const string DefaultAudioSyncReference = "loopback-scarlett-speakers";
-    private const int CalibrationChirpSampleRate = 48_000;
-    private const float CalibrationChirpIntervalSeconds = 1.5f;
-    private const float CalibrationChirpDurationSeconds = 0.08f;
-    private const float CalibrationChirpGain = 0.125f;
+    private static readonly MimirChirpletCalibrationPhrase CalibrationPhrase = MimirChirpletCalibrationPhrase.Default;
     private readonly LocalCastRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
     private int lastPollCount;
     private float runtimeSeconds;
-    private float nextCalibrationChirpSeconds = 0.5f;
-    private string? calibrationChirpPcm16Base64;
+    private float nextCalibrationChirpSeconds = (float)CalibrationPhrase.FirstFireSeconds;
+    private string? calibrationPhrasePcm16Base64;
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -121,7 +118,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Buffer details", DescribeBuffers);
                 panel.Readout("Audio sync", DescribeAudioSync);
                 panel.Readout("Aligned audio", DescribeAlignedAudio);
-                panel.Readout("Chirp reference", () => $"{DefaultAudioSyncReference} every {CalibrationChirpIntervalSeconds:0.0}s");
+                panel.Readout("Chirplet reference", () => $"{DefaultAudioSyncReference} every {CalibrationPhrase.IntervalSeconds:0.0}s");
             });
     }
 
@@ -130,33 +127,12 @@ public sealed class MimirRuntime : IAquariumRuntime
         while (runtimeSeconds >= nextCalibrationChirpSeconds)
         {
             visualRuntime.Audio.EnqueuePcm16Base64(
-                calibrationChirpPcm16Base64 ??= BuildCalibrationChirpPcm16Base64(),
-                CalibrationChirpSampleRate,
+                calibrationPhrasePcm16Base64 ??= CalibrationPhrase.RenderPcm16Base64(),
+                CalibrationPhrase.SampleRate,
                 channels: 1,
                 gain: 1.0f);
-            nextCalibrationChirpSeconds += CalibrationChirpIntervalSeconds;
+            nextCalibrationChirpSeconds += (float)CalibrationPhrase.IntervalSeconds;
         }
-    }
-
-    private static string BuildCalibrationChirpPcm16Base64()
-    {
-        var frameCount = Math.Max(1, (int)Math.Round(CalibrationChirpSampleRate * CalibrationChirpDurationSeconds));
-        var bytes = new byte[frameCount * sizeof(short)];
-        const double startHz = 9_000.0;
-        const double endHz = 16_000.0;
-        for (var frame = 0; frame < frameCount; frame++)
-        {
-            var t = frame / (double)CalibrationChirpSampleRate;
-            var normalized = frameCount <= 1 ? 1.0 : frame / (double)(frameCount - 1);
-            var phase = 2.0 * Math.PI * (startHz * t + 0.5 * (endHz - startHz) * t * normalized);
-            var envelope = 0.5 - 0.5 * Math.Cos(2.0 * Math.PI * normalized);
-            var value = Math.Clamp(Math.Sin(phase) * envelope * CalibrationChirpGain, -1.0, 1.0);
-            var sample = (short)Math.Round(value * short.MaxValue);
-            bytes[frame * sizeof(short)] = (byte)(sample & 0xff);
-            bytes[frame * sizeof(short) + 1] = (byte)((sample >> 8) & 0xff);
-        }
-
-        return Convert.ToBase64String(bytes);
     }
 
     private string DescribeBuffers()
@@ -185,7 +161,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         var reports = synchronization.AnalyzeAudioSynchronization(DefaultAudioSyncReference);
         return reports.Count == 0
             ? "no payload windows"
-            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.DelaySamples} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00}"));
+            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.0} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00}"));
     }
 
     private string DescribeAlignedAudio()

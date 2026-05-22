@@ -65,12 +65,15 @@ accepted_design:
     runtime rolling buffers; it does not carry pixels/audio payloads or own the
     final local-device hot path.
   - The diagnostic audio path can optionally carry base64 float sample payloads
-    for sync smoke tests. `MimirAudioSynchronizationAnalyzer` now treats
+    for sync smoke tests. `MimirChirpletCalibrationPhrase` owns the structured
+    harmonic-ish calibration phrase, PCM rendering, matched timing kernel, and
+    per-band response kernels. `MimirAudioSynchronizationAnalyzer` now treats
     `loopback-scarlett-speakers` as timing authority, resamples candidate mic
     windows into that timeline, projects loopback and mic windows through the
-    emitted chirplet shape, and estimates current delay from chirplet-energy
+    emitted chirplet phrase, and estimates current delay from chirplet-energy
     traces at a shared timestamp edge. Positive delay means the candidate mic is
-    late relative to loopback. `MimirSynchronizationHub.BuildAlignedAudioFrame`
+    late relative to loopback. Reports include rounded delay, fractional delay,
+    confidence, and per-band matched energy. `MimirSynchronizationHub.BuildAlignedAudioFrame`
     exposes the first provisional loopback-referenced aligned mono frame for
     channels that clear the confidence gate.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live

@@ -52,7 +52,7 @@ var reports = hub.AnalyzeAudioSynchronization(syncReference);
 foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
 {
     Console.WriteLine(
-        $"sync {report.ReferenceSourceId}->{report.SourceId}: delaySamples={report.DelaySamples} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} compared={report.ComparedSamples}");
+        $"sync {report.ReferenceSourceId}->{report.SourceId}: delaySamples={report.DelaySamples} fractionalDelaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} bands={DescribeBands(report.BandResponses)} compared={report.ComparedSamples}");
 }
 
 var aligned = hub.BuildAlignedAudioFrame(syncReference);
@@ -63,7 +63,7 @@ if (aligned != null)
     foreach (var channel in aligned.Channels)
     {
         Console.WriteLine(
-            $"aligned-channel {channel.SourceId}: delaySamples={channel.DelaySamples} confidence={channel.Confidence:0.000}");
+            $"aligned-channel {channel.SourceId}: delaySamples={channel.DelaySamples} fractionalDelaySamples={channel.FractionalDelaySamples:0.000} confidence={channel.Confidence:0.000}");
     }
 }
 
@@ -102,6 +102,13 @@ static string ParseStringOption(IReadOnlyList<string> args, string name, string 
     }
 
     return fallback;
+}
+
+static string DescribeBands(IReadOnlyList<MimirChirpletBandResponse> bands)
+{
+    return bands.Count == 0
+        ? "none"
+        : string.Join(",", bands.Select(band => $"{band.CenterHz:0}Hz:{band.Energy:0.000}"));
 }
 
 internal sealed class DisposableConfiguration : IDisposable
