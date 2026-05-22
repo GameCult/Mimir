@@ -66,14 +66,15 @@ accepted_design:
     final local-device hot path.
   - The diagnostic audio path can optionally carry base64 float sample payloads
     for sync smoke tests. `MimirChirpletCalibrationPhrase` owns the structured
-    harmonic-ish calibration phrase, PCM rendering, matched timing kernel, and
-    per-band response kernels. `MimirAudioSynchronizationAnalyzer` now treats
-    `loopback-scarlett-speakers` as timing authority, resamples candidate mic
-    windows into that timeline, projects loopback and mic windows through the
-    emitted chirplet phrase, and estimates current delay from chirplet-energy
-    traces at a shared timestamp edge. Positive delay means the candidate mic is
-    late relative to loopback. Reports include rounded delay, fractional delay,
-    confidence, and per-band matched energy. `MimirAudioSynchronizationStateTracker`
+    birdsong-like timeline fingerprint: a stateless 16-phrase cycle where
+    phrase `N` is generated from `N`, plus PCM rendering, matched timing kernel,
+    and per-band response kernels. `MimirAudioSynchronizationAnalyzer` now
+    treats `loopback-scarlett-speakers` as timing authority, resamples candidate
+    mic windows into that timeline, projects loopback and mic windows through
+    the emitted chirplet phrase cycle, and estimates current delay from
+    chirplet-energy traces at a shared timestamp edge. Positive delay means the
+    candidate mic is late relative to loopback. Reports include rounded delay,
+    fractional delay, confidence, and per-band matched energy. `MimirAudioSynchronizationStateTracker`
     owns the smoothed per-source belief: latest delay, smoothed delay,
     confidence, per-band response evidence, and delay-slope/SRO estimate in
     ppm. `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first

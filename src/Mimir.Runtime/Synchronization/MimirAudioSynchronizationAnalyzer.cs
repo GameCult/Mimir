@@ -5,9 +5,8 @@ namespace Mimir.Runtime.Synchronization;
 public sealed class MimirAudioSynchronizationAnalyzer
 {
     private const int MaxWindowSamples = 48_000 * 5;
-    private const int MaxLagSamples = 2_400;
+    private const int MaxLagSamples = 48_000;
     private const int ChirpletHopSamples = 16;
-    private readonly MimirChirpletCalibrationPhrase chirpletPhrase = MimirChirpletCalibrationPhrase.Default;
 
     public IReadOnlyList<MimirAudioSynchronizationReport> Analyze(
         IEnumerable<MimirRollingStreamBuffer> buffers,
@@ -66,8 +65,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
 
             var referenceWindow = referenceSamples.AsSpan(^compared..);
             var candidateWindow = candidateSamples.AsSpan(^compared..);
-            var referenceSync = chirpletPhrase.BuildEnergyTrace(referenceWindow, referenceBlock.SampleRate, ChirpletHopSamples);
-            var candidateSync = chirpletPhrase.BuildEnergyTrace(candidateWindow, referenceBlock.SampleRate, ChirpletHopSamples);
+            var referenceSync = MimirChirpletCalibrationPhrase.BuildTimelineEnergyTrace(referenceWindow, referenceBlock.SampleRate, ChirpletHopSamples);
+            var candidateSync = MimirChirpletCalibrationPhrase.BuildTimelineEnergyTrace(candidateWindow, referenceBlock.SampleRate, ChirpletHopSamples);
             if (referenceSync.Length < 16 || candidateSync.Length < 16)
             {
                 continue;
@@ -77,7 +76,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
             var (delayHops, confidence) = EstimateDelay(referenceSync, candidateSync, maxLag);
             var fractionalDelaySamples = delayHops * ChirpletHopSamples;
             var delaySamples = (int)Math.Round(fractionalDelaySamples);
-            var bandResponses = chirpletPhrase.EstimateBandResponse(candidateWindow, referenceBlock.SampleRate);
+            var bandResponses = MimirChirpletCalibrationPhrase.Default.EstimateBandResponse(candidateWindow, referenceBlock.SampleRate);
             reports.Add(new MimirAudioSynchronizationReport(
                 reference.Descriptor.SourceId,
                 buffer.Descriptor.SourceId,

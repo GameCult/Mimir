@@ -16,6 +16,7 @@ public sealed record MimirChirpletBandResponse(
 
 public sealed class MimirChirpletCalibrationPhrase
 {
+    public const int PhraseCycleLength = 16;
     private readonly float[] kernel;
     private readonly IReadOnlyList<float[]> toneKernels;
 
@@ -38,18 +39,46 @@ public sealed class MimirChirpletCalibrationPhrase
         toneKernels = tones.Select(tone => RenderToneKernel(tone, sampleRate, DurationSeconds)).ToArray();
     }
 
-    public static MimirChirpletCalibrationPhrase Default { get; } = new(
+    public static MimirChirpletCalibrationPhrase Default { get; } = ForIndex(0);
+
+    public static IReadOnlyList<MimirChirpletCalibrationPhrase> AnalysisCycle { get; } =
+        Enumerable.Range(0, PhraseCycleLength)
+            .Select(index => ForIndex((ulong)index))
+            .ToArray();
+
+    public static MimirChirpletCalibrationPhrase ForIndex(ulong phraseIndex) => new(
         sampleRate: 48_000,
-        intervalSeconds: 1.5,
-        firstFireSeconds: 0.5,
-        gain: 0.125,
-        tones:
-        [
-            new(0.000, 0.055, 7_680.0, 8_320.0),
-            new(0.085, 0.055, 9_600.0, 10_400.0),
-            new(0.170, 0.055, 11_520.0, 12_480.0),
-            new(0.255, 0.055, 15_360.0, 16_000.0),
-        ]);
+        intervalSeconds: 3.25,
+        firstFireSeconds: 0.75,
+        gain: 0.13,
+        tones: GenerateTones(phraseIndex));
+
+    public static float[] BuildTimelineEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int hopSamples)
+    {
+        var traces = new List<float[]>();
+        foreach (var phrase in AnalysisCycle)
+        {
+            var trace = phrase.BuildEnergyTrace(samples, sampleRate, hopSamples);
+            if (trace.Length > 0)
+            {
+                traces.Add(trace);
+            }
+        }
+
+        if (traces.Count == 0)
+        {
+            return [];
+        }
+
+        var length = traces.Min(trace => trace.Length);
+        var output = new float[length];
+        for (var index = 0; index < length; index++)
+        {
+            output[index] = traces.Max(trace => trace[index]);
+        }
+
+        return output;
+    }
 
     public int SampleRate { get; }
 
@@ -127,6 +156,55 @@ public sealed class MimirChirpletCalibrationPhrase
 
         return samples;
     }
+
+    private static IReadOnlyList<MimirChirpletTone> GenerateTones(ulong phraseIndex)
+    {
+        var baseTones = new[]
+        {
+            new MimirChirpletTone(0.000, 0.070, 7_040.0, 7_680.0, 0.80),
+            new MimirChirpletTone(0.190, 0.060, 9_600.0, 8_800.0, 0.75),
+            new MimirChirpletTone(0.410, 0.080, 11_800.0, 12_800.0, 0.90),
+            new MimirChirpletTone(0.735, 0.065, 8_200.0, 9_000.0, 0.60),
+            new MimirChirpletTone(0.980, 0.095, 14_500.0, 15_800.0, 0.80),
+            new MimirChirpletTone(1.310, 0.070, 10_800.0, 10_200.0, 0.70),
+        };
+        var tones = new List<MimirChirpletTone>(baseTones.Length);
+        var previousEnd = -1.0;
+        for (var index = 0; index < baseTones.Length; index++)
+        {
+            var baseTone = baseTones[index];
+            var seed = Mix(phraseIndex ^ ((ulong)index * 0x9E3779B97F4A7C15UL));
+            var timeJitter = Unit(seed) * 0.050 - 0.025;
+            var durationJitter = Unit(seed >> 11) * 0.020 - 0.010;
+            var bandJitter = Unit(seed >> 22) * 480.0 - 240.0;
+            var glideScale = 0.88 + Unit(seed >> 33) * 0.24;
+            var gainScale = 0.85 + Unit(seed >> 44) * 0.30;
+            var flips = ((seed >> 57) & 1UL) != 0;
+            var duration = Math.Clamp(baseTone.DurationSeconds + durationJitter, 0.045, 0.115);
+            var start = Math.Max(baseTone.StartSeconds + timeJitter, previousEnd + 0.060);
+            var center = Math.Clamp(baseTone.CenterHz + bandJitter, 6_800.0, 16_200.0);
+            var halfWidth = Math.Abs(baseTone.EndHz - baseTone.StartHz) * 0.5 * glideScale;
+            var low = Math.Clamp(center - halfWidth, 6_700.0, 16_400.0);
+            var high = Math.Clamp(center + halfWidth, 6_700.0, 16_400.0);
+            tones.Add(flips
+                ? new MimirChirpletTone(start, duration, high, low, baseTone.Gain * gainScale)
+                : new MimirChirpletTone(start, duration, low, high, baseTone.Gain * gainScale));
+            previousEnd = start + duration;
+        }
+
+        return tones;
+    }
+
+    private static ulong Mix(ulong value)
+    {
+        value += 0x9E3779B97F4A7C15UL;
+        value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9UL;
+        value = (value ^ (value >> 27)) * 0x94D049BB133111EBUL;
+        return value ^ (value >> 31);
+    }
+
+    private static double Unit(ulong value) =>
+        (value & ((1UL << 53) - 1)) / (double)(1UL << 53);
 
     private static float[] RenderToneKernel(MimirChirpletTone tone, int sampleRate, double phraseDurationSeconds)
     {

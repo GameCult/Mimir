@@ -42,8 +42,11 @@ a named invariant that the native runtime cannot protect yet.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter.
-- `MimirChirpletCalibrationPhrase` owns the structured harmonic-ish calibration
+- `MimirChirpletCalibrationPhrase` owns the structured birdsong-like calibration
   phrase, PCM rendering, matched timing trace, and per-band response kernels.
+  The default timeline is a stateless 16-phrase cycle; phrase `N` is generated
+  from `N`, spreads six chirplets across about 1.38 seconds, and fires every
+  3.25 seconds to reduce repeated-sweep ambiguity.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline
   and compared by chirplet-energy delay estimation with fractional peak

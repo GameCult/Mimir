@@ -63,11 +63,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
   640x480@60, and 81.10 fps when the PS3 Eye runs 320x240@187. The regular
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
 - Current chirplet-backed smoke uses Scarlett speaker loopback as timing
-  authority. `MimirChirpletCalibrationPhrase` owns the structured harmonic-ish
-  phrase around 8 kHz, 10 kHz, 12 kHz, and 16 kHz, the Aquarium PCM rendering,
+  authority. `MimirChirpletCalibrationPhrase` owns the structured birdsong-like
+  timeline fingerprint: a stateless 16-phrase cycle where phrase `N` is
+  generated from `N`; each phrase has six asymmetric chirplets over about 1.38
+  seconds and fires every 3.25 seconds. The phrase owns Aquarium PCM rendering,
   matched timing trace, and per-band response hooks. Sync reports now include
-  fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
-  now tracks smoothed delay and delay-slope/SRO ppm. PS3 Eye audio is
+  fractional delay and per-band matched energy. `MimirAudioSynchronizationState` now tracks smoothed delay and
+  delay-slope/SRO ppm. PS3 Eye audio is
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.
