@@ -73,9 +73,12 @@ accepted_design:
     emitted chirplet phrase, and estimates current delay from chirplet-energy
     traces at a shared timestamp edge. Positive delay means the candidate mic is
     late relative to loopback. Reports include rounded delay, fractional delay,
-    confidence, and per-band matched energy. `MimirSynchronizationHub.BuildAlignedAudioFrame`
-    exposes the first provisional loopback-referenced aligned mono frame for
-    channels that clear the confidence gate.
+    confidence, and per-band matched energy. `MimirAudioSynchronizationStateTracker`
+    owns the smoothed per-source belief: latest delay, smoothed delay,
+    confidence, per-band response evidence, and delay-slope/SRO estimate in
+    ppm. `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
+    provisional loopback-referenced aligned mono frame for channels that clear
+    the confidence gate.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.

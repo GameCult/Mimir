@@ -14,9 +14,16 @@ foreach (var source in configuration.Value.Sources)
 }
 
 var deadline = DateTimeOffset.UtcNow + duration;
+var nextSyncPoll = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(1);
 while (DateTimeOffset.UtcNow < deadline)
 {
     hub.PollSources(maxSamplesPerSource: 4096);
+    if (DateTimeOffset.UtcNow >= nextSyncPoll)
+    {
+        hub.AnalyzeAudioSynchronization(syncReference);
+        nextSyncPoll += TimeSpan.FromSeconds(1);
+    }
+
     await Task.Delay(pollDelay).ConfigureAwait(false);
 }
 
@@ -53,6 +60,12 @@ foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer
 {
     Console.WriteLine(
         $"sync {report.ReferenceSourceId}->{report.SourceId}: delaySamples={report.DelaySamples} fractionalDelaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} bands={DescribeBands(report.BandResponses)} compared={report.ComparedSamples}");
+}
+
+foreach (var state in hub.AudioSynchronizationStates)
+{
+    Console.WriteLine(
+        $"sync-state {state.ReferenceSourceId}->{state.SourceId}: smoothedDelaySamples={state.SmoothedDelaySamples:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000} bands={DescribeBands(state.BandResponses)}");
 }
 
 var aligned = hub.BuildAlignedAudioFrame(syncReference);

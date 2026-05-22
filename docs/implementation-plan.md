@@ -51,6 +51,9 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
   provisional aligned mono frame for loopback-referenced audio channels that
   clear the confidence gate.
+- `MimirAudioSynchronizationStateTracker` owns the first smoothed per-source
+  sync state: latest fractional delay, smoothed delay, confidence, per-band
+  response evidence, and delay-slope/SRO estimate in ppm.
 - `MimirRuntime` emits short calibration chirplets through Aquarium audio so the
   loopback and acoustic mic buffers carry a shared timing witness.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
@@ -86,10 +89,10 @@ a named invariant that the native runtime cannot protect yet.
    frame cadence in the rolling buffers.
 3. Replace the WASAPI frame-event diagnostic bridge with native audio capture
    workers for local mic, loopback, and network audio feeds.
-4. Add the synchronization actuator: smooth delay/SRO estimates, then drive a
-   variable-rate resampler and fractional delay line per non-reference stream.
-   The current aligned frame is integer-delay only and should not pretend to be
-   the final DSP path.
+4. Add the synchronization actuator: drive a variable-rate resampler and
+   fractional delay line per non-reference stream from the smoothed
+   `MimirAudioSynchronizationState`. The current aligned frame is integer-delay
+   only and should not pretend to be the final DSP path.
 5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 6. Move GPU feature extraction, fusion, material fitting, render budgeting, and

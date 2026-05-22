@@ -9,6 +9,7 @@ public sealed record MimirAudioSynchronizationReport(
     double DelayMilliseconds,
     double Confidence,
     IReadOnlyList<MimirChirpletBandResponse> BandResponses,
+    long AnalysisTimestampNs,
     int ComparedSamples,
     ulong ReferenceSequence,
     ulong SourceSequence);

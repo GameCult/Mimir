@@ -78,6 +78,13 @@ estimation: loopback carries what was emitted, each mic carries what survived
 speaker, air, room, and capsule, and the ratio over repeated chirplet phrases
 becomes gain/phase correction evidence.
 
+`MimirAudioSynchronizationStateTracker` turns per-phrase observations into
+state. It confidence-gates reports, smooths fractional delay per source, and
+estimates delay slope as sampling-rate offset in ppm. This is the control input
+for the coming actuator. The state can survive a brief weak report, but it is
+not a license to run blind: loopback must keep receiving the emitted phrase or
+fresh reports will stop.
+
 ## Chirplet Calibration Model
 
 ```mermaid
@@ -89,9 +96,10 @@ flowchart TD
     D --> F["mic rolling buffers"]
     E --> G["matched chirplet traces"]
     F --> G
-    G --> H["delay + SRO estimates"]
+    G --> H["delay observations"]
+    H --> L["smoothed sync state + SRO"]
     G --> I["per-band response estimates"]
-    H --> J["fractional delay / resampler actuator"]
+    L --> J["fractional delay / resampler actuator"]
     I --> K["frequency response normalization"]
 ```
 

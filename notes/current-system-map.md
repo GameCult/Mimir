@@ -96,10 +96,11 @@ is the current timing authority when calibration chirplets are playing.
 Mimir emits that phrase through Aquarium audio, compares mic buffers against
 loopback by chirplet-energy delay estimation, and can build a provisional
 aligned mono frame for channels that clear the confidence gate. Reports now
-carry fractional delay and per-band matched energy. Camera mics are
+carry fractional delay and per-band matched energy. The hub also owns smoothed
+per-source sync state with delay-slope/SRO in ppm. Camera mics are
 spatial/context witnesses; Focusrite devices are dialogue anchors. The current
-aligned frame is integer-delay only; SRO smoothing, fractional delay, and the
-hot resampler still belong in Faust/native DSP.
+aligned frame is integer-delay only; fractional delay and the hot resampler
+still belong in Faust/native DSP.
 
 ## Visual Fusion
 

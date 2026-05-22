@@ -4,6 +4,7 @@ public sealed class MimirSynchronizationHub : IDisposable
 {
     private readonly List<IMimirStreamSource> sources = [];
     private readonly MimirAudioSynchronizationAnalyzer audioSynchronization = new();
+    private readonly MimirAudioSynchronizationStateTracker audioSynchronizationState = new();
     private ulong ingestedSamples;
 
     public MimirSynchronizationHub(MimirSynchronizationSettings settings)
@@ -23,6 +24,9 @@ public sealed class MimirSynchronizationHub : IDisposable
     public ulong IngestedSamples => ingestedSamples;
 
     public int SourceCount => sources.Count;
+
+    public IReadOnlyList<MimirAudioSynchronizationState> AudioSynchronizationStates =>
+        audioSynchronizationState.States;
 
     public void AddSource(IMimirStreamSource source)
     {
@@ -61,7 +65,9 @@ public sealed class MimirSynchronizationHub : IDisposable
     public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronization(string referenceSourceId)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        return audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId);
+        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId);
+        audioSynchronizationState.Update(reports);
+        return reports;
     }
 
     public MimirAlignedAudioFrame? BuildAlignedAudioFrame(

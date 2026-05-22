@@ -66,7 +66,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   authority. `MimirChirpletCalibrationPhrase` owns the structured harmonic-ish
   phrase around 8 kHz, 10 kHz, 12 kHz, and 16 kHz, the Aquarium PCM rendering,
   matched timing trace, and per-band response hooks. Sync reports now include
-  fractional delay and per-band matched energy. PS3 Eye audio is
+  fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
+  now tracks smoothed delay and delay-slope/SRO ppm. PS3 Eye audio is
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.

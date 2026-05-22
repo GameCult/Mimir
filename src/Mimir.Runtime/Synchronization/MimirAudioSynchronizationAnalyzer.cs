@@ -87,6 +87,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 fractionalDelaySamples * 1000.0 / referenceBlock.SampleRate,
                 confidence,
                 bandResponses,
+                commonEndNs,
                 compared,
                 reference.Latest?.Sequence ?? 0,
                 buffer.Latest?.Sequence ?? 0));

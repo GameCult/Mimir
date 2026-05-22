@@ -117,6 +117,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Ingested", () => $"{synchronization.IngestedSamples}");
                 panel.Readout("Buffer details", DescribeBuffers);
                 panel.Readout("Audio sync", DescribeAudioSync);
+                panel.Readout("Audio sync state", DescribeAudioSyncState);
                 panel.Readout("Aligned audio", DescribeAlignedAudio);
                 panel.Readout("Chirplet reference", () => $"{DefaultAudioSyncReference} every {CalibrationPhrase.IntervalSeconds:0.0}s");
             });
@@ -170,5 +171,13 @@ public sealed class MimirRuntime : IAquariumRuntime
         return frame == null
             ? "no aligned frame"
             : $"{frame.Channels.Count}ch {frame.SampleRate}Hz {frame.FrameCount} frames";
+    }
+
+    private string DescribeAudioSyncState()
+    {
+        var states = synchronization.AudioSynchronizationStates;
+        return states.Count == 0
+            ? "no sync state"
+            : string.Join(" | ", states.Select(state => $"{state.SourceId}: {state.SmoothedDelaySamples:0.0} samples sro={state.SamplingRateOffsetPpm:0.0}ppm c={state.Confidence:0.00}"));
     }
 }
