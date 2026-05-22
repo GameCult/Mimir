@@ -154,6 +154,14 @@ timeline anchors. Current synthetic proof detects all 15 emitted chirps, keeps
 device runs still depend on loopback capture staying live; the local Scarlett
 loopback has intermittently stopped advancing during short headless sniffs.
 
+This matcher is a proof, not the final hot path. `BuildChirpletEnergyTrace`
+still behaves like a dense sliding matched-filter bank. The current research
+note at `research/chirplet-sync-decoder/summary.md` points at the better
+receiver shape: design the emitted symbol codebook so a mic can dechirp a
+candidate event window and classify symbols by FFT or Goertzel bins. The
+transmitter is ours; do not preserve arbitrary symbol shapes if they force the
+receiver to spend a CPU core proving they exist.
+
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
 delay estimates, and stem routing in Aquarium UI.
