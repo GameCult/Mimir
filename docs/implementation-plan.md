@@ -62,21 +62,18 @@ a named invariant that the native runtime cannot protect yet.
 
 ## Next
 
-1. Recover the Kiyo Pro KS acquire path, which currently enumerates but leaves
-   its runtime smoke buffer empty with `KSSTATE_ACQUIRE failed: The handle is
-   invalid`.
-2. Replace the frame-event diagnostic bridge with concrete direct capture
+1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
    other cameras.
-3. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
+2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-4. Add native audio capture workers for local mic, loopback, and network audio
+3. Add native audio capture workers for local mic, loopback, and network audio
    feeds.
-5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
+4. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-6. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+5. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Aquarium.
-7. Move mic alignment, room suppression, voice separation, spatialization, and
+6. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-8. Keep the OBS bridge witness ledger as evidence before expanding receiver
+7. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

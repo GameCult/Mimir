@@ -152,12 +152,10 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Recover or replug the Kiyo Pro KS acquire path, then rerun
-    Mimir.BufferSmoke with `--require-samples` until all declared local optical
-    buffers are non-empty. Current smoke proves live rolling-buffer samples for
-    Leap stereo IR, regular Kiyo, and both PS3 Eyes; Kiyo Pro still enumerates
-    but fails KSSTATE_ACQUIRE with ERROR_INVALID_HANDLE. After that, replace the
-    diagnostic JSON-line process bridge with direct native capture drivers that
-    push buffer handles into Mimir.Runtime. Keep the Focusrite away from the
-    Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
+    Replace the diagnostic JSON-line process bridge with direct native capture
+    drivers that push buffer handles into Mimir.Runtime. Current
+    Mimir.BufferSmoke with `--require-samples` proves all five declared local
+    optical buffers receive samples after replugging the Kiyo Pro: Leap stereo
+    IR, Kiyo Pro, regular Kiyo, and both PS3 Eyes. Keep the Focusrite away from
+    the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
     SuperSpeed negotiation is fixed.
