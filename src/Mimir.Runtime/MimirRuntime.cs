@@ -164,7 +164,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             return;
         }
 
-        synchronization.AnalyzeAudioSynchronizationStep(DefaultAudioSyncReference, runtimeSeconds);
+        synchronization.AnalyzeAudioSynchronizationStep(DefaultAudioSyncReference);
         lastAudioSynchronizationReports = synchronization.AudioSynchronizationReports;
         nextAudioSyncSeconds += AudioSyncUpdateIntervalSeconds;
     }

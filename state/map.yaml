@@ -75,10 +75,9 @@ accepted_design:
     is the first constrained chirplet-transform receiver: it owns a bounded PCM
     window, emits transform frames with multiple symbol candidates, decodes
     code-valid triplet anchors through gap/clock coherence, and fits a
-    per-source sample clock from those anchors. `MimirAudioSynchronizationAnalyzer` now treats
-    `loopback-scarlett-speakers` as timing authority, prefers delay from matched
-    decoded timeline anchors, and keeps the older chirplet-energy lag search as
-    a diagnostic fallback while the decoder is cut over. Positive delay means
+    per-source sample clock from those anchors. `MimirAudioSynchronizationAnalyzer`
+    now treats `loopback-scarlett-speakers` as timing authority and derives
+    delay only from matched decoded timeline anchors. Positive delay means
     the candidate mic is late relative to loopback. Reports include rounded
     delay, fractional delay, confidence, and per-band matched energy. `MimirSynchronizationHub`
     caches the latest per-source reports and `MimirAudioSynchronizationStateTracker`
@@ -88,9 +87,6 @@ accepted_design:
     service on a fixed cadence, while UI and telemetry read cached reports/states
     instead of invoking analysis. `MIMIR_SYNC_TELEMETRY_SECONDS` prints live
     buffer/report/state telemetry.
-    `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
-    provisional loopback-referenced aligned mono frame for channels that clear
-    the confidence gate.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
@@ -197,9 +193,9 @@ current_status:
     fits, so the actuator can use decoded time instead of filtered lag guesses.
     Replace
     the diagnostic JSON-line process bridge with direct native capture drivers that push buffer handles into
-    Mimir.Runtime. Mimir.BufferSmoke still proves loopback-referenced aligned
-    audio for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
-    9-16 kHz calibration chirplets are playing. Treat PS3 Eye audio as
+    Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports
+    for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
+    calibration chirplets are playing. Treat PS3 Eye audio as
     enumeration/runtime-fragile, not unavailable. Keep the Focusrite away from
     the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
     SuperSpeed negotiation is fixed.

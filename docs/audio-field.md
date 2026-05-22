@@ -76,20 +76,11 @@ observed_sample = source_offset + canonical_seconds * effective_sample_rate
 ```
 
 Delay and sampling-rate offset are derived by comparing the loopback clock fit
-to each mic clock fit over common canonical time. Wide cross-correlation is only
-a diagnostic fallback while the transform decoder is being cut over. The state
-tracker is not allowed to launder invalid codewords into plausible timing.
-Reports carry rounded integer delay, fractional delay, and the count/confidence
-of timeline-symbol anchors used to derive the report.
-
-`MimirSynchronizationHub.BuildAlignedAudioFrame` returns a provisional aligned
-mono frame: loopback is always channel zero, and other channels enter only when
-their chirplet confidence clears the gate. Delay estimates compare loopback and
-candidate mic windows at a shared timestamp edge; positive delay means the
-candidate mic is late relative to loopback. The current chirplet trace uses a
-16-sample hop and parabolic peak interpolation. The aligned-frame application
-still rounds to integer samples; the fractional estimate exists so the next
-actuator can drive a real fractional-delay line.
+to each mic clock fit over common canonical time. The state tracker is not
+allowed to launder invalid codewords into plausible timing. If a stream cannot
+produce at least three matched canonical anchors, it has not decoded timing for
+that window. Reports carry rounded integer delay, fractional delay, and the
+count/confidence of timeline-symbol anchors used to derive the report.
 
 The same timeline also starts the frequency-response path. Each report includes
 per-band matched energy for the chirplet atoms. That is not a finished room/mic
@@ -108,10 +99,10 @@ fresh reports will stop.
 The actual Mimir app path now runs this online: `MimirRuntime.Update` keeps the
 chirplet timeline queued, polls sources, and updates sync analysis on a fixed cadence.
 `MIMIR_SYNC_TELEMETRY_SECONDS` enables console telemetry for live tests. Current
-runtime testing proves Aquarium output wakes the Scarlett loopback, the mic
-buffers stay live, and the continuous timeline can produce confident online sync
-states in the app. The next failure is no longer lock/no-lock; it is stabilizing
-state filtering enough for the actuator.
+runtime testing proves Aquarium output wakes the Scarlett loopback and the mic
+buffers stay live. The next failure is decoder precision: symbol separation and
+sub-frame timing must make canonical anchors stable enough to drive the
+actuator directly.
 
 ## Chirplet Calibration Model
 
@@ -150,7 +141,7 @@ The symbol layer is intentionally redundant. It does not rely on one fixed
 frequency shelf: timing gaps, chirp duration, start band, and glide shape all
 contribute so poor mic frequency response does not erase the whole code. A
 synthetic runtime check rendered two seconds of canonical timeline audio and
-decoded events 9, 10, and 11 back to a zero-second window start. Real device
+decoded a coherent path containing events 0 through 9 plus event 16. Real device
 runs still depend on loopback capture staying live; the local Scarlett loopback
 has intermittently stopped advancing during short headless sniffs.
 

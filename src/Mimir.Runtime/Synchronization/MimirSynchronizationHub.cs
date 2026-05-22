@@ -68,18 +68,16 @@ public sealed class MimirSynchronizationHub : IDisposable
     }
 
     public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronization(
-        string referenceSourceId,
-        double approximateTimelineSeconds = double.PositiveInfinity)
+        string referenceSourceId)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId, approximateTimelineSeconds);
+        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId);
         StoreAudioSynchronizationReports(reports);
         return reports;
     }
 
     public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronizationStep(
         string referenceSourceId,
-        double approximateTimelineSeconds,
         int maxCandidates = 1)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
@@ -106,23 +104,9 @@ public sealed class MimirSynchronizationHub : IDisposable
         var reports = audioSynchronization.Analyze(
             Buffers.Buffers,
             referenceSourceId,
-            approximateTimelineSeconds,
             selected);
         StoreAudioSynchronizationReports(reports);
         return reports;
-    }
-
-    public MimirAlignedAudioFrame? BuildAlignedAudioFrame(
-        string referenceSourceId,
-        int frameCount = 4_800,
-        double minimumConfidence = 0.10)
-    {
-        ObjectDisposedException.ThrowIf(disposed, this);
-        return audioSynchronization.BuildAlignedFrame(
-            Buffers.Buffers,
-            referenceSourceId,
-            frameCount,
-            minimumConfidence);
     }
 
     private bool disposed;

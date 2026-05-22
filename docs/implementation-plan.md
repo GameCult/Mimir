@@ -56,12 +56,9 @@ a named invariant that the native runtime cannot protect yet.
   those anchors.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline.
-  The analyzer now prefers decoded triplet timeline anchors and derives delay
-  from matched canonical events. The older chirplet-energy lag search remains a
-  diagnostic fallback while the decoder is being cut over.
-- `MimirSynchronizationHub.BuildAlignedAudioFrame` exposes the first
-  provisional aligned mono frame for loopback-referenced audio channels that
-  clear the confidence gate.
+  The analyzer derives delay only from matched decoded triplet timeline anchors.
+  A source without at least three matched anchors has no timing report for that
+  window.
 - `MimirAudioSynchronizationStateTracker` owns the first smoothed per-source
   sync state: latest fractional delay, smoothed delay, confidence, per-band
   response evidence, and delay-slope/SRO estimate in ppm.
@@ -106,9 +103,7 @@ a named invariant that the native runtime cannot protect yet.
    workers for local mic, loopback, and network audio feeds.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
-   `MimirAudioSynchronizationState`. The current aligned frame is integer-delay
-   only and should not pretend to be the final DSP path.
-   First, finish the constrained chirplet-transform decoder so every correctly
+   `MimirAudioSynchronizationState`. First, finish the constrained chirplet-transform decoder so every correctly
    heard triplet becomes a deterministic timeline anchor and the state tracker no
    longer has to launder ambiguous lag guesses.
 5. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,

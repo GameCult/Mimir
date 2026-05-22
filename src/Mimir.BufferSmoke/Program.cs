@@ -68,18 +68,6 @@ foreach (var state in hub.AudioSynchronizationStates)
         $"sync-state {state.ReferenceSourceId}->{state.SourceId}: smoothedDelaySamples={state.SmoothedDelaySamples:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000} bands={DescribeBands(state.BandResponses)}");
 }
 
-var aligned = hub.BuildAlignedAudioFrame(syncReference);
-if (aligned != null)
-{
-    Console.WriteLine(
-        $"aligned-audio reference={aligned.ReferenceSourceId} sampleRate={aligned.SampleRate} frameCount={aligned.FrameCount} channels={aligned.Channels.Count}");
-    foreach (var channel in aligned.Channels)
-    {
-        Console.WriteLine(
-            $"aligned-channel {channel.SourceId}: delaySamples={channel.DelaySamples} fractionalDelaySamples={channel.FractionalDelaySamples:0.000} confidence={channel.Confidence:0.000}");
-    }
-}
-
 if (requireSamples && emptyBuffers.Count > 0)
 {
     Console.Error.WriteLine($"empty buffers: {string.Join(", ", emptyBuffers)}");

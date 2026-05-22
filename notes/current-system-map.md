@@ -57,7 +57,6 @@ separately controllable audio stems.
 - `MimirFrameEventProcessStreamSource`;
 - `MimirVideoFrameDescriptor`;
 - `MimirAudioSynchronizationAnalyzer`;
-- `MimirAlignedAudioFrame`;
 - `IMimirVideoCaptureDriver`;
 - `MimirVideoCaptureDriverSource`.
 
@@ -96,16 +95,14 @@ de Bruijn sequence over 32 time/frequency constellation symbols. Start band,
 glide shape, duration, and following inter-chirp gap all carry code. Any three
 consecutive correctly detected symbols identify the event index inside the
 current operating horizon. Mimir continuously queues that timeline through
-Aquarium audio, uses coarse chirplet energy for acquisition, refines delay from
-matched event indices when the symbol decoder succeeds, and can build a
-provisional aligned mono frame for channels that clear the confidence gate.
+Aquarium audio and decodes timing through the constrained chirplet-transform
+path.
 Reports now carry fractional delay and per-band matched energy. The first
 `MimirChirpletStreamDecoder` exists as the constrained chirplet-transform
 receiver: it turns a bounded PCM window into transform frames with multiple
 symbol candidates, code-valid triplet anchors selected through gap/clock
-coherence, and an affine source clock fit. The analyzer prefers matched
-canonical anchors before falling back to the older chirplet-energy lag search.
-The hub also owns cached reports plus smoothed
+coherence, and an affine source clock fit. The analyzer only emits timing
+reports from matched canonical anchors. The hub also owns cached reports plus smoothed
 per-source sync state with delay-slope/SRO in ppm. `MimirRuntime` runs analysis
 online as a bounded rotating service and can print live telemetry with
 `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are passive readers of cached
@@ -113,8 +110,8 @@ sync state; they must not invoke the analyzer. Current app testing proves
 loopback wakeup, live mic buffers, and confident online sync states, but the
 decoder is not finished until arbitrary valid triplets produce stable anchors in
 real mic streams. Camera mics are spatial/context witnesses; Focusrite devices
-are dialogue anchors. The current aligned frame is integer-delay only;
-fractional delay and the hot resampler still belong in Faust/native DSP.
+are dialogue anchors. Fractional delay and the hot resampler belong in
+Faust/native DSP.
 
 ## Visual Fusion
 

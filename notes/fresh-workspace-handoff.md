@@ -27,8 +27,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `src/Mimir.App` hosts Aquarium Engine as the windowing/rendering/D3D12 bridge.
 - `src/Mimir.Runtime` owns `MimirSynchronizationHub`, configurable five-second
   rolling buffers, stream descriptors, source adapters, direct native ingest,
-  audio chirplet delay estimation, provisional aligned audio frames, and the
-  video capture driver seam.
+  audio chirplet delay estimation, and the video capture driver seam.
 - Local six-camera ingest should use direct driver adapters. Process-backed
   sources are bridge/network edges only.
 - Leap stereo IR is the first timing-camera candidate for direct ingest.
@@ -68,8 +67,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   constellation symbols. Start band, glide shape, duration, and following
   inter-chirp gap all carry code, so any three consecutive correctly detected
   symbols identify the event index inside the current operating horizon. The
-  timeline owns Aquarium PCM segment rendering, coarse acquisition,
-  symbol/event decoding, and per-band response hooks. Sync reports now include
+  timeline owns Aquarium PCM segment rendering, transform-frame decoding,
+  triplet anchor decoding, and per-band response hooks. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
   now tracks smoothed delay and delay-slope/SRO ppm. `MimirChirpletStreamDecoder`
   is the first constrained chirplet-transform receiver: it emits transform
@@ -80,7 +79,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
   passive. Actual Mimir.App testing proves Aquarium audio wakes Scarlett
   loopback, keeps mic buffers live, and produces confident online sync states,
   but the decoder still needs stronger symbol likelihoods/codebook distance
-  before arbitrary real triplets can replace the lag fallback. PS3 Eye audio is
+  before arbitrary real triplets can drive the actuator directly. PS3 Eye audio is
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.
