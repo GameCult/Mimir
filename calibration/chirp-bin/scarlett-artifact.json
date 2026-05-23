@@ -1,8 +1,25 @@
 {
-  "ModelId": "chirp-bin-20260523T191655Z",
-  "CreatedAt": "2026-05-23T19:16:55.9803706+00:00",
+  "ModelId": "chirp-bin-20260523T192955Z",
+  "CreatedAt": "2026-05-23T19:29:55.6287406+00:00",
   "SampleRate": 192000,
   "ReferenceSourceId": "asio-ch2",
+  "EmissionPlan": {
+    "ReliableSymbolCount": 10,
+    "RecommendedOrder": 6,
+    "ReliableSymbolIds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      31
+    ],
+    "IsAdaptive": true
+  },
   "Paths": [
     {
       "SourceId": "asio-ch0",
@@ -274,10 +291,28 @@
         ],
         "UsableBandCount": 15
       },
+      "EmissionPlan": {
+        "ReliableSymbolCount": 10,
+        "RecommendedOrder": 6,
+        "ReliableSymbolIds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          31
+        ],
+        "IsAdaptive": true
+      },
       "CodebookPlan": {
         "ReliableSymbolCount": 0,
         "RecommendedOrder": 8,
-        "ReliableSymbolIds": []
+        "ReliableSymbolIds": [],
+        "IsAdaptive": false
       },
       "Symbols": [],
       "Confusion": [],
@@ -290,9 +325,9 @@
         "SourceId": "asio-ch1",
         "SampleRate": 192000,
         "FrameCount": 23,
-        "AnchorCount": 21,
-        "ClockConfidence": 0.8630578147481293,
-        "MeanAnchorErrorSamples": 37.291584033245464,
+        "AnchorCount": 9,
+        "ClockConfidence": 0.8854209145795446,
+        "MeanAnchorErrorSamples": 12.591755943532819,
         "Bands": [
           {
             "CenterHz": 3625,
@@ -553,34 +588,52 @@
         ],
         "UsableBandCount": 2
       },
+      "EmissionPlan": {
+        "ReliableSymbolCount": 10,
+        "RecommendedOrder": 6,
+        "ReliableSymbolIds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          31
+        ],
+        "IsAdaptive": true
+      },
       "CodebookPlan": {
         "ReliableSymbolCount": 2,
         "RecommendedOrder": 8,
         "ReliableSymbolIds": [
           3,
           8
-        ]
+        ],
+        "IsAdaptive": true
       },
       "Symbols": [
         {
           "SymbolId": 1,
-          "Reliability": 0.02319056845550582,
+          "Reliability": 0.02338947289373043,
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4468.75,
           "MeanEnergy": 0.9902022429801735,
-          "MeanTimingResidualSamples": 807.8313302832285,
-          "TimingResidualSpreadSamples": 208.19093681468166,
+          "MeanTimingResidualSamples": 797.9807757331619,
+          "TimingResidualSpreadSamples": 206.01228513677142,
           "MeanPhaseRadians": -1.1959642801490071,
           "ObservationCount": 8
         },
         {
           "SymbolId": 2,
-          "Reliability": 0.16743780377184878,
+          "Reliability": 0.16959717331712612,
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4475,
           "MeanEnergy": 0.9196472718940074,
-          "MeanTimingResidualSamples": -106.64683404730425,
-          "TimingResidualSpreadSamples": 186.34542688028313,
+          "MeanTimingResidualSamples": -116.56194124453597,
+          "TimingResidualSpreadSamples": 183.36166029984568,
           "MeanPhaseRadians": 1.008577262190213,
           "ObservationCount": 9
         },
@@ -590,7 +643,7 @@
           "ExpectedCenterHz": 4975,
           "ObservedCenterHz": 4975,
           "MeanEnergy": 1.148185667935492,
-          "MeanTimingResidualSamples": -22.558693408966064,
+          "MeanTimingResidualSamples": -38.79995955526829,
           "TimingResidualSpreadSamples": 0,
           "MeanPhaseRadians": -0.5902763444645657,
           "ObservationCount": 1
@@ -601,7 +654,7 @@
           "ExpectedCenterHz": 5425,
           "ObservedCenterHz": 4975,
           "MeanEnergy": 0.30966049519505534,
-          "MeanTimingResidualSamples": -720.2603219151497,
+          "MeanTimingResidualSamples": -733.0157453864813,
           "TimingResidualSpreadSamples": 0,
           "MeanPhaseRadians": 2.5499560816611844,
           "ObservationCount": 1
@@ -612,7 +665,7 @@
           "ExpectedCenterHz": 6325,
           "ObservedCenterHz": 6775,
           "MeanEnergy": 0.8679642624875925,
-          "MeanTimingResidualSamples": 896.3364210426807,
+          "MeanTimingResidualSamples": 890.5526829659939,
           "TimingResidualSpreadSamples": 0,
           "MeanPhaseRadians": 3.098070627204246,
           "ObservationCount": 1
@@ -623,7 +676,7 @@
           "ExpectedCenterHz": 6775,
           "ObservedCenterHz": 7225,
           "MeanEnergy": 0.5299773190124039,
-          "MeanTimingResidualSamples": 1098.634792521596,
+          "MeanTimingResidualSamples": 1096.3368971347809,
           "TimingResidualSpreadSamples": 0,
           "MeanPhaseRadians": 0.19503307191358674,
           "ObservationCount": 1
@@ -634,7 +687,7 @@
           "ExpectedCenterHz": 7225,
           "ObservedCenterHz": 7225,
           "MeanEnergy": 0.6732785913925556,
-          "MeanTimingResidualSamples": -8.06683599948883,
+          "MeanTimingResidualSamples": -6.878888696432114,
           "TimingResidualSpreadSamples": 0,
           "MeanPhaseRadians": 2.6277982959406794,
           "ObservationCount": 1
@@ -648,9 +701,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.6320307152592042,
-          "TimingResidualSamples": 969.2773541212082,
+          "TimingResidualSamples": 947.2263501733541,
           "Confidence": 0.6320307152592042,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": -1.6624052502584878
         },
         {
@@ -660,9 +714,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.8652845939929102,
-          "TimingResidualSamples": 2.7101446241140366,
+          "TimingResidualSamples": -18.17891177535057,
           "Confidence": 0.8652845939929102,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0180307422947092
         },
         {
@@ -672,9 +727,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.8922343380058734,
-          "TimingResidualSamples": 2.142935112118721,
+          "TimingResidualSamples": -17.58417372405529,
           "Confidence": 0.8922343380058734,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0220387933489175
         },
         {
@@ -684,9 +740,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 1.2266248952300964,
-          "TimingResidualSamples": 902.5757256150246,
+          "TimingResidualSamples": 884.0105643421412,
           "Confidence": 1.2266248952300964,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": -0.7101835897546481
         },
         {
@@ -696,9 +753,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.9053756459646586,
-          "TimingResidualSamples": 1.008516103029251,
+          "TimingResidualSamples": -16.394697606563568,
           "Confidence": 0.9053756459646586,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0334368755807082
         },
         {
@@ -708,9 +766,10 @@
           "ExpectedCenterHz": 4975,
           "ObservedCenterHz": 4975,
           "ObservedEnergy": 1.148185667935492,
-          "TimingResidualSamples": -22.558693408966064,
+          "TimingResidualSamples": -38.79995955526829,
           "Confidence": 1.148185667935492,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": -0.5902763444645656
         },
         {
@@ -720,9 +779,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 1.1922110739849172,
-          "TimingResidualSamples": 900.8740970939398,
+          "TimingResidualSamples": 885.7947785109282,
           "Confidence": 1.1922110739849172,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": -0.7107129185351657
         },
         {
@@ -732,9 +792,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.8953269035780607,
-          "TimingResidualSamples": -0.6931124180555344,
+          "TimingResidualSamples": -14.610483437776566,
           "Confidence": 0.8953269035780607,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0251732541617515
         },
         {
@@ -744,9 +805,10 @@
           "ExpectedCenterHz": 5425,
           "ObservedCenterHz": 4975,
           "ObservedEnergy": 0.30966049519505534,
-          "TimingResidualSamples": -720.2603219151497,
+          "TimingResidualSamples": -733.0157453864813,
           "Confidence": 0.30966049519505534,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": -1,
           "PhaseRadians": 2.5499560816611844
         },
         {
@@ -756,9 +818,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.6198462152151802,
-          "TimingResidualSamples": 964.2498763252806,
+          "TimingResidualSamples": 952.6564004321408,
           "Confidence": 0.6198462152151802,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": -1.6367658651449744
         },
         {
@@ -768,9 +831,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.8629764995587222,
-          "TimingResidualSamples": -2.39474093914032,
+          "TimingResidualSamples": -12.826269268989563,
           "Confidence": 0.8629764995587222,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0292647496608314
         },
         {
@@ -780,9 +844,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.6170315850664282,
-          "TimingResidualSamples": 962.4708400517702,
+          "TimingResidualSamples": 954.3632068485022,
           "Confidence": 0.6170315850664282,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": -1.6334918021334714
         },
         {
@@ -792,9 +857,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.8633924891830707,
-          "TimingResidualSamples": -4.096369445323944,
+          "TimingResidualSamples": -11.04205510020256,
           "Confidence": 0.8633924891830707,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0289449583188552
         },
         {
@@ -804,9 +870,10 @@
           "ExpectedCenterHz": 6325,
           "ObservedCenterHz": 6775,
           "ObservedEnergy": 0.8679642624875925,
-          "TimingResidualSamples": 896.3364210426807,
+          "TimingResidualSamples": 890.5526829659939,
           "Confidence": 0.8679642624875925,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": 3.098070627204246
         },
         {
@@ -816,9 +883,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 1.1921949851942821,
-          "TimingResidualSamples": 895.7692115306854,
+          "TimingResidualSamples": 891.1474210172892,
           "Confidence": 1.1921949851942821,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": -0.703020204805768
         },
         {
@@ -828,9 +896,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.881859333373252,
-          "TimingResidualSamples": -5.7979979664087296,
+          "TimingResidualSamples": -9.257840931415558,
           "Confidence": 0.881859333373252,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0345538888401813
         },
         {
@@ -840,9 +909,10 @@
           "ExpectedCenterHz": 6775,
           "ObservedCenterHz": 7225,
           "ObservedEnergy": 0.5299773190124039,
-          "TimingResidualSamples": 1098.634792521596,
+          "TimingResidualSamples": 1096.3368971347809,
           "Confidence": 0.5299773190124039,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": 0.19503307191358674
         },
         {
@@ -852,9 +922,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4075,
           "ObservedEnergy": 1.2388193344455247,
-          "TimingResidualSamples": -24.9324169754982,
+          "TimingResidualSamples": -26.068364813923836,
           "Confidence": 1.2388193344455247,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": -1.8128993540776832
         },
         {
@@ -864,9 +935,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 0.9011319584205876,
-          "TimingResidualSamples": -7.499626487493515,
+          "TimingResidualSamples": -7.473626762628555,
           "Confidence": 0.9011319584205876,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 1.0288652611619757
         },
         {
@@ -876,9 +948,10 @@
           "ExpectedCenterHz": 7225,
           "ObservedCenterHz": 7225,
           "ObservedEnergy": 0.6732785913925556,
-          "TimingResidualSamples": -8.06683599948883,
+          "TimingResidualSamples": -6.878888696432114,
           "Confidence": 0.6732785913925556,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 0,
           "PhaseRadians": 2.6277982959406794
         },
         {
@@ -888,9 +961,10 @@
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4525,
           "ObservedEnergy": 1.202859139445754,
-          "TimingResidualSamples": 892.365954503417,
+          "TimingResidualSamples": 894.7158493548632,
           "Confidence": 1.202859139445754,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": 1,
           "PhaseRadians": -0.7043348957346999
         },
         {
@@ -900,9 +974,10 @@
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4075,
           "ObservedEnergy": 1.209243684968931,
-          "TimingResidualSamples": -945.2012550085783,
+          "TimingResidualSamples": -941.6894125938416,
           "Confidence": 1.209243684968931,
-          "DelayHypothesisSamples": -71375003.58864856,
+          "DelayHypothesisSamples": -71371524,
+          "BinShift": -1,
           "PhaseRadians": -1.9807483218485091
         }
       ],
@@ -1178,6 +1253,23 @@
         ],
         "UsableBandCount": 2
       },
+      "EmissionPlan": {
+        "ReliableSymbolCount": 10,
+        "RecommendedOrder": 6,
+        "ReliableSymbolIds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          31
+        ],
+        "IsAdaptive": true
+      },
       "CodebookPlan": {
         "ReliableSymbolCount": 9,
         "RecommendedOrder": 6,
@@ -1191,7 +1283,8 @@
           3,
           0,
           1
-        ]
+        ],
+        "IsAdaptive": true
       },
       "Symbols": [
         {
@@ -1305,6 +1398,7 @@
           "TimingResidualSamples": -2.5433450834352698,
           "Confidence": 1.9831585964902498,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": 3.0592955096959598
         },
         {
@@ -1317,6 +1411,7 @@
           "TimingResidualSamples": -2.6111917724629166,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1329,6 +1424,7 @@
           "TimingResidualSamples": -2.6790384614942013,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1341,6 +1437,7 @@
           "TimingResidualSamples": -2.746885150525486,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1353,6 +1450,7 @@
           "TimingResidualSamples": -2.814731839534943,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1365,6 +1463,7 @@
           "TimingResidualSamples": -2.8825785285444,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1377,6 +1476,7 @@
           "TimingResidualSamples": 2.0495747824315913,
           "Confidence": 1.98317479150165,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.1988765139742783
         },
         {
@@ -1389,6 +1489,7 @@
           "TimingResidualSamples": -3.0182719065924175,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1401,6 +1502,7 @@
           "TimingResidualSamples": -3.08611859564553,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1413,6 +1515,7 @@
           "TimingResidualSamples": 1.846034715330461,
           "Confidence": 1.9831581977468316,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.1546958595762624
         },
         {
@@ -1425,6 +1528,7 @@
           "TimingResidualSamples": -3.2218119737226516,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1437,6 +1541,7 @@
           "TimingResidualSamples": -3.2896586627466604,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1449,6 +1554,7 @@
           "TimingResidualSamples": -3.357505351770669,
           "Confidence": 1.9831595137173625,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -2.031073191995889
         },
         {
@@ -1461,6 +1567,7 @@
           "TimingResidualSamples": -3.425352040794678,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1473,6 +1580,7 @@
           "TimingResidualSamples": -3.493198729818687,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1485,6 +1593,7 @@
           "TimingResidualSamples": -3.5610454188426957,
           "Confidence": 1.983165098459816,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -2.075246822614443
         },
         {
@@ -1497,6 +1606,7 @@
           "TimingResidualSamples": -3.6288921078667045,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1509,6 +1619,7 @@
           "TimingResidualSamples": -3.6967387968907133,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1521,6 +1632,7 @@
           "TimingResidualSamples": 1.235414514085278,
           "Confidence": 1.9831633177029786,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.0221685852666889
         },
         {
@@ -1533,6 +1645,7 @@
           "TimingResidualSamples": -3.832432174938731,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1545,6 +1658,7 @@
           "TimingResidualSamples": -3.9002788639627397,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -1557,6 +1671,7 @@
           "TimingResidualSamples": 1.0318744470132515,
           "Confidence": 1.9831607953145476,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -0.9779871637154909
         },
         {
@@ -1569,6 +1684,7 @@
           "TimingResidualSamples": -4.035972242010757,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -1581,6 +1697,7 @@
           "TimingResidualSamples": -4.103818931034766,
           "Confidence": 1.8861434373187795,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8703739684798266
         }
       ],
@@ -1885,6 +2002,23 @@
         ],
         "UsableBandCount": 2
       },
+      "EmissionPlan": {
+        "ReliableSymbolCount": 10,
+        "RecommendedOrder": 6,
+        "ReliableSymbolIds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          31
+        ],
+        "IsAdaptive": true
+      },
       "CodebookPlan": {
         "ReliableSymbolCount": 9,
         "RecommendedOrder": 6,
@@ -1898,7 +2032,8 @@
           3,
           0,
           1
-        ]
+        ],
+        "IsAdaptive": true
       },
       "Symbols": [
         {
@@ -2012,6 +2147,7 @@
           "TimingResidualSamples": -2.5433450834352698,
           "Confidence": 1.9831585964902498,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": 3.0592955096959598
         },
         {
@@ -2024,6 +2160,7 @@
           "TimingResidualSamples": -2.6111917724629166,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2036,6 +2173,7 @@
           "TimingResidualSamples": -2.6790384614942013,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2048,6 +2186,7 @@
           "TimingResidualSamples": -2.746885150525486,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2060,6 +2199,7 @@
           "TimingResidualSamples": -2.814731839534943,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2072,6 +2212,7 @@
           "TimingResidualSamples": -2.8825785285444,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2084,6 +2225,7 @@
           "TimingResidualSamples": 2.0495747824315913,
           "Confidence": 1.98317479150165,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.1988765139742783
         },
         {
@@ -2096,6 +2238,7 @@
           "TimingResidualSamples": -3.0182719065924175,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2108,6 +2251,7 @@
           "TimingResidualSamples": -3.08611859564553,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2120,6 +2264,7 @@
           "TimingResidualSamples": 1.846034715330461,
           "Confidence": 1.9831581977468316,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.1546958595762624
         },
         {
@@ -2132,6 +2277,7 @@
           "TimingResidualSamples": -3.2218119737226516,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2144,6 +2290,7 @@
           "TimingResidualSamples": -3.2896586627466604,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2156,6 +2303,7 @@
           "TimingResidualSamples": -3.357505351770669,
           "Confidence": 1.9831595137173625,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -2.031073191995889
         },
         {
@@ -2168,6 +2316,7 @@
           "TimingResidualSamples": -3.425352040794678,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2180,6 +2329,7 @@
           "TimingResidualSamples": -3.493198729818687,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2192,6 +2342,7 @@
           "TimingResidualSamples": -3.5610454188426957,
           "Confidence": 1.983165098459816,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -2.075246822614443
         },
         {
@@ -2204,6 +2355,7 @@
           "TimingResidualSamples": -3.6288921078667045,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2216,6 +2368,7 @@
           "TimingResidualSamples": -3.6967387968907133,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2228,6 +2381,7 @@
           "TimingResidualSamples": 1.235414514085278,
           "Confidence": 1.9831633177029786,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.0221685852666889
         },
         {
@@ -2240,6 +2394,7 @@
           "TimingResidualSamples": -3.832432174938731,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2252,6 +2407,7 @@
           "TimingResidualSamples": -3.9002788639627397,
           "Confidence": 1.9831852678192377,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8985378977427367
         },
         {
@@ -2264,6 +2420,7 @@
           "TimingResidualSamples": 1.0318744470132515,
           "Confidence": 1.9831607953145476,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -0.9779871637154909
         },
         {
@@ -2276,6 +2433,7 @@
           "TimingResidualSamples": -4.035972242010757,
           "Confidence": 1.9831606924956897,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8543981407092287
         },
         {
@@ -2288,6 +2446,7 @@
           "TimingResidualSamples": -4.103818931034766,
           "Confidence": 1.8861434373187795,
           "DelayHypothesisSamples": 1238.9999232024563,
+          "BinShift": 0,
           "PhaseRadians": -1.8703739684798266
         }
       ],

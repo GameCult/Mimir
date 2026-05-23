@@ -106,7 +106,10 @@ a named invariant that the native runtime cannot protect yet.
   bands, expected-symbol versus observed-bin confusion observations, timing
   residuals, delay hypotheses, phase summaries, and an adaptive codebook plan.
   The active decoder can consume that model as learned response weighting,
-  first-order group-delay correction, and global delay-hypothesis seeds.
+  first-order group-delay correction, and global delay-hypothesis seeds. The
+  runtime emitter also consumes the model's emission plan, rendering the smaller
+  reliable symbol alphabet at the higher recommended de Bruijn order when the
+  physical path cannot support all 32 bins.
   Reports/states expose delay in microseconds as well as fractional samples.
   Hybrid emits this as low-gain half-second bursts every two seconds only while
   passive confidence is weak.

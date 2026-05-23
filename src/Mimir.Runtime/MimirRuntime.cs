@@ -180,6 +180,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             calibrationSegmentIndex,
             segmentCount,
             UseChirpBinTimeline(audioSyncSettings.Mode),
+            synchronization.ChirpBinEmissionPlan,
             out var peak);
         visualRuntime.Audio.EnqueuePcm16Base64(
             batch,
@@ -223,6 +224,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         ulong firstSegment,
         int segmentCount,
         bool useChirpBinTimeline,
+        MimirChirpBinCodebookPlan? chirpBinCodebookPlan,
         out float peak)
     {
         var samplesPerSegment = (int)Math.Round(MimirChirpletTimeline.SegmentSeconds * MimirChirpletTimeline.SampleRate);
@@ -232,7 +234,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         for (var segment = 0; segment < segmentCount; segment++)
         {
             var samples = useChirpBinTimeline
-                ? MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment)
+                ? MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment, MimirChirpBinTimeline.SampleRate, chirpBinCodebookPlan)
                 : MimirChirpletTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment);
             for (var index = 0; index < samples.Length; index++)
             {

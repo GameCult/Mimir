@@ -94,7 +94,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   measured usable bands, response/confusion observations, timing residuals,
   delay hypotheses, phase summaries, and adaptive codebook plans. The active
   decoder can load the model for learned weighting, first-order group-delay
-  correction, and global delay-hypothesis seeds.
+  correction, and global delay-hypothesis seeds. Runtime chirp-bin emission
+  loads the same model's emission plan, so a physical calibration can shrink the
+  emitted alphabet and raise sequence order instead of continuing to use dead
+  bins.
   `Mimir.BufferSmoke
   --chirp-only-sync-self-test --sample-rate 192000` and
   `--hybrid-sync-self-test --sample-rate 192000` both recover a 1269.5-sample

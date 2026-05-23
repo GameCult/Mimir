@@ -8,6 +8,7 @@ public sealed record MimirChirpBinCalibrationModel(
     DateTimeOffset CreatedAt,
     int SampleRate,
     string ReferenceSourceId,
+    MimirChirpBinCodebookPlan EmissionPlan,
     IReadOnlyList<MimirChirpBinPathCalibration> Paths)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -44,11 +45,14 @@ public sealed record MimirChirpBinCalibrationModel(
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => MimirChirpBinPathCalibration.FromDecode(pair.Key, sampleRate, pair.Value))
             .ToArray();
+        var emissionPlan = MimirChirpBinCodebookPlan.ForSharedEmission(paths);
+        paths = paths.Select(path => path with { EmissionPlan = emissionPlan }).ToArray();
         return new MimirChirpBinCalibrationModel(
             $"chirp-bin-{DateTimeOffset.UtcNow:yyyyMMddTHHmmssZ}",
             DateTimeOffset.UtcNow,
             sampleRate,
             referenceSourceId,
+            emissionPlan,
             paths);
     }
 }
@@ -57,6 +61,7 @@ public sealed record MimirChirpBinPathCalibration(
     string SourceId,
     int SampleRate,
     MimirChirpBinCalibrationProfile Profile,
+    MimirChirpBinCodebookPlan EmissionPlan,
     MimirChirpBinCodebookPlan CodebookPlan,
     IReadOnlyList<MimirChirpBinSymbolCalibration> Symbols,
     IReadOnlyList<MimirChirpBinConfusionObservation> Confusion,
@@ -114,6 +119,7 @@ public sealed record MimirChirpBinPathCalibration(
             sampleRate,
             profile,
             plan,
+            plan,
             symbols,
             observations,
             hypotheses);
@@ -135,7 +141,7 @@ public sealed record MimirChirpBinPathCalibration(
                 var residual = group.Average(anchor => Math.Abs(anchor.SampleOffset - (delay + anchor.TimelineSeconds * decode.ClockFit!.EffectiveSampleRate)));
                 return new MimirChirpBinDelayHypothesis(
                     delay,
-                    0,
+                    DominantBinShift(group),
                     group.Count(),
                     group.Average(anchor => anchor.Confidence),
                     residual);
@@ -150,8 +156,35 @@ public sealed record MimirChirpBinPathCalibration(
         }
 
         return Math.Abs(decode.ClockFit.SourceOffsetSamples) <= liveHorizonSamples
-            ? [new MimirChirpBinDelayHypothesis(decode.ClockFit.SourceOffsetSamples, 0, decode.ClockFit.AnchorCount, decode.ClockFit.Confidence, decode.ClockFit.MeanAbsoluteErrorSamples)]
+            ? [new MimirChirpBinDelayHypothesis(decode.ClockFit.SourceOffsetSamples, DominantBinShift(decode.Anchors), decode.ClockFit.AnchorCount, decode.ClockFit.Confidence, decode.ClockFit.MeanAbsoluteErrorSamples)]
             : [];
+    }
+
+    private static int DominantBinShift(IEnumerable<MimirChirpletTimelineAnchor> anchors)
+    {
+        return anchors
+            .Select(anchor =>
+            {
+                var expected = MimirChirpBinTimeline.Default.EventForIndex(anchor.EventIndex).SymbolId;
+                var observed = anchor.Symbols.FirstOrDefault()?.SymbolId ?? expected;
+                var shift = observed - expected;
+                if (shift > MimirChirpBinTimeline.SymbolCount / 2)
+                {
+                    shift -= MimirChirpBinTimeline.SymbolCount;
+                }
+                else if (shift < -MimirChirpBinTimeline.SymbolCount / 2)
+                {
+                    shift += MimirChirpBinTimeline.SymbolCount;
+                }
+
+                return shift;
+            })
+            .GroupBy(shift => shift)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => Math.Abs(group.Key))
+            .Select(group => group.Key)
+            .DefaultIfEmpty(0)
+            .First();
     }
 
     private static double CircularMean(IEnumerable<double> radians)
@@ -175,6 +208,8 @@ public sealed record MimirChirpBinCodebookPlan(
     int RecommendedOrder,
     IReadOnlyList<int> ReliableSymbolIds)
 {
+    public bool IsAdaptive => ReliableSymbolIds.Count >= 2 && ReliableSymbolIds.Count < MimirChirpBinTimeline.SymbolCount;
+
     public static MimirChirpBinCodebookPlan FromSymbols(IReadOnlyList<MimirChirpBinSymbolCalibration> symbols)
     {
         var reliable = symbols
@@ -186,6 +221,27 @@ public sealed record MimirChirpBinCodebookPlan(
         var count = Math.Max(2, reliable.Length);
         var order = 3;
         while (Math.Pow(count, order) < 120_000.0 && order < 8)
+        {
+            order++;
+        }
+
+        return new MimirChirpBinCodebookPlan(reliable.Length, order, reliable);
+    }
+
+    public static MimirChirpBinCodebookPlan ForSharedEmission(IReadOnlyList<MimirChirpBinPathCalibration> paths)
+    {
+        var reliable = paths
+            .SelectMany(path => path.CodebookPlan.ReliableSymbolIds)
+            .Distinct()
+            .Order()
+            .ToArray();
+        if (reliable.Length < 2)
+        {
+            return new MimirChirpBinCodebookPlan(MimirChirpBinTimeline.SymbolCount, MimirChirpBinTimeline.TimelineOrder, []);
+        }
+
+        var order = 3;
+        while (Math.Pow(reliable.Length, order) < 120_000.0 && order < 8)
         {
             order++;
         }
@@ -215,6 +271,7 @@ public sealed record MimirChirpBinConfusionObservation(
     double TimingResidualSamples,
     double Confidence,
     double DelayHypothesisSamples,
+    int BinShift,
     double PhaseRadians);
 
 public sealed record MimirChirpBinDelayHypothesis(

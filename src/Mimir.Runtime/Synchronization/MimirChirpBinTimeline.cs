@@ -19,6 +19,12 @@ internal sealed record ChirpBinScore(
     double Energy,
     double PhaseRadians);
 
+internal sealed record ChirpBinTimelinePlan(
+    int[] Symbols,
+    int Order,
+    int[] TimelineSymbols,
+    Dictionary<string, int> CodeToIndex);
+
 public sealed class MimirChirpBinTimeline
 {
     public const int SampleRate = 48_000;
@@ -41,6 +47,7 @@ public sealed class MimirChirpBinTimeline
     private static readonly Dictionary<int, int> TripleToIndex = BuildTripleIndex(TimelineSymbols);
     private static readonly MimirChirpBinSymbolDefinition[] Symbols = BuildSymbols();
     private static readonly ConcurrentDictionary<int, ChirpBinKernelSet> KernelSets = new();
+    private static readonly ConcurrentDictionary<string, ChirpBinTimelinePlan> TimelinePlans = new();
 
     public static MimirChirpBinTimeline Default { get; } = new();
 
@@ -49,11 +56,14 @@ public sealed class MimirChirpBinTimeline
     public float[] RenderSegmentMonoFloat(ulong segmentIndex)
         => RenderSegmentMonoFloat(segmentIndex, SampleRate);
 
-    public float[] RenderSegmentMonoFloat(ulong segmentIndex, int sampleRate)
+    public float[] RenderSegmentMonoFloat(
+        ulong segmentIndex,
+        int sampleRate,
+        MimirChirpBinCodebookPlan? codebookPlan = null)
     {
         var segmentStartSeconds = segmentIndex * SegmentSeconds;
         var samples = new float[(int)Math.Round(SegmentSeconds * sampleRate)];
-        foreach (var timelineEvent in EventsOverlapping(segmentStartSeconds, SegmentSeconds))
+        foreach (var timelineEvent in EventsOverlapping(segmentStartSeconds, SegmentSeconds, codebookPlan))
         {
             AddChirp(samples, sampleRate, timelineEvent, segmentStartSeconds);
         }
@@ -101,7 +111,7 @@ public sealed class MimirChirpBinTimeline
         var observations = new List<MimirChirpBinConfusionObservation>(decode.Frames.Count);
         foreach (var frame in decode.Frames)
         {
-            if (!TryExpectedEventForSample(frame.SampleOffset, sampleRate, decode.ClockFit, out var timelineEvent))
+            if (!TryExpectedEventForSample(frame.SampleOffset, sampleRate, decode.ClockFit, null, out var timelineEvent))
             {
                 continue;
             }
@@ -121,6 +131,7 @@ public sealed class MimirChirpBinTimeline
                 frame.SampleOffset - expectedSample,
                 best.Energy,
                 decode.ClockFit.SourceOffsetSamples,
+                SymbolShift(best.SymbolId, timelineEvent.SymbolId),
                 bestBand?.PhaseRadians ?? 0.0));
         }
 
@@ -128,8 +139,13 @@ public sealed class MimirChirpBinTimeline
     }
 
     public MimirChirpletTimelineEvent EventForIndex(ulong eventIndex)
+        => EventForIndex(eventIndex, null);
+
+    public MimirChirpletTimelineEvent EventForIndex(
+        ulong eventIndex,
+        MimirChirpBinCodebookPlan? codebookPlan)
     {
-        var symbolId = SymbolForEvent(eventIndex);
+        var symbolId = SymbolForEvent(eventIndex, codebookPlan);
         var startSeconds = EventStartSeconds(eventIndex);
         var symbol = Symbols[symbolId];
         return new MimirChirpletTimelineEvent(
@@ -144,7 +160,10 @@ public sealed class MimirChirpBinTimeline
                 Gain));
     }
 
-    public IReadOnlyList<MimirChirpletTimelineEvent> EventsOverlapping(double startSeconds, double durationSeconds)
+    public IReadOnlyList<MimirChirpletTimelineEvent> EventsOverlapping(
+        double startSeconds,
+        double durationSeconds,
+        MimirChirpBinCodebookPlan? codebookPlan = null)
     {
         var endSeconds = startSeconds + durationSeconds;
         var firstIndex = Math.Max(0, (long)Math.Floor((startSeconds - FirstEventSeconds - ChirpDurationSeconds) / EventSpacingSeconds) - 2);
@@ -152,7 +171,7 @@ public sealed class MimirChirpBinTimeline
         var events = new List<MimirChirpletTimelineEvent>((int)(lastIndex - firstIndex + 1));
         for (var eventIndex = firstIndex; eventIndex <= lastIndex; eventIndex++)
         {
-            var timelineEvent = EventForIndex((ulong)eventIndex);
+            var timelineEvent = EventForIndex((ulong)eventIndex, codebookPlan);
             if (timelineEvent.StartSeconds < endSeconds &&
                 timelineEvent.StartSeconds + ChirpDurationSeconds > startSeconds)
             {
@@ -413,58 +432,91 @@ public sealed class MimirChirpBinTimeline
         int sampleRate,
         MimirChirpBinPathCalibration? calibration)
     {
-        if (frames.Count < TimelineOrder)
+        var plan = GetTimelinePlan(calibration?.EmissionPlan);
+        if (frames.Count < plan.Order)
         {
             return [];
         }
 
         var candidates = new List<MimirChirpletTimelineAnchor>();
-        for (var index = 0; index <= frames.Count - TimelineOrder; index++)
+        for (var index = 0; index <= frames.Count - plan.Order; index++)
         {
-            var firstFrame = frames[index];
-            var secondFrame = frames[index + 1];
-            var thirdFrame = frames[index + 2];
-            if (!IsConsecutive(firstFrame, secondFrame, sampleRate) ||
-                !IsConsecutive(secondFrame, thirdFrame, sampleRate))
+            var window = frames.Skip(index).Take(plan.Order).ToArray();
+            var consecutive = true;
+            for (var gap = 0; gap < window.Length - 1; gap++)
+            {
+                if (!IsConsecutive(window[gap], window[gap + 1], sampleRate))
+                {
+                    consecutive = false;
+                    break;
+                }
+            }
+
+            if (!consecutive)
             {
                 continue;
             }
 
-            foreach (var first in firstFrame.Candidates)
-            foreach (var second in secondFrame.Candidates)
-            foreach (var third in thirdFrame.Candidates)
+            foreach (var candidatePath in CandidateSymbolPaths(window))
             {
-                var code = TripleCode(first.SymbolId, second.SymbolId, third.SymbolId);
-                if (!TripleToIndex.TryGetValue(code, out var eventIndex))
+                var code = CodeKey(candidatePath.Select(candidate => candidate.SymbolId));
+                if (!plan.CodeToIndex.TryGetValue(code, out var eventIndex))
                 {
                     continue;
                 }
 
-                var firstEvent = Default.EventForIndex((ulong)eventIndex);
-                var measuredGapA = (second.SampleOffset - first.SampleOffset) / sampleRate;
-                var measuredGapB = (third.SampleOffset - second.SampleOffset) / sampleRate;
-                var gapError = Math.Abs(measuredGapA - EventSpacingSeconds) + Math.Abs(measuredGapB - EventSpacingSeconds);
+                var firstEvent = Default.EventForIndex((ulong)eventIndex, calibration?.EmissionPlan);
+                var gapError = 0.0;
+                for (var gap = 0; gap < candidatePath.Count - 1; gap++)
+                {
+                    var measuredGap = (candidatePath[gap + 1].SampleOffset - candidatePath[gap].SampleOffset) / sampleRate;
+                    gapError += Math.Abs(measuredGap - EventSpacingSeconds);
+                }
+
                 var gapConfidence = 1.0 / (1.0 + gapError / 0.003);
                 if (gapConfidence < 0.55)
                 {
                     continue;
                 }
 
-                var energyConfidence = Math.Clamp((first.Energy + second.Energy + third.Energy) / 3.0, 0.0, 1.0);
+                var energyConfidence = Math.Clamp(candidatePath.Average(candidate => candidate.Energy), 0.0, 1.0);
                 candidates.Add(new MimirChirpletTimelineAnchor(
                     (ulong)eventIndex,
                     firstEvent.StartSeconds,
-                    first.SampleOffset,
+                    candidatePath[0].SampleOffset,
                     gapConfidence * 0.60 + energyConfidence * 0.40,
-                    [
-                        new MimirChirpletSymbolObservation(first.SymbolId, first.SampleOffset, first.Energy),
-                        new MimirChirpletSymbolObservation(second.SymbolId, second.SampleOffset, second.Energy),
-                        new MimirChirpletSymbolObservation(third.SymbolId, third.SampleOffset, third.Energy),
-                    ]));
+                    candidatePath
+                        .Select(candidate => new MimirChirpletSymbolObservation(candidate.SymbolId, candidate.SampleOffset, candidate.Energy))
+                        .ToArray()));
             }
         }
 
         return SelectCoherentAnchorPath(candidates, sampleRate, calibration);
+    }
+
+    private static IEnumerable<IReadOnlyList<MimirChirpletSymbolCandidate>> CandidateSymbolPaths(
+        IReadOnlyList<MimirChirpletTransformFrame> frames)
+    {
+        var path = new MimirChirpletSymbolCandidate[frames.Count];
+        IEnumerable<IReadOnlyList<MimirChirpletSymbolCandidate>> Recurse(int index)
+        {
+            if (index == frames.Count)
+            {
+                yield return path.ToArray();
+                yield break;
+            }
+
+            foreach (var candidate in frames[index].Candidates.OrderByDescending(candidate => candidate.Energy).Take(2))
+            {
+                path[index] = candidate;
+                foreach (var child in Recurse(index + 1))
+                {
+                    yield return child;
+                }
+            }
+        }
+
+        return Recurse(0);
     }
 
     private static IReadOnlyList<MimirChirpletTimelineAnchor> SelectCoherentAnchorPath(
@@ -768,6 +820,21 @@ public sealed class MimirChirpBinTimeline
     private static int ShiftSymbol(int symbolId, int shift) =>
         (symbolId + shift + SymbolCount) % SymbolCount;
 
+    private static int SymbolShift(int observedSymbolId, int expectedSymbolId)
+    {
+        var shift = observedSymbolId - expectedSymbolId;
+        if (shift > SymbolCount / 2)
+        {
+            shift -= SymbolCount;
+        }
+        else if (shift < -SymbolCount / 2)
+        {
+            shift += SymbolCount;
+        }
+
+        return shift;
+    }
+
     private static double BinShiftSamples(int sampleRate)
     {
         var slope = (BaseEndHz - BaseStartHz) / ChirpDurationSeconds;
@@ -815,8 +882,11 @@ public sealed class MimirChirpBinTimeline
         return symbols;
     }
 
-    private static int SymbolForEvent(ulong eventIndex) =>
-        TimelineSymbols[(int)(eventIndex % (ulong)TimelineSymbols.Length)];
+    private static int SymbolForEvent(ulong eventIndex, MimirChirpBinCodebookPlan? codebookPlan)
+    {
+        var plan = GetTimelinePlan(codebookPlan);
+        return plan.TimelineSymbols[(int)(eventIndex % (ulong)plan.TimelineSymbols.Length)];
+    }
 
     private static double EventStartSeconds(ulong eventIndex) =>
         FirstEventSeconds + eventIndex * EventSpacingSeconds;
@@ -825,6 +895,7 @@ public sealed class MimirChirpBinTimeline
         double sampleOffset,
         int sampleRate,
         MimirChirpletClockFit clockFit,
+        MimirChirpBinCodebookPlan? codebookPlan,
         out MimirChirpletTimelineEvent timelineEvent)
     {
         var timelineSeconds = (sampleOffset - clockFit.SourceOffsetSamples) / clockFit.EffectiveSampleRate;
@@ -835,8 +906,33 @@ public sealed class MimirChirpBinTimeline
             return false;
         }
 
-        timelineEvent = Default.EventForIndex((ulong)eventIndex);
+        timelineEvent = Default.EventForIndex((ulong)eventIndex, codebookPlan);
         return Math.Abs(timelineSeconds - timelineEvent.StartSeconds) <= Math.Max(0.012, 6.0 / sampleRate);
+    }
+
+    private static ChirpBinTimelinePlan GetTimelinePlan(MimirChirpBinCodebookPlan? codebookPlan)
+    {
+        if (codebookPlan is not { IsAdaptive: true })
+        {
+            return TimelinePlans.GetOrAdd("default", _ => new ChirpBinTimelinePlan(
+                Enumerable.Range(0, SymbolCount).ToArray(),
+                TimelineOrder,
+                TimelineSymbols,
+                BuildCodeIndex(TimelineSymbols, TimelineOrder)));
+        }
+
+        var key = $"{codebookPlan.RecommendedOrder}:{string.Join(",", codebookPlan.ReliableSymbolIds)}";
+        return TimelinePlans.GetOrAdd(key, _ =>
+        {
+            var symbols = codebookPlan.ReliableSymbolIds.Distinct().Order().ToArray();
+            var alphabetSequence = RotateToDistinctOpening(BuildDeBruijn(symbols.Length, codebookPlan.RecommendedOrder));
+            var timelineSymbols = alphabetSequence.Select(index => symbols[index]).ToArray();
+            return new ChirpBinTimelinePlan(
+                symbols,
+                codebookPlan.RecommendedOrder,
+                timelineSymbols,
+                BuildCodeIndex(timelineSymbols, codebookPlan.RecommendedOrder));
+        });
     }
 
     private static int[] BuildDeBruijn(int alphabetSize, int order)
@@ -908,4 +1004,22 @@ public sealed class MimirChirpBinTimeline
 
     private static int TripleCode(int first, int second, int third) =>
         first * SymbolCount * SymbolCount + second * SymbolCount + third;
+
+    private static Dictionary<string, int> BuildCodeIndex(IReadOnlyList<int> symbols, int order)
+    {
+        var map = new Dictionary<string, int>(symbols.Count, StringComparer.Ordinal);
+        for (var index = 0; index < symbols.Count; index++)
+        {
+            var code = CodeKey(Enumerable.Range(0, order).Select(offset => symbols[(index + offset) % symbols.Count]));
+            if (!map.ContainsKey(code))
+            {
+                map[code] = index;
+            }
+        }
+
+        return map;
+    }
+
+    private static string CodeKey(IEnumerable<int> symbols) =>
+        string.Join(",", symbols);
 }

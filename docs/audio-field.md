@@ -83,7 +83,10 @@ profile is kept even when a timing report is rejected, because a failed sync
 window can still teach us which bands survived the speaker/room/mic path. The
 decoder can consume the persisted model to weight reliable symbols, downweight
 dead bands, apply first-order group-delay correction, and seed global delay
-hypotheses before selecting the coherent anchor path.
+hypotheses before selecting the coherent anchor path. The model also owns the
+active emission plan: if the measured path only leaves a smaller alphabet, Mimir
+emits that reliable symbol set and raises the de Bruijn order so the timeline
+remains unique without pretending the dead bins still carry code.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
 it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and

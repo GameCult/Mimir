@@ -115,7 +115,10 @@ accepted_design:
     confusion observations, timing residuals, delay hypotheses, phase summaries,
     and an adaptive codebook plan. The active decoder can consume a persisted
     model for learned response weighting, first-order group-delay correction,
-    and global delay-hypothesis seeding. The analyzer keeps calibration profiles
+    and global delay-hypothesis seeding. Runtime chirp-bin emission consumes the
+    same model's emission plan, so Mimir can render the measured reliable symbol
+    alphabet at a higher de Bruijn order instead of spending code on dead bins.
+    The analyzer keeps calibration profiles
     even when a source fails pairwise timing, so physical mic failures can still
     guide acoustic codebook and response-weighting work. Reports and sync states expose
     delay in microseconds as well as fractional samples. Hybrid emits it as low-gain half-second

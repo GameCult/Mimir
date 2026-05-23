@@ -117,7 +117,10 @@ timing residuals, delay hypotheses, phase summaries, and an adaptive codebook
 plan. The analyzer keeps raw profiles even when no timing report is accepted,
 and the active decoder can consume a persisted model for learned response
 weighting, first-order group-delay correction, and global delay-hypothesis
-seeding. Reports/states expose `delayUs` next to fractional sample delay.
+seeding. Runtime chirp-bin emission consumes the same model's emission plan, so
+the emitted timeline can use the measured reliable symbol set at a higher
+de Bruijn order instead of continuing to spend code on dead bins. Reports/states
+expose `delayUs` next to fractional sample delay.
 `Mimir.BufferSmoke
 --chirp-only-sync-self-test --sample-rate 192000` and `--hybrid-sync-self-test
 --sample-rate 192000` both recover a 1269.5-sample synthetic delay with printed

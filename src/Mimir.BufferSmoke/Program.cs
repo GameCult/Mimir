@@ -46,7 +46,8 @@ if (args.Any(arg => string.Equals(arg, "--render-chirp-bin-f32", StringCompariso
     return RenderChirpBinFloat32(
         ParseStringOption(args, "--output", "artifacts/asio/chirp-bin-f32.raw"),
         ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate),
-        ParseDoubleOption(args, "--seconds", 3.0));
+        ParseDoubleOption(args, "--seconds", 3.0),
+        LoadOptionalCalibration(args)?.EmissionPlan);
 }
 
 if (args.Any(arg => string.Equals(arg, "--analyze-asio-f32", StringComparison.OrdinalIgnoreCase)))
@@ -455,13 +456,17 @@ static int RenderChirpletFloat32(string outputPath, int sampleRate, double secon
     return 0;
 }
 
-static int RenderChirpBinFloat32(string outputPath, int sampleRate, double seconds)
+static int RenderChirpBinFloat32(
+    string outputPath,
+    int sampleRate,
+    double seconds,
+    MimirChirpBinCodebookPlan? codebookPlan = null)
 {
     var segmentCount = Math.Max(1, (int)Math.Ceiling(seconds / MimirChirpBinTimeline.SegmentSeconds));
     var samples = new List<float>(Math.Max(1, (int)Math.Ceiling(seconds * sampleRate)));
     for (var segment = 0; segment < segmentCount; segment++)
     {
-        samples.AddRange(MimirChirpBinTimeline.Default.RenderSegmentMonoFloat((ulong)segment, sampleRate));
+        samples.AddRange(MimirChirpBinTimeline.Default.RenderSegmentMonoFloat((ulong)segment, sampleRate, codebookPlan));
     }
 
     var requestedSamples = Math.Max(1, (int)Math.Round(seconds * sampleRate));
@@ -483,8 +488,16 @@ static int RenderChirpBinFloat32(string outputPath, int sampleRate, double secon
     }
 
     File.WriteAllBytes(outputPath, bytes);
-    Console.WriteLine($"chirp-bin-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count}");
+    Console.WriteLine($"chirp-bin-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count} adaptiveSymbols={codebookPlan?.ReliableSymbolIds.Count ?? MimirChirpBinTimeline.SymbolCount} order={codebookPlan?.RecommendedOrder ?? MimirChirpBinTimeline.TimelineOrder}");
     return 0;
+}
+
+static MimirChirpBinCalibrationModel? LoadOptionalCalibration(string[] args)
+{
+    var path = ParseStringOption(args, "--calibration", "");
+    return string.IsNullOrWhiteSpace(path) || !File.Exists(path)
+        ? null
+        : MimirChirpBinCalibrationModel.Load(path);
 }
 
 static int AnalyzeAsioFloat32(
@@ -595,7 +608,7 @@ static int CalibrateChirpBinAsioFloat32(
         var seconds = ParseDoubleOption(args, "--seconds", 6.0);
         var gain = ParseDoubleOption(args, "--gain", 1.0);
         var renderPath = Path.Combine("artifacts", "asio", $"chirp-bin-calibration-{sampleRate}.raw");
-        RenderChirpBinFloat32(renderPath, sampleRate, seconds);
+        RenderChirpBinFloat32(renderPath, sampleRate, seconds, LoadOptionalCalibration(args)?.EmissionPlan);
         var probeExit = RunAsioProbeCapture(probe, renderPath, inputPath, sampleRate, seconds, gain);
         if (probeExit != 0)
         {
