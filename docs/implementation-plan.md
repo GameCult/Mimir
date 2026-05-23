@@ -36,6 +36,10 @@ a named invariant that the native runtime cannot protect yet.
   from native probes into the same rolling buffers Fensalir inspects. One probe
   process can accept multiple emitted `sourceId` values so it does not reopen
   the same camera set once per stream.
+- `native/asio_capture` plus `MimirAsioStreamSource` provide the first
+  production-shaped Focusrite path: a native in-process ASIO callback source
+  feeds sample-bearing 192 kHz Float32 blocks directly into `Mimir.Runtime`
+  rolling buffers on one interface clock domain.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
   empty declared sensor buffer should fail the run. Use `--chirplet-self-test`
@@ -106,7 +110,8 @@ a named invariant that the native runtime cannot protect yet.
   bands, expected-symbol versus observed-bin confusion observations, timing
   residuals, delay hypotheses, phase summaries, and an adaptive codebook plan.
   The active decoder can consume that model as learned response weighting,
-  first-order group-delay correction, and global delay-hypothesis seeds. The
+  phase-coherence weighting, first-order group-delay correction, and joint
+  global delay/bin-shift hypotheses. The
   runtime emitter also consumes the model's emission plan, rendering the smaller
   reliable symbol alphabet at the higher recommended de Bruijn order when the
   physical path cannot support all 32 bins.
@@ -129,13 +134,14 @@ a named invariant that the native runtime cannot protect yet.
   loopback timing proof, but failed timing windows now leave usable response
   evidence instead of silence.
 - `config/mimir-runtime.asio.example.json` is the minimal continuous Scarlett
-  runtime ingest proof. It starts the ASIO worker at 192 kHz with
-  `--emit-json-blocks` and declares `asio-ch0` through `asio-ch3` as accepted
-  audio sources. A two-second BufferSmoke run ingested 13,324 sample-bearing
-  blocks, 3,331 per channel, proving loopback and mic channels enter
-  `Mimir.Runtime` together in one ASIO clock domain. BufferSmoke does not emit
-  speaker calibration audio, so that proof is ingest-only rather than a sync
-  report.
+  runtime ingest proof. It loads `native/asio_capture` in process at 192 kHz
+  and declares `asio-ch0` through `asio-ch3` as accepted audio sources. A
+  two-second BufferSmoke run ingested more than 12,000 sample-bearing blocks
+  and retained 2,048 blocks per channel, proving loopback and mic channels enter
+  `Mimir.Runtime` together in one ASIO clock domain without stdout/base64
+  transport. BufferSmoke does not
+  emit speaker calibration audio, so that proof is ingest-only rather than a
+  sync report.
   A standalone 192 kHz synthetic receiver test recovers a 500 ms delayed audio
   stream to below printed microsecond precision using only the chirp-bin
   codebook and schedule state.
@@ -170,26 +176,22 @@ a named invariant that the native runtime cannot protect yet.
    other cameras.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Replace the WASAPI frame-event diagnostic bridge with native audio capture
-   workers for local mic, loopback, and network audio feeds. Use the verified
-   Focusrite ASIO path for Scarlett capture; WASAPI remains a diagnostic
-   witness, not the Scarlett hot path.
-4. Use chirp-bin calibration profiles from real microphones to tune acoustic
+3. Use chirp-bin calibration profiles from real microphones to tune acoustic
    bands, gain, and code spacing without weakening the standalone
    codebook/schedule receiver invariant.
-5. Add the synchronization actuator: drive a variable-rate resampler and
+4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the constrained chirplet
    decoder through real loopback and microphone paths so every correctly heard
    triplet becomes a deterministic timeline anchor before the actuator moves
    samples.
-6. Prove the chirp-bin hybrid fallback through real loopback and microphones
+5. Prove the chirp-bin hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
-7. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
+6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+7. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
-9. Move mic alignment, room suppression, voice separation, spatialization, and
+8. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-10. Keep the OBS bridge witness ledger as evidence before expanding receiver
+9. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

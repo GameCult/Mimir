@@ -6,7 +6,7 @@ This directory is for the hot path.
 
 - `reservoir`: the first native five-second spatiotemporal reservoir core. It
   owns one shared-edge rolling buffer with typed sample views.
-  Aquarium/Faust integration should build on this invariant instead of copying
+  Fensalir/Faust integration should build on this invariant instead of copying
   the deadline bridge cache.
   It exports `rlib`, `cdylib`, and `staticlib` artifacts plus the C header at
   `reservoir/include/localcast_reservoir.h`.
@@ -35,16 +35,16 @@ The reservoir ABI is intentionally small:
 
 ## Runtime ABI
 
-`LocalcastRuntime` is the live spine for Aquarium/Faust integration:
+`LocalcastRuntime` is the live spine for Fensalir/Faust integration:
 
 - it owns one native reservoir;
 - it exposes typed producer functions for camera frames, camera features, scene
   rays, surface claims, material claims, audio blocks, phase claims, event
   claims, and render packets;
-- it exposes `LocalcastRuntimeStatus` so Aquarium/Faust can inspect the shared
+- it exposes `LocalcastRuntimeStatus` so Fensalir/Faust can inspect the shared
   edge, window start, total sample count, and typed-view counts without polling JSON or
   MessagePack files;
-- it exposes total and typed-view sample reads so Aquarium/Faust can consume the
+- it exposes total and typed-view sample reads so Fensalir/Faust can consume the
   same rolling window producers append to.
 
 `LocalcastProducer` is the native ingress helper for capture workers:
@@ -69,16 +69,16 @@ The reservoir ABI is intentionally small:
   optional metadata handle;
 - `localcast_producer_push_render_packet` only accepts `RenderPacket`
   producers and stores the descriptor pointer as the sample payload handle;
-- Aquarium owns decoding and GPU upload. The reservoir only indexes when this
+- Fensalir owns decoding and GPU upload. The reservoir only indexes when this
   render packet exists in the shared rolling window.
 
 `LocalcastRenderPoint` is the fixed point-buffer element shape for the initial
-native/Aquarium render path. It carries a stable-key hash, source timestamp,
+native/Fensalir render path. It carries a stable-key hash, source timestamp,
 position, radius, color/alpha, and confidence. Richer material/brush payloads
 can get their own descriptors later; this point shape exists to kill the old
 JSON/CultCache render-frame dependency first.
 
-Payload handles are owned by the caller. Aquarium should treat them as handles
+Payload handles are owned by the caller. Fensalir should treat them as handles
 to GPU/native visual memory; Faust/native DSP should treat them as handles to
 audio buffers. This crate does not interpret those bytes. It is the clocked
 retention authority, not the renderer or DSP engine in a tiny hat.

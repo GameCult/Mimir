@@ -92,9 +92,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Each classified chirp carries the full dechirped bin-energy surface; sync
   reports expose those bands, and `MimirChirpBinCalibrationModel` preserves
   measured usable bands, response/confusion observations, timing residuals,
-  delay hypotheses, phase summaries, and adaptive codebook plans. The active
-  decoder can load the model for learned weighting, first-order group-delay
-  correction, and global delay-hypothesis seeds. Runtime chirp-bin emission
+  delay hypotheses, phase summaries, and adaptive codebook plans per
+  output/mic path. The active decoder can load the model for learned weighting,
+  phase-coherence weighting, first-order group-delay correction, and joint
+  global delay/bin-shift hypotheses. Runtime chirp-bin emission
   loads the same model's emission plan, so a physical calibration can shrink the
   emitted alphabet and raise sequence order instead of continuing to use dead
   bins.
@@ -129,20 +130,21 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `--calibrate-chirp-bin-asio-f32` now persists a real response/confusion/delay
   model and `--analyze-asio-f32 --calibration ...` consumes it. In the stored
   artifact, physical input 1 produced two reliable symbols and a different
-  strongest-bin profile while failing pairwise timing. The ASIO native worker
-  also supports `--emit-json-blocks` so `Mimir.Runtime` can ingest Focusrite ASIO
-  callbacks continuously through the frame-event adapter. The minimal
-  `config/mimir-runtime.asio.example.json` proof ingested 13,324 sample-bearing
-  192 kHz blocks across `asio-ch0` through `asio-ch3` in two seconds. Acoustic robustness is
-  still open, but failed timing now leaves response evidence.
+  strongest-bin profile while failing pairwise timing. `native/asio_capture`
+  plus `MimirAsioStreamSource` now load Focusrite ASIO in process and feed
+  sample-bearing 192 kHz Float32 blocks directly into runtime buffers. The
+  minimal `config/mimir-runtime.asio.example.json` proof ingests more than
+  12,000 blocks across `asio-ch0` through `asio-ch3` in two seconds and retains
+  2,048 blocks per channel. Acoustic robustness is still open, but failed
+  timing now leaves response evidence.
 - Raven also has a 192 kHz loopback-capable Scarlett for co-streamer/game timing
   evidence. Do not move the heavy soundfield or sensor-fusion workload there.
 
 ## Immediate Re-entry Instruction
 
 Use the chirp-bin calibration models from real microphones to tune the active
-codebook/bands/weighting, then replace the ASIO JSON-block process bridge with
-a native ABI callback source and turn decoded clock fits into the
-SRO/fractional-delay actuator. Keep loopback as timing authority. Do not call
-synchronization analysis from UI/telemetry readouts. Do not restore deleted
-script infrastructure because a stale doc once missed it.
+codebook/bands/weighting, then turn decoded clock fits into the
+SRO/fractional-delay actuator. Keep loopback as timing authority and keep
+Scarlett capture on the in-process ASIO source. Do not call synchronization
+analysis from UI/telemetry readouts. Do not restore deleted script
+infrastructure because a stale doc once missed it.

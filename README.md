@@ -162,8 +162,9 @@ hardware that earns the claim.
 
 Next audio cuts:
 
-1. Feed ASIO callbacks directly into `Mimir.Runtime` buffers.
-2. Use ASIO loopback as the canonical program/timing reference.
+1. Use ASIO loopback as the canonical program/timing reference.
+2. Learn per output/mic chirp-bin response models and adapt the codebook to the
+   bands that survive the actual room.
 3. Align all mic streams with fractional-delay and sample-rate-offset state.
 4. Move the hot actuator into Faust/native DSP.
 5. Emit separately controllable OBS stems plus a spatial bed from the same
@@ -185,8 +186,11 @@ showed that generic dense chirplet matching is the wrong hot path for our
 controlled beacon. The current hybrid watermark uses `MimirChirpBinTimeline`: a
 fixed-slope chirp-bin codebook decoded by dechirp plus a small Goertzel/bin
 bank, then code-valid de Bruijn triplets become canonical timeline anchors.
-Reports expose fractional delay and `delayUs`; the synthetic proof currently
-recovers a `317.375` sample offset with about `0.369 us` error.
+Reports expose fractional delay and `delayUs`; the synthetic 192 kHz proof now
+recovers a delayed stream below printed microsecond precision. Physical
+calibration persists usable bands, expected/observed bin confusion, phase,
+group-delay, delay hypotheses, and an adaptive codebook plan per output/mic
+path.
 
 For the long-form reasoning and source trail, read:
 
@@ -288,7 +292,6 @@ Run the old OBS bridge only when you need the compatibility path:
 
 Audio-side help is especially useful around:
 
-- ASIO callback capture into `Mimir.Runtime` without stdout/process payloads.
 - Fractional-delay lines and variable-rate resampling.
 - Sample-rate-offset estimation over a rolling window.
 - GCC-PHAT/passive program-audio timing under music/game audio.

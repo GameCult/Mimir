@@ -119,6 +119,24 @@ public sealed class MimirRuntimeConfiguration
             return new MimirNativeIngestStreamSource(ToDescriptor(stream));
         }
 
+        if (string.Equals(stream.Adapter, "asio", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("The Mimir ASIO stream source requires Windows.");
+            }
+
+#pragma warning disable CA1416
+            return new MimirAsioStreamSource(
+                ToDescriptor(stream),
+                new MimirAsioStreamSourceOptions(
+                    ResolveCommand(stream.Command, configDirectory),
+                    stream.DriverClsid,
+                    stream.SampleRate,
+                    stream.AcceptSourceIds));
+#pragma warning restore CA1416
+        }
+
         if (string.Equals(stream.Adapter, "frame-events", StringComparison.OrdinalIgnoreCase)
             || string.Equals(stream.Adapter, "json-lines", StringComparison.OrdinalIgnoreCase))
         {
@@ -243,4 +261,8 @@ public sealed class MimirStreamConfig
     public string[] AcceptSourceIds { get; set; } = [];
 
     public int ChunkBytes { get; set; } = 65_536;
+
+    public int SampleRate { get; set; } = 192_000;
+
+    public string DriverClsid { get; set; } = "";
 }

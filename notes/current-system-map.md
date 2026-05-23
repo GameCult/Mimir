@@ -116,8 +116,9 @@ usable bands, expected-symbol versus observed-bin confusion observations,
 timing residuals, delay hypotheses, phase summaries, and an adaptive codebook
 plan. The analyzer keeps raw profiles even when no timing report is accepted,
 and the active decoder can consume a persisted model for learned response
-weighting, first-order group-delay correction, and global delay-hypothesis
-seeding. Runtime chirp-bin emission consumes the same model's emission plan, so
+weighting, phase-coherence weighting, first-order group-delay correction, and
+joint global delay/bin-shift hypotheses. Runtime chirp-bin emission consumes the
+same model's emission plan, so
 the emitted timeline can use the measured reliable symbol set at a higher
 de Bruijn order instead of continuing to spend code on dead bins. Reports/states
 expose `delayUs` next to fractional sample delay.
@@ -163,14 +164,15 @@ The ASIO probe can now play raw mono Float32 timeline audio through the
 Focusrite outputs while capturing every ASIO input as raw interleaved Float32.
 `Mimir.BufferSmoke --analyze-asio-f32` feeds those captured channels into the
 same runtime active analyzer. `--calibrate-chirp-bin-asio-f32` computes and
-persists the response/confusion/delay model, and `--analyze-asio-f32
---calibration ...` loads it into the active decoder. The ASIO worker also
-supports `--emit-json-blocks`, so Focusrite ASIO callbacks can feed
-sample-bearing `audio-block` events into `Mimir.Runtime` continuously through
-the existing frame-event adapter while the native ABI cut is pending. The
-minimal `config/mimir-runtime.asio.example.json` proof ingested 13,324
-sample-bearing 192 kHz blocks across `asio-ch0` through `asio-ch3` in two
-seconds, all from the same ASIO callback stream. A real
+persists the response/confusion/delay model per output/mic path, and
+`--analyze-asio-f32 --calibration ...` loads it into the active decoder.
+`native/asio_capture` and `MimirAsioStreamSource` are now the runtime Scarlett
+path: Focusrite ASIO callbacks feed sample-bearing 192 kHz Float32 blocks into
+`Mimir.Runtime` in process, without the diagnostic JSON/stdout bridge. The
+minimal `config/mimir-runtime.asio.example.json` proof ingested more than
+12,000 sample-bearing 192 kHz blocks across `asio-ch0` through `asio-ch3` in
+two seconds and retained 2,048 blocks per channel, all from the same ASIO
+callback stream. A real
 192 kHz chirp-bin Scarlett artifact decoded
 `Loopback 1 -> Loopback 2` at exactly `0.000 us` with 12 matched anchors and
 0.999 confidence. The same analyzer now prints calibration profiles for

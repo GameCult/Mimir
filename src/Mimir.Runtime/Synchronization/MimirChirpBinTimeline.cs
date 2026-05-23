@@ -296,7 +296,8 @@ public sealed class MimirChirpBinTimeline
                 var correctedEnergy = ScoreSymbolEnergy(
                     samples.Slice((int)Math.Round(correctedOffset), chirpSamples),
                     sampleRate,
-                    canonicalSymbol) * (calibration?.SymbolWeight(canonicalSymbol) ?? 1.0);
+                    canonicalSymbol) *
+                    (calibration?.SymbolWeight(canonicalSymbol) ?? 1.0);
                 correctedOffset -= calibration?.GroupDelayCorrectionSamples(canonicalSymbol) ?? 0.0;
                 correctedCandidates.Add(new MimirChirpletSymbolCandidate(
                     canonicalSymbol,
@@ -350,7 +351,9 @@ public sealed class MimirChirpBinTimeline
             .Select((score, symbol) => new MimirChirpletSymbolCandidate(
                 symbol,
                 sampleOffset - (calibration?.GroupDelayCorrectionSamples(symbol) ?? 0.0),
-                score.Energy * (calibration?.SymbolWeight(symbol) ?? 1.0),
+                score.Energy *
+                    (calibration?.SymbolWeight(symbol) ?? 1.0) *
+                    (calibration?.PhaseWeight(symbol, score.PhaseRadians) ?? 1.0),
                 bandResponses))
             .OrderByDescending(candidate => candidate.Energy)
             .Take(MaxSymbolCandidatesPerFrame)
@@ -459,35 +462,45 @@ public sealed class MimirChirpBinTimeline
 
             foreach (var candidatePath in CandidateSymbolPaths(window))
             {
-                var code = CodeKey(candidatePath.Select(candidate => candidate.SymbolId));
-                if (!plan.CodeToIndex.TryGetValue(code, out var eventIndex))
+                foreach (var globalBinShift in GlobalBinShiftHypotheses(calibration))
                 {
-                    continue;
-                }
+                    var canonicalSymbols = candidatePath
+                        .Select(candidate => ShiftSymbol(candidate.SymbolId, -globalBinShift))
+                        .ToArray();
+                    var code = CodeKey(canonicalSymbols);
+                    if (!plan.CodeToIndex.TryGetValue(code, out var eventIndex))
+                    {
+                        continue;
+                    }
 
-                var firstEvent = Default.EventForIndex((ulong)eventIndex, calibration?.EmissionPlan);
-                var gapError = 0.0;
-                for (var gap = 0; gap < candidatePath.Count - 1; gap++)
-                {
-                    var measuredGap = (candidatePath[gap + 1].SampleOffset - candidatePath[gap].SampleOffset) / sampleRate;
-                    gapError += Math.Abs(measuredGap - EventSpacingSeconds);
-                }
+                    var firstEvent = Default.EventForIndex((ulong)eventIndex, calibration?.EmissionPlan);
+                    var gapError = 0.0;
+                    for (var gap = 0; gap < candidatePath.Count - 1; gap++)
+                    {
+                        var measuredGap = (candidatePath[gap + 1].SampleOffset - candidatePath[gap].SampleOffset) / sampleRate;
+                        gapError += Math.Abs(measuredGap - EventSpacingSeconds);
+                    }
 
-                var gapConfidence = 1.0 / (1.0 + gapError / 0.003);
-                if (gapConfidence < 0.55)
-                {
-                    continue;
-                }
+                    var gapConfidence = 1.0 / (1.0 + gapError / 0.003);
+                    if (gapConfidence < 0.55)
+                    {
+                        continue;
+                    }
 
-                var energyConfidence = Math.Clamp(candidatePath.Average(candidate => candidate.Energy), 0.0, 1.0);
-                candidates.Add(new MimirChirpletTimelineAnchor(
-                    (ulong)eventIndex,
-                    firstEvent.StartSeconds,
-                    candidatePath[0].SampleOffset,
-                    gapConfidence * 0.60 + energyConfidence * 0.40,
-                    candidatePath
-                        .Select(candidate => new MimirChirpletSymbolObservation(candidate.SymbolId, candidate.SampleOffset, candidate.Energy))
-                        .ToArray()));
+                    var energyConfidence = Math.Clamp(candidatePath.Average(candidate => candidate.Energy), 0.0, 1.0);
+                    var binShiftPenalty = 1.0 / (1.0 + Math.Abs(globalBinShift) * 0.10);
+                    candidates.Add(new MimirChirpletTimelineAnchor(
+                        (ulong)eventIndex,
+                        firstEvent.StartSeconds,
+                        candidatePath[0].SampleOffset,
+                        (gapConfidence * 0.60 + energyConfidence * 0.40) * binShiftPenalty,
+                        candidatePath
+                            .Select((candidate, candidateIndex) => new MimirChirpletSymbolObservation(
+                                canonicalSymbols[candidateIndex],
+                                candidate.SampleOffset,
+                                candidate.Energy))
+                            .ToArray()));
+                }
             }
         }
 
@@ -517,6 +530,33 @@ public sealed class MimirChirpBinTimeline
         }
 
         return Recurse(0);
+    }
+
+    private static IReadOnlyList<int> GlobalBinShiftHypotheses(MimirChirpBinPathCalibration? calibration)
+    {
+        var shifts = new HashSet<int> { 0 };
+        if (calibration != null)
+        {
+            foreach (var hypothesis in calibration.DelayHypotheses)
+            {
+                shifts.Add(Math.Clamp(hypothesis.BinShift, -MaxTimingBinShift, MaxTimingBinShift));
+            }
+
+            foreach (var group in calibration.Confusion
+                         .GroupBy(observation => observation.BinShift)
+                         .OrderByDescending(group => group.Count())
+                         .Take(4))
+            {
+                shifts.Add(Math.Clamp(group.Key, -MaxTimingBinShift, MaxTimingBinShift));
+            }
+        }
+
+        for (var shift = -MaxTimingBinShift; shift <= MaxTimingBinShift; shift++)
+        {
+            shifts.Add(shift);
+        }
+
+        return shifts.OrderBy(shift => Math.Abs(shift)).ThenBy(shift => shift).ToArray();
     }
 
     private static IReadOnlyList<MimirChirpletTimelineAnchor> SelectCoherentAnchorPath(

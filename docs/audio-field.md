@@ -78,11 +78,12 @@ per-band response evidence, so the same stream can calibrate timing and the
 speaker/room/mic transfer function. `MimirChirpBinCalibrationModel` is the live
 surface for that evidence. It stores measured usable bands per source,
 expected-symbol versus observed-bin confusion observations, timing residuals,
-delay hypotheses, phase summaries, and an adaptive codebook plan. The raw
-profile is kept even when a timing report is rejected, because a failed sync
-window can still teach us which bands survived the speaker/room/mic path. The
-decoder can consume the persisted model to weight reliable symbols, downweight
-dead bands, apply first-order group-delay correction, and seed global delay
+delay hypotheses, phase summaries, and an adaptive codebook plan per
+output/mic path. The raw profile is kept even when a timing report is rejected,
+because a failed sync window can still teach us which bands survived the
+speaker/room/mic path. The decoder can consume the persisted model to weight
+reliable symbols, downweight dead bands, apply phase-coherence weighting,
+apply first-order group-delay correction, and search joint global delay/bin-shift
 hypotheses before selecting the coherent anchor path. The model also owns the
 active emission plan: if the measured path only leaves a smaller alphabet, Mimir
 emits that reliable symbol set and raises the de Bruijn order so the timeline
@@ -130,11 +131,12 @@ buffer, and captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz.
 Raven also has a loopback-capable Scarlett ASIO path at 192 kHz for
 co-streamer/game timing evidence, but Starfire owns the heavy local alignment,
 soundfield, and sensor-fusion work.
-The worker now also supports `--emit-json-blocks`, which streams each ASIO
-callback as sample-bearing `audio-block` events (`asio-ch0` through `asio-ch3`)
-for `MimirFrameEventProcessStreamSource`. That is a continuous ASIO runtime
-ingest path through the existing process boundary; the later native ABI cut
-should remove stdout/base64 overhead, not change ASIO ownership.
+The runtime hot path is now `native/asio_capture` plus
+`MimirAsioStreamSource`. The native DLL owns the Focusrite ASIO COM driver and
+keeps callback buffers in process; the managed source drains one 192 kHz Float32
+block per ASIO input channel into `Mimir.Runtime` buffers (`asio-ch0` through
+`asio-ch3`). The older `--emit-json-blocks` worker path remains a diagnostic
+probe, not the live Scarlett ingest path.
 
 The probe also has a `--monitor-sweep` mode for measuring the acoustic ceiling.
 At 192 kHz, ASIO loopback detected emitted 8-40 kHz tones cleanly, but the
@@ -146,8 +148,11 @@ The synthetic chirp-bin timing proof now runs at arbitrary sample rates with
 `--hybrid-sync-self-test --sample-rate N`. On the same physical delay, measured
 in memory, the active chirp-bin path recovered about 0.369 us error at 48 kHz,
 0.168 us at 96 kHz, and below printed microsecond precision at 192 kHz. That
-proves the timing kernel benefits from the Scarlett ASIO rate; the live proof
-still depends on feeding ASIO callbacks into `Mimir.Runtime`.
+proves the timing kernel benefits from the Scarlett ASIO rate. The live ingest
+proof now feeds ASIO callbacks into `Mimir.Runtime` without a process/stdout
+bridge: a two-second BufferSmoke run at 192 kHz ingested more than 12,000
+sample-bearing blocks and retained 2,048 blocks per channel across `asio-ch0`
+through `asio-ch3`.
 
 The full probe runtime config now enables sample-bearing blocks for every local
 audio source. `MimirChirpletTimeline` owns the emitted calibration stream and
@@ -269,8 +274,9 @@ The older `MimirChirpletTimeline` matcher is a diagnostic/reference artifact,
 not the active runtime path. `BuildChirpletEnergyTrace` still behaves like a
 dense sliding matched-filter bank and should not retake authority.
 
-Next, replace the diagnostic bridge with native audio capture workers that
-append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
-delay estimates, and stem routing in Fensalir UI. The analyzer accepts Float32,
-Int16, Int24, and Int32 PCM windows so the direct driver path can preserve real
-interface formats before Faust/native DSP owns the hot resampling and alignment.
+Next, use the in-process ASIO source as the local Scarlett authority, prove
+stable acoustic anchors against real mics, then expose buffer depth, clock
+state, delay estimates, and stem routing in Fensalir UI. The analyzer accepts
+Float32, Int16, Int24, and Int32 PCM windows so direct driver paths can preserve
+real interface formats before Faust/native DSP owns the hot resampling and
+alignment.

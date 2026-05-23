@@ -113,9 +113,10 @@ accepted_design:
     evidence for frequency-response normalization. `MimirChirpBinCalibrationModel`
     now preserves measured usable bands, expected-symbol versus observed-bin
     confusion observations, timing residuals, delay hypotheses, phase summaries,
-    and an adaptive codebook plan. The active decoder can consume a persisted
-    model for learned response weighting, first-order group-delay correction,
-    and global delay-hypothesis seeding. Runtime chirp-bin emission consumes the
+    and an adaptive codebook plan per output/mic path. The active decoder can
+    consume a persisted model for learned response weighting, phase-coherence
+    weighting, first-order group-delay correction, and joint global
+    delay/bin-shift hypotheses. Runtime chirp-bin emission consumes the
     same model's emission plan, so Mimir can render the measured reliable symbol
     alphabet at a higher de Bruijn order instead of spending code on dead bins.
     The analyzer keeps calibration profiles
@@ -144,10 +145,13 @@ accepted_design:
     pairwise timing against loopback in the stored artifact, but decoded mic
     channels now leave calibration models; physical input 1 produced two reliable
     symbols and a different strongest measured band set.
-    `config/mimir-runtime.asio.example.json` proves continuous ASIO runtime
-    ingest: a two-second BufferSmoke run at 192 kHz ingested 13,324 sample-bearing
-    blocks across `asio-ch0` through `asio-ch3`, all from the Focusrite ASIO
-    callback stream.
+    `native/asio_capture` and `MimirAsioStreamSource` are now the runtime
+    Scarlett path: Focusrite ASIO callbacks feed sample-bearing 192 kHz Float32
+    blocks into `Mimir.Runtime` in process. `config/mimir-runtime.asio.example.json`
+    proves continuous ASIO runtime ingest: a two-second BufferSmoke run at
+    192 kHz ingested more than 12,000 sample-bearing blocks across `asio-ch0`
+    through `asio-ch3` and retained 2,048 blocks per channel, all from the
+    Focusrite ASIO callback stream.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.
@@ -164,9 +168,10 @@ accepted_design:
 active_subgoals:
   - Implement the first concrete Leap direct capture driver and measure cadence.
   - Add remaining local camera drivers through `IMimirVideoCaptureDriver`.
-  - Add native audio capture workers for mic, loopback, and network audio feeds.
-  - Feed verified Focusrite ASIO input callbacks into `Mimir.Runtime`; WASAPI
-    remains a diagnostic witness.
+  - Use the verified in-process Focusrite ASIO source for local Scarlett mic and
+    loopback ingest; WASAPI remains a diagnostic witness.
+  - Add network audio feed producers that enter the same runtime clock/rebuffer
+    machinery instead of becoming independent authorities.
   - Bind Fensalir UI to stream health, buffer depth, source timestamps,
     settings, and output management.
   - Keep PowerShell/FFmpeg/SRT as bridge utilities until direct program output
@@ -250,9 +255,7 @@ current_status:
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
     Use chirp-bin calibration models from real microphones to tune the active
-    codebook/bands/weighting, then replace the ASIO JSON-block process bridge
-    with a native ABI callback source and add the synchronization
-    actuator.
+    codebook/bands/weighting, then add the synchronization actuator.
     Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the continuous
@@ -260,7 +263,7 @@ current_status:
     invariant is code-valid triplets producing stable canonical anchors and clock
     fits, so the actuator can use decoded time instead of filtered lag guesses.
     Replace
-    the diagnostic JSON-line process bridge with direct native capture drivers that push buffer handles into
+    the remaining diagnostic JSON-line process bridges with direct native capture drivers that push buffer handles into
     Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports
     for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
     calibration chirplets are playing. Treat PS3 Eye audio as

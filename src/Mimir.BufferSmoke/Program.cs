@@ -599,6 +599,7 @@ static int CalibrateChirpBinAsioFloat32(
     int channels,
     int referenceChannel)
 {
+    var outputSourceId = ParseStringOption(args, "--output-source-id", "main-speakers");
     if (args.Any(arg => string.Equals(arg, "--capture-asio", StringComparison.OrdinalIgnoreCase)))
     {
         var probe = ParseStringOption(
@@ -636,7 +637,7 @@ static int CalibrateChirpBinAsioFloat32(
     }
 
     var referenceSourceId = $"asio-ch{referenceChannel}";
-    var model = MimirChirpBinCalibrationModel.FromDecodes(referenceSourceId, sampleRate, decodes);
+    var model = MimirChirpBinCalibrationModel.FromDecodes(referenceSourceId, sampleRate, decodes, outputSourceId);
     model.Save(outputPath);
     Console.WriteLine($"chirp-bin-calibration path={outputPath} input={inputPath} sampleRate={sampleRate} channels={channels} frames={frameCount} reference={referenceSourceId}");
     foreach (var path in model.Paths)

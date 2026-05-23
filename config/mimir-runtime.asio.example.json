@@ -13,13 +13,9 @@
       "kind": "Audio",
       "origin": "LocalDevice",
       "enabled": true,
-      "adapter": "frame-events",
-      "command": "../native/probes/asio_audio_cadence/build/Release/asio_audio_cadence.exe",
-      "arguments": [
-        "--set-sample-rate",
-        "192000",
-        "--emit-json-blocks"
-      ],
+      "adapter": "asio",
+      "command": "../native/asio_capture/build/Release/mimir_asio_capture.dll",
+      "sampleRate": 192000,
       "acceptSourceIds": [
         "asio-ch0",
         "asio-ch1",

@@ -39,11 +39,12 @@ public sealed record MimirChirpBinCalibrationModel(
     public static MimirChirpBinCalibrationModel FromDecodes(
         string referenceSourceId,
         int sampleRate,
-        IReadOnlyDictionary<string, MimirChirpletStreamDecode> decodes)
+        IReadOnlyDictionary<string, MimirChirpletStreamDecode> decodes,
+        string outputSourceId = "main-speakers")
     {
         var paths = decodes
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Select(pair => MimirChirpBinPathCalibration.FromDecode(pair.Key, sampleRate, pair.Value))
+            .Select(pair => MimirChirpBinPathCalibration.FromDecode(outputSourceId, pair.Key, sampleRate, pair.Value))
             .ToArray();
         var emissionPlan = MimirChirpBinCodebookPlan.ForSharedEmission(paths);
         paths = paths.Select(path => path with { EmissionPlan = emissionPlan }).ToArray();
@@ -58,6 +59,7 @@ public sealed record MimirChirpBinCalibrationModel(
 }
 
 public sealed record MimirChirpBinPathCalibration(
+    string OutputSourceId,
     string SourceId,
     int SampleRate,
     MimirChirpBinCalibrationProfile Profile,
@@ -79,7 +81,20 @@ public sealed record MimirChirpBinPathCalibration(
         return symbol?.MeanTimingResidualSamples ?? 0.0;
     }
 
+    public double PhaseWeight(int symbolId, double observedPhaseRadians)
+    {
+        var symbol = Symbols.FirstOrDefault(item => item.SymbolId == symbolId);
+        if (symbol == null || symbol.ObservationCount <= 0)
+        {
+            return 1.0;
+        }
+
+        var error = Math.Abs(AngularDistance(observedPhaseRadians, symbol.MeanPhaseRadians));
+        return Math.Clamp(1.0 - error / Math.PI, 0.15, 1.0);
+    }
+
     public static MimirChirpBinPathCalibration FromDecode(
+        string outputSourceId,
         string sourceId,
         int sampleRate,
         MimirChirpletStreamDecode decode)
@@ -99,9 +114,11 @@ public sealed record MimirChirpBinPathCalibration(
                     (correct / (double)items.Length) *
                     (1.0 / (1.0 + residualSpread / Math.Max(1.0, sampleRate * 0.00025)));
                 var phase = CircularMean(items.Select(item => item.PhaseRadians));
+                var phaseCoherence = PhaseCoherence(items.Select(item => item.PhaseRadians));
                 return new MimirChirpBinSymbolCalibration(
                     group.Key,
                     reliability,
+                    phaseCoherence,
                     items.Average(item => item.ExpectedCenterHz),
                     items.Average(item => item.ObservedCenterHz),
                     items.Average(item => item.ObservedEnergy),
@@ -115,6 +132,7 @@ public sealed record MimirChirpBinPathCalibration(
         var hypotheses = BuildDelayHypotheses(decode);
         var plan = MimirChirpBinCodebookPlan.FromSymbols(symbols);
         return new MimirChirpBinPathCalibration(
+            outputSourceId,
             sourceId,
             sampleRate,
             profile,
@@ -201,6 +219,27 @@ public sealed record MimirChirpBinPathCalibration(
 
         return count == 0 ? 0.0 : Math.Atan2(sin / count, cos / count);
     }
+
+    private static double PhaseCoherence(IEnumerable<double> radians)
+    {
+        var sin = 0.0;
+        var cos = 0.0;
+        var count = 0;
+        foreach (var value in radians)
+        {
+            sin += Math.Sin(value);
+            cos += Math.Cos(value);
+            count++;
+        }
+
+        return count == 0 ? 0.0 : Math.Clamp(Math.Sqrt(sin * sin + cos * cos) / count, 0.0, 1.0);
+    }
+
+    private static double AngularDistance(double a, double b)
+    {
+        var delta = Math.Abs(a - b) % (Math.PI * 2.0);
+        return delta > Math.PI ? Math.PI * 2.0 - delta : delta;
+    }
 }
 
 public sealed record MimirChirpBinCodebookPlan(
@@ -253,6 +292,7 @@ public sealed record MimirChirpBinCodebookPlan(
 public sealed record MimirChirpBinSymbolCalibration(
     int SymbolId,
     double Reliability,
+    double PhaseCoherence,
     double ExpectedCenterHz,
     double ObservedCenterHz,
     double MeanEnergy,

@@ -1,6 +1,6 @@
 {
-  "ModelId": "chirp-bin-20260523T192955Z",
-  "CreatedAt": "2026-05-23T19:29:55.6287406+00:00",
+  "ModelId": "chirp-bin-20260523T203522Z",
+  "CreatedAt": "2026-05-23T20:35:22.527425+00:00",
   "SampleRate": 192000,
   "ReferenceSourceId": "asio-ch2",
   "EmissionPlan": {
@@ -22,6 +22,7 @@
   },
   "Paths": [
     {
+      "OutputSourceId": "main-speakers",
       "SourceId": "asio-ch0",
       "SampleRate": 192000,
       "Profile": {
@@ -319,6 +320,7 @@
       "DelayHypotheses": []
     },
     {
+      "OutputSourceId": "main-speakers",
       "SourceId": "asio-ch1",
       "SampleRate": 192000,
       "Profile": {
@@ -618,6 +620,7 @@
         {
           "SymbolId": 1,
           "Reliability": 0.02338947289373043,
+          "PhaseCoherence": 0.8813023361164132,
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4468.75,
           "MeanEnergy": 0.9902022429801735,
@@ -629,6 +632,7 @@
         {
           "SymbolId": 2,
           "Reliability": 0.16959717331712612,
+          "PhaseCoherence": 0.7788915227933655,
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4475,
           "MeanEnergy": 0.9196472718940074,
@@ -640,6 +644,7 @@
         {
           "SymbolId": 3,
           "Reliability": 1.148185667935492,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 4975,
           "ObservedCenterHz": 4975,
           "MeanEnergy": 1.148185667935492,
@@ -651,6 +656,7 @@
         {
           "SymbolId": 4,
           "Reliability": 0,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 5425,
           "ObservedCenterHz": 4975,
           "MeanEnergy": 0.30966049519505534,
@@ -662,6 +668,7 @@
         {
           "SymbolId": 6,
           "Reliability": 0,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 6325,
           "ObservedCenterHz": 6775,
           "MeanEnergy": 0.8679642624875925,
@@ -673,6 +680,7 @@
         {
           "SymbolId": 7,
           "Reliability": 0,
+          "PhaseCoherence": 0.9999999999999999,
           "ExpectedCenterHz": 6775,
           "ObservedCenterHz": 7225,
           "MeanEnergy": 0.5299773190124039,
@@ -684,6 +692,7 @@
         {
           "SymbolId": 8,
           "Reliability": 0.6732785913925556,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 7225,
           "ObservedCenterHz": 7225,
           "MeanEnergy": 0.6732785913925556,
@@ -984,6 +993,7 @@
       "DelayHypotheses": []
     },
     {
+      "OutputSourceId": "main-speakers",
       "SourceId": "asio-ch2",
       "SampleRate": 192000,
       "Profile": {
@@ -1290,6 +1300,7 @@
         {
           "SymbolId": 0,
           "Reliability": 1.9664832701324948,
+          "PhaseCoherence": 0.9999999999999998,
           "ExpectedCenterHz": 3625,
           "ObservedCenterHz": 3625,
           "MeanEnergy": 1.9831606924956895,
@@ -1301,6 +1312,7 @@
         {
           "SymbolId": 1,
           "Reliability": 1.9550716359955316,
+          "PhaseCoherence": 0.9999608311103569,
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4075,
           "MeanEnergy": 1.9724028422080755,
@@ -1312,6 +1324,7 @@
         {
           "SymbolId": 2,
           "Reliability": 1.98317479150165,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "MeanEnergy": 1.98317479150165,
@@ -1323,6 +1336,7 @@
         {
           "SymbolId": 3,
           "Reliability": 1.9831581977468316,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 4975,
           "ObservedCenterHz": 4975,
           "MeanEnergy": 1.9831581977468316,
@@ -1334,6 +1348,7 @@
         {
           "SymbolId": 4,
           "Reliability": 1.9831595137173625,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 5425,
           "ObservedCenterHz": 5425,
           "MeanEnergy": 1.9831595137173625,
@@ -1345,6 +1360,7 @@
         {
           "SymbolId": 5,
           "Reliability": 1.983165098459816,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 5875,
           "ObservedCenterHz": 5875,
           "MeanEnergy": 1.983165098459816,
@@ -1356,6 +1372,7 @@
         {
           "SymbolId": 6,
           "Reliability": 1.9831633177029786,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 6325,
           "ObservedCenterHz": 6325,
           "MeanEnergy": 1.9831633177029786,
@@ -1367,6 +1384,7 @@
         {
           "SymbolId": 7,
           "Reliability": 1.9831607953145476,
+          "PhaseCoherence": 0.9999999999999999,
           "ExpectedCenterHz": 6775,
           "ObservedCenterHz": 6775,
           "MeanEnergy": 1.9831607953145476,
@@ -1378,6 +1396,7 @@
         {
           "SymbolId": 31,
           "Reliability": 1.9831585964902498,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 17575,
           "ObservedCenterHz": 17575,
           "MeanEnergy": 1.9831585964902498,
@@ -1733,6 +1752,7 @@
       ]
     },
     {
+      "OutputSourceId": "main-speakers",
       "SourceId": "asio-ch3",
       "SampleRate": 192000,
       "Profile": {
@@ -2039,6 +2059,7 @@
         {
           "SymbolId": 0,
           "Reliability": 1.9664832701324948,
+          "PhaseCoherence": 0.9999999999999998,
           "ExpectedCenterHz": 3625,
           "ObservedCenterHz": 3625,
           "MeanEnergy": 1.9831606924956895,
@@ -2050,6 +2071,7 @@
         {
           "SymbolId": 1,
           "Reliability": 1.9550716359955316,
+          "PhaseCoherence": 0.9999608311103569,
           "ExpectedCenterHz": 4075,
           "ObservedCenterHz": 4075,
           "MeanEnergy": 1.9724028422080755,
@@ -2061,6 +2083,7 @@
         {
           "SymbolId": 2,
           "Reliability": 1.98317479150165,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 4525,
           "ObservedCenterHz": 4525,
           "MeanEnergy": 1.98317479150165,
@@ -2072,6 +2095,7 @@
         {
           "SymbolId": 3,
           "Reliability": 1.9831581977468316,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 4975,
           "ObservedCenterHz": 4975,
           "MeanEnergy": 1.9831581977468316,
@@ -2083,6 +2107,7 @@
         {
           "SymbolId": 4,
           "Reliability": 1.9831595137173625,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 5425,
           "ObservedCenterHz": 5425,
           "MeanEnergy": 1.9831595137173625,
@@ -2094,6 +2119,7 @@
         {
           "SymbolId": 5,
           "Reliability": 1.983165098459816,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 5875,
           "ObservedCenterHz": 5875,
           "MeanEnergy": 1.983165098459816,
@@ -2105,6 +2131,7 @@
         {
           "SymbolId": 6,
           "Reliability": 1.9831633177029786,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 6325,
           "ObservedCenterHz": 6325,
           "MeanEnergy": 1.9831633177029786,
@@ -2116,6 +2143,7 @@
         {
           "SymbolId": 7,
           "Reliability": 1.9831607953145476,
+          "PhaseCoherence": 0.9999999999999999,
           "ExpectedCenterHz": 6775,
           "ObservedCenterHz": 6775,
           "MeanEnergy": 1.9831607953145476,
@@ -2127,6 +2155,7 @@
         {
           "SymbolId": 31,
           "Reliability": 1.9831585964902498,
+          "PhaseCoherence": 1,
           "ExpectedCenterHz": 17575,
           "ObservedCenterHz": 17575,
           "MeanEnergy": 1.9831585964902498,
