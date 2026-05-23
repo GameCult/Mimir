@@ -89,17 +89,16 @@ The first cut should be deliberately boring:
 
 - `src/Mimir.App` launches Fensalir and points it at the Mimir runtime
   assembly.
-- `src/Mimir.Runtime` implements the Fensalir client runtime factory and uses
-  Fensalir's LocalCast runtime until Mimir-specific ingest workers replace the
-  remaining diagnostic source.
+- `src/Mimir.Runtime` implements the Fensalir client runtime factory. Mimir owns
+  its scene state; Fensalir is the host/window/D3D12 bridge, not an embedded demo
+  runtime.
 
 ## Synchronization Runtime
 
 `Mimir.Runtime` now owns the first synchronization spine:
 
-- `MimirRuntime` is the Fensalir client runtime. It wraps the current
-  Fensalir `LocalCastRuntime` visual path and adds a Mimir-owned synchronization
-  hub.
+- `MimirRuntime` is the Fensalir client runtime. It starts from an empty Mimir
+  scene and adds a Mimir-owned synchronization hub.
 - `MimirSynchronizationHub` owns stream source polling and appends samples into
   bounded buffers.
 - `MimirRollingStreamBuffer` owns one stream's short history and evicts samples

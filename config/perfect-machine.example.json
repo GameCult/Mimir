@@ -8,12 +8,12 @@
     "storageLayout": "single-native-rolling-buffer-with-typed-views"
   },
   "viableStreamApp": {
-    "owner": "Aquarium",
+    "owner": "Mimir",
     "solution": "Mimir.slnx",
     "appProject": "src/Mimir.App/Mimir.App.csproj",
     "runtimeProject": "src/Mimir.Runtime/Mimir.Runtime.csproj",
-    "windowingRenderingLibrary": "Aquarium.Engine",
-    "d3d12Bridge": "Aquarium.Engine",
+    "windowingRenderingLibrary": "Fensalir",
+    "d3d12Bridge": "Fensalir",
     "defaultReservoirSeconds": 5.0,
     "runtimeState": "in-memory-localcast-runtime",
     "syncBuffers": {
@@ -35,9 +35,9 @@
   },
   "authorities": {
     "configurationCalibrationLaunchStatus": "Mimir",
-    "denseVisualFusion": "Aquarium",
-    "gpuMaterialAndBrushReconciliation": "Aquarium",
-    "spoutPublication": "Aquarium",
+    "denseVisualFusion": "Fensalir",
+    "gpuMaterialAndBrushReconciliation": "Fensalir",
+    "spoutPublication": "Fensalir",
     "hotAudioDsp": "Faust",
     "obsBroadcastControls": "OBS"
   },
@@ -72,7 +72,7 @@
     "video": {
       "target": "Spout2",
       "senderName": "Mimir Point Cloud",
-      "owner": "Aquarium"
+      "owner": "Fensalir"
     },
     "audio": {
       "owner": "Faust",
@@ -92,7 +92,7 @@
       "Mimir.Runtime",
       "native-driver-workers",
       "native-reservoir",
-      "Aquarium.Engine",
+      "Fensalir",
       "Faust"
     ],
     "neverInCompatibilityEdges": [

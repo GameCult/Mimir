@@ -12,7 +12,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Fensalir\src\Aquarium.Engine.Contracts\Aquarium.Engine.Contracts.csproj" />
-    <ProjectReference Include="..\..\..\Fensalir\src\Aquarium.Fensalir\Aquarium.Fensalir.csproj" />
   </ItemGroup>
 
 </Project>

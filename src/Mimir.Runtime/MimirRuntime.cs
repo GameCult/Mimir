@@ -3,9 +3,9 @@ using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
-using Aquarium.Fensalir;
 using Mimir.Runtime.Synchronization;
 using System.Diagnostics;
+using System.Numerics;
 
 namespace Mimir.Runtime;
 
@@ -16,9 +16,9 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const double CalibrationStartSeconds = 0.5;
     private const int CalibrationBatchSegments = 120;
     private const int HybridWatermarkIntervalSegments = 4;
-    private readonly IAquariumRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
+    private readonly AquariumAudioDocument audio = new();
     private readonly MimirAudioSynchronizationSettings audioSyncSettings;
     private readonly float telemetryIntervalSeconds;
     private readonly float audioSyncUpdateIntervalSeconds;
@@ -55,7 +55,6 @@ public sealed class MimirRuntime : IAquariumRuntime
         IEnumerable<IMimirStreamSource> streamSources)
     {
         Options = options;
-        visualRuntime = new FensalirRuntimeFactory().Create(options);
         synchronization = new MimirSynchronizationHub(settings);
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
@@ -74,21 +73,26 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     public AquariumRuntimeOptions Options { get; }
 
-    public AquariumFrame Frame => visualRuntime.Frame;
+    public AquariumFrame Frame => new(
+        new ViewFrame(Vector2.Zero, 24.0f),
+        new Vector3(0.0f, -10.0f, 7.0f),
+        runtimeSeconds,
+        Vector2.Zero,
+        new AquariumSceneState
+        {
+            TraceHeightFieldSurface = false,
+            UseStarfieldBackground = false,
+        });
 
-    public GraphicsSettings GraphicsSettings
-    {
-        get => visualRuntime.GraphicsSettings;
-        set => visualRuntime.GraphicsSettings = value;
-    }
+    public GraphicsSettings GraphicsSettings { get; set; } = GraphicsSettings.Default;
 
-    public AquariumRenderPlan RenderPlan => visualRuntime.RenderPlan;
+    public AquariumRenderPlan RenderPlan { get; } = CreateRenderPlan();
 
     public AquariumUiDocument Ui => ui;
 
-    public AquariumAudioDocument Audio => visualRuntime.Audio;
+    public AquariumAudioDocument Audio => audio;
 
-    public AquariumSynthDocument Synth => visualRuntime.Synth;
+    public AquariumSynthDocument Synth => AquariumSynthDocument.Empty;
 
     public void RegisterStreamSource(IMimirStreamSource source)
     {
@@ -98,7 +102,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     public void Start()
     {
         Console.WriteLine($"Mimir runtime sync buffers: {synchronization.Summary()} @ {synchronization.Settings.BufferDuration.TotalSeconds:0.###}s audioSync={audioSyncSettings.Mode} reference={audioSyncSettings.ReferenceSourceId}");
-        visualRuntime.Start();
+        Console.WriteLine("Mimir empty scene runtime booted.");
     }
 
     public void Update(float deltaSeconds, InputState input)
@@ -108,23 +112,20 @@ public sealed class MimirRuntime : IAquariumRuntime
         lastPollCount = synchronization.PollSources();
         UpdateAudioSynchronization();
         EmitTelemetry();
-        visualRuntime.Update(deltaSeconds, input);
     }
 
     public AquariumFrame ComposeFrame(AquariumFrame frame, AquariumFrameInput input)
     {
-        return visualRuntime.ComposeFrame(frame, input);
+        return frame;
     }
 
     public void FlushState()
     {
-        visualRuntime.FlushState();
     }
 
     public void Dispose()
     {
         synchronization.Dispose();
-        visualRuntime.Dispose();
     }
 
     private AquariumUiDocument CreateUi()
@@ -144,6 +145,18 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Aligned audio", DescribeAlignedAudio);
                 panel.Readout("Chirplet reference", DescribeChirpletReference);
             });
+    }
+
+    private static AquariumRenderPlan CreateRenderPlan()
+    {
+        var app = new AquariumApp();
+        var scene = app.RenderTargets.Hdr("scene");
+        app.Cameras.Perspective("main");
+        app.Graph.Pass("scene").Fullscreen();
+        app.Features.Presentation(scene.Color);
+        app.Features.DirectWriteOverlay();
+        app.Debug.View("Scene", scene.Color);
+        return app.Plan;
     }
 
     private void QueueCalibrationTimeline()
@@ -182,7 +195,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             UseChirpBinTimeline(audioSyncSettings.Mode),
             synchronization.ChirpBinEmissionPlan,
             out var peak);
-        visualRuntime.Audio.EnqueuePcm16Base64(
+        audio.EnqueuePcm16Base64(
             batch,
             MimirChirpletTimeline.SampleRate,
             channels: 1,
@@ -324,6 +337,11 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     private bool ShouldEmitCalibrationTimeline()
     {
+        if (!HasReferenceAudioBuffer())
+        {
+            return false;
+        }
+
         return audioSyncSettings.Mode switch
         {
             MimirAudioSyncMode.ChirpOnly => true,
@@ -331,6 +349,13 @@ public sealed class MimirRuntime : IAquariumRuntime
             MimirAudioSyncMode.Hybrid => lastPassiveSynchronizationConfidence < HybridPassiveConfidenceThreshold,
             _ => true,
         };
+    }
+
+    private bool HasReferenceAudioBuffer()
+    {
+        return synchronization.Buffers.Buffers.Any(buffer =>
+            buffer.Descriptor.Kind == MimirStreamKind.Audio &&
+            string.Equals(buffer.Descriptor.SourceId, audioSyncSettings.ReferenceSourceId, StringComparison.Ordinal));
     }
 
     private string DescribeAudioSyncMode()
