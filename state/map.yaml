@@ -162,6 +162,8 @@ accepted_design:
     Fensalir/Faust integration.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
+  - `docs/code-algorithm-map.md` is the source-level ownership and algorithm map
+    for the current repo code surface.
   - `.voidbot` state is part of repo memory and must be committed separately
     whenever dirty.
 
