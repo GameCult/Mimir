@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Mimir.Runtime.Synchronization;
 
 if (args.Any(arg => string.Equals(arg, "--chirplet-self-test", StringComparison.OrdinalIgnoreCase)))
@@ -55,7 +56,19 @@ if (args.Any(arg => string.Equals(arg, "--analyze-asio-f32", StringComparison.Or
         ParseIntOption(args, "--sample-rate", MimirChirpletTimeline.SampleRate),
         ParseIntOption(args, "--channels", 4),
         ParseIntOption(args, "--reference-channel", 2),
-        ParseIntOption(args, "--candidate-channel", -1));
+        ParseIntOption(args, "--candidate-channel", -1),
+        ParseStringOption(args, "--calibration", ""));
+}
+
+if (args.Any(arg => string.Equals(arg, "--calibrate-chirp-bin-asio-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return CalibrateChirpBinAsioFloat32(
+        args,
+        ParseStringOption(args, "--input", "artifacts/asio/scarlett-chirp-bin-192k-f32.raw"),
+        ParseStringOption(args, "--output", "calibration/chirp-bin/latest.json"),
+        ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--reference-channel", 2));
 }
 
 var duration = TimeSpan.FromSeconds(ParseDoubleOption(args, "--seconds", 10.0));
@@ -474,7 +487,13 @@ static int RenderChirpBinFloat32(string outputPath, int sampleRate, double secon
     return 0;
 }
 
-static int AnalyzeAsioFloat32(string inputPath, int sampleRate, int channels, int referenceChannel, int candidateChannel)
+static int AnalyzeAsioFloat32(
+    string inputPath,
+    int sampleRate,
+    int channels,
+    int referenceChannel,
+    int candidateChannel,
+    string calibrationPath)
 {
     if (channels <= 0)
     {
@@ -533,9 +552,12 @@ static int AnalyzeAsioFloat32(string inputPath, int sampleRate, int channels, in
         ? new HashSet<string>(StringComparer.Ordinal) { $"asio-ch{candidateChannel}" }
         : null;
     var analyzer = new MimirAudioSynchronizationAnalyzer();
-    var reports = analyzer.Analyze(buffers, referenceSourceId, MimirAudioSyncMode.ChirpOnly, candidates);
+    var calibration = string.IsNullOrWhiteSpace(calibrationPath) || !File.Exists(calibrationPath)
+        ? null
+        : MimirChirpBinCalibrationModel.Load(calibrationPath);
+    var reports = analyzer.Analyze(buffers, referenceSourceId, MimirAudioSyncMode.ChirpOnly, candidates, calibration);
 
-    Console.WriteLine($"asio-f32-analysis input={inputPath} sampleRate={sampleRate} channels={channels} frames={frameCount} reference={referenceSourceId} candidate={(candidateChannel >= 0 ? $"asio-ch{candidateChannel}" : "all")}");
+    Console.WriteLine($"asio-f32-analysis input={inputPath} sampleRate={sampleRate} channels={channels} frames={frameCount} reference={referenceSourceId} candidate={(candidateChannel >= 0 ? $"asio-ch{candidateChannel}" : "all")} calibration={(calibration == null ? "none" : calibrationPath)}");
     foreach (var trace in analyzer.LastDecodeTraces.OrderBy(trace => trace.SourceId, StringComparer.Ordinal))
     {
         Console.WriteLine(
@@ -554,6 +576,152 @@ static int AnalyzeAsioFloat32(string inputPath, int sampleRate, int channels, in
     }
 
     return reports.Count > 0 ? 0 : 1;
+}
+
+static int CalibrateChirpBinAsioFloat32(
+    string[] args,
+    string inputPath,
+    string outputPath,
+    int sampleRate,
+    int channels,
+    int referenceChannel)
+{
+    if (args.Any(arg => string.Equals(arg, "--capture-asio", StringComparison.OrdinalIgnoreCase)))
+    {
+        var probe = ParseStringOption(
+            args,
+            "--asio-probe",
+            "native/probes/asio_audio_cadence/build/Release/asio_audio_cadence.exe");
+        var seconds = ParseDoubleOption(args, "--seconds", 6.0);
+        var gain = ParseDoubleOption(args, "--gain", 1.0);
+        var renderPath = Path.Combine("artifacts", "asio", $"chirp-bin-calibration-{sampleRate}.raw");
+        RenderChirpBinFloat32(renderPath, sampleRate, seconds);
+        var probeExit = RunAsioProbeCapture(probe, renderPath, inputPath, sampleRate, seconds, gain);
+        if (probeExit != 0)
+        {
+            return probeExit;
+        }
+    }
+
+    var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
+    if (frameCount == 0)
+    {
+        Console.Error.WriteLine("chirp-bin calibration failed: capture file contains no complete frames");
+        return 1;
+    }
+
+    if (referenceChannel < 0 || referenceChannel >= channels)
+    {
+        Console.Error.WriteLine("chirp-bin calibration failed: reference channel is outside the capture channel count");
+        return 1;
+    }
+
+    var decodes = new Dictionary<string, MimirChirpletStreamDecode>(StringComparer.Ordinal);
+    for (var channel = 0; channel < channels; channel++)
+    {
+        decodes[$"asio-ch{channel}"] = MimirChirpBinTimeline.Default.DecodeStreamWindow(channelSamples[channel], sampleRate);
+    }
+
+    var referenceSourceId = $"asio-ch{referenceChannel}";
+    var model = MimirChirpBinCalibrationModel.FromDecodes(referenceSourceId, sampleRate, decodes);
+    model.Save(outputPath);
+    Console.WriteLine($"chirp-bin-calibration path={outputPath} input={inputPath} sampleRate={sampleRate} channels={channels} frames={frameCount} reference={referenceSourceId}");
+    foreach (var path in model.Paths)
+    {
+        var reliable = path.CodebookPlan.ReliableSymbolIds.Count == 0
+            ? "none"
+            : string.Join(",", path.CodebookPlan.ReliableSymbolIds.Take(16));
+        Console.WriteLine(
+            $"chirp-bin-calibration-path {path.SourceId}: frames={path.Profile.FrameCount} anchors={path.Profile.AnchorCount} clock={path.Profile.ClockConfidence:0.000} usableBins={path.Profile.UsableBandCount}/{path.Profile.Bands.Count} symbols={path.Symbols.Count} reliableSymbols={path.CodebookPlan.ReliableSymbolCount} recommendedOrder={path.CodebookPlan.RecommendedOrder} reliable={reliable}");
+        foreach (var hypothesis in path.DelayHypotheses.Take(3))
+        {
+            Console.WriteLine(
+                $"chirp-bin-delay-hypothesis {path.SourceId}: delaySamples={hypothesis.DelaySamples:0.000} binShift={hypothesis.BinShift} support={hypothesis.SupportCount} confidence={hypothesis.Confidence:0.000} residual={hypothesis.MeanResidualSamples:0.000}");
+        }
+    }
+
+    return 0;
+}
+
+static int RunAsioProbeCapture(
+    string probePath,
+    string playbackPath,
+    string capturePath,
+    int sampleRate,
+    double seconds,
+    double gain)
+{
+    var startInfo = new ProcessStartInfo(Path.GetFullPath(probePath))
+    {
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true,
+    };
+    startInfo.ArgumentList.Add("--set-sample-rate");
+    startInfo.ArgumentList.Add(sampleRate.ToString());
+    startInfo.ArgumentList.Add("--play-f32-mono");
+    startInfo.ArgumentList.Add(Path.GetFullPath(playbackPath));
+    startInfo.ArgumentList.Add("--play-gain");
+    startInfo.ArgumentList.Add(gain.ToString("0.#####"));
+    startInfo.ArgumentList.Add("--record-f32-interleaved");
+    startInfo.ArgumentList.Add(Path.GetFullPath(capturePath));
+    startInfo.ArgumentList.Add("--capture-seconds");
+    startInfo.ArgumentList.Add(seconds.ToString("0.###"));
+
+    using var process = Process.Start(startInfo);
+    if (process == null)
+    {
+        Console.Error.WriteLine($"chirp-bin calibration failed: could not start ASIO probe {probePath}");
+        return 1;
+    }
+
+    process.OutputDataReceived += (_, e) =>
+    {
+        if (e.Data != null)
+        {
+            Console.WriteLine(e.Data);
+        }
+    };
+    process.ErrorDataReceived += (_, e) =>
+    {
+        if (e.Data != null)
+        {
+            Console.Error.WriteLine(e.Data);
+        }
+    };
+    process.BeginOutputReadLine();
+    process.BeginErrorReadLine();
+    process.WaitForExit();
+    return process.ExitCode;
+}
+
+static float[][] ReadInterleavedFloat32(string inputPath, int channels, out int frameCount)
+{
+    if (channels <= 0)
+    {
+        frameCount = 0;
+        return [];
+    }
+
+    var bytes = File.ReadAllBytes(inputPath);
+    frameCount = bytes.Length / (sizeof(float) * channels);
+    var channelSamples = new float[channels][];
+    for (var channel = 0; channel < channels; channel++)
+    {
+        channelSamples[channel] = new float[frameCount];
+    }
+
+    var span = bytes.AsSpan(0, frameCount * channels * sizeof(float));
+    for (var frame = 0; frame < frameCount; frame++)
+    {
+        for (var channel = 0; channel < channels; channel++)
+        {
+            channelSamples[channel][frame] = BitConverter.ToSingle(span.Slice((frame * channels + channel) * sizeof(float), sizeof(float)));
+        }
+    }
+
+    return channelSamples;
 }
 
 static int ParseIntOption(string[] args, string name, int fallback)

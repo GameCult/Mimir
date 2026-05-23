@@ -23,7 +23,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
         IEnumerable<MimirRollingStreamBuffer> buffers,
         string referenceSourceId,
         MimirAudioSyncMode mode = MimirAudioSyncMode.ChirpOnly,
-        IReadOnlySet<string>? candidateSourceIds = null)
+        IReadOnlySet<string>? candidateSourceIds = null,
+        MimirChirpBinCalibrationModel? calibrationModel = null)
     {
         var audioBuffers = buffers
             .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio)
@@ -168,10 +169,16 @@ public sealed class MimirAudioSynchronizationAnalyzer
             }
 
             var comparedReferenceDecode = useChirpBinTimeline
-                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate)
+                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(
+                    referenceWindow,
+                    activeReferenceBlock.SampleRate,
+                    calibrationModel?.PathFor(reference.Descriptor.SourceId))
                 : MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate);
             var candidateDecode = useChirpBinTimeline
-                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate)
+                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(
+                    candidateWindow,
+                    activeReferenceBlock.SampleRate,
+                    calibrationModel?.PathFor(buffer.Descriptor.SourceId))
                 : MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate);
             if (useChirpBinTimeline)
             {

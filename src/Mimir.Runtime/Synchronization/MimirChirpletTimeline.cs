@@ -14,7 +14,8 @@ public sealed record MimirChirpletTone(
 
 public sealed record MimirChirpletBandResponse(
     double CenterHz,
-    double Energy);
+    double Energy,
+    double PhaseRadians = 0.0);
 
 public sealed record MimirChirpletTimelineEvent(
     ulong Index,

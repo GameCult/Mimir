@@ -111,12 +111,13 @@ scheduled-waveform correlation for standalone source-offset refinement. Pairwise
 sync compares matched anchors first, then only accepts independent clock-fit
 offsets inside the live latency horizon so period aliases do not become absurd
 reports. Each classified chirp carries the full dechirped bin-energy surface,
-and decodes aggregate that into a `MimirChirpBinCalibrationProfile` per source
-with frames, anchors, clock confidence, anchor error, usable band count, and
-strongest bins. The analyzer keeps those profiles even when no timing report is
-accepted, so a physical mic path can fail synchronization while still teaching
-the next decoder which bands survived. Reports/states expose `delayUs` next to
-fractional sample delay.
+and decodes aggregate that into a `MimirChirpBinCalibrationModel` with measured
+usable bands, expected-symbol versus observed-bin confusion observations,
+timing residuals, delay hypotheses, phase summaries, and an adaptive codebook
+plan. The analyzer keeps raw profiles even when no timing report is accepted,
+and the active decoder can consume a persisted model for learned response
+weighting, first-order group-delay correction, and global delay-hypothesis
+seeding. Reports/states expose `delayUs` next to fractional sample delay.
 `Mimir.BufferSmoke
 --chirp-only-sync-self-test --sample-rate 192000` and `--hybrid-sync-self-test
 --sample-rate 192000` both recover a 1269.5-sample synthetic delay with printed
@@ -158,7 +159,13 @@ evidence; Starfire still owns the heavy soundfield and sensor-fusion work.
 The ASIO probe can now play raw mono Float32 timeline audio through the
 Focusrite outputs while capturing every ASIO input as raw interleaved Float32.
 `Mimir.BufferSmoke --analyze-asio-f32` feeds those captured channels into the
-same runtime active analyzer. A real 192 kHz chirp-bin Scarlett artifact decoded
+same runtime active analyzer. `--calibrate-chirp-bin-asio-f32` computes and
+persists the response/confusion/delay model, and `--analyze-asio-f32
+--calibration ...` loads it into the active decoder. The ASIO worker also
+supports `--emit-json-blocks`, so Focusrite ASIO callbacks can feed
+sample-bearing `audio-block` events into `Mimir.Runtime` continuously through
+the existing frame-event adapter while the native ABI cut is pending. A real
+192 kHz chirp-bin Scarlett artifact decoded
 `Loopback 1 -> Loopback 2` at exactly `0.000 us` with 12 matched anchors and
 0.999 confidence. The same analyzer now prints calibration profiles for
 decoded sources. Physical input 1 still fails pairwise timing in the stored

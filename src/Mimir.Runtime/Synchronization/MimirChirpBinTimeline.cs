@@ -15,6 +15,10 @@ internal sealed record ChirpBinKernelSet(
     ChirpBinKernel[] Symbols,
     double ReferenceEnergy);
 
+internal sealed record ChirpBinScore(
+    double Energy,
+    double PhaseRadians);
+
 public sealed class MimirChirpBinTimeline
 {
     public const int SampleRate = 48_000;
@@ -57,21 +61,24 @@ public sealed class MimirChirpBinTimeline
         return samples;
     }
 
-    public MimirChirpletStreamDecode DecodeStreamWindow(ReadOnlySpan<float> samples, int sampleRate)
+    public MimirChirpletStreamDecode DecodeStreamWindow(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        MimirChirpBinPathCalibration? calibration = null)
     {
         if (samples.Length == 0)
         {
             return new MimirChirpletStreamDecode([], [], [], null, []);
         }
 
-        var frames = DetectFrames(samples, sampleRate);
+        var frames = DetectFrames(samples, sampleRate, calibration);
         var symbols = frames
             .Select(frame => new MimirChirpletSymbolObservation(
                 frame.BestCandidate.SymbolId,
                 frame.SampleOffset,
                 frame.BestCandidate.Energy))
             .ToArray();
-        var anchors = DecodeAnchors(frames, sampleRate);
+        var anchors = DecodeAnchors(frames, sampleRate, calibration);
         var clock = FitClock(anchors, sampleRate);
         if (clock != null)
         {
@@ -80,6 +87,44 @@ public sealed class MimirChirpBinTimeline
         }
 
         return new MimirChirpletStreamDecode(frames, symbols, anchors, clock, EstimateBandResponse(frames));
+    }
+
+    public IReadOnlyList<MimirChirpBinConfusionObservation> CalibrationObservations(
+        MimirChirpletStreamDecode decode,
+        int sampleRate)
+    {
+        if (decode.ClockFit == null)
+        {
+            return [];
+        }
+
+        var observations = new List<MimirChirpBinConfusionObservation>(decode.Frames.Count);
+        foreach (var frame in decode.Frames)
+        {
+            if (!TryExpectedEventForSample(frame.SampleOffset, sampleRate, decode.ClockFit, out var timelineEvent))
+            {
+                continue;
+            }
+
+            var best = frame.BestCandidate;
+            var bestBand = best.BandResponses?
+                .OrderByDescending(response => response.Energy)
+                .FirstOrDefault();
+            var expectedSample = decode.ClockFit.SampleForTimelineSeconds(timelineEvent.StartSeconds);
+            observations.Add(new MimirChirpBinConfusionObservation(
+                timelineEvent.Index,
+                timelineEvent.SymbolId,
+                best.SymbolId,
+                SymbolCenterHz(Symbols[timelineEvent.SymbolId]),
+                bestBand?.CenterHz ?? SymbolCenterHz(Symbols[best.SymbolId]),
+                bestBand?.Energy ?? best.Energy,
+                frame.SampleOffset - expectedSample,
+                best.Energy,
+                decode.ClockFit.SourceOffsetSamples,
+                bestBand?.PhaseRadians ?? 0.0));
+        }
+
+        return observations;
     }
 
     public MimirChirpletTimelineEvent EventForIndex(ulong eventIndex)
@@ -118,7 +163,10 @@ public sealed class MimirChirpBinTimeline
         return events;
     }
 
-    private static IReadOnlyList<MimirChirpletTransformFrame> DetectFrames(ReadOnlySpan<float> samples, int sampleRate)
+    private static IReadOnlyList<MimirChirpletTransformFrame> DetectFrames(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        MimirChirpBinPathCalibration? calibration)
     {
         var chirpSamples = Math.Max(1, (int)Math.Round(ChirpDurationSeconds * sampleRate));
         if (samples.Length < chirpSamples)
@@ -149,7 +197,7 @@ public sealed class MimirChirpBinTimeline
                      .Take(maxExpectedEvents)
                      .Order())
         {
-            var frame = ClassifyAt(samples, sampleRate, proposal, sampleRate / 1_000);
+            var frame = ClassifyAt(samples, sampleRate, proposal, sampleRate / 1_000, calibration);
             if (frame != null)
             {
                 frames.Add(frame);
@@ -163,7 +211,8 @@ public sealed class MimirChirpBinTimeline
         ReadOnlySpan<float> samples,
         int sampleRate,
         int predictedOffset,
-        int searchRadiusSamples)
+        int searchRadiusSamples,
+        MimirChirpBinPathCalibration? calibration)
     {
         var chirpSamples = Math.Max(1, (int)Math.Round(ChirpDurationSeconds * sampleRate));
         if (samples.Length < chirpSamples)
@@ -179,7 +228,7 @@ public sealed class MimirChirpBinTimeline
         var step = Math.Max(2, sampleRate / 4_000);
         for (var offset = start; offset <= end; offset += step)
         {
-            var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset);
+            var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset, calibration);
             var energy = candidates.Length == 0 ? 0.0 : candidates[0].Energy;
             if (energy > bestEnergy || PreferLaterPlateauOffset(sampleRate, energy, bestEnergy, offset, bestOffset))
             {
@@ -194,7 +243,7 @@ public sealed class MimirChirpBinTimeline
         var localEnd = Math.Min(end, bestOffset + localStep * 4);
         for (var offset = localStart; offset <= localEnd; offset += localStep)
         {
-            var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset);
+            var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset, calibration);
             var energy = candidates.Length == 0 ? 0.0 : candidates[0].Energy;
             if (energy > bestEnergy || PreferLaterPlateauOffset(sampleRate, energy, bestEnergy, offset, bestOffset))
             {
@@ -228,7 +277,8 @@ public sealed class MimirChirpBinTimeline
                 var correctedEnergy = ScoreSymbolEnergy(
                     samples.Slice((int)Math.Round(correctedOffset), chirpSamples),
                     sampleRate,
-                    canonicalSymbol);
+                    canonicalSymbol) * (calibration?.SymbolWeight(canonicalSymbol) ?? 1.0);
+                correctedOffset -= calibration?.GroupDelayCorrectionSamples(canonicalSymbol) ?? 0.0;
                 correctedCandidates.Add(new MimirChirpletSymbolCandidate(
                     canonicalSymbol,
                     correctedOffset,
@@ -247,10 +297,11 @@ public sealed class MimirChirpBinTimeline
     private static MimirChirpletSymbolCandidate[] ScoreBins(
         ReadOnlySpan<float> samples,
         int sampleRate,
-        int sampleOffset)
+        int sampleOffset,
+        MimirChirpBinPathCalibration? calibration)
     {
         var kernels = KernelSets.GetOrAdd(sampleRate, BuildKernelSet);
-        var scores = new double[Symbols.Length];
+        var scores = new ChirpBinScore[Symbols.Length];
         var sampleEnergy = 0.0;
         for (var index = 0; index < samples.Length; index++)
         {
@@ -265,15 +316,23 @@ public sealed class MimirChirpBinTimeline
         for (var symbol = 0; symbol < Symbols.Length; symbol++)
         {
             var score = DechirpedBin(samples, kernels.Symbols[symbol]);
-            scores[symbol] = 2.0 * score / Math.Sqrt(sampleEnergy * kernels.ReferenceEnergy);
+            var energy = 2.0 * score.Energy / Math.Sqrt(sampleEnergy * kernels.ReferenceEnergy);
+            scores[symbol] = score with { Energy = energy };
         }
 
         var bandResponses = scores
-            .Select((energy, symbol) => new MimirChirpletBandResponse(SymbolCenterHz(Symbols[symbol]), energy))
+            .Select((score, symbol) => new MimirChirpletBandResponse(
+                SymbolCenterHz(Symbols[symbol]),
+                score.Energy,
+                score.PhaseRadians))
             .ToArray();
 
         return scores
-            .Select((energy, symbol) => new MimirChirpletSymbolCandidate(symbol, sampleOffset, energy, bandResponses))
+            .Select((score, symbol) => new MimirChirpletSymbolCandidate(
+                symbol,
+                sampleOffset - (calibration?.GroupDelayCorrectionSamples(symbol) ?? 0.0),
+                score.Energy * (calibration?.SymbolWeight(symbol) ?? 1.0),
+                bandResponses))
             .OrderByDescending(candidate => candidate.Energy)
             .Take(MaxSymbolCandidatesPerFrame)
             .ToArray();
@@ -294,7 +353,7 @@ public sealed class MimirChirpBinTimeline
         }
 
         var score = DechirpedBin(samples, kernels.Symbols[symbolId]);
-        return 2.0 * score / Math.Sqrt(sampleEnergy * kernels.ReferenceEnergy);
+        return 2.0 * score.Energy / Math.Sqrt(sampleEnergy * kernels.ReferenceEnergy);
     }
 
     private static double RefineOffset(
@@ -334,7 +393,7 @@ public sealed class MimirChirpBinTimeline
             offset > bestOffset;
     }
 
-    private static double DechirpedBin(ReadOnlySpan<float> samples, ChirpBinKernel kernel)
+    private static ChirpBinScore DechirpedBin(ReadOnlySpan<float> samples, ChirpBinKernel kernel)
     {
         var real = 0.0;
         var imaginary = 0.0;
@@ -344,12 +403,15 @@ public sealed class MimirChirpBinTimeline
             imaginary += samples[index] * kernel.Imaginary[index];
         }
 
-        return Math.Sqrt(real * real + imaginary * imaginary);
+        return new ChirpBinScore(
+            Math.Sqrt(real * real + imaginary * imaginary),
+            Math.Atan2(imaginary, real));
     }
 
     private static IReadOnlyList<MimirChirpletTimelineAnchor> DecodeAnchors(
         IReadOnlyList<MimirChirpletTransformFrame> frames,
-        int sampleRate)
+        int sampleRate,
+        MimirChirpBinPathCalibration? calibration)
     {
         if (frames.Count < TimelineOrder)
         {
@@ -402,12 +464,13 @@ public sealed class MimirChirpBinTimeline
             }
         }
 
-        return SelectCoherentAnchorPath(candidates, sampleRate);
+        return SelectCoherentAnchorPath(candidates, sampleRate, calibration);
     }
 
     private static IReadOnlyList<MimirChirpletTimelineAnchor> SelectCoherentAnchorPath(
         IReadOnlyList<MimirChirpletTimelineAnchor> candidates,
-        int sampleRate)
+        int sampleRate,
+        MimirChirpBinPathCalibration? calibration)
     {
         if (candidates.Count == 0)
         {
@@ -416,9 +479,8 @@ public sealed class MimirChirpBinTimeline
 
         List<MimirChirpletTimelineAnchor> bestPath = [];
         var bestScore = double.NegativeInfinity;
-        foreach (var seed in candidates.OrderByDescending(anchor => anchor.Confidence).Take(64))
+        foreach (var seedOffset in CandidateDelaySeeds(candidates, sampleRate, calibration))
         {
-            var seedOffset = seed.SampleOffset - seed.TimelineSeconds * sampleRate;
             var path = candidates
                 .Where(anchor => Math.Abs((anchor.SampleOffset - anchor.TimelineSeconds * sampleRate) - seedOffset) <= sampleRate * 0.006)
                 .GroupBy(anchor => anchor.EventIndex)
@@ -451,6 +513,27 @@ public sealed class MimirChirpBinTimeline
             .Where(anchor => Math.Abs(anchor.SampleOffset - finalClock.SampleForTimelineSeconds(anchor.TimelineSeconds)) <= Math.Max(16.0, sampleRate * 0.0015))
             .OrderBy(anchor => anchor.SampleOffset)
             .ToArray();
+    }
+
+    private static IEnumerable<double> CandidateDelaySeeds(
+        IReadOnlyList<MimirChirpletTimelineAnchor> candidates,
+        int sampleRate,
+        MimirChirpBinPathCalibration? calibration)
+    {
+        if (calibration != null)
+        {
+            foreach (var hypothesis in calibration.DelayHypotheses
+                         .OrderByDescending(hypothesis => hypothesis.Confidence * hypothesis.SupportCount)
+                         .Take(16))
+            {
+                yield return hypothesis.DelaySamples;
+            }
+        }
+
+        foreach (var seed in candidates.OrderByDescending(anchor => anchor.Confidence).Take(64))
+        {
+            yield return seed.SampleOffset - seed.TimelineSeconds * sampleRate;
+        }
     }
 
     private static MimirChirpletClockFit? FitClock(
@@ -737,6 +820,24 @@ public sealed class MimirChirpBinTimeline
 
     private static double EventStartSeconds(ulong eventIndex) =>
         FirstEventSeconds + eventIndex * EventSpacingSeconds;
+
+    private static bool TryExpectedEventForSample(
+        double sampleOffset,
+        int sampleRate,
+        MimirChirpletClockFit clockFit,
+        out MimirChirpletTimelineEvent timelineEvent)
+    {
+        var timelineSeconds = (sampleOffset - clockFit.SourceOffsetSamples) / clockFit.EffectiveSampleRate;
+        var eventIndex = (long)Math.Round((timelineSeconds - FirstEventSeconds) / EventSpacingSeconds);
+        if (eventIndex < 0)
+        {
+            timelineEvent = default!;
+            return false;
+        }
+
+        timelineEvent = Default.EventForIndex((ulong)eventIndex);
+        return Math.Abs(timelineSeconds - timelineEvent.StartSeconds) <= Math.Max(0.012, 6.0 / sampleRate);
+    }
 
     private static int[] BuildDeBruijn(int alphabetSize, int order)
     {

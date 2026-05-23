@@ -71,7 +71,7 @@ public sealed record MimirChirpBinCalibrationProfile(
             decode.Frames.Count,
             decode.Anchors.Count,
             decode.ClockFit?.Confidence ?? 0.0,
-            decode.ClockFit?.MeanAbsoluteErrorSamples ?? double.NaN,
+            decode.ClockFit?.MeanAbsoluteErrorSamples ?? 0.0,
             bands);
     }
 }

@@ -2,11 +2,31 @@
   "bufferSeconds": 5.0,
   "audioSync": {
     "mode": "hybrid",
-    "referenceSourceId": "loopback-scarlett-speakers",
+    "referenceSourceId": "asio-ch2",
     "calibrationGain": 2.0,
-    "watermarkGain": 0.035
+    "watermarkGain": 0.035,
+    "calibrationModelPath": "../calibration/chirp-bin/scarlett-artifact.json"
   },
   "streams": [
+    {
+      "sourceId": "focusrite-asio",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../native/probes/asio_audio_cadence/build/Release/asio_audio_cadence.exe",
+      "arguments": [
+        "--set-sample-rate",
+        "192000",
+        "--emit-json-blocks"
+      ],
+      "acceptSourceIds": [
+        "asio-ch0",
+        "asio-ch1",
+        "asio-ch2",
+        "asio-ch3"
+      ]
+    },
     {
       "sourceId": "local-ks-probe",
       "kind": "Video",

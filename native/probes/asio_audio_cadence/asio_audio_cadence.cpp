@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <mutex>
 #include <thread>
 #include <string>
 #include <vector>
@@ -127,6 +128,8 @@ struct CaptureState
     std::vector<float>* recordedInput = nullptr;
     unsigned long long recordFrames = 0;
     unsigned long long sweepFrame = 0;
+    bool emitJsonBlocks = false;
+    std::mutex emitMutex;
     std::atomic<unsigned long long> callbacks{0};
     std::atomic<unsigned long long> frames{0};
     std::atomic<unsigned long long> nonZeroSamples{0};
@@ -217,6 +220,51 @@ void writeSample(unsigned char* sample, ASIOSampleType type, double value)
     default:
         break;
     }
+}
+
+std::string base64Encode(const unsigned char* data, size_t size)
+{
+    static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string output;
+    output.reserve(((size + 2) / 3) * 4);
+    for (size_t index = 0; index < size; index += 3)
+    {
+        const unsigned int a = data[index];
+        const unsigned int b = index + 1 < size ? data[index + 1] : 0;
+        const unsigned int c = index + 2 < size ? data[index + 2] : 0;
+        const unsigned int triple = (a << 16) | (b << 8) | c;
+        output.push_back(alphabet[(triple >> 18) & 0x3f]);
+        output.push_back(alphabet[(triple >> 12) & 0x3f]);
+        output.push_back(index + 1 < size ? alphabet[(triple >> 6) & 0x3f] : '=');
+        output.push_back(index + 2 < size ? alphabet[triple & 0x3f] : '=');
+    }
+
+    return output;
+}
+
+void emitJsonAudioBlock(size_t channel, unsigned long long startFrame, const std::vector<float>& samples)
+{
+    if (!g_capture.emitJsonBlocks || g_capture.sampleRate <= 0.0 || samples.empty())
+    {
+        return;
+    }
+
+    const auto timestampNs = static_cast<unsigned long long>(
+        (static_cast<double>(startFrame) / g_capture.sampleRate) * 1000000000.0);
+    const auto encoded = base64Encode(
+        reinterpret_cast<const unsigned char*>(samples.data()),
+        samples.size() * sizeof(float));
+    std::lock_guard<std::mutex> lock(g_capture.emitMutex);
+    std::printf(
+        "{\"type\":\"audio-block\",\"sourceId\":\"asio-ch%zu\",\"timestampNs\":%llu,\"sequence\":%llu,\"sampleRate\":%.0f,\"channels\":1,\"sampleFormat\":\"Float32\",\"frameCount\":%zu,\"byteLength\":%zu,\"samplesBase64\":\"%s\"}\n",
+        channel,
+        timestampNs,
+        startFrame / static_cast<unsigned long long>(std::max(1L, g_capture.bufferSize)),
+        g_capture.sampleRate,
+        samples.size(),
+        samples.size() * sizeof(float),
+        encoded.c_str());
+    std::fflush(stdout);
 }
 
 void processOutput(long doubleBufferIndex)
@@ -335,6 +383,7 @@ void processSweepInput(long doubleBufferIndex)
 
 void bufferSwitch(long doubleBufferIndex, ASIOBool)
 {
+    const auto callbackStartFrame = g_capture.frames.load(std::memory_order_relaxed);
     g_capture.callbacks.fetch_add(1, std::memory_order_relaxed);
     g_capture.frames.fetch_add(static_cast<unsigned long long>(g_capture.bufferSize), std::memory_order_relaxed);
     processOutput(doubleBufferIndex);
@@ -357,13 +406,25 @@ void bufferSwitch(long doubleBufferIndex, ASIOBool)
             continue;
         }
 
+        std::vector<float> emittedSamples;
+        if (g_capture.emitJsonBlocks)
+        {
+            emittedSamples.resize(static_cast<size_t>(g_capture.bufferSize));
+        }
+
         for (long frame = 0; frame < g_capture.bufferSize; ++frame)
         {
             const auto absoluteFrame = g_capture.sweepFrame + static_cast<unsigned long long>(frame);
+            const auto value = static_cast<float>(readSample(raw + frame * sampleBytes, info.type));
             if (g_capture.recordedInput && absoluteFrame < g_capture.recordFrames)
             {
                 (*g_capture.recordedInput)[static_cast<size_t>(absoluteFrame) * static_cast<size_t>(g_capture.inputCount) + channel] =
-                    static_cast<float>(readSample(raw + frame * sampleBytes, info.type));
+                    value;
+            }
+
+            if (g_capture.emitJsonBlocks)
+            {
+                emittedSamples[static_cast<size_t>(frame)] = value;
             }
 
             if (sampleIsNonZero(raw + frame * sampleBytes, sampleBytes))
@@ -371,6 +432,8 @@ void bufferSwitch(long doubleBufferIndex, ASIOBool)
                 ++nonZero;
             }
         }
+
+        emitJsonAudioBlock(channel, callbackStartFrame, emittedSamples);
     }
     g_capture.nonZeroSamples.fetch_add(nonZero, std::memory_order_relaxed);
 }
@@ -509,6 +572,7 @@ int main(int argc, char** argv)
     const auto captureSeconds = doubleOption(argc, argv, "--capture-seconds", 0.0);
     const auto setSampleRate = doubleOption(argc, argv, "--set-sample-rate", 0.0);
     const bool monitorSweep = hasArg(argc, argv, "--monitor-sweep");
+    const bool emitJsonBlocks = hasArg(argc, argv, "--emit-json-blocks");
     const char* playFloat32MonoPath = option(argc, argv, "--play-f32-mono", nullptr);
     const char* recordFloat32InterleavedPath = option(argc, argv, "--record-f32-interleaved", nullptr);
     const auto playGain = doubleOption(argc, argv, "--play-gain", 1.0);
@@ -670,7 +734,7 @@ int main(int argc, char** argv)
         std::printf("asio playback-f32-mono: path=%s samples=%zu gain=%.5f\n", playFloat32MonoPath, playbackSamples.size(), playGain);
     }
 
-    if (captureSeconds > 0.0 || monitorSweep || !playbackSamples.empty())
+    if (captureSeconds > 0.0 || monitorSweep || !playbackSamples.empty() || emitJsonBlocks)
     {
         std::vector<double> sweepFrequencies;
         if (monitorSweep)
@@ -681,6 +745,10 @@ int main(int argc, char** argv)
         auto runSeconds = monitorSweep
             ? (sweepToneSeconds + sweepGapSeconds) * static_cast<double>(sweepFrequencies.size()) + 0.25
             : captureSeconds;
+        if (runSeconds <= 0.0 && emitJsonBlocks)
+        {
+            runSeconds = 86400.0;
+        }
         if (runSeconds <= 0.0 && !playbackSamples.empty() && currentRate > 0.0)
         {
             runSeconds = static_cast<double>(playbackSamples.size()) / currentRate;
@@ -739,8 +807,8 @@ int main(int argc, char** argv)
         {
             const auto requestedFrames = static_cast<unsigned long long>(std::ceil(runSeconds * currentRate)) + static_cast<unsigned long long>(preferredSize);
             recordedInput.assign(static_cast<size_t>(requestedFrames) * static_cast<size_t>(inputs), 0.0f);
-            g_capture.recordedInput = &recordedInput;
-            g_capture.recordFrames = requestedFrames;
+        g_capture.recordedInput = &recordedInput;
+        g_capture.recordFrames = requestedFrames;
         }
         g_capture.bufferSize = preferredSize;
         g_capture.inputCount = inputs;
@@ -752,6 +820,7 @@ int main(int argc, char** argv)
         g_capture.sweepGain = sweepGain;
         g_capture.playbackSamples = playbackSamples.empty() ? nullptr : &playbackSamples;
         g_capture.playbackGain = playGain;
+        g_capture.emitJsonBlocks = emitJsonBlocks;
         g_capture.sweepFrame = 0;
         g_capture.sweepEnergy.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
         g_capture.sweepPeak.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
@@ -854,6 +923,7 @@ int main(int argc, char** argv)
         g_capture.outputChannels = nullptr;
         g_capture.playbackSamples = nullptr;
         g_capture.recordedInput = nullptr;
+        g_capture.emitJsonBlocks = false;
         driver->disposeBuffers();
     }
 

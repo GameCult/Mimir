@@ -1,0 +1,2326 @@
+{
+  "ModelId": "chirp-bin-20260523T191655Z",
+  "CreatedAt": "2026-05-23T19:16:55.9803706+00:00",
+  "SampleRate": 192000,
+  "ReferenceSourceId": "asio-ch2",
+  "Paths": [
+    {
+      "SourceId": "asio-ch0",
+      "SampleRate": 192000,
+      "Profile": {
+        "SourceId": "asio-ch0",
+        "SampleRate": 192000,
+        "FrameCount": 8,
+        "AnchorCount": 0,
+        "ClockConfidence": 0,
+        "MeanAnchorErrorSamples": 0,
+        "Bands": [
+          {
+            "CenterHz": 3625,
+            "MeanEnergy": 0.03913795797334273,
+            "PeakEnergy": 0.07305074809319667,
+            "RelativeGain": 0.9031274571076037,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4075,
+            "MeanEnergy": 0.028378157645841395,
+            "PeakEnergy": 0.06260494595938466,
+            "RelativeGain": 0.6548398199401124,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4525,
+            "MeanEnergy": 0.029450143520437407,
+            "PeakEnergy": 0.05873913227546674,
+            "RelativeGain": 0.6795764165105972,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4975,
+            "MeanEnergy": 0.04333602933376392,
+            "PeakEnergy": 0.089830384056493,
+            "RelativeGain": 1,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 5425,
+            "MeanEnergy": 0.025098166610740144,
+            "PeakEnergy": 0.06088170700446069,
+            "RelativeGain": 0.5791524280510326,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 5875,
+            "MeanEnergy": 0.023348415166252516,
+            "PeakEnergy": 0.03873787074531297,
+            "RelativeGain": 0.5387760605944885,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 6325,
+            "MeanEnergy": 0.024440126399055725,
+            "PeakEnergy": 0.028984479357744262,
+            "RelativeGain": 0.563967829420264,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 6775,
+            "MeanEnergy": 0.014346409009942268,
+            "PeakEnergy": 0.023781208939574427,
+            "RelativeGain": 0.3310503807224607,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 7225,
+            "MeanEnergy": 0.017928237014792882,
+            "PeakEnergy": 0.034450221655744274,
+            "RelativeGain": 0.4137028078118051,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 7675,
+            "MeanEnergy": 0.012511349747870226,
+            "PeakEnergy": 0.029690682396459226,
+            "RelativeGain": 0.28870549379387644,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8125,
+            "MeanEnergy": 0.014082854634327,
+            "PeakEnergy": 0.02978395174916663,
+            "RelativeGain": 0.32496873504178614,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8575,
+            "MeanEnergy": 0.014166240006282685,
+            "PeakEnergy": 0.032449764564376087,
+            "RelativeGain": 0.32689289314389264,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9025,
+            "MeanEnergy": 0.014949054633497034,
+            "PeakEnergy": 0.031211037161692847,
+            "RelativeGain": 0.3449567222313546,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9475,
+            "MeanEnergy": 0.01598732169771644,
+            "PeakEnergy": 0.022043530041922513,
+            "RelativeGain": 0.36891524081696186,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 9925,
+            "MeanEnergy": 0.020915908006712388,
+            "PeakEnergy": 0.03807360398880363,
+            "RelativeGain": 0.48264477221996915,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 10375,
+            "MeanEnergy": 0.016560658256372204,
+            "PeakEnergy": 0.030453798151008158,
+            "RelativeGain": 0.38214526136730026,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 10825,
+            "MeanEnergy": 0.010364612796337729,
+            "PeakEnergy": 0.021158941509049876,
+            "RelativeGain": 0.23916849226106796,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11275,
+            "MeanEnergy": 0.008895896623590851,
+            "PeakEnergy": 0.01512100554982274,
+            "RelativeGain": 0.2052771506839435,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11725,
+            "MeanEnergy": 0.0070253514944388275,
+            "PeakEnergy": 0.01355432162581175,
+            "RelativeGain": 0.16211341007574137,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12175,
+            "MeanEnergy": 0.010056778683663989,
+            "PeakEnergy": 0.019258362032579232,
+            "RelativeGain": 0.2320650700646578,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12625,
+            "MeanEnergy": 0.011261164532357664,
+            "PeakEnergy": 0.017268940437937266,
+            "RelativeGain": 0.2598568605726847,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13075,
+            "MeanEnergy": 0.008621657525495872,
+            "PeakEnergy": 0.018929333152272788,
+            "RelativeGain": 0.19894894982403422,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13525,
+            "MeanEnergy": 0.008660113899150099,
+            "PeakEnergy": 0.018669616981169514,
+            "RelativeGain": 0.19983634939075604,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13975,
+            "MeanEnergy": 0.011187424435002015,
+            "PeakEnergy": 0.020384498091683367,
+            "RelativeGain": 0.2581552718833352,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14425,
+            "MeanEnergy": 0.010552117191449764,
+            "PeakEnergy": 0.016668621424328497,
+            "RelativeGain": 0.2434952475728645,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14875,
+            "MeanEnergy": 0.008890250773902491,
+            "PeakEnergy": 0.014590860318431953,
+            "RelativeGain": 0.2051468699504486,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15325,
+            "MeanEnergy": 0.007801691431406243,
+            "PeakEnergy": 0.014537042081991903,
+            "RelativeGain": 0.18002783252982058,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15775,
+            "MeanEnergy": 0.013197788520475354,
+            "PeakEnergy": 0.026741608738675923,
+            "RelativeGain": 0.3045454030600978,
+            "ObservationCount": 8,
+            "Usable": false
+          },
+          {
+            "CenterHz": 16225,
+            "MeanEnergy": 0.015930425224870523,
+            "PeakEnergy": 0.028386465156178056,
+            "RelativeGain": 0.3676023269732012,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 16675,
+            "MeanEnergy": 0.016853262201619375,
+            "PeakEnergy": 0.03226346177158823,
+            "RelativeGain": 0.38889724002675713,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 17125,
+            "MeanEnergy": 0.019183361719107617,
+            "PeakEnergy": 0.026489025614269062,
+            "RelativeGain": 0.4426654221447441,
+            "ObservationCount": 8,
+            "Usable": true
+          },
+          {
+            "CenterHz": 17575,
+            "MeanEnergy": 0.020148588662393548,
+            "PeakEnergy": 0.026481812373487085,
+            "RelativeGain": 0.46493850433813055,
+            "ObservationCount": 8,
+            "Usable": true
+          }
+        ],
+        "UsableBandCount": 15
+      },
+      "CodebookPlan": {
+        "ReliableSymbolCount": 0,
+        "RecommendedOrder": 8,
+        "ReliableSymbolIds": []
+      },
+      "Symbols": [],
+      "Confusion": [],
+      "DelayHypotheses": []
+    },
+    {
+      "SourceId": "asio-ch1",
+      "SampleRate": 192000,
+      "Profile": {
+        "SourceId": "asio-ch1",
+        "SampleRate": 192000,
+        "FrameCount": 23,
+        "AnchorCount": 21,
+        "ClockConfidence": 0.8630578147481293,
+        "MeanAnchorErrorSamples": 37.291584033245464,
+        "Bands": [
+          {
+            "CenterHz": 3625,
+            "MeanEnergy": 0.07604257070110779,
+            "PeakEnergy": 0.1401972838450978,
+            "RelativeGain": 0.12387005178726239,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 4075,
+            "MeanEnergy": 0.17829723823556212,
+            "PeakEnergy": 1.2388193344455247,
+            "RelativeGain": 0.29043847321488825,
+            "ObservationCount": 23,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4525,
+            "MeanEnergy": 0.6138898757522541,
+            "PeakEnergy": 1.2266248952300964,
+            "RelativeGain": 1,
+            "ObservationCount": 23,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4975,
+            "MeanEnergy": 0.07926446199507334,
+            "PeakEnergy": 1.148185667935492,
+            "RelativeGain": 0.12911837305989696,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 5425,
+            "MeanEnergy": 0.017644521234816076,
+            "PeakEnergy": 0.08597903561317417,
+            "RelativeGain": 0.028742160331598023,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 5875,
+            "MeanEnergy": 0.021699433399213774,
+            "PeakEnergy": 0.13289042061046374,
+            "RelativeGain": 0.03534743649685299,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 6325,
+            "MeanEnergy": 0.023856681006375436,
+            "PeakEnergy": 0.157188760201815,
+            "RelativeGain": 0.038861499348139136,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 6775,
+            "MeanEnergy": 0.06738464767771958,
+            "PeakEnergy": 0.8679642624875925,
+            "RelativeGain": 0.10976667043929851,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 7225,
+            "MeanEnergy": 0.09613414051941083,
+            "PeakEnergy": 0.8095031054659771,
+            "RelativeGain": 0.1565983481998446,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 7675,
+            "MeanEnergy": 0.006966987915686608,
+            "PeakEnergy": 0.01288522554439906,
+            "RelativeGain": 0.011348921347089062,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8125,
+            "MeanEnergy": 0.0072653256582989635,
+            "PeakEnergy": 0.01459307033791203,
+            "RelativeGain": 0.01183490059906284,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8575,
+            "MeanEnergy": 0.004937089034154387,
+            "PeakEnergy": 0.013829997151026315,
+            "RelativeGain": 0.008042304050224857,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9025,
+            "MeanEnergy": 0.0035920096761061907,
+            "PeakEnergy": 0.010705744571023681,
+            "RelativeGain": 0.0058512280752383815,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9475,
+            "MeanEnergy": 0.0022603096498280146,
+            "PeakEnergy": 0.009713029712701021,
+            "RelativeGain": 0.0036819464518098714,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9925,
+            "MeanEnergy": 0.0018129464602818417,
+            "PeakEnergy": 0.0054030700107880044,
+            "RelativeGain": 0.002953211205935391,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 10375,
+            "MeanEnergy": 0.0014427400191521856,
+            "PeakEnergy": 0.00634236456535317,
+            "RelativeGain": 0.0023501609590551847,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 10825,
+            "MeanEnergy": 0.0011374093746133074,
+            "PeakEnergy": 0.004264435318383495,
+            "RelativeGain": 0.0018527905729338477,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11275,
+            "MeanEnergy": 0.0010757061746231808,
+            "PeakEnergy": 0.0029966445065518587,
+            "RelativeGain": 0.0017522787345287654,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11725,
+            "MeanEnergy": 0.0010824555915236204,
+            "PeakEnergy": 0.0024713942718322312,
+            "RelativeGain": 0.0017632732421221167,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12175,
+            "MeanEnergy": 0.0007859625349032106,
+            "PeakEnergy": 0.0021708548358275064,
+            "RelativeGain": 0.0012802989036756805,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12625,
+            "MeanEnergy": 0.0006357850515006968,
+            "PeakEnergy": 0.0016578989419019621,
+            "RelativeGain": 0.001035666292299759,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13075,
+            "MeanEnergy": 0.0006138442164321321,
+            "PeakEnergy": 0.0016684254196232822,
+            "RelativeGain": 0.0009999256229465162,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13525,
+            "MeanEnergy": 0.0005673541958751057,
+            "PeakEnergy": 0.0008959942935431642,
+            "RelativeGain": 0.0009241953944587797,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13975,
+            "MeanEnergy": 0.00042043036956721555,
+            "PeakEnergy": 0.0010401193764853743,
+            "RelativeGain": 0.0006848628494679517,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14425,
+            "MeanEnergy": 0.00048328668908086055,
+            "PeakEnergy": 0.0013801185419960926,
+            "RelativeGain": 0.0007872530695976151,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14875,
+            "MeanEnergy": 0.000464296823345008,
+            "PeakEnergy": 0.0008551336522606569,
+            "RelativeGain": 0.0007563194013845947,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15325,
+            "MeanEnergy": 0.000482258742316937,
+            "PeakEnergy": 0.0013037789603530822,
+            "RelativeGain": 0.0007855785888730976,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15775,
+            "MeanEnergy": 0.0003753288551728027,
+            "PeakEnergy": 0.0010527771239291612,
+            "RelativeGain": 0.0006113944373376068,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 16225,
+            "MeanEnergy": 0.0004655070469994536,
+            "PeakEnergy": 0.0007271438229257128,
+            "RelativeGain": 0.000758290803263413,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 16675,
+            "MeanEnergy": 0.0004362942277345238,
+            "PeakEnergy": 0.001217409576080948,
+            "RelativeGain": 0.0007107043868411961,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 17125,
+            "MeanEnergy": 0.0005625077108242511,
+            "PeakEnergy": 0.0013332699699953883,
+            "RelativeGain": 0.0009163006803703355,
+            "ObservationCount": 23,
+            "Usable": false
+          },
+          {
+            "CenterHz": 17575,
+            "MeanEnergy": 0.000503526700159773,
+            "PeakEnergy": 0.001054670204701983,
+            "RelativeGain": 0.0008202231703898957,
+            "ObservationCount": 23,
+            "Usable": false
+          }
+        ],
+        "UsableBandCount": 2
+      },
+      "CodebookPlan": {
+        "ReliableSymbolCount": 2,
+        "RecommendedOrder": 8,
+        "ReliableSymbolIds": [
+          3,
+          8
+        ]
+      },
+      "Symbols": [
+        {
+          "SymbolId": 1,
+          "Reliability": 0.02319056845550582,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4468.75,
+          "MeanEnergy": 0.9902022429801735,
+          "MeanTimingResidualSamples": 807.8313302832285,
+          "TimingResidualSpreadSamples": 208.19093681468166,
+          "MeanPhaseRadians": -1.1959642801490071,
+          "ObservationCount": 8
+        },
+        {
+          "SymbolId": 2,
+          "Reliability": 0.16743780377184878,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4475,
+          "MeanEnergy": 0.9196472718940074,
+          "MeanTimingResidualSamples": -106.64683404730425,
+          "TimingResidualSpreadSamples": 186.34542688028313,
+          "MeanPhaseRadians": 1.008577262190213,
+          "ObservationCount": 9
+        },
+        {
+          "SymbolId": 3,
+          "Reliability": 1.148185667935492,
+          "ExpectedCenterHz": 4975,
+          "ObservedCenterHz": 4975,
+          "MeanEnergy": 1.148185667935492,
+          "MeanTimingResidualSamples": -22.558693408966064,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -0.5902763444645657,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 4,
+          "Reliability": 0,
+          "ExpectedCenterHz": 5425,
+          "ObservedCenterHz": 4975,
+          "MeanEnergy": 0.30966049519505534,
+          "MeanTimingResidualSamples": -720.2603219151497,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": 2.5499560816611844,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 6,
+          "Reliability": 0,
+          "ExpectedCenterHz": 6325,
+          "ObservedCenterHz": 6775,
+          "MeanEnergy": 0.8679642624875925,
+          "MeanTimingResidualSamples": 896.3364210426807,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": 3.098070627204246,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 7,
+          "Reliability": 0,
+          "ExpectedCenterHz": 6775,
+          "ObservedCenterHz": 7225,
+          "MeanEnergy": 0.5299773190124039,
+          "MeanTimingResidualSamples": 1098.634792521596,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": 0.19503307191358674,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 8,
+          "Reliability": 0.6732785913925556,
+          "ExpectedCenterHz": 7225,
+          "ObservedCenterHz": 7225,
+          "MeanEnergy": 0.6732785913925556,
+          "MeanTimingResidualSamples": -8.06683599948883,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": 2.6277982959406794,
+          "ObservationCount": 1
+        }
+      ],
+      "Confusion": [
+        {
+          "EventIndex": 2975,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.6320307152592042,
+          "TimingResidualSamples": 969.2773541212082,
+          "Confidence": 0.6320307152592042,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -1.6624052502584878
+        },
+        {
+          "EventIndex": 2976,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.8652845939929102,
+          "TimingResidualSamples": 2.7101446241140366,
+          "Confidence": 0.8652845939929102,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0180307422947092
+        },
+        {
+          "EventIndex": 2977,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.8922343380058734,
+          "TimingResidualSamples": 2.142935112118721,
+          "Confidence": 0.8922343380058734,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0220387933489175
+        },
+        {
+          "EventIndex": 2978,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 1.2266248952300964,
+          "TimingResidualSamples": 902.5757256150246,
+          "Confidence": 1.2266248952300964,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -0.7101835897546481
+        },
+        {
+          "EventIndex": 2979,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.9053756459646586,
+          "TimingResidualSamples": 1.008516103029251,
+          "Confidence": 0.9053756459646586,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0334368755807082
+        },
+        {
+          "EventIndex": 2980,
+          "ExpectedSymbolId": 3,
+          "ObservedSymbolId": 3,
+          "ExpectedCenterHz": 4975,
+          "ObservedCenterHz": 4975,
+          "ObservedEnergy": 1.148185667935492,
+          "TimingResidualSamples": -22.558693408966064,
+          "Confidence": 1.148185667935492,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -0.5902763444645656
+        },
+        {
+          "EventIndex": 2981,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 1.1922110739849172,
+          "TimingResidualSamples": 900.8740970939398,
+          "Confidence": 1.1922110739849172,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -0.7107129185351657
+        },
+        {
+          "EventIndex": 2982,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.8953269035780607,
+          "TimingResidualSamples": -0.6931124180555344,
+          "Confidence": 0.8953269035780607,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0251732541617515
+        },
+        {
+          "EventIndex": 2983,
+          "ExpectedSymbolId": 4,
+          "ObservedSymbolId": 3,
+          "ExpectedCenterHz": 5425,
+          "ObservedCenterHz": 4975,
+          "ObservedEnergy": 0.30966049519505534,
+          "TimingResidualSamples": -720.2603219151497,
+          "Confidence": 0.30966049519505534,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 2.5499560816611844
+        },
+        {
+          "EventIndex": 2984,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.6198462152151802,
+          "TimingResidualSamples": 964.2498763252806,
+          "Confidence": 0.6198462152151802,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -1.6367658651449744
+        },
+        {
+          "EventIndex": 2985,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.8629764995587222,
+          "TimingResidualSamples": -2.39474093914032,
+          "Confidence": 0.8629764995587222,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0292647496608314
+        },
+        {
+          "EventIndex": 2987,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.6170315850664282,
+          "TimingResidualSamples": 962.4708400517702,
+          "Confidence": 0.6170315850664282,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -1.6334918021334714
+        },
+        {
+          "EventIndex": 2988,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.8633924891830707,
+          "TimingResidualSamples": -4.096369445323944,
+          "Confidence": 0.8633924891830707,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0289449583188552
+        },
+        {
+          "EventIndex": 2989,
+          "ExpectedSymbolId": 6,
+          "ObservedSymbolId": 7,
+          "ExpectedCenterHz": 6325,
+          "ObservedCenterHz": 6775,
+          "ObservedEnergy": 0.8679642624875925,
+          "TimingResidualSamples": 896.3364210426807,
+          "Confidence": 0.8679642624875925,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 3.098070627204246
+        },
+        {
+          "EventIndex": 2990,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 1.1921949851942821,
+          "TimingResidualSamples": 895.7692115306854,
+          "Confidence": 1.1921949851942821,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -0.703020204805768
+        },
+        {
+          "EventIndex": 2991,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.881859333373252,
+          "TimingResidualSamples": -5.7979979664087296,
+          "Confidence": 0.881859333373252,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0345538888401813
+        },
+        {
+          "EventIndex": 2992,
+          "ExpectedSymbolId": 7,
+          "ObservedSymbolId": 8,
+          "ExpectedCenterHz": 6775,
+          "ObservedCenterHz": 7225,
+          "ObservedEnergy": 0.5299773190124039,
+          "TimingResidualSamples": 1098.634792521596,
+          "Confidence": 0.5299773190124039,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 0.19503307191358674
+        },
+        {
+          "EventIndex": 2993,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.2388193344455247,
+          "TimingResidualSamples": -24.9324169754982,
+          "Confidence": 1.2388193344455247,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -1.8128993540776832
+        },
+        {
+          "EventIndex": 2994,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 0.9011319584205876,
+          "TimingResidualSamples": -7.499626487493515,
+          "Confidence": 0.9011319584205876,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 1.0288652611619757
+        },
+        {
+          "EventIndex": 2995,
+          "ExpectedSymbolId": 8,
+          "ObservedSymbolId": 8,
+          "ExpectedCenterHz": 7225,
+          "ObservedCenterHz": 7225,
+          "ObservedEnergy": 0.6732785913925556,
+          "TimingResidualSamples": -8.06683599948883,
+          "Confidence": 0.6732785913925556,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": 2.6277982959406794
+        },
+        {
+          "EventIndex": 2996,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 1.202859139445754,
+          "TimingResidualSamples": 892.365954503417,
+          "Confidence": 1.202859139445754,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -0.7043348957346999
+        },
+        {
+          "EventIndex": 2997,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.209243684968931,
+          "TimingResidualSamples": -945.2012550085783,
+          "Confidence": 1.209243684968931,
+          "DelayHypothesisSamples": -71375003.58864856,
+          "PhaseRadians": -1.9807483218485091
+        }
+      ],
+      "DelayHypotheses": []
+    },
+    {
+      "SourceId": "asio-ch2",
+      "SampleRate": 192000,
+      "Profile": {
+        "SourceId": "asio-ch2",
+        "SampleRate": 192000,
+        "FrameCount": 24,
+        "AnchorCount": 22,
+        "ClockConfidence": 0.9945090136670505,
+        "MeanAnchorErrorSamples": 1.411854858157612,
+        "Bands": [
+          {
+            "CenterHz": 3625,
+            "MeanEnergy": 0.6624755521547112,
+            "PeakEnergy": 1.9831606924956897,
+            "RelativeGain": 0.8944231516807526,
+            "ObservationCount": 24,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4075,
+            "MeanEnergy": 0.7406735289776681,
+            "PeakEnergy": 1.9831852678192377,
+            "RelativeGain": 1,
+            "ObservationCount": 24,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4525,
+            "MeanEnergy": 0.08429458472689423,
+            "PeakEnergy": 1.98317479150165,
+            "RelativeGain": 0.11380801585179343,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 4975,
+            "MeanEnergy": 0.08337506164059473,
+            "PeakEnergy": 1.9831581977468316,
+            "RelativeGain": 0.11256654703952373,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 5425,
+            "MeanEnergy": 0.08321944241002051,
+            "PeakEnergy": 1.9831595137173625,
+            "RelativeGain": 0.11235644201418414,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 5875,
+            "MeanEnergy": 0.08310533327536378,
+            "PeakEnergy": 1.983165098459816,
+            "RelativeGain": 0.11220238070350894,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 6325,
+            "MeanEnergy": 0.0830356303720685,
+            "PeakEnergy": 1.9831633177029786,
+            "RelativeGain": 0.11210827324513725,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 6775,
+            "MeanEnergy": 0.08291350719729566,
+            "PeakEnergy": 1.9831607953145476,
+            "RelativeGain": 0.11194339199854889,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 7225,
+            "MeanEnergy": 0.00026026652816593665,
+            "PeakEnergy": 0.002720711271139252,
+            "RelativeGain": 0.0003513916968589057,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 7675,
+            "MeanEnergy": 0.0001383844467230625,
+            "PeakEnergy": 0.0012441852619940823,
+            "RelativeGain": 0.0001868359558010273,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8125,
+            "MeanEnergy": 0.00010149909684072828,
+            "PeakEnergy": 0.001138369491888335,
+            "RelativeGain": 0.00013703621483654853,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8575,
+            "MeanEnergy": 7.942045739380608E-05,
+            "PeakEnergy": 0.0009847181166187187,
+            "RelativeGain": 0.00010722734684933052,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9025,
+            "MeanEnergy": 6.932803696279827E-05,
+            "PeakEnergy": 0.0009655563464050287,
+            "RelativeGain": 9.360134290000874E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9475,
+            "MeanEnergy": 5.938080471592461E-05,
+            "PeakEnergy": 0.0008718621230498649,
+            "RelativeGain": 8.017136078548176E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9925,
+            "MeanEnergy": 5.2521749034327335E-05,
+            "PeakEnergy": 0.00080611693950029,
+            "RelativeGain": 7.091079534976996E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 10375,
+            "MeanEnergy": 4.889393044360893E-05,
+            "PeakEnergy": 0.0007887016857020034,
+            "RelativeGain": 6.601279582800254E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 10825,
+            "MeanEnergy": 4.3700374122193164E-05,
+            "PeakEnergy": 0.0007147968712550945,
+            "RelativeGain": 5.9000858559791686E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11275,
+            "MeanEnergy": 4.111038749022518E-05,
+            "PeakEnergy": 0.0006912043825421561,
+            "RelativeGain": 5.5504059321478315E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11725,
+            "MeanEnergy": 3.8716235531850445E-05,
+            "PeakEnergy": 0.0006644785111916305,
+            "RelativeGain": 5.2271660883155135E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12175,
+            "MeanEnergy": 3.5572873283649724E-05,
+            "PeakEnergy": 0.00061454059289895,
+            "RelativeGain": 4.802773677189464E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12625,
+            "MeanEnergy": 3.432883628711727E-05,
+            "PeakEnergy": 0.0006063088423829821,
+            "RelativeGain": 4.634813442637871E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13075,
+            "MeanEnergy": 3.222173250933059E-05,
+            "PeakEnergy": 0.0005737700002909321,
+            "RelativeGain": 4.3503286196558673E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13525,
+            "MeanEnergy": 3.047105236971771E-05,
+            "PeakEnergy": 0.0005456783063992556,
+            "RelativeGain": 4.113965354179201E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13975,
+            "MeanEnergy": 2.980150164862842E-05,
+            "PeakEnergy": 0.0005382715392447802,
+            "RelativeGain": 4.023567804530916E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14425,
+            "MeanEnergy": 2.8434512414593615E-05,
+            "PeakEnergy": 0.0005069691775315045,
+            "RelativeGain": 3.839007511695607E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14875,
+            "MeanEnergy": 2.826022879847868E-05,
+            "PeakEnergy": 0.0004940107220304877,
+            "RelativeGain": 3.8154770884664284E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15325,
+            "MeanEnergy": 2.8804816579022977E-05,
+            "PeakEnergy": 0.00048205186326239093,
+            "RelativeGain": 3.8890031102882126E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15775,
+            "MeanEnergy": 3.0095438998520765E-05,
+            "PeakEnergy": 0.0004574916715202174,
+            "RelativeGain": 4.063252947632771E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 16225,
+            "MeanEnergy": 3.519857204648069E-05,
+            "PeakEnergy": 0.00045171867786498104,
+            "RelativeGain": 4.752238424811042E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 16675,
+            "MeanEnergy": 5.010758773662952E-05,
+            "PeakEnergy": 0.0006879073880343965,
+            "RelativeGain": 6.765138185212543E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 17125,
+            "MeanEnergy": 0.00013397831817283423,
+            "PeakEnergy": 0.0027218985136102307,
+            "RelativeGain": 0.00018088714248740725,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 17575,
+            "MeanEnergy": 0.0826517522937974,
+            "PeakEnergy": 1.9831585964902498,
+            "RelativeGain": 0.11158999081265858,
+            "ObservationCount": 24,
+            "Usable": false
+          }
+        ],
+        "UsableBandCount": 2
+      },
+      "CodebookPlan": {
+        "ReliableSymbolCount": 9,
+        "RecommendedOrder": 6,
+        "ReliableSymbolIds": [
+          2,
+          5,
+          6,
+          7,
+          4,
+          31,
+          3,
+          0,
+          1
+        ]
+      },
+      "Symbols": [
+        {
+          "SymbolId": 0,
+          "Reliability": 1.9664832701324948,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "MeanEnergy": 1.9831606924956895,
+          "MeanTimingResidualSamples": -3.323582007240475,
+          "TimingResidualSpreadSamples": 0.40708013416224276,
+          "MeanPhaseRadians": -1.8543981407092287,
+          "ObservationCount": 8
+        },
+        {
+          "SymbolId": 1,
+          "Reliability": 1.9550716359955316,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "MeanEnergy": 1.9724028422080755,
+          "MeanTimingResidualSamples": -3.3198127467403538,
+          "TimingResidualSpreadSamples": 0.42550762994344243,
+          "MeanPhaseRadians": -1.895408858286294,
+          "ObservationCount": 9
+        },
+        {
+          "SymbolId": 2,
+          "Reliability": 1.98317479150165,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "MeanEnergy": 1.98317479150165,
+          "MeanTimingResidualSamples": 2.0495747824315913,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -1.1988765139742783,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 3,
+          "Reliability": 1.9831581977468316,
+          "ExpectedCenterHz": 4975,
+          "ObservedCenterHz": 4975,
+          "MeanEnergy": 1.9831581977468316,
+          "MeanTimingResidualSamples": 1.846034715330461,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -1.1546958595762624,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 4,
+          "Reliability": 1.9831595137173625,
+          "ExpectedCenterHz": 5425,
+          "ObservedCenterHz": 5425,
+          "MeanEnergy": 1.9831595137173625,
+          "MeanTimingResidualSamples": -3.357505351770669,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -2.031073191995889,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 5,
+          "Reliability": 1.983165098459816,
+          "ExpectedCenterHz": 5875,
+          "ObservedCenterHz": 5875,
+          "MeanEnergy": 1.983165098459816,
+          "MeanTimingResidualSamples": -3.5610454188426957,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -2.075246822614443,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 6,
+          "Reliability": 1.9831633177029786,
+          "ExpectedCenterHz": 6325,
+          "ObservedCenterHz": 6325,
+          "MeanEnergy": 1.9831633177029786,
+          "MeanTimingResidualSamples": 1.235414514085278,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -1.0221685852666889,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 7,
+          "Reliability": 1.9831607953145476,
+          "ExpectedCenterHz": 6775,
+          "ObservedCenterHz": 6775,
+          "MeanEnergy": 1.9831607953145476,
+          "MeanTimingResidualSamples": 1.0318744470132515,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -0.9779871637154909,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 31,
+          "Reliability": 1.9831585964902498,
+          "ExpectedCenterHz": 17575,
+          "ObservedCenterHz": 17575,
+          "MeanEnergy": 1.9831585964902498,
+          "MeanTimingResidualSamples": -2.5433450834352698,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": 3.0592955096959598,
+          "ObservationCount": 1
+        }
+      ],
+      "Confusion": [
+        {
+          "EventIndex": 0,
+          "ExpectedSymbolId": 31,
+          "ObservedSymbolId": 31,
+          "ExpectedCenterHz": 17575,
+          "ObservedCenterHz": 17575,
+          "ObservedEnergy": 1.9831585964902498,
+          "TimingResidualSamples": -2.5433450834352698,
+          "Confidence": 1.9831585964902498,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": 3.0592955096959598
+        },
+        {
+          "EventIndex": 1,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -2.6111917724629166,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 2,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -2.6790384614942013,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 3,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -2.746885150525486,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 4,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -2.814731839534943,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 5,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -2.8825785285444,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 6,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 1.98317479150165,
+          "TimingResidualSamples": 2.0495747824315913,
+          "Confidence": 1.98317479150165,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.1988765139742783
+        },
+        {
+          "EventIndex": 7,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.0182719065924175,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 8,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.08611859564553,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 9,
+          "ExpectedSymbolId": 3,
+          "ObservedSymbolId": 3,
+          "ExpectedCenterHz": 4975,
+          "ObservedCenterHz": 4975,
+          "ObservedEnergy": 1.9831581977468316,
+          "TimingResidualSamples": 1.846034715330461,
+          "Confidence": 1.9831581977468316,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.1546958595762624
+        },
+        {
+          "EventIndex": 10,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.2218119737226516,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 11,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.2896586627466604,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 12,
+          "ExpectedSymbolId": 4,
+          "ObservedSymbolId": 4,
+          "ExpectedCenterHz": 5425,
+          "ObservedCenterHz": 5425,
+          "ObservedEnergy": 1.9831595137173625,
+          "TimingResidualSamples": -3.357505351770669,
+          "Confidence": 1.9831595137173625,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -2.031073191995889
+        },
+        {
+          "EventIndex": 13,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.425352040794678,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 14,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.493198729818687,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 15,
+          "ExpectedSymbolId": 5,
+          "ObservedSymbolId": 5,
+          "ExpectedCenterHz": 5875,
+          "ObservedCenterHz": 5875,
+          "ObservedEnergy": 1.983165098459816,
+          "TimingResidualSamples": -3.5610454188426957,
+          "Confidence": 1.983165098459816,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -2.075246822614443
+        },
+        {
+          "EventIndex": 16,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.6288921078667045,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 17,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.6967387968907133,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 18,
+          "ExpectedSymbolId": 6,
+          "ObservedSymbolId": 6,
+          "ExpectedCenterHz": 6325,
+          "ObservedCenterHz": 6325,
+          "ObservedEnergy": 1.9831633177029786,
+          "TimingResidualSamples": 1.235414514085278,
+          "Confidence": 1.9831633177029786,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.0221685852666889
+        },
+        {
+          "EventIndex": 19,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.832432174938731,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 20,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.9002788639627397,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 21,
+          "ExpectedSymbolId": 7,
+          "ObservedSymbolId": 7,
+          "ExpectedCenterHz": 6775,
+          "ObservedCenterHz": 6775,
+          "ObservedEnergy": 1.9831607953145476,
+          "TimingResidualSamples": 1.0318744470132515,
+          "Confidence": 1.9831607953145476,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -0.9779871637154909
+        },
+        {
+          "EventIndex": 22,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -4.035972242010757,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 23,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.8861434373187795,
+          "TimingResidualSamples": -4.103818931034766,
+          "Confidence": 1.8861434373187795,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8703739684798266
+        }
+      ],
+      "DelayHypotheses": [
+        {
+          "DelaySamples": 1235.9868702719023,
+          "BinShift": 0,
+          "SupportCount": 13,
+          "Confidence": 0.9976303970711632,
+          "MeanResidualSamples": 0.2770071918989393
+        },
+        {
+          "DelaySamples": 1235.2760457299416,
+          "BinShift": 0,
+          "SupportCount": 5,
+          "Confidence": 0.9938390323850242,
+          "MeanResidualSamples": 0.1139824375626631
+        },
+        {
+          "DelaySamples": 1240.947727951323,
+          "BinShift": 0,
+          "SupportCount": 2,
+          "Confidence": 0.9948364888123916,
+          "MeanResidualSamples": 0.10177003353601322
+        },
+        {
+          "DelaySamples": 1240.1335676829913,
+          "BinShift": 0,
+          "SupportCount": 2,
+          "Confidence": 0.9948364888123916,
+          "MeanResidualSamples": 0.10177003353601322
+        }
+      ]
+    },
+    {
+      "SourceId": "asio-ch3",
+      "SampleRate": 192000,
+      "Profile": {
+        "SourceId": "asio-ch3",
+        "SampleRate": 192000,
+        "FrameCount": 24,
+        "AnchorCount": 22,
+        "ClockConfidence": 0.9945090136670505,
+        "MeanAnchorErrorSamples": 1.411854858157612,
+        "Bands": [
+          {
+            "CenterHz": 3625,
+            "MeanEnergy": 0.6624755521547112,
+            "PeakEnergy": 1.9831606924956897,
+            "RelativeGain": 0.8944231516807526,
+            "ObservationCount": 24,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4075,
+            "MeanEnergy": 0.7406735289776681,
+            "PeakEnergy": 1.9831852678192377,
+            "RelativeGain": 1,
+            "ObservationCount": 24,
+            "Usable": true
+          },
+          {
+            "CenterHz": 4525,
+            "MeanEnergy": 0.08429458472689423,
+            "PeakEnergy": 1.98317479150165,
+            "RelativeGain": 0.11380801585179343,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 4975,
+            "MeanEnergy": 0.08337506164059473,
+            "PeakEnergy": 1.9831581977468316,
+            "RelativeGain": 0.11256654703952373,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 5425,
+            "MeanEnergy": 0.08321944241002051,
+            "PeakEnergy": 1.9831595137173625,
+            "RelativeGain": 0.11235644201418414,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 5875,
+            "MeanEnergy": 0.08310533327536378,
+            "PeakEnergy": 1.983165098459816,
+            "RelativeGain": 0.11220238070350894,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 6325,
+            "MeanEnergy": 0.0830356303720685,
+            "PeakEnergy": 1.9831633177029786,
+            "RelativeGain": 0.11210827324513725,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 6775,
+            "MeanEnergy": 0.08291350719729566,
+            "PeakEnergy": 1.9831607953145476,
+            "RelativeGain": 0.11194339199854889,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 7225,
+            "MeanEnergy": 0.00026026652816593665,
+            "PeakEnergy": 0.002720711271139252,
+            "RelativeGain": 0.0003513916968589057,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 7675,
+            "MeanEnergy": 0.0001383844467230625,
+            "PeakEnergy": 0.0012441852619940823,
+            "RelativeGain": 0.0001868359558010273,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8125,
+            "MeanEnergy": 0.00010149909684072828,
+            "PeakEnergy": 0.001138369491888335,
+            "RelativeGain": 0.00013703621483654853,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 8575,
+            "MeanEnergy": 7.942045739380608E-05,
+            "PeakEnergy": 0.0009847181166187187,
+            "RelativeGain": 0.00010722734684933052,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9025,
+            "MeanEnergy": 6.932803696279827E-05,
+            "PeakEnergy": 0.0009655563464050287,
+            "RelativeGain": 9.360134290000874E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9475,
+            "MeanEnergy": 5.938080471592461E-05,
+            "PeakEnergy": 0.0008718621230498649,
+            "RelativeGain": 8.017136078548176E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 9925,
+            "MeanEnergy": 5.2521749034327335E-05,
+            "PeakEnergy": 0.00080611693950029,
+            "RelativeGain": 7.091079534976996E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 10375,
+            "MeanEnergy": 4.889393044360893E-05,
+            "PeakEnergy": 0.0007887016857020034,
+            "RelativeGain": 6.601279582800254E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 10825,
+            "MeanEnergy": 4.3700374122193164E-05,
+            "PeakEnergy": 0.0007147968712550945,
+            "RelativeGain": 5.9000858559791686E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11275,
+            "MeanEnergy": 4.111038749022518E-05,
+            "PeakEnergy": 0.0006912043825421561,
+            "RelativeGain": 5.5504059321478315E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 11725,
+            "MeanEnergy": 3.8716235531850445E-05,
+            "PeakEnergy": 0.0006644785111916305,
+            "RelativeGain": 5.2271660883155135E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12175,
+            "MeanEnergy": 3.5572873283649724E-05,
+            "PeakEnergy": 0.00061454059289895,
+            "RelativeGain": 4.802773677189464E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 12625,
+            "MeanEnergy": 3.432883628711727E-05,
+            "PeakEnergy": 0.0006063088423829821,
+            "RelativeGain": 4.634813442637871E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13075,
+            "MeanEnergy": 3.222173250933059E-05,
+            "PeakEnergy": 0.0005737700002909321,
+            "RelativeGain": 4.3503286196558673E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13525,
+            "MeanEnergy": 3.047105236971771E-05,
+            "PeakEnergy": 0.0005456783063992556,
+            "RelativeGain": 4.113965354179201E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 13975,
+            "MeanEnergy": 2.980150164862842E-05,
+            "PeakEnergy": 0.0005382715392447802,
+            "RelativeGain": 4.023567804530916E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14425,
+            "MeanEnergy": 2.8434512414593615E-05,
+            "PeakEnergy": 0.0005069691775315045,
+            "RelativeGain": 3.839007511695607E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 14875,
+            "MeanEnergy": 2.826022879847868E-05,
+            "PeakEnergy": 0.0004940107220304877,
+            "RelativeGain": 3.8154770884664284E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15325,
+            "MeanEnergy": 2.8804816579022977E-05,
+            "PeakEnergy": 0.00048205186326239093,
+            "RelativeGain": 3.8890031102882126E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 15775,
+            "MeanEnergy": 3.0095438998520765E-05,
+            "PeakEnergy": 0.0004574916715202174,
+            "RelativeGain": 4.063252947632771E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 16225,
+            "MeanEnergy": 3.519857204648069E-05,
+            "PeakEnergy": 0.00045171867786498104,
+            "RelativeGain": 4.752238424811042E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 16675,
+            "MeanEnergy": 5.010758773662952E-05,
+            "PeakEnergy": 0.0006879073880343965,
+            "RelativeGain": 6.765138185212543E-05,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 17125,
+            "MeanEnergy": 0.00013397831817283423,
+            "PeakEnergy": 0.0027218985136102307,
+            "RelativeGain": 0.00018088714248740725,
+            "ObservationCount": 24,
+            "Usable": false
+          },
+          {
+            "CenterHz": 17575,
+            "MeanEnergy": 0.0826517522937974,
+            "PeakEnergy": 1.9831585964902498,
+            "RelativeGain": 0.11158999081265858,
+            "ObservationCount": 24,
+            "Usable": false
+          }
+        ],
+        "UsableBandCount": 2
+      },
+      "CodebookPlan": {
+        "ReliableSymbolCount": 9,
+        "RecommendedOrder": 6,
+        "ReliableSymbolIds": [
+          2,
+          5,
+          6,
+          7,
+          4,
+          31,
+          3,
+          0,
+          1
+        ]
+      },
+      "Symbols": [
+        {
+          "SymbolId": 0,
+          "Reliability": 1.9664832701324948,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "MeanEnergy": 1.9831606924956895,
+          "MeanTimingResidualSamples": -3.323582007240475,
+          "TimingResidualSpreadSamples": 0.40708013416224276,
+          "MeanPhaseRadians": -1.8543981407092287,
+          "ObservationCount": 8
+        },
+        {
+          "SymbolId": 1,
+          "Reliability": 1.9550716359955316,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "MeanEnergy": 1.9724028422080755,
+          "MeanTimingResidualSamples": -3.3198127467403538,
+          "TimingResidualSpreadSamples": 0.42550762994344243,
+          "MeanPhaseRadians": -1.895408858286294,
+          "ObservationCount": 9
+        },
+        {
+          "SymbolId": 2,
+          "Reliability": 1.98317479150165,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "MeanEnergy": 1.98317479150165,
+          "MeanTimingResidualSamples": 2.0495747824315913,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -1.1988765139742783,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 3,
+          "Reliability": 1.9831581977468316,
+          "ExpectedCenterHz": 4975,
+          "ObservedCenterHz": 4975,
+          "MeanEnergy": 1.9831581977468316,
+          "MeanTimingResidualSamples": 1.846034715330461,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -1.1546958595762624,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 4,
+          "Reliability": 1.9831595137173625,
+          "ExpectedCenterHz": 5425,
+          "ObservedCenterHz": 5425,
+          "MeanEnergy": 1.9831595137173625,
+          "MeanTimingResidualSamples": -3.357505351770669,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -2.031073191995889,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 5,
+          "Reliability": 1.983165098459816,
+          "ExpectedCenterHz": 5875,
+          "ObservedCenterHz": 5875,
+          "MeanEnergy": 1.983165098459816,
+          "MeanTimingResidualSamples": -3.5610454188426957,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -2.075246822614443,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 6,
+          "Reliability": 1.9831633177029786,
+          "ExpectedCenterHz": 6325,
+          "ObservedCenterHz": 6325,
+          "MeanEnergy": 1.9831633177029786,
+          "MeanTimingResidualSamples": 1.235414514085278,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -1.0221685852666889,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 7,
+          "Reliability": 1.9831607953145476,
+          "ExpectedCenterHz": 6775,
+          "ObservedCenterHz": 6775,
+          "MeanEnergy": 1.9831607953145476,
+          "MeanTimingResidualSamples": 1.0318744470132515,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": -0.9779871637154909,
+          "ObservationCount": 1
+        },
+        {
+          "SymbolId": 31,
+          "Reliability": 1.9831585964902498,
+          "ExpectedCenterHz": 17575,
+          "ObservedCenterHz": 17575,
+          "MeanEnergy": 1.9831585964902498,
+          "MeanTimingResidualSamples": -2.5433450834352698,
+          "TimingResidualSpreadSamples": 0,
+          "MeanPhaseRadians": 3.0592955096959598,
+          "ObservationCount": 1
+        }
+      ],
+      "Confusion": [
+        {
+          "EventIndex": 0,
+          "ExpectedSymbolId": 31,
+          "ObservedSymbolId": 31,
+          "ExpectedCenterHz": 17575,
+          "ObservedCenterHz": 17575,
+          "ObservedEnergy": 1.9831585964902498,
+          "TimingResidualSamples": -2.5433450834352698,
+          "Confidence": 1.9831585964902498,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": 3.0592955096959598
+        },
+        {
+          "EventIndex": 1,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -2.6111917724629166,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 2,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -2.6790384614942013,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 3,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -2.746885150525486,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 4,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -2.814731839534943,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 5,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -2.8825785285444,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 6,
+          "ExpectedSymbolId": 2,
+          "ObservedSymbolId": 2,
+          "ExpectedCenterHz": 4525,
+          "ObservedCenterHz": 4525,
+          "ObservedEnergy": 1.98317479150165,
+          "TimingResidualSamples": 2.0495747824315913,
+          "Confidence": 1.98317479150165,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.1988765139742783
+        },
+        {
+          "EventIndex": 7,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.0182719065924175,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 8,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.08611859564553,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 9,
+          "ExpectedSymbolId": 3,
+          "ObservedSymbolId": 3,
+          "ExpectedCenterHz": 4975,
+          "ObservedCenterHz": 4975,
+          "ObservedEnergy": 1.9831581977468316,
+          "TimingResidualSamples": 1.846034715330461,
+          "Confidence": 1.9831581977468316,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.1546958595762624
+        },
+        {
+          "EventIndex": 10,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.2218119737226516,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 11,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.2896586627466604,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 12,
+          "ExpectedSymbolId": 4,
+          "ObservedSymbolId": 4,
+          "ExpectedCenterHz": 5425,
+          "ObservedCenterHz": 5425,
+          "ObservedEnergy": 1.9831595137173625,
+          "TimingResidualSamples": -3.357505351770669,
+          "Confidence": 1.9831595137173625,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -2.031073191995889
+        },
+        {
+          "EventIndex": 13,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.425352040794678,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 14,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.493198729818687,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 15,
+          "ExpectedSymbolId": 5,
+          "ObservedSymbolId": 5,
+          "ExpectedCenterHz": 5875,
+          "ObservedCenterHz": 5875,
+          "ObservedEnergy": 1.983165098459816,
+          "TimingResidualSamples": -3.5610454188426957,
+          "Confidence": 1.983165098459816,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -2.075246822614443
+        },
+        {
+          "EventIndex": 16,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.6288921078667045,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 17,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.6967387968907133,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 18,
+          "ExpectedSymbolId": 6,
+          "ObservedSymbolId": 6,
+          "ExpectedCenterHz": 6325,
+          "ObservedCenterHz": 6325,
+          "ObservedEnergy": 1.9831633177029786,
+          "TimingResidualSamples": 1.235414514085278,
+          "Confidence": 1.9831633177029786,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.0221685852666889
+        },
+        {
+          "EventIndex": 19,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -3.832432174938731,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 20,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.9831852678192377,
+          "TimingResidualSamples": -3.9002788639627397,
+          "Confidence": 1.9831852678192377,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8985378977427367
+        },
+        {
+          "EventIndex": 21,
+          "ExpectedSymbolId": 7,
+          "ObservedSymbolId": 7,
+          "ExpectedCenterHz": 6775,
+          "ObservedCenterHz": 6775,
+          "ObservedEnergy": 1.9831607953145476,
+          "TimingResidualSamples": 1.0318744470132515,
+          "Confidence": 1.9831607953145476,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -0.9779871637154909
+        },
+        {
+          "EventIndex": 22,
+          "ExpectedSymbolId": 0,
+          "ObservedSymbolId": 0,
+          "ExpectedCenterHz": 3625,
+          "ObservedCenterHz": 3625,
+          "ObservedEnergy": 1.9831606924956897,
+          "TimingResidualSamples": -4.035972242010757,
+          "Confidence": 1.9831606924956897,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8543981407092287
+        },
+        {
+          "EventIndex": 23,
+          "ExpectedSymbolId": 1,
+          "ObservedSymbolId": 1,
+          "ExpectedCenterHz": 4075,
+          "ObservedCenterHz": 4075,
+          "ObservedEnergy": 1.8861434373187795,
+          "TimingResidualSamples": -4.103818931034766,
+          "Confidence": 1.8861434373187795,
+          "DelayHypothesisSamples": 1238.9999232024563,
+          "PhaseRadians": -1.8703739684798266
+        }
+      ],
+      "DelayHypotheses": [
+        {
+          "DelaySamples": 1235.9868702719023,
+          "BinShift": 0,
+          "SupportCount": 13,
+          "Confidence": 0.9976303970711632,
+          "MeanResidualSamples": 0.2770071918989393
+        },
+        {
+          "DelaySamples": 1235.2760457299416,
+          "BinShift": 0,
+          "SupportCount": 5,
+          "Confidence": 0.9938390323850242,
+          "MeanResidualSamples": 0.1139824375626631
+        },
+        {
+          "DelaySamples": 1240.947727951323,
+          "BinShift": 0,
+          "SupportCount": 2,
+          "Confidence": 0.9948364888123916,
+          "MeanResidualSamples": 0.10177003353601322
+        },
+        {
+          "DelaySamples": 1240.1335676829913,
+          "BinShift": 0,
+          "SupportCount": 2,
+          "Confidence": 0.9948364888123916,
+          "MeanResidualSamples": 0.10177003353601322
+        }
+      ]
+    }
+  ]
+}

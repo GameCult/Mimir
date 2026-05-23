@@ -75,11 +75,15 @@ the de Bruijn triplet trellis. A constrained local waveform correlation around
 the decoded anchor delay provides the final fractional offset. The decoder keeps
 the full bin-energy surface for each classified chirp and aggregates it into
 per-band response evidence, so the same stream can calibrate timing and the
-speaker/room/mic transfer function. `MimirChirpBinCalibrationProfile` is the
-first named surface for that evidence: it summarizes frames, anchors, clock
-confidence, anchor error, usable bands, and strongest measured bins per source.
-The profile is kept even when a timing report is rejected, because a failed
-sync window can still teach us which bands survived the speaker/room/mic path.
+speaker/room/mic transfer function. `MimirChirpBinCalibrationModel` is the live
+surface for that evidence. It stores measured usable bands per source,
+expected-symbol versus observed-bin confusion observations, timing residuals,
+delay hypotheses, phase summaries, and an adaptive codebook plan. The raw
+profile is kept even when a timing report is rejected, because a failed sync
+window can still teach us which bands survived the speaker/room/mic path. The
+decoder can consume the persisted model to weight reliable symbols, downweight
+dead bands, apply first-order group-delay correction, and seed global delay
+hypotheses before selecting the coherent anchor path.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
 it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and
@@ -123,8 +127,11 @@ buffer, and captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz.
 Raven also has a loopback-capable Scarlett ASIO path at 192 kHz for
 co-streamer/game timing evidence, but Starfire owns the heavy local alignment,
 soundfield, and sensor-fusion work.
-The next cut is not more WASAPI probing; it is feeding those ASIO buffers
-directly into `Mimir.Runtime`.
+The worker now also supports `--emit-json-blocks`, which streams each ASIO
+callback as sample-bearing `audio-block` events (`asio-ch0` through `asio-ch3`)
+for `MimirFrameEventProcessStreamSource`. That is a continuous ASIO runtime
+ingest path through the existing process boundary; the later native ABI cut
+should remove stdout/base64 overhead, not change ASIO ownership.
 
 The probe also has a `--monitor-sweep` mode for measuring the acoustic ceiling.
 At 192 kHz, ASIO loopback detected emitted 8-40 kHz tones cleanly, but the
@@ -174,12 +181,15 @@ that window. Reports carry rounded integer delay, fractional delay, and the
 count/confidence of timeline-symbol anchors used to derive the report.
 
 The same timeline also starts the frequency-response path. Each active chirp-bin
-decode emits a calibration profile for the source, whether or not that source
-earns a timing report. That is not a finished room/mic normalizer yet, but it is
-the live surface that will become response-curve estimation: loopback carries
-what was emitted, each mic carries what survived speaker, air, room, and
-capsule, and the ratio over the continuous timeline becomes gain/phase
-correction evidence.
+decode can emit a persisted calibration model for the source set, whether or
+not each source earns a timing report. That model is not a finished room/mic
+normalizer yet, but it is the live surface that will become response-curve
+estimation: loopback carries what was emitted, each mic carries what survived
+speaker, air, room, and capsule, and the ratio over the continuous timeline
+becomes gain/phase correction evidence. Use
+`Mimir.BufferSmoke --calibrate-chirp-bin-asio-f32` to render the calibration
+timeline, optionally capture it through the ASIO worker with `--capture-asio`,
+compute the response/confusion/delay model, and persist it for runtime decode.
 
 `MimirAudioSynchronizationStateTracker` turns continuous observations into
 state. It confidence-gates reports, smooths fractional delay per source, and

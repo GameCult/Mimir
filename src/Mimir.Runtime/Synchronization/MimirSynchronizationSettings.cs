@@ -66,6 +66,8 @@ public sealed class MimirAudioSynchronizationSettings
 
     public float WatermarkGain { get; init; } = DefaultWatermarkGain;
 
+    public string CalibrationModelPath { get; init; } = "";
+
     public static MimirAudioSynchronizationSettings FromEnvironment()
     {
         return new MimirAudioSynchronizationSettings().WithEnvironmentOverrides();
@@ -79,6 +81,7 @@ public sealed class MimirAudioSynchronizationSettings
             ReferenceSourceId = ReadReferenceSourceId(ReferenceSourceId),
             CalibrationGain = ReadCalibrationGain(CalibrationGain),
             WatermarkGain = ReadWatermarkGain(WatermarkGain),
+            CalibrationModelPath = ReadCalibrationModelPath(CalibrationModelPath),
         };
     }
 
@@ -118,6 +121,12 @@ public sealed class MimirAudioSynchronizationSettings
         return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_WATERMARK_GAIN"), out var gain)
             ? Math.Clamp(gain, 0.0f, 0.25f)
             : fallback;
+    }
+
+    private static string ReadCalibrationModelPath(string fallback)
+    {
+        var path = Environment.GetEnvironmentVariable("MIMIR_CHIRP_BIN_CALIBRATION");
+        return string.IsNullOrWhiteSpace(path) ? fallback : path.Trim();
     }
 }
 

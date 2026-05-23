@@ -102,11 +102,12 @@ a named invariant that the native runtime cannot protect yet.
   with constrained local waveform correlation around the decoded active delay.
   Each classified chirp carries the full bin-energy response surface, and stream
   decodes aggregate that into per-band calibration evidence for frequency
-  response normalization. `MimirChirpBinCalibrationProfile` preserves that
-  evidence per source, including frames, anchors, clock confidence, anchor
-  error, usable band count, and strongest measured bins, even when the source
-  does not produce a timing report. Reports/states expose delay in microseconds
-  as well as fractional samples.
+  response normalization. `MimirChirpBinCalibrationModel` now preserves usable
+  bands, expected-symbol versus observed-bin confusion observations, timing
+  residuals, delay hypotheses, phase summaries, and an adaptive codebook plan.
+  The active decoder can consume that model as learned response weighting,
+  first-order group-delay correction, and global delay-hypothesis seeds.
+  Reports/states expose delay in microseconds as well as fractional samples.
   Hybrid emits this as low-gain half-second bursts every two seconds only while
   passive confidence is weak.
   Use `--chirp-bin-self-test` to prove the codebook/decoder and
@@ -116,12 +117,14 @@ a named invariant that the native runtime cannot protect yet.
 - `Mimir.BufferSmoke --render-chirp-bin-f32` and `--analyze-asio-f32` provide
   the current active Scarlett artifact proof. A 192 kHz chirp-bin run decoded
   Focusrite `Loopback 1 -> Loopback 2` at `0.000 us` with 12 matched anchors and
-  0.999 confidence. The ASIO analyzer now prints chirp-bin calibration profiles
-  for every decoded source; physical input 1 still failed pairwise timing in
-  the stored artifact, but it produced 14 frames, 12 anchors, 0.865 clock
-  confidence, and a different strongest band set. Acoustic robustness remains
-  separate from the clean loopback timing proof, but failed timing windows now
-  leave usable response evidence instead of silence.
+  0.999 confidence. `--calibrate-chirp-bin-asio-f32` can render/capture/analyze
+  a calibration session and persist the response/confusion/delay model under
+  `calibration/chirp-bin/`. `--analyze-asio-f32 --calibration ...` loads that
+  model into the active decoder. Physical input 1 still failed pairwise timing
+  in the stored artifact, but it produced a useful response/confusion model
+  with two reliable symbols. Acoustic robustness remains separate from the clean
+  loopback timing proof, but failed timing windows now leave usable response
+  evidence instead of silence.
   A standalone 192 kHz synthetic receiver test recovers a 500 ms delayed audio
   stream to below printed microsecond precision using only the chirp-bin
   codebook and schedule state.

@@ -201,6 +201,8 @@ public sealed class MimirAudioSyncConfig
 
     public float WatermarkGain { get; set; } = float.NaN;
 
+    public string CalibrationModelPath { get; set; } = "";
+
     public MimirAudioSynchronizationSettings ToSettings(MimirAudioSynchronizationSettings fallback)
     {
         return new MimirAudioSynchronizationSettings
@@ -215,6 +217,9 @@ public sealed class MimirAudioSyncConfig
             WatermarkGain = float.IsFinite(WatermarkGain)
                 ? Math.Clamp(WatermarkGain, 0.0f, 0.25f)
                 : fallback.WatermarkGain,
+            CalibrationModelPath = string.IsNullOrWhiteSpace(CalibrationModelPath)
+                ? fallback.CalibrationModelPath
+                : CalibrationModelPath.Trim(),
         };
     }
 }

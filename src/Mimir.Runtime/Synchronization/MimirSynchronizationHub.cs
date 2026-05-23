@@ -6,6 +6,7 @@ public sealed class MimirSynchronizationHub : IDisposable
     private readonly MimirAudioSynchronizationAnalyzer audioSynchronization = new();
     private readonly MimirAudioSynchronizationStateTracker audioSynchronizationState = new();
     private readonly Dictionary<string, MimirAudioSynchronizationReport> audioSynchronizationReports = new(StringComparer.Ordinal);
+    private readonly MimirChirpBinCalibrationModel? chirpBinCalibrationModel;
     private ulong ingestedSamples;
     private int nextAudioSynchronizationCandidate;
 
@@ -13,6 +14,7 @@ public sealed class MimirSynchronizationHub : IDisposable
     {
         Settings = settings;
         Buffers = new MimirStreamBufferSet(settings.BufferDuration);
+        chirpBinCalibrationModel = TryLoadCalibrationModel(settings.Audio.CalibrationModelPath);
         foreach (var stream in settings.Streams.Where(stream => stream.Enabled))
         {
             Buffers.EnsureBuffer(stream);
@@ -85,7 +87,7 @@ public sealed class MimirSynchronizationHub : IDisposable
                 buffer.Latest?.AudioBlock != null)
             .Select(buffer => buffer.Descriptor.SourceId)
             .ToArray();
-        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId, mode);
+        var reports = audioSynchronization.Analyze(Buffers.Buffers, referenceSourceId, mode, calibrationModel: chirpBinCalibrationModel);
         StoreAudioSynchronizationReports(reports, candidates);
         return reports;
     }
@@ -120,12 +122,23 @@ public sealed class MimirSynchronizationHub : IDisposable
             Buffers.Buffers,
             referenceSourceId,
             mode,
-            selected);
+            selected,
+            chirpBinCalibrationModel);
         StoreAudioSynchronizationReports(reports, selected);
         return reports;
     }
 
     private bool disposed;
+
+    private static MimirChirpBinCalibrationModel? TryLoadCalibrationModel(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return null;
+        }
+
+        return MimirChirpBinCalibrationModel.Load(path);
+    }
 
     private void StoreAudioSynchronizationReports(
         IReadOnlyList<MimirAudioSynchronizationReport> reports,
