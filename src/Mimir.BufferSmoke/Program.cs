@@ -181,7 +181,7 @@ static int RunChirpletSelfTest()
 {
     var timeline = MimirChirpletTimeline.Default;
     var decoder = new MimirChirpletStreamDecoder(windowDuration: TimeSpan.FromSeconds(2));
-    MimirChirpletStreamDecode decode = new([], [], [], null);
+    MimirChirpletStreamDecode decode = new([], [], [], null, []);
     for (ulong segment = 0; segment < 4; segment++)
     {
         decode = decoder.Append(timeline.RenderSegmentMonoFloat(segment));
@@ -528,7 +528,7 @@ static int AnalyzeAsioFloat32(string inputPath, int sampleRate, int channels, in
     foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
     {
         Console.WriteLine(
-            $"asio-f32-sync {report.ReferenceSourceId}->{report.SourceId}: evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
+            $"asio-f32-sync {report.ReferenceSourceId}->{report.SourceId}: evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} bands={DescribeBands(report.BandResponses)} compared={report.ComparedSamples}");
     }
 
     return reports.Count > 0 ? 0 : 1;

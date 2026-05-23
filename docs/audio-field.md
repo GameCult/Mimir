@@ -72,7 +72,10 @@ and `hybrid`. `MimirChirpBinTimeline` uses a common chirp duration, chirp slope,
 and window for every symbol. Acquisition is a cheap bounded energy/onset pass;
 classification is dechirp plus a fixed Goertzel bin bank; timeline placement is
 the de Bruijn triplet trellis. A constrained local waveform correlation around
-the decoded anchor delay provides the final fractional offset. The synthetic invariant is
+the decoded anchor delay provides the final fractional offset. The decoder keeps
+the full bin-energy surface for each classified chirp and aggregates it into
+per-band response evidence, so the same stream can calibrate timing and the
+speaker/room/mic transfer function. The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
 it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and
 requires code-valid triplet anchors plus a stable source clock. `chirp-only`
@@ -165,11 +168,11 @@ produce at least three matched canonical anchors, it has not decoded timing for
 that window. Reports carry rounded integer delay, fractional delay, and the
 count/confidence of timeline-symbol anchors used to derive the report.
 
-The same timeline also starts the frequency-response path. Each report includes
-per-band matched energy for the chirplet atoms. That is not a finished room/mic
-normalizer yet, but it is the live surface that will become response-curve
-estimation: loopback carries what was emitted, each mic carries what survived
-speaker, air, room, and capsule, and the ratio over the continuous chirplet
+The same timeline also starts the frequency-response path. Each active report
+includes per-band dechirped energy for the chirp-bin bank. That is not a
+finished room/mic normalizer yet, but it is the live surface that will become
+response-curve estimation: loopback carries what was emitted, each mic carries
+what survived speaker, air, room, and capsule, and the ratio over the continuous
 timeline becomes gain/phase correction evidence.
 
 `MimirAudioSynchronizationStateTracker` turns continuous observations into

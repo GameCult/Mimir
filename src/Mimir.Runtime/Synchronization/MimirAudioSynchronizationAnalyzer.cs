@@ -194,7 +194,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 ? RefineDelayFromWaveform(referenceWindow, candidateWindow, deterministicFit.DelaySamples, activeReferenceBlock.SampleRate)
                 : deterministicFit.DelaySamples;
             var bandResponses = useChirpBinTimeline
-                ? []
+                ? candidateDecode.BandResponses
                 : MimirChirpletTimeline.Default.EstimateBandResponse(candidateWindow, activeReferenceBlock.SampleRate);
             reports.Add(new MimirAudioSynchronizationReport(
                 reference.Descriptor.SourceId,

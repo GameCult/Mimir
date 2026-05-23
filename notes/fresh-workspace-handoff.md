@@ -89,6 +89,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   explicit time/frequency ambiguity candidates, and constrained local waveform
   correlation for final fractional delay. It also supports standalone source
   offset recovery from schedule/codebook state, which is the Raven/phone shape.
+  Each classified chirp carries the full dechirped bin-energy surface; sync
+  reports expose those bands so the same stream can become frequency-response
+  calibration evidence.
   `Mimir.BufferSmoke
   --chirp-only-sync-self-test --sample-rate 192000` and
   `--hybrid-sync-self-test --sample-rate 192000` both recover a 1269.5-sample

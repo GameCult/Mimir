@@ -108,8 +108,10 @@ accepted_design:
     classification, explicit time/frequency ambiguity candidates, then the
     existing de Bruijn triplet anchor and clock-fit machine. The analyzer refines
     final active delay with constrained local waveform correlation around the
-    decoded anchor delay. Reports and sync states expose delay in microseconds
-    as well as fractional samples. Hybrid emits it as low-gain half-second
+    decoded anchor delay. Each classified chirp carries the full dechirped
+    bin-energy surface, and decodes aggregate that into per-band response
+    evidence for frequency-response normalization. Reports and sync states expose
+    delay in microseconds as well as fractional samples. Hybrid emits it as low-gain half-second
     bursts every two seconds while passive confidence is weak, never as catch-up
     backlog. The analyzer no longer applies the passive two-second window floor
     to active fallback; `dotnet run --project

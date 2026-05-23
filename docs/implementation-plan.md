@@ -100,7 +100,10 @@ a named invariant that the native runtime cannot protect yet.
   time/frequency ambiguity as candidate symbol/offset pairs so code constraints
   can choose the coherent path. The analyzer refines the final fractional delay
   with constrained local waveform correlation around the decoded active delay.
-  Reports/states expose delay in microseconds as well as fractional samples.
+  Each classified chirp carries the full bin-energy response surface, and stream
+  decodes aggregate that into per-band calibration evidence for frequency
+  response normalization. Reports/states expose delay in microseconds as well
+  as fractional samples.
   Hybrid emits this as low-gain half-second bursts every two seconds only while
   passive confidence is weak.
   Use `--chirp-bin-self-test` to prove the codebook/decoder and

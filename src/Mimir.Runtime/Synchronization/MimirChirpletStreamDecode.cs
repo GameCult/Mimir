@@ -3,7 +3,8 @@ namespace Mimir.Runtime.Synchronization;
 public sealed record MimirChirpletSymbolCandidate(
     int SymbolId,
     double SampleOffset,
-    double Energy);
+    double Energy,
+    IReadOnlyList<MimirChirpletBandResponse>? BandResponses = null);
 
 public sealed record MimirChirpletTransformFrame(
     double SampleOffset,
@@ -40,4 +41,5 @@ public sealed record MimirChirpletStreamDecode(
     IReadOnlyList<MimirChirpletTransformFrame> Frames,
     IReadOnlyList<MimirChirpletSymbolObservation> Symbols,
     IReadOnlyList<MimirChirpletTimelineAnchor> Anchors,
-    MimirChirpletClockFit? ClockFit);
+    MimirChirpletClockFit? ClockFit,
+    IReadOnlyList<MimirChirpletBandResponse> BandResponses);

@@ -83,6 +83,6 @@ public sealed class MimirChirpletStreamDecoder
                     .ToArray(),
             })
             .ToArray();
-        return new MimirChirpletStreamDecode(frames, symbols, anchors, clock);
+        return new MimirChirpletStreamDecode(frames, symbols, anchors, clock, decode.BandResponses);
     }
 }

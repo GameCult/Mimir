@@ -115,7 +115,7 @@ public sealed class MimirChirpletTimeline
     {
         if (samples.Length == 0)
         {
-            return new MimirChirpletStreamDecode([], [], [], null);
+            return new MimirChirpletStreamDecode([], [], [], null, []);
         }
 
         var frames = DetectTransformFrames(samples, sampleRate, Math.Max(1, sampleRate / 200));
@@ -127,7 +127,7 @@ public sealed class MimirChirpletTimeline
             .ToArray();
         var anchors = DecodeTrellisAnchors(frames, sampleRate);
         var clock = FitClock(anchors, sampleRate);
-        return new MimirChirpletStreamDecode(frames, symbols, anchors, clock);
+        return new MimirChirpletStreamDecode(frames, symbols, anchors, clock, EstimateBandResponse(samples, sampleRate));
     }
 
     public MimirChirpletTimelineEvent EventForIndex(ulong eventIndex)

@@ -110,7 +110,10 @@ Goertzel bins, explicit time/frequency ambiguity candidates, and a constrained
 scheduled-waveform correlation for standalone source-offset refinement. Pairwise
 sync compares matched anchors first, then only accepts independent clock-fit
 offsets inside the live latency horizon so period aliases do not become absurd
-reports. Reports/states expose `delayUs` next to fractional sample delay.
+reports. Each classified chirp carries the full dechirped bin-energy surface,
+and decodes aggregate that into per-band response evidence for future
+frequency-response normalization. Reports/states expose `delayUs` next to
+fractional sample delay.
 `Mimir.BufferSmoke
 --chirp-only-sync-self-test --sample-rate 192000` and `--hybrid-sync-self-test
 --sample-rate 192000` both recover a 1269.5-sample synthetic delay with printed
