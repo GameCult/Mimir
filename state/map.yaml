@@ -104,15 +104,17 @@ accepted_design:
     confidence is capped below certainty until repeated state earns it.
     `MimirChirpBinTimeline` is the active hybrid watermark path: one fixed chirp
     slope/window, 32 widened symbol frequency bins, dechirped bin-energy
-    proposal scoring, cached per-sample-rate kernels, then the existing
-    de Bruijn triplet anchor and clock-fit machine. Hybrid emits it as low-gain
-    half-second bursts every two seconds while passive confidence is weak, never
-    as catch-up backlog. The analyzer no longer applies the passive two-second
-    window floor to chirp-bin fallback; `dotnet run --project
+    proposal scoring, cached per-sample-rate kernels, sub-sample matched-peak
+    refinement, then the existing de Bruijn triplet anchor and clock-fit
+    machine. Reports and sync states expose delay in microseconds as well as
+    fractional samples. Hybrid emits it as low-gain half-second bursts every two
+    seconds while passive confidence is weak, never as catch-up backlog. The
+    analyzer no longer applies the passive two-second window floor to chirp-bin
+    fallback; `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --hybrid-sync-self-test`
     proves a one-second rolling-buffer chirp-bin window can recover a
-    317-sample fractional delay from code-valid anchors. The synthetic codebook
-    proof remains `dotnet run --project
+    317.375-sample fractional delay from code-valid anchors with 0.369 us
+    error. The synthetic codebook proof remains `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared

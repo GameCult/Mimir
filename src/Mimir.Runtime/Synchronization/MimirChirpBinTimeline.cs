@@ -192,7 +192,10 @@ public sealed class MimirChirpBinTimeline
             return null;
         }
 
-        return new MimirChirpletTransformFrame(bestOffset, bestCandidates);
+        var refinedOffset = RefineOffset(samples, sampleRate, bestOffset, bestCandidates[0].SymbolId, chirpSamples);
+        return new MimirChirpletTransformFrame(
+            refinedOffset,
+            bestCandidates.Select(candidate => candidate with { SampleOffset = refinedOffset }).ToArray());
     }
 
     private static MimirChirpletSymbolCandidate[] ScoreBins(
@@ -249,6 +252,49 @@ public sealed class MimirChirpBinTimeline
         }
 
         return 2.0 * best / Math.Sqrt(sampleEnergy * kernels.ReferenceEnergy);
+    }
+
+    private static double ScoreSymbolEnergy(ReadOnlySpan<float> samples, int sampleRate, int symbolId)
+    {
+        var kernels = KernelSets.GetOrAdd(sampleRate, BuildKernelSet);
+        var sampleEnergy = 0.0;
+        for (var index = 0; index < samples.Length; index++)
+        {
+            sampleEnergy += samples[index] * samples[index];
+        }
+
+        if (sampleEnergy <= 1.0e-12 || kernels.ReferenceEnergy <= 1.0e-12)
+        {
+            return 0.0;
+        }
+
+        var score = DechirpedBin(samples, kernels.Symbols[symbolId]);
+        return 2.0 * score / Math.Sqrt(sampleEnergy * kernels.ReferenceEnergy);
+    }
+
+    private static double RefineOffset(
+        ReadOnlySpan<float> samples,
+        int sampleRate,
+        int bestOffset,
+        int symbolId,
+        int chirpSamples)
+    {
+        if (bestOffset <= 0 || bestOffset >= samples.Length - chirpSamples - 1)
+        {
+            return bestOffset;
+        }
+
+        var left = ScoreSymbolEnergy(samples.Slice(bestOffset - 1, chirpSamples), sampleRate, symbolId);
+        var center = ScoreSymbolEnergy(samples.Slice(bestOffset, chirpSamples), sampleRate, symbolId);
+        var right = ScoreSymbolEnergy(samples.Slice(bestOffset + 1, chirpSamples), sampleRate, symbolId);
+        var denominator = left - 2.0 * center + right;
+        if (Math.Abs(denominator) <= 1.0e-12)
+        {
+            return bestOffset;
+        }
+
+        var delta = 0.5 * (left - right) / denominator;
+        return bestOffset + Math.Clamp(delta, -0.5, 0.5);
     }
 
     private static double DechirpedBin(ReadOnlySpan<float> samples, ChirpBinKernel kernel)

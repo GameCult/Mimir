@@ -106,9 +106,11 @@ needs a longer program-audio window, while chirp-bin fallback can decode short
 pilot windows once at least a code-valid triplet is present. The chirp-bin
 detector now proposes events from dechirped bin energy rather than broadband RMS
 and uses a widened symbol spacing to keep sub-frame timing error from becoming
-symbol substitution. `Mimir.BufferSmoke --hybrid-sync-self-test` proves the
-analyzer path with a one-second rolling-buffer window and a recovered
-317-sample delay.
+symbol substitution. Chirp-bin frame timing is refined with a local matched-peak
+fit below one sample, and reports/states expose `delayUs` next to fractional
+sample delay. `Mimir.BufferSmoke --hybrid-sync-self-test` proves the analyzer
+path with a one-second rolling-buffer window and a recovered 317.375-sample
+delay at 0.369 us error.
 Reports now carry fractional delay and per-band matched energy. The first
 `MimirChirpletSymbolCodebook` owns separable symbol definitions; every symbol
 has a unique chirp shape, with rhythm as additional evidence. `MimirChirpletStreamDecoder`

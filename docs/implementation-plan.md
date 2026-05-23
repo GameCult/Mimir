@@ -84,11 +84,14 @@ a named invariant that the native runtime cannot protect yet.
   fixed Goertzel bins, then feeds the same de Bruijn triplet timeline-anchor
   machine. The detector scores dechirped bin energy directly, caches chirp
   kernels per sample rate, and uses a widened 32-symbol codebook so sub-frame
-  timing error does not masquerade as neighboring symbol identity. Hybrid emits
-  this as low-gain half-second bursts every two seconds only while passive
-  confidence is weak. Use `--chirp-bin-self-test` to prove the codebook/decoder
-  and `--hybrid-sync-self-test` to prove that the analyzer can recover a
-  fractional delay from a one-second rolling-buffer chirp-bin window.
+  timing error does not masquerade as neighboring symbol identity. The matched
+  chirp-bin peak is refined below one sample and reports/states expose delay in
+  microseconds as well as fractional samples. Hybrid emits this as low-gain
+  half-second bursts every two seconds only while passive confidence is weak.
+  Use `--chirp-bin-self-test` to prove the codebook/decoder and
+  `--hybrid-sync-self-test` to prove that the analyzer can recover a fractional
+  delay from a one-second rolling-buffer chirp-bin window. The current synthetic
+  microsecond proof recovers a 317.375-sample delay with 0.369 us error.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live

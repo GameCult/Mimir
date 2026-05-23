@@ -12,7 +12,10 @@ public sealed record MimirAudioSynchronizationState(
     IReadOnlyList<MimirChirpletBandResponse> BandResponses,
     long UpdatedAtNs,
     ulong ReferenceSequence,
-    ulong SourceSequence);
+    ulong SourceSequence)
+{
+    public double DelayMicroseconds => SmoothedDelaySamples * 1_000_000.0 / SampleRate;
+}
 
 public sealed class MimirAudioSynchronizationStateTracker
 {

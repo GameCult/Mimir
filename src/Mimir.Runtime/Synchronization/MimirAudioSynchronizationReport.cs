@@ -15,4 +15,7 @@ public sealed record MimirAudioSynchronizationReport(
     ulong SourceSequence,
     int TimelineMatchedEvents = 0,
     double TimelineConfidence = 0.0,
-    string EvidenceKind = "chirplet");
+    string EvidenceKind = "chirplet")
+{
+    public double DelayMicroseconds => FractionalDelaySamples * 1_000_000.0 / SampleRate;
+}

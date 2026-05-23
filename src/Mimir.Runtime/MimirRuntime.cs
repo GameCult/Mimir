@@ -283,13 +283,13 @@ public sealed class MimirRuntime : IAquariumRuntime
         foreach (var report in lastAudioSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
         {
             Console.WriteLine(
-                $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} timelineEvents={report.TimelineMatchedEvents} timelineConfidence={report.TimelineConfidence:0.000}");
+                $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} timelineEvents={report.TimelineMatchedEvents} timelineConfidence={report.TimelineConfidence:0.000}");
         }
 
         foreach (var state in states)
         {
             Console.WriteLine(
-                $"mimir-sync-state {state.ReferenceSourceId}->{state.SourceId} delaySamples={state.SmoothedDelaySamples:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000}");
+                $"mimir-sync-state {state.ReferenceSourceId}->{state.SourceId} delaySamples={state.SmoothedDelaySamples:0.000000} delayUs={state.DelayMicroseconds:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000}");
         }
 
         foreach (var trace in synchronization.AudioSynchronizationDecodeTraces.OrderBy(trace => trace.SourceId, StringComparer.Ordinal))
@@ -383,7 +383,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         var reports = synchronization.AudioSynchronizationReports;
         return reports.Count == 0
             ? "no payload windows"
-            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.0} samples {report.DelayMilliseconds:0.00}ms c={report.Confidence:0.00} {report.EvidenceKind} events={report.TimelineMatchedEvents}"));
+            : string.Join(" | ", reports.Select(report => $"{report.SourceId}: {report.FractionalDelaySamples:0.000} samples {report.DelayMicroseconds:0.0}us c={report.Confidence:0.00} {report.EvidenceKind} events={report.TimelineMatchedEvents}"));
     }
 
     private string DescribeAlignedAudio()
@@ -399,6 +399,6 @@ public sealed class MimirRuntime : IAquariumRuntime
         var states = synchronization.AudioSynchronizationStates;
         return states.Count == 0
             ? "no sync state"
-            : string.Join(" | ", states.Select(state => $"{state.SourceId}: {state.SmoothedDelaySamples:0.0} samples sro={state.SamplingRateOffsetPpm:0.0}ppm c={state.Confidence:0.00}"));
+            : string.Join(" | ", states.Select(state => $"{state.SourceId}: {state.SmoothedDelaySamples:0.000} samples {state.DelayMicroseconds:0.0}us sro={state.SamplingRateOffsetPpm:0.0}ppm c={state.Confidence:0.00}"));
     }
 }

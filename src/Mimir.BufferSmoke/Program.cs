@@ -80,13 +80,13 @@ var reports = hub.AnalyzeAudioSynchronization(syncReference, syncMode);
 foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
 {
     Console.WriteLine(
-        $"sync {report.ReferenceSourceId}->{report.SourceId}: evidence={report.EvidenceKind} delaySamples={report.DelaySamples} fractionalDelaySamples={report.FractionalDelaySamples:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} bands={DescribeBands(report.BandResponses)} compared={report.ComparedSamples}");
+        $"sync {report.ReferenceSourceId}->{report.SourceId}: evidence={report.EvidenceKind} delaySamples={report.DelaySamples} fractionalDelaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} bands={DescribeBands(report.BandResponses)} compared={report.ComparedSamples}");
 }
 
 foreach (var state in hub.AudioSynchronizationStates)
 {
     Console.WriteLine(
-        $"sync-state {state.ReferenceSourceId}->{state.SourceId}: smoothedDelaySamples={state.SmoothedDelaySamples:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000} bands={DescribeBands(state.BandResponses)}");
+        $"sync-state {state.ReferenceSourceId}->{state.SourceId}: smoothedDelaySamples={state.SmoothedDelaySamples:0.000000} delayUs={state.DelayMicroseconds:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000} bands={DescribeBands(state.BandResponses)}");
 }
 
 foreach (var trace in hub.AudioSynchronizationDecodeTraces.OrderBy(trace => trace.SourceId, StringComparer.Ordinal))
@@ -260,15 +260,14 @@ static int RunHybridSyncSelfTest()
 {
     const string referenceSourceId = "loopback-test";
     const string candidateSourceId = "mic-test";
-    const int delaySamples = 317;
+    const double delaySamples = 317.375;
 
     var firstSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(0);
     var secondSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(1);
     var reference = new float[firstSegment.Length + secondSegment.Length];
     Array.Copy(firstSegment, 0, reference, 0, firstSegment.Length);
     Array.Copy(secondSegment, 0, reference, firstSegment.Length, secondSegment.Length);
-    var candidate = new float[reference.Length];
-    Array.Copy(reference, 0, candidate, delaySamples, reference.Length - delaySamples);
+    var candidate = ApplyFractionalDelay(reference, delaySamples);
 
     var referenceBuffer = new MimirRollingStreamBuffer(
         new MimirStreamDescriptor(referenceSourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice),
@@ -297,13 +296,32 @@ static int RunHybridSyncSelfTest()
 
     var error = Math.Abs(report.FractionalDelaySamples - delaySamples);
     Console.WriteLine(
-        $"hybrid-sync-self-test evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000} expected={delaySamples} error={error:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
+        $"hybrid-sync-self-test evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} expected={delaySamples:0.000000} errorSamples={error:0.000000} errorUs={error * 1_000_000.0 / report.SampleRate:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
     return string.Equals(report.EvidenceKind, "chirp-bin", StringComparison.Ordinal) &&
         report.TimelineMatchedEvents >= 3 &&
         report.Confidence > 0.70 &&
-        error < 1.0
+        error * 1_000_000.0 / report.SampleRate < 1.0
             ? 0
             : 1;
+}
+
+static float[] ApplyFractionalDelay(float[] source, double delaySamples)
+{
+    var delayed = new float[source.Length];
+    for (var index = 0; index < delayed.Length; index++)
+    {
+        var sourcePosition = index - delaySamples;
+        if (sourcePosition < 0.0 || sourcePosition >= source.Length - 1)
+        {
+            continue;
+        }
+
+        var left = (int)Math.Floor(sourcePosition);
+        var fraction = sourcePosition - left;
+        delayed[index] = (float)(source[left] + (source[left + 1] - source[left]) * fraction);
+    }
+
+    return delayed;
 }
 
 static void AppendFloatBlock(MimirRollingStreamBuffer buffer, string sourceId, float[] samples, int sampleRate)

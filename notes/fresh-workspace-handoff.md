@@ -86,7 +86,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   confidence is weak. Hybrid chirp-bin fallback now has its own short-window
   analyzer floor instead of inheriting the passive two-second gate, and
   `Mimir.BufferSmoke --hybrid-sync-self-test` proves a one-second rolling-buffer
-  window recovers a 317-sample delay from code-valid chirp-bin anchors. Actual
+  window recovers a 317.375-sample fractional delay with 0.369 us error from
+  code-valid chirp-bin anchors. Reports and sync states now expose `delayUs`.
+  Actual
   Mimir.App testing proves Aquarium audio can wake Scarlett
   loopback, keep mic buffers live, and produce confident online passive sync
   states. The latest live hybrid smoke did not prove acoustic chirp-bin decode
