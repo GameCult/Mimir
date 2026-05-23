@@ -101,16 +101,24 @@ Get-Content .\state\evidence.jsonl -Tail 8
   (`USB\VID_1235&PID_8218`) is now local; `native/probes/asio_audio_cadence`
   opens `Focusrite USB ASIO`, sees 4 inputs / 2 outputs including
   `Loopback 1/2`, 192-frame preferred buffers, 44.1-192 kHz support, and
-  captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz. The next
-  audio cut is feeding ASIO buffers into `Mimir.Runtime`, not more WASAPI
-  probing or Raven loopback offload.
+  captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz. It can play
+  raw mono Float32 chirplet timelines through ASIO outputs and capture all ASIO
+  inputs as raw interleaved Float32 for runtime analysis. A real Scarlett
+  chirp-only artifact run at 192 kHz decoded `Loopback 1 -> Loopback 2` at
+  `0.000 us` delay with 7 matched anchors and 0.896 confidence. Physical input
+  2 decoded against loopback at about 616.226 samples / 3209.508 us with 3
+  matched anchors and 0.516 confidence; physical input 1 did not decode in that
+  window. One 2-second 192 kHz chirp-only matched-kernel decode took roughly
+  100 seconds. Accuracy is present; the current chirplet transform is not a hot
+  path.
 - Raven also has a 192 kHz loopback-capable Scarlett for co-streamer/game timing
   evidence. Do not move the heavy soundfield or sensor-fusion workload there.
 
 ## Immediate Re-entry Instruction
 
-Feed Scarlett ASIO callbacks into `Mimir.Runtime`, then prove the constrained
-chirplet-transform decoder through real loopback and mic paths and turn decoded
+Replace the diagnostic chirp-only matched-kernel decoder with the planned
+efficient streaming transform before calling chirp-only runtime-ready at
+192 kHz, then feed Scarlett ASIO callbacks into `Mimir.Runtime` and turn decoded
 clock fits into the SRO/fractional-delay actuator. Keep loopback as timing
 authority. Do not call synchronization analysis from UI/telemetry readouts. Do
 not restore deleted script infrastructure because a stale doc once missed it.

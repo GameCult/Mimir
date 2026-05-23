@@ -116,6 +116,15 @@ accepted_design:
     317.375-sample fractional delay from code-valid anchors with 0.369 us
     error. The synthetic codebook proof remains `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`.
+    `Mimir.BufferSmoke --render-chirplet-f32` plus
+    `native/probes/asio_audio_cadence --play-f32-mono --record-f32-interleaved`
+    now provides a real Scarlett ASIO artifact proof for chirp-only mode.
+    At 192 kHz, Loopback 1 -> Loopback 2 decoded at 0.000 us with 7 anchors and
+    0.896 confidence. Physical input 2 decoded at about 616.226 samples /
+    3209.508 us with 3 anchors and 0.516 confidence; physical input 1 did not
+    decode in that capture. The proof cost roughly 100 seconds for one 2-second
+    192 kHz matched-kernel comparison, so the current chirplet decoder is a
+    diagnostic witness, not the runtime hot path.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
@@ -214,8 +223,10 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Prove the constrained chirplet-transform decoder through real loopback and
-    microphone paths before adding the synchronization actuator.
+    Replace the diagnostic chirp-only matched-kernel decoder with the efficient
+    streaming transform before calling chirp-only runtime-ready at 192 kHz, then
+    feed Scarlett ASIO callbacks directly into Mimir.Runtime and add the
+    synchronization actuator.
     Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the continuous

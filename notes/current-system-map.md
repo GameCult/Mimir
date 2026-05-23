@@ -144,6 +144,18 @@ runtime analyzer accepts Float32, Int16, Int24, and Int32 PCM windows so
 ASIO/native capture can preserve the interface format. Raven also has a
 loopback-capable Scarlett ASIO path at 192 kHz for co-streamer/game timing
 evidence; Starfire still owns the heavy soundfield and sensor-fusion work.
+The ASIO probe can now play a raw mono Float32 chirplet timeline through the
+Focusrite outputs while capturing every ASIO input as raw interleaved Float32.
+`Mimir.BufferSmoke --analyze-asio-f32` feeds those captured channels into the
+same runtime chirp-only analyzer. A real 192 kHz Scarlett artifact decoded
+`Loopback 1 -> Loopback 2` at exactly `0.000 us` with 7 matched anchors and
+0.896 confidence. The physical input path decoded on channel 1 at about
+616.226 samples / 3209.508 us with 3 matched anchors and 0.516 confidence;
+channel 0 did not produce anchors in that window. The result proves chirp-only
+hardware alignment can reach microsecond reporting on clean loopback, but the
+current matched-kernel chirplet decoder took roughly 100 seconds for one
+2-second 192 kHz comparison. That implementation is diagnostic, not the final
+runtime hot path.
 
 ## Visual Fusion
 

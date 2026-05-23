@@ -52,7 +52,9 @@ a named invariant that the native runtime cannot protect yet.
   `Loopback 1/2`, 192-frame preferred buffers, 44.1-192 kHz support, and
   nonzero 4-channel `Int32LSB` input callbacks at 192 kHz. `--monitor-sweep`
   emits low-gain ASIO output bursts and synchronously measures loopback/mic
-  response per frequency so ultrasonic acoustic claims stay measured.
+  response per frequency so ultrasonic acoustic claims stay measured. The probe
+  can also play raw mono Float32 timeline audio with `--play-f32-mono` and
+  capture raw interleaved Float32 ASIO input with `--record-f32-interleaved`.
 - `MimirChirpletTimeline` owns the structured birdsong-like calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
   The default timeline is an order-3 de Bruijn symbol sequence over 32
@@ -102,6 +104,14 @@ a named invariant that the native runtime cannot protect yet.
   `--hybrid-sync-self-test` to prove that the analyzer can recover a fractional
   delay from a one-second rolling-buffer chirp-bin window. The current synthetic
   microsecond proof recovers a 317.375-sample delay with 0.369 us error.
+- `Mimir.BufferSmoke --render-chirplet-f32` and `--analyze-asio-f32` provide the
+  current chirp-only Scarlett artifact proof. A 192 kHz run decoded Focusrite
+  `Loopback 1 -> Loopback 2` at `0.000 us` with 7 matched anchors and 0.896
+  confidence. Physical input 2 decoded at about 616.226 samples / 3209.508 us
+  with 3 matched anchors and 0.516 confidence; physical input 1 did not decode
+  in that capture. This proves the timing evidence can survive the real ASIO
+  path, but the matched-kernel chirplet decoder took roughly 100 seconds for one
+  2-second 192 kHz comparison and is not the runtime hot path.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -137,19 +147,21 @@ a named invariant that the native runtime cannot protect yet.
    workers for local mic, loopback, and network audio feeds. Use the verified
    Focusrite ASIO path for Scarlett capture; WASAPI remains a diagnostic
    witness, not the Scarlett hot path.
-4. Add the synchronization actuator: drive a variable-rate resampler and
+4. Replace the diagnostic chirp-only matched-kernel decoder with the efficient
+   streaming transform before using chirp-only at 192 kHz in the hot path.
+5. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the constrained chirplet
    decoder through real loopback and microphone paths so every correctly heard
    triplet becomes a deterministic timeline anchor before the actuator moves
    samples.
-5. Prove the chirp-bin hybrid fallback through real loopback and microphones
+6. Prove the chirp-bin hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
-6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
+7. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-7. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
-8. Move mic alignment, room suppression, voice separation, spatialization, and
+9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-9. Keep the OBS bridge witness ledger as evidence before expanding receiver
+10. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

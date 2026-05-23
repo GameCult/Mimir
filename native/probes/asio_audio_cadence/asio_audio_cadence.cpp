@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <thread>
 #include <string>
 #include <vector>
@@ -121,6 +122,10 @@ struct CaptureState
     std::vector<double> sweepSin;
     std::vector<double> sweepCos;
     std::vector<unsigned long long> sweepSamples;
+    std::vector<float>* playbackSamples = nullptr;
+    double playbackGain = 1.0;
+    std::vector<float>* recordedInput = nullptr;
+    unsigned long long recordFrames = 0;
     unsigned long long sweepFrame = 0;
     std::atomic<unsigned long long> callbacks{0};
     std::atomic<unsigned long long> frames{0};
@@ -216,7 +221,9 @@ void writeSample(unsigned char* sample, ASIOSampleType type, double value)
 
 void processOutput(long doubleBufferIndex)
 {
-    if (!g_capture.outputBuffers || !g_capture.outputChannels || g_capture.sweepFrequencies.empty())
+    const bool hasPlayback = g_capture.playbackSamples && !g_capture.playbackSamples->empty();
+    const bool hasSweep = !g_capture.sweepFrequencies.empty();
+    if (!g_capture.outputBuffers || !g_capture.outputChannels || (!hasPlayback && !hasSweep))
     {
         return;
     }
@@ -224,7 +231,7 @@ void processOutput(long doubleBufferIndex)
     const auto toneFrames = static_cast<unsigned long long>(g_capture.sweepToneSeconds * g_capture.sampleRate);
     const auto gapFrames = static_cast<unsigned long long>(g_capture.sweepGapSeconds * g_capture.sampleRate);
     const auto slotFrames = toneFrames + gapFrames;
-    if (slotFrames == 0)
+    if (hasSweep && slotFrames == 0)
     {
         return;
     }
@@ -232,25 +239,35 @@ void processOutput(long doubleBufferIndex)
     for (long frame = 0; frame < g_capture.bufferSize; ++frame)
     {
         const auto absoluteFrame = g_capture.sweepFrame + static_cast<unsigned long long>(frame);
-        const auto slot = absoluteFrame / slotFrames;
-        const auto slotOffset = absoluteFrame % slotFrames;
         double sampleValue = 0.0;
-        if (slot < g_capture.sweepFrequencies.size() && slotOffset < toneFrames)
+        if (hasPlayback)
         {
-            const auto fadeFrames = static_cast<unsigned long long>(0.01 * g_capture.sampleRate);
-            auto envelope = 1.0;
-            if (fadeFrames > 0 && slotOffset < fadeFrames)
+            if (absoluteFrame < g_capture.playbackSamples->size())
             {
-                envelope = static_cast<double>(slotOffset) / static_cast<double>(fadeFrames);
+                sampleValue = (*g_capture.playbackSamples)[static_cast<size_t>(absoluteFrame)] * g_capture.playbackGain;
             }
-            else if (fadeFrames > 0 && toneFrames - slotOffset < fadeFrames)
+        }
+        else
+        {
+            const auto slot = absoluteFrame / slotFrames;
+            const auto slotOffset = absoluteFrame % slotFrames;
+            if (slot < g_capture.sweepFrequencies.size() && slotOffset < toneFrames)
             {
-                envelope = static_cast<double>(toneFrames - slotOffset) / static_cast<double>(fadeFrames);
-            }
+                const auto fadeFrames = static_cast<unsigned long long>(0.01 * g_capture.sampleRate);
+                auto envelope = 1.0;
+                if (fadeFrames > 0 && slotOffset < fadeFrames)
+                {
+                    envelope = static_cast<double>(slotOffset) / static_cast<double>(fadeFrames);
+                }
+                else if (fadeFrames > 0 && toneFrames - slotOffset < fadeFrames)
+                {
+                    envelope = static_cast<double>(toneFrames - slotOffset) / static_cast<double>(fadeFrames);
+                }
 
-            const auto phase = 2.0 * Pi * g_capture.sweepFrequencies[slot] *
-                (static_cast<double>(slotOffset) / g_capture.sampleRate);
-            sampleValue = std::sin(phase) * envelope * g_capture.sweepGain;
+                const auto phase = 2.0 * Pi * g_capture.sweepFrequencies[slot] *
+                    (static_cast<double>(slotOffset) / g_capture.sampleRate);
+                sampleValue = std::sin(phase) * envelope * g_capture.sweepGain;
+            }
         }
 
         for (size_t channel = 0; channel < g_capture.outputBuffers->size(); ++channel)
@@ -342,6 +359,13 @@ void bufferSwitch(long doubleBufferIndex, ASIOBool)
 
         for (long frame = 0; frame < g_capture.bufferSize; ++frame)
         {
+            const auto absoluteFrame = g_capture.sweepFrame + static_cast<unsigned long long>(frame);
+            if (g_capture.recordedInput && absoluteFrame < g_capture.recordFrames)
+            {
+                (*g_capture.recordedInput)[static_cast<size_t>(absoluteFrame) * static_cast<size_t>(g_capture.inputCount) + channel] =
+                    static_cast<float>(readSample(raw + frame * sampleBytes, info.type));
+            }
+
             if (sampleIsNonZero(raw + frame * sampleBytes, sampleBytes))
             {
                 ++nonZero;
@@ -485,6 +509,9 @@ int main(int argc, char** argv)
     const auto captureSeconds = doubleOption(argc, argv, "--capture-seconds", 0.0);
     const auto setSampleRate = doubleOption(argc, argv, "--set-sample-rate", 0.0);
     const bool monitorSweep = hasArg(argc, argv, "--monitor-sweep");
+    const char* playFloat32MonoPath = option(argc, argv, "--play-f32-mono", nullptr);
+    const char* recordFloat32InterleavedPath = option(argc, argv, "--record-f32-interleaved", nullptr);
+    const auto playGain = doubleOption(argc, argv, "--play-gain", 1.0);
     const auto sweepGain = doubleOption(argc, argv, "--sweep-gain", 0.03);
     const auto sweepToneSeconds = doubleOption(argc, argv, "--sweep-tone-seconds", 0.55);
     const auto sweepGapSeconds = doubleOption(argc, argv, "--sweep-gap-seconds", 0.20);
@@ -622,7 +649,28 @@ int main(int argc, char** argv)
             info.name);
     }
 
-    if (captureSeconds > 0.0 || monitorSweep)
+    std::vector<float> playbackSamples;
+    if (playFloat32MonoPath)
+    {
+        std::ifstream input(playFloat32MonoPath, std::ios::binary);
+        if (!input)
+        {
+            std::fprintf(stderr, "failed to open --play-f32-mono file: %s\n", playFloat32MonoPath);
+            return 9;
+        }
+
+        input.seekg(0, std::ios::end);
+        const auto byteCount = input.tellg();
+        input.seekg(0, std::ios::beg);
+        if (byteCount > 0)
+        {
+            playbackSamples.resize(static_cast<size_t>(byteCount) / sizeof(float));
+            input.read(reinterpret_cast<char*>(playbackSamples.data()), static_cast<std::streamsize>(playbackSamples.size() * sizeof(float)));
+        }
+        std::printf("asio playback-f32-mono: path=%s samples=%zu gain=%.5f\n", playFloat32MonoPath, playbackSamples.size(), playGain);
+    }
+
+    if (captureSeconds > 0.0 || monitorSweep || !playbackSamples.empty())
     {
         std::vector<double> sweepFrequencies;
         if (monitorSweep)
@@ -630,13 +678,18 @@ int main(int argc, char** argv)
             sweepFrequencies = {8000.0, 10000.0, 12000.0, 14000.0, 16000.0, 18000.0, 20000.0, 22000.0, 24000.0, 28000.0, 32000.0, 40000.0};
         }
 
-        const auto runSeconds = monitorSweep
+        auto runSeconds = monitorSweep
             ? (sweepToneSeconds + sweepGapSeconds) * static_cast<double>(sweepFrequencies.size()) + 0.25
             : captureSeconds;
+        if (runSeconds <= 0.0 && !playbackSamples.empty() && currentRate > 0.0)
+        {
+            runSeconds = static_cast<double>(playbackSamples.size()) / currentRate;
+        }
 
-        std::vector<ASIOBufferInfo> buffers(static_cast<size_t>(inputs + (monitorSweep ? outputs : 0)));
+        const bool needsOutput = monitorSweep || !playbackSamples.empty();
+        std::vector<ASIOBufferInfo> buffers(static_cast<size_t>(inputs + (needsOutput ? outputs : 0)));
         std::vector<ASIOChannelInfo> channels(static_cast<size_t>(inputs));
-        std::vector<ASIOChannelInfo> outputChannels(static_cast<size_t>(monitorSweep ? outputs : 0));
+        std::vector<ASIOChannelInfo> outputChannels(static_cast<size_t>(needsOutput ? outputs : 0));
         for (long channel = 0; channel < inputs; ++channel)
         {
             buffers[static_cast<size_t>(channel)].isInput = 1;
@@ -645,7 +698,7 @@ int main(int argc, char** argv)
             channels[static_cast<size_t>(channel)].isInput = 1;
             driver->getChannelInfo(&channels[static_cast<size_t>(channel)]);
         }
-        if (monitorSweep)
+        if (needsOutput)
         {
             for (long channel = 0; channel < outputs; ++channel)
             {
@@ -673,13 +726,21 @@ int main(int argc, char** argv)
 
         g_capture.buffers = &buffers;
         g_capture.channels = &channels;
-        g_capture.outputBuffers = monitorSweep ? reinterpret_cast<std::vector<ASIOBufferInfo>*>(nullptr) : nullptr;
+        g_capture.outputBuffers = needsOutput ? reinterpret_cast<std::vector<ASIOBufferInfo>*>(nullptr) : nullptr;
         std::vector<ASIOBufferInfo> outputBuffers;
-        if (monitorSweep)
+        if (needsOutput)
         {
             outputBuffers.assign(buffers.begin() + inputs, buffers.end());
             g_capture.outputBuffers = &outputBuffers;
             g_capture.outputChannels = &outputChannels;
+        }
+        std::vector<float> recordedInput;
+        if (recordFloat32InterleavedPath)
+        {
+            const auto requestedFrames = static_cast<unsigned long long>(std::ceil(runSeconds * currentRate)) + static_cast<unsigned long long>(preferredSize);
+            recordedInput.assign(static_cast<size_t>(requestedFrames) * static_cast<size_t>(inputs), 0.0f);
+            g_capture.recordedInput = &recordedInput;
+            g_capture.recordFrames = requestedFrames;
         }
         g_capture.bufferSize = preferredSize;
         g_capture.inputCount = inputs;
@@ -689,6 +750,8 @@ int main(int argc, char** argv)
         g_capture.sweepToneSeconds = sweepToneSeconds;
         g_capture.sweepGapSeconds = sweepGapSeconds;
         g_capture.sweepGain = sweepGain;
+        g_capture.playbackSamples = playbackSamples.empty() ? nullptr : &playbackSamples;
+        g_capture.playbackGain = playGain;
         g_capture.sweepFrame = 0;
         g_capture.sweepEnergy.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
         g_capture.sweepPeak.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
@@ -762,10 +825,35 @@ int main(int argc, char** argv)
             }
         }
 
+        if (recordFloat32InterleavedPath)
+        {
+            const auto capturedFrames = std::min(
+                g_capture.frames.load(std::memory_order_relaxed),
+                g_capture.recordFrames);
+            std::ofstream output(recordFloat32InterleavedPath, std::ios::binary);
+            if (!output)
+            {
+                std::fprintf(stderr, "failed to open --record-f32-interleaved file: %s\n", recordFloat32InterleavedPath);
+                driver->disposeBuffers();
+                return 10;
+            }
+
+            output.write(
+                reinterpret_cast<const char*>(recordedInput.data()),
+                static_cast<std::streamsize>(capturedFrames * static_cast<unsigned long long>(inputs) * sizeof(float)));
+            std::printf("asio record-f32-interleaved: path=%s frames=%llu channels=%ld sampleRate=%.0f\n",
+                recordFloat32InterleavedPath,
+                capturedFrames,
+                inputs,
+                currentRate);
+        }
+
         g_capture.buffers = nullptr;
         g_capture.channels = nullptr;
         g_capture.outputBuffers = nullptr;
         g_capture.outputChannels = nullptr;
+        g_capture.playbackSamples = nullptr;
+        g_capture.recordedInput = nullptr;
         driver->disposeBuffers();
     }
 

@@ -10,8 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\Aquarium-Engine\src\Aquarium.Engine.Contracts\Aquarium.Engine.Contracts.csproj" />
-    <ProjectReference Include="..\..\..\Aquarium-Engine\src\Aquarium.LocalCast\Aquarium.LocalCast.csproj" />
+    <ProjectReference Include="..\..\..\Fensalir\src\Aquarium.Engine.Contracts\Aquarium.Engine.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\Fensalir\src\Aquarium.LocalCast\Aquarium.LocalCast.csproj" />
   </ItemGroup>
 
 </Project>

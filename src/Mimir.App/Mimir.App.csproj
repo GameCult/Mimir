@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Mimir.Runtime\Mimir.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\Aquarium-Engine\src\Aquarium.Engine\Aquarium.Engine.csproj" />
+    <ProjectReference Include="..\..\..\Fensalir\src\Aquarium.Engine\Aquarium.Engine.csproj" />
   </ItemGroup>
 
 </Project>

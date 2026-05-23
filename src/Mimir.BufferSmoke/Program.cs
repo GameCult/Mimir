@@ -20,6 +20,24 @@ if (args.Any(arg => string.Equals(arg, "--hybrid-sync-self-test", StringComparis
     return RunHybridSyncSelfTest(ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate));
 }
 
+if (args.Any(arg => string.Equals(arg, "--render-chirplet-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return RenderChirpletFloat32(
+        ParseStringOption(args, "--output", "artifacts/asio/chirplet-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirChirpletTimeline.SampleRate),
+        ParseDoubleOption(args, "--seconds", 3.0));
+}
+
+if (args.Any(arg => string.Equals(arg, "--analyze-asio-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return AnalyzeAsioFloat32(
+        ParseStringOption(args, "--input", "artifacts/asio/scarlett-chirplet-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirChirpletTimeline.SampleRate),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--reference-channel", 2),
+        ParseIntOption(args, "--candidate-channel", -1));
+}
+
 var duration = TimeSpan.FromSeconds(ParseDoubleOption(args, "--seconds", 10.0));
 var pollDelay = TimeSpan.FromMilliseconds(ParseDoubleOption(args, "--poll-ms", 10.0));
 var requireSamples = args.Any(arg => string.Equals(arg, "--require-samples", StringComparison.OrdinalIgnoreCase));
@@ -303,6 +321,115 @@ static int RunHybridSyncSelfTest(int sampleRate)
         error * 1_000_000.0 / report.SampleRate < 1.0
             ? 0
             : 1;
+}
+
+static int RenderChirpletFloat32(string outputPath, int sampleRate, double seconds)
+{
+    var segmentCount = Math.Max(1, (int)Math.Ceiling(seconds / MimirChirpletTimeline.SegmentSeconds));
+    var samples = new List<float>(Math.Max(1, (int)Math.Ceiling(seconds * sampleRate)));
+    for (var segment = 0; segment < segmentCount; segment++)
+    {
+        samples.AddRange(MimirChirpletTimeline.Default.RenderSegmentMonoFloat((ulong)segment, sampleRate));
+    }
+
+    var requestedSamples = Math.Max(1, (int)Math.Round(seconds * sampleRate));
+    if (samples.Count > requestedSamples)
+    {
+        samples.RemoveRange(requestedSamples, samples.Count - requestedSamples);
+    }
+
+    var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+    if (!string.IsNullOrEmpty(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+
+    var bytes = new byte[samples.Count * sizeof(float)];
+    for (var index = 0; index < samples.Count; index++)
+    {
+        BitConverter.TryWriteBytes(bytes.AsSpan(index * sizeof(float), sizeof(float)), samples[index]);
+    }
+
+    File.WriteAllBytes(outputPath, bytes);
+    Console.WriteLine($"chirplet-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count}");
+    return 0;
+}
+
+static int AnalyzeAsioFloat32(string inputPath, int sampleRate, int channels, int referenceChannel, int candidateChannel)
+{
+    if (channels <= 0)
+    {
+        Console.Error.WriteLine("asio-f32 analysis failed: channel count must be positive");
+        return 1;
+    }
+
+    if (referenceChannel < 0 || referenceChannel >= channels)
+    {
+        Console.Error.WriteLine("asio-f32 analysis failed: reference channel is outside the capture channel count");
+        return 1;
+    }
+
+    if (candidateChannel >= channels)
+    {
+        Console.Error.WriteLine("asio-f32 analysis failed: candidate channel is outside the capture channel count");
+        return 1;
+    }
+
+    var bytes = File.ReadAllBytes(inputPath);
+    var frameCount = bytes.Length / (sizeof(float) * channels);
+    if (frameCount == 0)
+    {
+        Console.Error.WriteLine("asio-f32 analysis failed: capture file contains no complete frames");
+        return 1;
+    }
+
+    var channelSamples = new float[channels][];
+    for (var channel = 0; channel < channels; channel++)
+    {
+        channelSamples[channel] = new float[frameCount];
+    }
+
+    var span = bytes.AsSpan(0, frameCount * channels * sizeof(float));
+    for (var frame = 0; frame < frameCount; frame++)
+    {
+        for (var channel = 0; channel < channels; channel++)
+        {
+            channelSamples[channel][frame] = BitConverter.ToSingle(span.Slice((frame * channels + channel) * sizeof(float), sizeof(float)));
+        }
+    }
+
+    var buffers = new List<MimirRollingStreamBuffer>(channels);
+    for (var channel = 0; channel < channels; channel++)
+    {
+        var sourceId = $"asio-ch{channel}";
+        var buffer = new MimirRollingStreamBuffer(
+            new MimirStreamDescriptor(sourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice),
+            TimeSpan.FromSeconds(10));
+        AppendFloatBlock(buffer, sourceId, channelSamples[channel], sampleRate);
+        buffers.Add(buffer);
+    }
+
+    var referenceSourceId = $"asio-ch{referenceChannel}";
+    var candidates = candidateChannel >= 0
+        ? new HashSet<string>(StringComparer.Ordinal) { $"asio-ch{candidateChannel}" }
+        : null;
+    var analyzer = new MimirAudioSynchronizationAnalyzer();
+    var reports = analyzer.Analyze(buffers, referenceSourceId, MimirAudioSyncMode.ChirpOnly, candidates);
+
+    Console.WriteLine($"asio-f32-analysis input={inputPath} sampleRate={sampleRate} channels={channels} frames={frameCount} reference={referenceSourceId} candidate={(candidateChannel >= 0 ? $"asio-ch{candidateChannel}" : "all")}");
+    foreach (var trace in analyzer.LastDecodeTraces.OrderBy(trace => trace.SourceId, StringComparer.Ordinal))
+    {
+        Console.WriteLine(
+            $"asio-f32-trace {trace.ReferenceSourceId}->{trace.SourceId}: status={trace.Status} compared={trace.ComparedSamples} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} refClock={trace.ReferenceClockConfidence:0.000} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} candClock={trace.CandidateClockConfidence:0.000} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
+    }
+
+    foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
+    {
+        Console.WriteLine(
+            $"asio-f32-sync {report.ReferenceSourceId}->{report.SourceId}: evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
+    }
+
+    return reports.Count > 0 ? 0 : 1;
 }
 
 static int ParseIntOption(string[] args, string name, int fallback)

@@ -57,11 +57,16 @@ public sealed class MimirChirpletTimeline
 
     public float[] RenderSegmentMonoFloat(ulong segmentIndex)
     {
+        return RenderSegmentMonoFloat(segmentIndex, SampleRate);
+    }
+
+    public float[] RenderSegmentMonoFloat(ulong segmentIndex, int sampleRate)
+    {
         var segmentStartSeconds = segmentIndex * SegmentSeconds;
-        var samples = new float[(int)Math.Round(SegmentSeconds * SampleRate)];
+        var samples = new float[(int)Math.Round(SegmentSeconds * sampleRate)];
         foreach (var timelineEvent in EventsOverlapping(segmentStartSeconds, SegmentSeconds))
         {
-            AddTone(samples, SampleRate, timelineEvent.Tone, segmentStartSeconds);
+            AddTone(samples, sampleRate, timelineEvent.Tone, segmentStartSeconds);
         }
 
         for (var index = 0; index < samples.Length; index++)
