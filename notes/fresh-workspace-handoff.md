@@ -22,9 +22,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - VoidBot persona/state live under `.voidbot/voice/` and `.voidbot/state/`.
   Commit `.voidbot` dirt in a separate state commit whenever it appears.
 - V1 still has FFmpeg/SRT/OBS bridge utilities for LAN ingest.
-- The live stream app is C# plus Aquarium: `Mimir.slnx` contains
+- The live stream app is C# plus Fensalir: `Mimir.slnx` contains
   `src/Mimir.App` and `src/Mimir.Runtime`.
-- `src/Mimir.App` hosts Aquarium Engine as the windowing/rendering/D3D12 bridge.
+- `src/Mimir.App` hosts Fensalir as the windowing/rendering/D3D12 bridge.
 - `src/Mimir.Runtime` owns `MimirSynchronizationHub`, configurable five-second
   rolling buffers, stream descriptors, source adapters, direct native ingest,
   audio chirplet delay estimation, and the video capture driver seam.
@@ -32,8 +32,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   sources are bridge/network edges only.
 - Leap stereo IR is the first timing-camera candidate for direct ingest.
 - `native/reservoir` owns the lower shared-edge typed-handle invariant for
-  Aquarium/Faust binding work.
-- Aquarium owns production GPU fusion, UI, and Spout2 publication.
+  Fensalir/Faust binding work.
+- Fensalir owns production GPU fusion, UI, and Spout2 publication.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
 - OBS receives final program surfaces; it does not own synchronization.
@@ -46,7 +46,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Turn the current loopback-referenced chirplet measurement into the real
   synchronization actuator: smooth delay/SRO, then drive fractional delay and
   variable-rate resampling.
-- Bind Aquarium UI to stream health, buffer depth, timestamps, settings, and
+- Bind Fensalir UI to stream health, buffer depth, timestamps, settings, and
   output management.
 - Keep PowerShell/FFmpeg/SRT as bridge utilities until native program output
   replaces them.
@@ -67,7 +67,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
   constellation symbols. Start band, glide shape, duration, and following
   inter-chirp gap all carry code, so any three consecutive correctly detected
   symbols identify the event index inside the current operating horizon. The
-  timeline owns Aquarium PCM segment rendering, transform-frame decoding,
+  timeline owns Fensalir PCM segment rendering, transform-frame decoding,
   triplet anchor decoding, and per-band response hooks. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
   now tracks smoothed delay and delay-slope/SRO ppm. `MimirChirpletSymbolCodebook`
@@ -89,7 +89,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
   window recovers a 317.375-sample fractional delay with 0.369 us error from
   code-valid chirp-bin anchors. Reports and sync states now expose `delayUs`.
   Actual
-  Mimir.App testing proves Aquarium audio can wake Scarlett
+  Mimir.App testing proves Fensalir audio can wake Scarlett
   loopback, keep mic buffers live, and produce confident online passive sync
   states. The latest live hybrid smoke did not prove acoustic chirp-bin decode
   because Scarlett loopback stalled after one block in that run; treat that as
@@ -104,6 +104,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz. The next
   audio cut is feeding ASIO buffers into `Mimir.Runtime`, not more WASAPI
   probing or Raven loopback offload.
+- Raven also has a 192 kHz loopback-capable Scarlett for co-streamer/game timing
+  evidence. Do not move the heavy soundfield or sensor-fusion workload there.
 
 ## Immediate Re-entry Instruction
 

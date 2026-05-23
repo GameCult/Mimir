@@ -46,9 +46,9 @@ be charming while lying. Still a liar.
 
 ## Synchronization
 
-The video SRT source is a timed media artifact in the Aquarium path, not just
+The video SRT source is a timed media artifact in the Fensalir path, not just
 scenery in OBS. Keep the listener URL and latency aligned with the
-Aquarium/native presentation ledger.
+Fensalir/native presentation ledger.
 
 The live sync heartbeat is `calibration/runs/av-sync-status.json`. `remote-video-latency-ms` is presentation delay, not merely the SRT URL's `latency` parameter. Check `remote_video.delta_ns` before trusting the composite. If that number grows, fix the configured media delay or the ingest path instead of eyeballing it in OBS like a doomed little stage magician.
 

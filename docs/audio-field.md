@@ -111,6 +111,9 @@ capture. With the Scarlett Solo 4th Gen attached to Starfire, Focusrite USB
 ASIO exposes 4 inputs and 2 outputs: `Input 1`, `Input 2`, `Loopback 1`, and
 `Loopback 2`. It accepts 44.1 through 192 kHz, reports a 192-frame preferred
 buffer, and captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz.
+Raven also has a loopback-capable Scarlett ASIO path at 192 kHz for
+co-streamer/game timing evidence, but Starfire owns the heavy local alignment,
+soundfield, and sensor-fusion work.
 The next cut is not more WASAPI probing; it is feeding those ASIO buffers
 directly into `Mimir.Runtime`.
 
@@ -171,7 +174,7 @@ fresh reports will stop.
 The actual Mimir app path now runs this online: `MimirRuntime.Update` keeps the
 chirplet timeline queued, polls sources, and updates sync analysis on a fixed cadence.
 `MIMIR_SYNC_TELEMETRY_SECONDS` enables console telemetry for live tests. Current
-runtime testing proves Aquarium output wakes the Scarlett loopback and the mic
+runtime testing proves Fensalir output wakes the Scarlett loopback and the mic
 buffers stay live. The decoder now uses quadrature chirplet atoms so symbol
 classification is phase-invariant at the transform layer. The next failure is
 physical capture proof: the same canonical anchors need to stay stable through
@@ -181,7 +184,7 @@ loopback, room mics, device clocks, and codec/network paths.
 
 ```mermaid
 flowchart TD
-    A["MimirChirpletTimeline"] --> B["Aquarium audio output"]
+    A["MimirChirpletTimeline"] --> B["Fensalir audio output"]
     B --> C["Scarlett speaker loopback"]
     B --> D["room + speakers + mics"]
     C --> E["loopback rolling buffer"]
@@ -199,7 +202,7 @@ flowchart TD
 
 The chirplet timeline owns three facts:
 
-- **Emission**: the PCM that Aquarium sends to the speakers.
+- **Emission**: the PCM that Fensalir sends to the speakers.
 - **Timing witness**: the matched-filter atom bank used to find the stream in
   loopback and mic buffers.
 - **Response witness**: the per-band atoms used to measure how strongly each
@@ -233,6 +236,6 @@ hybrid watermark belongs to the chirp-bin machine.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
-delay estimates, and stem routing in Aquarium UI. The analyzer accepts Float32,
+delay estimates, and stem routing in Fensalir UI. The analyzer accepts Float32,
 Int16, Int24, and Int32 PCM windows so the direct driver path can preserve real
 interface formats before Faust/native DSP owns the hot resampling and alignment.

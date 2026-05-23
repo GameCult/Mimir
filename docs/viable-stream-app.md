@@ -4,7 +4,7 @@
 
 Build the smallest live Mimir application that can ingest multiple local or
 networked video and audio feeds, hold a short synchronized window in memory,
-and emit coherent OBS-facing program outputs while Aquarium provides the
+and emit coherent OBS-facing program outputs while Fensalir provides the
 operator UI.
 
 The default reservoir horizon is five seconds. That delay is not decoration. It
@@ -24,22 +24,22 @@ Today the repo has two partial machines:
 - FFmpeg/SRT bridge scripts can capture sender video/audio and expose stable OBS
   Media Source endpoints.
 - The native `LocalcastRuntime` reservoir ABI can hold typed live sample handles,
-  and Aquarium can consume native render packets for GPU fusion.
+  and Fensalir can consume native render packets for GPU fusion.
 
 Those parts are useful, but they are not yet the viable app. The viable app is
-the join: ingest workers append live sample handles into one Aquarium-hosted
-runtime window, Aquarium renders video from that window, Faust/native audio
+the join: ingest workers append live sample handles into one Fensalir-hosted
+runtime window, Fensalir renders video from that window, Faust/native audio
 builds synchronized stems from the same window, and OBS receives only the
 program outputs.
 
 ```mermaid
 flowchart TD
-    A["local camera workers"] --> R["Aquarium-hosted 5s LocalcastRuntime"]
+    A["local camera workers"] --> R["Fensalir-hosted 5s LocalcastRuntime"]
     B["network video ingest workers"] --> R
     C["local mic/loopback workers"] --> R
     D["network audio ingest workers"] --> R
-    R --> U["Aquarium debug/settings/output UI"]
-    R --> V["Aquarium GPU video composition"]
+    R --> U["Fensalir debug/settings/output UI"]
+    R --> V["Fensalir GPU video composition"]
     R --> F["Faust/native audio alignment + stems"]
     V --> O["OBS video output"]
     F --> P["OBS audio stem outputs"]
@@ -51,7 +51,7 @@ flowchart TD
 - The five-second rolling window is a deliberate compute budget, not accidental
   latency. It exists so capture, sync, GPU fusion, and audio field extraction
   can choose coherence over immediacy.
-- Aquarium owns the running app, UI, debug state, settings changes, output
+- Fensalir owns the running app, UI, debug state, settings changes, output
   management, GPU fusion/rendering, and Spout/video publication.
 - Faust/native DSP owns audio alignment, voice separation, suppression,
   volumetric sound-field extraction, stems, and spatial bed generation.
@@ -68,15 +68,15 @@ flowchart TD
 The first cut should be deliberately boring:
 
 1. Build Mimir as its own C# solution in this repo.
-2. Reference Aquarium Engine as the windowing/rendering library and D3D12
-   bridge; do not copy engine host code into Mimir.
-3. Start an Aquarium `LocalCastRuntime` app with a five-second native runtime.
+2. Reference Fensalir as the windowing/rendering library and D3D12 bridge; do
+   not copy engine host code into Mimir.
+3. Start a Fensalir-hosted `LocalCastRuntime` app with a five-second native runtime.
 4. Create one producer per configured feed using native source-id hashing.
 5. Ingest video feeds as timed camera-frame or render-packet handles.
 6. Ingest audio feeds as timed `LocalcastAudioBlockDescriptor` handles.
    Starfire's Focusrite USB ASIO path is the current local target for mic plus
    loopback ingest.
-7. Expose Aquarium UI readouts for reservoir edge, window start, per-kind
+7. Expose Fensalir UI readouts for reservoir edge, window start, per-kind
    counts, feed health, delay estimate, output status, and current settings.
 8. Render one synchronized program video output from the reservoir.
 9. Emit separately controllable OBS audio stems from the same reservoir window.
@@ -87,18 +87,18 @@ The first cut should be deliberately boring:
 
 `Mimir.slnx` owns the Mimir app surface:
 
-- `src/Mimir.App` launches Aquarium Engine and points it at the Mimir runtime
+- `src/Mimir.App` launches Fensalir and points it at the Mimir runtime
   assembly.
-- `src/Mimir.Runtime` implements the Aquarium client runtime factory and uses
-  Aquarium's LocalCast runtime until Mimir-specific ingest workers replace the
+- `src/Mimir.Runtime` implements the Fensalir client runtime factory and uses
+  Fensalir's LocalCast runtime until Mimir-specific ingest workers replace the
   remaining diagnostic source.
 
 ## Synchronization Runtime
 
 `Mimir.Runtime` now owns the first synchronization spine:
 
-- `MimirRuntime` is the Aquarium client runtime. It wraps the current
-  Aquarium `LocalCastRuntime` visual path and adds a Mimir-owned synchronization
+- `MimirRuntime` is the Fensalir client runtime. It wraps the current
+  Fensalir `LocalCastRuntime` visual path and adds a Mimir-owned synchronization
   hub.
 - `MimirSynchronizationHub` owns stream source polling and appends samples into
   bounded buffers.
@@ -143,7 +143,7 @@ immediately on frame receipt.
 
 Do not add a new registry, bridge daemon, JSON live store, OBS plugin, or
 per-feed buffer manager to make this happen. If the app needs one of those,
-first move the missing authority into `LocalcastRuntime`, Aquarium, or
+first move the missing authority into `LocalcastRuntime`, Fensalir, or
 Faust/native DSP.
 
 The app exists to make the live system coherent, not to preserve every

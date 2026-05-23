@@ -16,7 +16,7 @@ flowchart TD
     C["Leap timing/IR driver"] --> R
     D["network feed producers"] --> R
     R --> N["native reservoir handles"]
-    N --> E["Aquarium GPU fusion + UI"]
+    N --> E["Fensalir GPU fusion + UI"]
     N --> F["Faust/native DSP"]
     E --> G["Spout2/program video"]
     F --> H["program stems + spatial bed"]
@@ -30,7 +30,7 @@ Ownership:
   runtime contracts.
 - `Mimir.Runtime` owns app-level stream buffers and synchronization.
 - Native capture workers own device reads.
-- Aquarium owns dense visual fusion, material/brush/splat reconciliation,
+- Fensalir owns dense visual fusion, material/brush/splat reconciliation,
   D3D12 interop, runtime UI, and Spout2 publication.
 - Faust/native DSP owns hot audio alignment, suppression, separation,
   spatialization, and stem generation.
@@ -41,7 +41,7 @@ No private history outlives the rolling buffer.
 
 ## Viable Stream App
 
-`docs/viable-stream-app.md` defines the near-term app target. Aquarium hosts the
+`docs/viable-stream-app.md` defines the near-term app target. Fensalir hosts the
 running Mimir app, keeps the default five-second runtime in memory, exposes
 debug/settings/output controls, and emits synchronized OBS program video plus
 separately controllable audio stems.
@@ -63,7 +63,7 @@ separately controllable audio stems.
 Process-backed sources are bridge/network edges. Local cameras should feed
 native descriptors with device timestamps and optional native/GPU handles.
 The `frame-events`/`json-lines` adapter is a diagnostic witness only: native
-probes can emit per-frame JSON metadata so Aquarium sees real sensor cadence in
+probes can emit per-frame JSON metadata so Fensalir sees real sensor cadence in
 the rolling buffers while the direct ABI driver is being cut. It does not carry
 pixels and does not own the final six-camera hot path. Multi-camera probes are
 one process with declared accepted source ids, not one process per camera.
@@ -96,7 +96,7 @@ de Bruijn sequence over 32 time/frequency constellation symbols. Start band,
 glide shape, duration, and following inter-chirp gap all carry code. Any three
 consecutive correctly detected symbols identify the event index inside the
 current operating horizon. Mimir continuously queues that timeline through
-Aquarium audio and decodes timing through the constrained chirplet-transform
+Fensalir audio and decodes timing through the constrained chirplet-transform
 path.
 `MimirAudioSynchronizationSettings.Mode` chooses whether active calibration is
 allowed: `chirp-only` emits the witness, `passive` stays silent and uses
@@ -141,12 +141,14 @@ is attached to Starfire and exposes 4 ASIO inputs / 2 outputs: `Input 1`,
 can instantiate that driver, verify 44.1-192 kHz support, and capture nonzero
 4-channel `Int32LSB` callbacks at 192 kHz with 192-frame preferred buffers. The
 runtime analyzer accepts Float32, Int16, Int24, and Int32 PCM windows so
-ASIO/native capture can preserve the interface format.
+ASIO/native capture can preserve the interface format. Raven also has a
+loopback-capable Scarlett ASIO path at 192 kHz for co-streamer/game timing
+evidence; Starfire still owns the heavy soundfield and sensor-fusion work.
 
 ## Visual Fusion
 
-Visual fusion belongs in Aquarium over current reservoir claims. Native capture
-workers provide frames; Aquarium owns feature extraction, matching, material
+Visual fusion belongs in Fensalir over current reservoir claims. Native capture
+workers provide frames; Fensalir owns feature extraction, matching, material
 fitting, render budgeting, and publication.
 
 ## Known Risks

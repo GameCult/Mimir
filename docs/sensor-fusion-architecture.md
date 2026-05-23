@@ -1,6 +1,6 @@
 # Sensor Fusion Architecture
 
-Visual fusion belongs in Aquarium over current Mimir runtime buffers.
+Visual fusion belongs in Fensalir over current Mimir runtime buffers.
 
 ## Live Flow
 
@@ -9,7 +9,7 @@ flowchart TD
     A["direct camera drivers"] --> B["Mimir.Runtime video buffers"]
     C["Leap stereo IR driver"] --> B
     B --> D["native reservoir handles"]
-    D --> E["Aquarium GPU feature extraction"]
+    D --> E["Fensalir GPU feature extraction"]
     E --> F["cross-view matching + flow"]
     F --> G["surface/material claims"]
     G --> H["brush/splat render budget"]
@@ -21,7 +21,7 @@ flowchart TD
 - Device timestamps beat arrival timestamps when available.
 - Leap is the first timing-camera candidate.
 - Process capture is a bridge edge, not the local six-camera foundation.
-- Aquarium owns GPU extraction, fusion, material fitting, and render budgeting.
+- Fensalir owns GPU extraction, fusion, material fitting, and render budgeting.
 - Runtime buffers own retention and stream health, not scene reconstruction.
 
 ## Next Cut

@@ -5,16 +5,16 @@
 Mimir is now a C# app/runtime plus native reservoir project. The live stream
 machine must be direct-driver and native-buffer first:
 
-- `src/Mimir.App` hosts Aquarium Engine for windowing, rendering, and the D3D12
+- `src/Mimir.App` hosts Fensalir for windowing, rendering, and the D3D12
   bridge.
 - `src/Mimir.Runtime` owns stream descriptors, source polling, direct push
   ingest, one rolling buffer per configured audio/video stream, and the
-  synchronization hub Aquarium can inspect.
+  synchronization hub Fensalir can inspect.
 - The default five-second window is an intentional latency/memory trade: use it
   to line up streams and extract the volumetric audio/video field before OBS
   sees program output.
 - `native/reservoir` owns the lower native rolling-buffer invariant for
-  Aquarium/Faust integration.
+  Fensalir/Faust integration.
 - PowerShell/FFmpeg/SRT remains a bridge utility for LAN OBS feeds. It is not
   the synchronized program authority.
 
@@ -25,7 +25,7 @@ a named invariant that the native runtime cannot protect yet.
 
 - Mimir public identity, branding, and Face memory.
 - `Mimir.slnx` with `src/Mimir.App` and `src/Mimir.Runtime`.
-- Aquarium host bootstrapping from `Mimir.App`.
+- Fensalir host bootstrapping from `Mimir.App`.
 - `MimirSynchronizationHub`, `MimirRollingStreamBuffer`, stream descriptors, and
   `IMimirStreamSource`.
 - Configurable five-second default rolling buffers for local and network audio
@@ -33,7 +33,7 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirNativeIngestStreamSource` for direct push ingest into runtime buffers.
 - `MimirProcessStreamSource` for bridge/network command edges.
 - `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
-  from native probes into the same rolling buffers Aquarium inspects. One probe
+  from native probes into the same rolling buffers Fensalir inspects. One probe
   process can accept multiple emitted `sourceId` values so it does not reopen
   the same camera set once per stream.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
@@ -80,7 +80,7 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis.
-- `MimirRuntime` queues chirplet timeline PCM through Aquarium audio when the
+- `MimirRuntime` queues chirplet timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
   emission, and hybrid emits the active pilot only while passive confidence is
@@ -124,7 +124,7 @@ a named invariant that the native runtime cannot protect yet.
 - Frame-event process sources are diagnostic only. They prove source cadence and
   runtime plumbing without dragging stdout bytes into the pixel hot loop.
 - Calibration artifacts may remain on disk as evidence, but live state must be
-  in memory inside Mimir/Aquarium/native runtime surfaces.
+  in memory inside Mimir/Fensalir/native runtime surfaces.
 
 ## Next
 
@@ -145,10 +145,10 @@ a named invariant that the native runtime cannot protect yet.
    samples.
 5. Prove the chirp-bin hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
-6. Bind Aquarium UI to the synchronization hub so buffer depth, stream cadence,
+6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 7. Move GPU feature extraction, fusion, material fitting, render budgeting, and
-   Spout2 publication into Aquarium.
+   Spout2 publication into Fensalir.
 8. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 9. Keep the OBS bridge witness ledger as evidence before expanding receiver

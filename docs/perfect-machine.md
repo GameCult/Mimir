@@ -3,11 +3,11 @@
 ## Objective
 
 Build one synchronized spatial stream machine from six cameras, six microphones,
-program loopback, speakers, Leap timing, Aquarium GPU rendering, Faust DSP, and
+program loopback, speakers, Leap timing, Fensalir GPU rendering, Faust DSP, and
 OBS output.
 
 The product is not a pile of bridge scripts. The product is a coherent live
-volumetric field with explicit owners: visual evidence becomes Aquarium sensor
+volumetric field with explicit owners: visual evidence becomes Fensalir sensor
 fusion, audio evidence becomes a synchronized sound field, and OBS receives
 only program outputs.
 
@@ -17,7 +17,7 @@ only program outputs.
 flowchart TD
     A["direct camera / audio / network producers"] --> B["Mimir.Runtime rolling buffers"]
     B --> C["native reservoir handles"]
-    C --> D["Aquarium GPU + UI"]
+    C --> D["Fensalir GPU + UI"]
     C --> E["Faust/native DSP"]
     D --> F["Spout2/program video"]
     E --> G["program stems"]
@@ -31,7 +31,7 @@ flowchart TD
 - Every stream has a bounded rolling buffer.
 - Missing data is absence, not a stale substitute.
 - Late data can refine the live window only while it remains inside the window.
-- Aquarium owns dense visual fusion, temporal accumulation, material fitting,
+- Fensalir owns dense visual fusion, temporal accumulation, material fitting,
   rendering, D3D12 interop, UI, and Spout publication.
 - Faust/native DSP owns hot audio alignment, suppression, voice separation,
   spatialization, and stem generation.
@@ -42,14 +42,14 @@ flowchart TD
 
 The native reservoir stores time-ordered sample handles with typed views. It
 owns retention and lookup, not payload memory. Producers append. Optimizers
-refine. Aquarium/Faust consume.
+refine. Fensalir/Faust consume.
 
 Required sample kinds include camera frames, camera features, scene rays,
 surface claims, material claims, audio blocks, phase claims, event claims, and
 render packets.
 
 `LocalcastRuntime` and `LocalcastProducer` are the lower native boundary.
-`Mimir.Runtime` is the app-level synchronization surface that Aquarium hosts and
+`Mimir.Runtime` is the app-level synchronization surface that Fensalir hosts and
 debugs.
 
 ## Volumetric Sensor Fusion
@@ -57,7 +57,7 @@ debugs.
 Camera fusion is cross-view evidence across the rolling window, not
 latest-frame display. Leap stereo IR is the timing ground-truth candidate. The
 driver path should deliver frame descriptors with device timestamps and native
-or GPU handles, then Aquarium should do feature extraction, flow, matching,
+or GPU handles, then Fensalir should do feature extraction, flow, matching,
 material estimation, brush/splat budgeting, and final presentation on GPU.
 
 ## Volumetric Audio Field
@@ -69,7 +69,9 @@ and spatial bed as synchronized outputs. Starfire currently owns the local
 Focusrite USB ASIO path: Scarlett Solo 4th Gen input channels plus ASIO
 `Loopback 1/2` at up to 192 kHz. That loopback is the local program/timing
 reference; room microphones are aligned to it before any volumetric field or
-stem claim is allowed to cross into OBS.
+stem claim is allowed to cross into OBS. Raven also has a 192 kHz
+loopback-capable Scarlett for co-streamer/game timing evidence, but the heavy
+soundfield and sensor-fusion work belongs on Starfire.
 
 Raw estimator detail stays inside the audio runtime. Meaning crosses the
 boundary.

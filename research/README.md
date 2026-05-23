@@ -12,7 +12,7 @@ Use it to shape native implementation decisions:
 - direct camera and audio drivers;
 - pinned/native buffers;
 - GPU feature extraction, flow, matching, and fusion;
-- Aquarium D3D12 compute/render paths;
+- Fensalir D3D12 compute/render paths;
 - Faust/native DSP;
 - OBS-facing program outputs.
 
@@ -31,5 +31,5 @@ Audio timing research entry points:
 
 Do not promote mirrored examples, old probes, or external library demos into the
 Mimir hot path just because they exist here. If research points at a concept,
-rebuild the live version in the Mimir/Aquarium/native stack with a clear owner
+rebuild the live version in the Mimir/Fensalir/native stack with a clear owner
 and invariant.

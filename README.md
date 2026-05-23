@@ -5,7 +5,7 @@ microphones, speakers, loopbacks, and network feeds into one coherent
 OBS-facing program surface.
 
 The point is not to collect impressive device counts. The point is to recover a
-live volumetric field: synchronized video evidence for Aquarium GPU fusion,
+live volumetric field: synchronized video evidence for Fensalir GPU fusion,
 synchronized audio evidence for a volumetric sound field, and final outputs
 that OBS can use without pretending raw unsynchronized sources are a world.
 
@@ -18,6 +18,9 @@ Start with:
 - [docs/native-capture-cadence.md](docs/native-capture-cadence.md) for measured
   camera/sensor evidence.
 
+Naming note: **Fensalir** is the engine/windowing/rendering/D3D12 layer. Older
+research notes may still use the previous engine name.
+
 ## Machine Shape
 
 ```mermaid
@@ -25,7 +28,7 @@ flowchart TD
     C["direct camera drivers"] --> R["Mimir.Runtime rolling buffers"]
     A["ASIO mic + loopback drivers"] --> R
     N["network feed producers"] --> R
-    R --> Q["Aquarium UI + GPU fusion"]
+    R --> Q["Fensalir UI + GPU fusion"]
     R --> F["Faust/native DSP"]
     Q --> V["Spout2 / program video"]
     F --> S["program stems + spatial bed"]
@@ -38,7 +41,7 @@ Ownership is deliberately narrow:
 - `Mimir.Runtime` owns stream identity, bounded rolling buffers, timing state,
   and synchronization contracts.
 - Native capture workers own device reads and append typed sample handles.
-- Aquarium owns the window, UI, D3D12 bridge, visual fusion, and program video
+- Fensalir owns the window, UI, D3D12 bridge, visual fusion, and program video
   publication.
 - Faust/native DSP owns hot audio alignment, resampling, suppression,
   separation, spatialization, and stems.
@@ -62,6 +65,11 @@ The important result is local ownership of the timing reference. We do not need
 Raven, the game machine, to carry the soundfield workload just to get program
 loopback. Raven can run games; Starfire can capture ASIO mic inputs plus ASIO
 loopback and do the alignment work.
+
+Raven also has a loopback-capable Scarlett at `192 kHz` for the co-streamer
+side. Its Focusrite USB ASIO path exposes `Input 1`, `Input 2`, `Loopback 1`,
+and `Loopback 2`, so Raven can publish precise game/co-streamer timing evidence
+back to Starfire without owning the heavy soundfield or sensor-fusion workload.
 
 The repo contains a native ASIO probe:
 
@@ -142,7 +150,7 @@ Known shape:
 - PS3 Eyes are high-rate tracking witnesses.
 - Kiyo/Kiyo Pro provide RGB context, with the Kiyo Pro still limited by its
   current USB/cadence behavior.
-- Aquarium owns the GPU fusion work: feature extraction, temporal accumulation,
+- Fensalir owns the GPU fusion work: feature extraction, temporal accumulation,
   splats/surface claims, material fitting, rendering, UI, and Spout2 output.
 
 Next visual cuts:
@@ -150,7 +158,7 @@ Next visual cuts:
 1. Replace diagnostic frame-event probes with direct native capture workers.
 2. Preserve device or immediate receipt timestamps at the driver boundary.
 3. Feed typed frame handles into `Mimir.Runtime` and the native reservoir.
-4. Let Aquarium consume the synchronized window for volumetric sensor fusion.
+4. Let Fensalir consume the synchronized window for volumetric sensor fusion.
 
 ## Bridge Scripts
 
@@ -174,10 +182,10 @@ the coherent field machine.
 ## Repo Shape
 
 - `Mimir.slnx`: C# app/runtime solution.
-- `src/Mimir.App`: Aquarium-hosted window/render app.
+- `src/Mimir.App`: Fensalir-hosted window/render app.
 - `src/Mimir.Runtime`: rolling buffers, stream sources, synchronization state,
   and runtime contracts.
-- `native/reservoir`: lower native rolling-buffer ABI for Aquarium/Faust
+- `native/reservoir`: lower native rolling-buffer ABI for Fensalir/Faust
   integration.
 - `native/probes`: direct hardware probes and cadence witnesses.
 - `config/*.example.json`: live system profiles.
@@ -230,7 +238,7 @@ Visual-side help is useful around:
 - GPU-resident frame handles and D3D12 interop.
 - Cross-camera feature matching, temporal accumulation, splats, and surface
   confidence.
-- Aquarium UI surfaces for buffer depth, health, drift, and calibration state.
+- Fensalir UI surfaces for buffer depth, health, drift, and calibration state.
 
 ## Rehydrate State
 

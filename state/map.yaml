@@ -1,23 +1,23 @@
 workspace:
   name: Mimir
   status: active
-  focus: direct-driver-aquarium-stream-app
+  focus: direct-driver-fensalir-stream-app
   implementation_name: Mimir public surface / native runtime contracts
   premise: >
     Mimir is the local realtime field machine: cameras, microphones, speakers,
     network feeds, and timing signals become one coherent OBS-facing volumetric
-    program surface. The live path is a C# Aquarium-hosted app with in-memory
+    program surface. The live path is a C# Fensalir-hosted app with in-memory
     rolling buffers and native capture/runtime boundaries.
 
 objective:
   primary: >
     Build one synchronized spatial stream machine from six cameras, six
-    microphones, two speakers, Leap timing, Aquarium GPU rendering, Faust DSP,
+    microphones, two speakers, Leap timing, Fensalir GPU rendering, Faust DSP,
     and OBS output.
   current: >
     Implement direct camera/audio capture into Mimir.Runtime buffers, starting
     with Leap stereo IR as the timing-camera candidate, then expose runtime
-    health/settings/output controls through Aquarium UI.
+    health/settings/output controls through Fensalir UI.
 
 constraints:
   - Sender is Windows.
@@ -26,7 +26,7 @@ constraints:
   - Audio sources must remain separately controllable in OBS.
   - V1 bridge is LAN-only.
   - Persistent state must clarify rehydrate, not become transcript tax.
-  - Live ingest belongs to Mimir.Runtime, native drivers, Aquarium, and
+  - Live ingest belongs to Mimir.Runtime, native drivers, Fensalir, and
     Faust/native DSP.
   - Edge JSON is schema/diagnostic only; live process data is typed or in
     memory.
@@ -45,14 +45,14 @@ invariants:
     to line up feeds and crunch data before OBS-facing output is emitted.
   - Typed views may index the rolling buffer, but no per-kind ring owns
     retention.
-  - Aquarium owns production UI, GPU fusion, D3D12 interop, and Spout2 output.
+  - Fensalir owns production UI, GPU fusion, D3D12 interop, and Spout2 output.
   - Faust/native DSP owns hot audio alignment, separation, spatialization, and
     stems.
   - Local secrets remain untracked.
 
 accepted_design:
   - `Mimir.slnx` owns the app surface.
-  - `src/Mimir.App` launches Aquarium Engine as host/window/D3D12 library.
+  - `src/Mimir.App` launches Fensalir as host/window/D3D12 library.
   - `src/Mimir.Runtime` owns `MimirSynchronizationHub`,
     `MimirRollingStreamBuffer`, stream descriptors, `IMimirStreamSource`,
     direct native ingest, process bridge ingest, and video capture driver seams.
@@ -120,7 +120,7 @@ accepted_design:
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
   - `native/reservoir` owns the lower shared-edge rolling-buffer invariant for
-    Aquarium/Faust integration.
+    Fensalir/Faust integration.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `.voidbot` state is part of repo memory and must be committed separately
@@ -132,7 +132,7 @@ active_subgoals:
   - Add native audio capture workers for mic, loopback, and network audio feeds.
   - Feed verified Focusrite ASIO input callbacks into `Mimir.Runtime`; WASAPI
     remains a diagnostic witness.
-  - Bind Aquarium UI to stream health, buffer depth, source timestamps,
+  - Bind Fensalir UI to stream health, buffer depth, source timestamps,
     settings, and output management.
   - Keep PowerShell/FFmpeg/SRT as bridge utilities until direct program output
     replaces them.
@@ -216,7 +216,7 @@ current_status:
   next_action: >
     Prove the constrained chirplet-transform decoder through real loopback and
     microphone paths before adding the synchronization actuator.
-    Current app testing proves Aquarium WASAPI output wakes Scarlett speaker
+    Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the continuous
     chirplet timeline can produce confident sync states in the app. The next
@@ -232,5 +232,7 @@ current_status:
     Starfire, and `native/probes/asio_audio_cadence` proves local Focusrite USB
     ASIO access with 4 inputs / 2 outputs including Loopback 1/2, 192-frame
     preferred buffers, 44.1-192 kHz support, and nonzero 4-channel Int32LSB
-    input callbacks at 192 kHz. Treat Kiyo Pro as a ~25 fps source until its
-    SuperSpeed negotiation is fixed.
+    input callbacks at 192 kHz. Raven also has a 192 kHz loopback-capable
+    Scarlett for co-streamer/game timing evidence, but Starfire owns the heavy
+    soundfield and sensor-fusion work. Treat Kiyo Pro as a ~25 fps source until
+    its SuperSpeed negotiation is fixed.
