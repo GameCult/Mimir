@@ -97,16 +97,16 @@ Get-Content .\state\evidence.jsonl -Tail 8
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.
-- Scarlett ASIO is the next audio cut. Current local driver state has no ASIO
-  registry entries; shared WASAPI exposes Focusrite capture at 48 kHz Float32
-  and Scarlett loopback at 44.1 kHz Float32, and strict WASAPI exclusive
-  24-bit/192 kHz requests are rejected. The official Focusrite Control 3.27.0
-  installer was downloaded to `artifacts/drivers/` and is ignored; install and
-  verify the driver before building the Scarlett hot path.
+- Scarlett ASIO is usable. The Focusrite driver install registered
+  `Focusrite USB ASIO`; `native/probes/asio_audio_cadence` opens it, sees 2
+  inputs / 2 outputs, 192-frame preferred buffers, 44.1-192 kHz support, and
+  captures nonzero 2-channel `Int32LSB` input callbacks at 192 kHz. The next
+  audio cut is feeding ASIO buffers into `Mimir.Runtime`, not more WASAPI
+  probing.
 
 ## Immediate Re-entry Instruction
 
-Install/verify the Focusrite ASIO driver, then prove the constrained
+Feed Scarlett ASIO callbacks into `Mimir.Runtime`, then prove the constrained
 chirplet-transform decoder through real loopback and mic paths and turn decoded
 clock fits into the SRO/fractional-delay actuator. Keep loopback as timing
 authority. Do not call synchronization analysis from UI/telemetry readouts. Do

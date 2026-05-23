@@ -45,6 +45,11 @@ a named invariant that the native runtime cannot protect yet.
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter. It can probe requested shared/exclusive formats so driver state is
   explicit, but Scarlett production capture belongs on ASIO.
+- `native/probes/asio_audio_cadence` opens the registered Focusrite ASIO COM
+  driver, reports channel counts, buffer sizing, supported sample rates, and can
+  run a short input callback capture. Current Focusrite USB ASIO proof shows 2
+  inputs / 2 outputs, 192-frame preferred buffers, 44.1-192 kHz support, and
+  nonzero 2-channel `Int32LSB` input callbacks at 192 kHz.
 - `MimirChirpletTimeline` owns the structured birdsong-like calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
   The default timeline is an order-3 de Bruijn symbol sequence over 32
@@ -125,10 +130,10 @@ a named invariant that the native runtime cannot protect yet.
    other cameras.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Install/verify the Focusrite ASIO driver, then replace the WASAPI frame-event
-   diagnostic bridge with native audio capture workers for local mic, loopback,
-   and network audio feeds. WASAPI remains a diagnostic witness, not the
-   Scarlett hot path.
+3. Replace the WASAPI frame-event diagnostic bridge with native audio capture
+   workers for local mic, loopback, and network audio feeds. Use the verified
+   Focusrite ASIO path for Scarlett capture; WASAPI remains a diagnostic
+   witness, not the Scarlett hot path.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the constrained chirplet
