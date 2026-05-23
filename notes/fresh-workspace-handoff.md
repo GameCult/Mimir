@@ -61,7 +61,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
   but Leap drops hard under shared USB load: 40.12 fps when the PS3 Eye runs
   640x480@60, and 81.10 fps when the PS3 Eye runs 320x240@187. The regular
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
-- Current chirplet-backed smoke uses Scarlett speaker loopback as timing
+- Current active sync smoke uses Scarlett speaker loopback as timing
   authority. `MimirChirpletTimeline` owns the structured birdsong-like timeline
   fingerprint: an order-3 de Bruijn sequence over 32 time/frequency
   constellation symbols. Start band, glide shape, duration, and following
@@ -80,14 +80,18 @@ Get-Content .\state\evidence.jsonl -Tail 8
   it currently detects all 15 emitted chirps and recovers 13 anchors for events
   0-12 with a 47999.999990 Hz clock fit and 0.000014 sample MAE. `MimirRuntime` runs sync analysis as a bounded rotating
   service and caches reports/states for UI and telemetry; readouts must stay
-  passive. Audio sync mode is runtime-owned: `chirp-only` emits active
-  calibration, `passive` disables emission and uses program-audio phase
-  correlation, and `hybrid` emits active pilot chunks only when passive
-  confidence is weak. Hybrid chirp-bin fallback now has its own short-window
-  analyzer floor instead of inheriting the passive two-second gate, and
-  `Mimir.BufferSmoke --hybrid-sync-self-test` proves a one-second rolling-buffer
-  window recovers a 317.375-sample fractional delay with 0.369 us error from
-  code-valid chirp-bin anchors. Reports and sync states now expose `delayUs`.
+  passive. Audio sync mode is runtime-owned: `chirp-only` emits the active
+  chirp-bin witness continuously, `passive` disables emission and uses
+  program-audio phase correlation, and `hybrid` emits active pilot chunks only
+  when passive confidence is weak. The active chirp-bin path now has its own
+  short-window analyzer floor instead of inheriting the passive two-second gate.
+  It uses cheap energy/onset proposals, dechirp plus fixed Goertzel bins,
+  explicit time/frequency ambiguity candidates, and constrained local waveform
+  correlation for final fractional delay. `Mimir.BufferSmoke
+  --chirp-only-sync-self-test --sample-rate 192000` and
+  `--hybrid-sync-self-test --sample-rate 192000` both recover a 1269.5-sample
+  synthetic delay with printed 0.000 us error. Reports and sync states expose
+  `delayUs`.
   Actual
   Mimir.App testing proves Fensalir audio can wake Scarlett
   loopback, keep mic buffers live, and produce confident online passive sync
@@ -103,22 +107,20 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `Loopback 1/2`, 192-frame preferred buffers, 44.1-192 kHz support, and
   captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz. It can play
   raw mono Float32 chirplet timelines through ASIO outputs and capture all ASIO
-  inputs as raw interleaved Float32 for runtime analysis. A real Scarlett
-  chirp-only artifact run at 192 kHz decoded `Loopback 1 -> Loopback 2` at
-  `0.000 us` delay with 7 matched anchors and 0.896 confidence. Physical input
-  2 decoded against loopback at about 616.226 samples / 3209.508 us with 3
-  matched anchors and 0.516 confidence; physical input 1 did not decode in that
-  window. One 2-second 192 kHz chirp-only matched-kernel decode took roughly
-  100 seconds. Accuracy is present; the current chirplet transform is not a hot
-  path.
+  inputs as raw interleaved Float32 for runtime analysis. The old arbitrary
+  chirplet artifact proved correctness but took roughly 100 seconds per
+  comparison and is now diagnostic only. A real Scarlett chirp-bin artifact run
+  at 192 kHz decoded `Loopback 1 -> Loopback 2` at `0.000 us` delay with 12
+  matched anchors and 0.999 confidence in the normal active analyzer. Physical
+  inputs did not produce matched anchors in that chirp-bin run, so acoustic
+  robustness is still open.
 - Raven also has a 192 kHz loopback-capable Scarlett for co-streamer/game timing
   evidence. Do not move the heavy soundfield or sensor-fusion workload there.
 
 ## Immediate Re-entry Instruction
 
-Replace the diagnostic chirp-only matched-kernel decoder with the planned
-efficient streaming transform before calling chirp-only runtime-ready at
-192 kHz, then feed Scarlett ASIO callbacks into `Mimir.Runtime` and turn decoded
-clock fits into the SRO/fractional-delay actuator. Keep loopback as timing
-authority. Do not call synchronization analysis from UI/telemetry readouts. Do
-not restore deleted script infrastructure because a stale doc once missed it.
+Prove the active chirp-bin path through real microphones, then feed Scarlett
+ASIO callbacks into `Mimir.Runtime` and turn decoded clock fits into the
+SRO/fractional-delay actuator. Keep loopback as timing authority. Do not call
+synchronization analysis from UI/telemetry readouts. Do not restore deleted
+script infrastructure because a stale doc once missed it.

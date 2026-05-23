@@ -99,19 +99,19 @@ current operating horizon. Mimir continuously queues that timeline through
 Fensalir audio and decodes timing through the constrained chirplet-transform
 path.
 `MimirAudioSynchronizationSettings.Mode` chooses whether active calibration is
-allowed: `chirp-only` emits the witness, `passive` stays silent and uses
-program-audio phase correlation, and `hybrid` uses passive evidence by default
-while emitting active pilot chunks only when passive confidence is weak.
-Hybrid does not inherit the passive two-second analysis floor: passive still
-needs a longer program-audio window, while chirp-bin fallback can decode short
-pilot windows once at least a code-valid triplet is present. The chirp-bin
-detector now proposes events from dechirped bin energy rather than broadband RMS
-and uses a widened symbol spacing to keep sub-frame timing error from becoming
-symbol substitution. Chirp-bin frame timing is refined with a local matched-peak
-fit below one sample, and reports/states expose `delayUs` next to fractional
-sample delay. `Mimir.BufferSmoke --hybrid-sync-self-test` proves the analyzer
-path with a one-second rolling-buffer window and a recovered 317.375-sample
-delay at 0.369 us error.
+allowed: `chirp-only` emits the active chirp-bin witness, `passive` stays silent
+and uses program-audio phase correlation, and `hybrid` uses passive evidence by
+default while emitting active pilot chunks only when passive confidence is weak.
+Active decoding does not inherit the passive two-second analysis floor: passive
+still needs a longer program-audio window, while the chirp-bin witness can decode
+short pilot windows once at least a code-valid triplet is present. The chirp-bin
+detector now uses cheap bounded energy/onset proposals, dechirp plus fixed
+Goertzel bins, explicit time/frequency ambiguity candidates, and a constrained
+local waveform correlation for final fractional delay. Reports/states expose
+`delayUs` next to fractional sample delay. `Mimir.BufferSmoke
+--chirp-only-sync-self-test --sample-rate 192000` and `--hybrid-sync-self-test
+--sample-rate 192000` both recover a 1269.5-sample synthetic delay with printed
+0.000 us error.
 Reports now carry fractional delay and per-band matched energy. The first
 `MimirChirpletSymbolCodebook` owns separable symbol definitions; every symbol
 has a unique chirp shape, with rhythm as additional evidence. `MimirChirpletStreamDecoder`
@@ -144,18 +144,14 @@ runtime analyzer accepts Float32, Int16, Int24, and Int32 PCM windows so
 ASIO/native capture can preserve the interface format. Raven also has a
 loopback-capable Scarlett ASIO path at 192 kHz for co-streamer/game timing
 evidence; Starfire still owns the heavy soundfield and sensor-fusion work.
-The ASIO probe can now play a raw mono Float32 chirplet timeline through the
+The ASIO probe can now play raw mono Float32 timeline audio through the
 Focusrite outputs while capturing every ASIO input as raw interleaved Float32.
 `Mimir.BufferSmoke --analyze-asio-f32` feeds those captured channels into the
-same runtime chirp-only analyzer. A real 192 kHz Scarlett artifact decoded
-`Loopback 1 -> Loopback 2` at exactly `0.000 us` with 7 matched anchors and
-0.896 confidence. The physical input path decoded on channel 1 at about
-616.226 samples / 3209.508 us with 3 matched anchors and 0.516 confidence;
-channel 0 did not produce anchors in that window. The result proves chirp-only
-hardware alignment can reach microsecond reporting on clean loopback, but the
-current matched-kernel chirplet decoder took roughly 100 seconds for one
-2-second 192 kHz comparison. That implementation is diagnostic, not the final
-runtime hot path.
+same runtime active analyzer. A real 192 kHz chirp-bin Scarlett artifact decoded
+`Loopback 1 -> Loopback 2` at exactly `0.000 us` with 12 matched anchors and
+0.999 confidence. Physical inputs did not produce matched anchors in that
+chirp-bin run; acoustic robustness is now the open problem, not clean loopback
+timing or active decoder shape.
 
 ## Visual Fusion
 

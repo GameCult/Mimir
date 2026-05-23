@@ -73,6 +73,11 @@ When the user says to prepare for imminent compaction:
 
 - Before substantial edits, restate the current mechanism and intended change.
 - Prefer one clear hypothesis per iteration.
+- Do not keep corpses of previous attempts at building the Machine. When a new
+  mechanism supersedes an old one, either delete the old mechanism or demote it
+  to an explicitly named diagnostic/reference artifact with no live authority.
+  Do not leave dead pipelines selectable, documented as current, or quietly
+  reachable through mode flags just because they once worked.
 - Verify against OBS ingest behavior and actual sender-side FFmpeg capability, not vibes wearing a lab coat.
 - Do not add an OBS plugin, fork, registry, custom transport daemon, or compatibility layer until the script-based SRT design fails a concrete invariant.
 - Keep video, audio-source isolation, transport, and OBS composition as separate responsibilities.

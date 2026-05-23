@@ -143,7 +143,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 }
             }
 
-            var activeMinSeconds = mode == MimirAudioSyncMode.Hybrid
+            var useChirpBinTimeline = mode is MimirAudioSyncMode.ChirpOnly or MimirAudioSyncMode.Hybrid;
+            var activeMinSeconds = useChirpBinTimeline
                 ? MinChirpBinWindowSeconds
                 : MinChirpletWindowSeconds;
             var minActiveSamples = MinWindowSamples(activeReferenceBlock.SampleRate, activeMinSeconds);
@@ -154,16 +155,16 @@ public sealed class MimirAudioSynchronizationAnalyzer
                     buffer.Descriptor.SourceId,
                     activeReferenceBlock.SampleRate,
                     compared,
-                    mode == MimirAudioSyncMode.Hybrid
+                    useChirpBinTimeline
                         ? "chirp-bin-insufficient-window"
                         : "chirplet-insufficient-window"));
                 continue;
             }
 
-            var comparedReferenceDecode = mode == MimirAudioSyncMode.Hybrid
+            var comparedReferenceDecode = useChirpBinTimeline
                 ? MimirChirpBinTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate)
                 : MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate);
-            var candidateDecode = mode == MimirAudioSyncMode.Hybrid
+            var candidateDecode = useChirpBinTimeline
                 ? MimirChirpBinTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate)
                 : MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate);
             var deterministicFit = EstimateDelayFromDecodedTimeline(comparedReferenceDecode, candidateDecode);
@@ -188,8 +189,10 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 continue;
             }
 
-            var decodedDelaySamples = deterministicFit.DelaySamples;
-            var bandResponses = mode == MimirAudioSyncMode.Hybrid
+            var decodedDelaySamples = useChirpBinTimeline
+                ? RefineDelayFromWaveform(referenceWindow, candidateWindow, deterministicFit.DelaySamples, activeReferenceBlock.SampleRate)
+                : deterministicFit.DelaySamples;
+            var bandResponses = useChirpBinTimeline
                 ? []
                 : MimirChirpletTimeline.Default.EstimateBandResponse(candidateWindow, activeReferenceBlock.SampleRate);
             reports.Add(new MimirAudioSynchronizationReport(
@@ -207,7 +210,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 buffer.Latest?.Sequence ?? 0,
                 deterministicFit.MatchedEvents,
                 deterministicFit.Confidence,
-                mode == MimirAudioSyncMode.Hybrid ? "chirp-bin" : "chirplet"));
+                useChirpBinTimeline ? "chirp-bin" : "chirplet"));
         }
 
         return reports;
@@ -303,6 +306,75 @@ public sealed class MimirAudioSynchronizationAnalyzer
             reference.ClockFit.SampleForTimelineSeconds(timelineSeconds);
         var confidence = Math.Sqrt(reference.ClockFit.Confidence * candidate.ClockFit.Confidence) * 0.65;
         return (clockDelay, confidence, Math.Min(reference.ClockFit.AnchorCount, candidate.ClockFit.AnchorCount));
+    }
+
+    private static double RefineDelayFromWaveform(
+        ReadOnlySpan<float> reference,
+        ReadOnlySpan<float> candidate,
+        double initialDelaySamples,
+        int sampleRate)
+    {
+        var radius = Math.Max(16, (int)Math.Ceiling(sampleRate * 0.00035));
+        var center = (int)Math.Round(initialDelaySamples);
+        var firstLag = Math.Max(0, center - radius);
+        var lastLag = Math.Min(candidate.Length - 2, center + radius);
+        if (reference.Length == 0 || candidate.Length == 0 || firstLag > lastLag)
+        {
+            return initialDelaySamples;
+        }
+
+        var bestLag = center;
+        var bestScore = double.NegativeInfinity;
+        for (var lag = firstLag; lag <= lastLag; lag++)
+        {
+            var score = NormalizedLagScore(reference, candidate, lag);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestLag = lag;
+            }
+        }
+
+        if (bestLag <= firstLag || bestLag >= lastLag)
+        {
+            return bestLag;
+        }
+
+        var left = NormalizedLagScore(reference, candidate, bestLag - 1);
+        var middle = NormalizedLagScore(reference, candidate, bestLag);
+        var right = NormalizedLagScore(reference, candidate, bestLag + 1);
+        var denominator = left - 2.0 * middle + right;
+        if (Math.Abs(denominator) <= 1.0e-12)
+        {
+            return bestLag;
+        }
+
+        return bestLag + Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+    }
+
+    private static double NormalizedLagScore(ReadOnlySpan<float> reference, ReadOnlySpan<float> candidate, int lag)
+    {
+        var count = Math.Min(reference.Length, candidate.Length - lag);
+        if (count <= 0)
+        {
+            return double.NegativeInfinity;
+        }
+
+        var dot = 0.0;
+        var referenceEnergy = 0.0;
+        var candidateEnergy = 0.0;
+        for (var index = 0; index < count; index++)
+        {
+            var referenceSample = reference[index];
+            var candidateSample = candidate[index + lag];
+            dot += referenceSample * candidateSample;
+            referenceEnergy += referenceSample * referenceSample;
+            candidateEnergy += candidateSample * candidateSample;
+        }
+
+        return referenceEnergy <= 1.0e-12 || candidateEnergy <= 1.0e-12
+            ? double.NegativeInfinity
+            : dot / Math.Sqrt(referenceEnergy * candidateEnergy);
     }
 
     private static float[] ExtractMonoWindow(

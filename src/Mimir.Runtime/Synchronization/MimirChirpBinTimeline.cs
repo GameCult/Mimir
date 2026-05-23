@@ -31,6 +31,7 @@ public sealed class MimirChirpBinTimeline
     private const double Gain = 0.070;
     private const int MaxSymbolCandidatesPerFrame = 1;
     private const int MaxTimingBinShift = 4;
+    private const double ProposalBudgetMultiplier = 2.5;
 
     private static readonly int[] TimelineSymbols = RotateToDistinctOpening(BuildDeBruijn(SymbolCount, TimelineOrder));
     private static readonly Dictionary<int, int> TripleToIndex = BuildTripleIndex(TimelineSymbols);
@@ -119,8 +120,8 @@ public sealed class MimirChirpBinTimeline
             return [];
         }
 
-        var hopSamples = Math.Max(1, sampleRate / 1_200);
-        var energyTrace = BuildDechirpedEnergyTrace(samples, sampleRate, chirpSamples, hopSamples);
+        var hopSamples = Math.Max(1, sampleRate / 1_000);
+        var energyTrace = BuildWindowEnergyTrace(samples, chirpSamples, hopSamples);
         var threshold = AdaptiveThreshold(energyTrace);
         var proposals = new List<int>();
         for (var index = 1; index < energyTrace.Length - 1; index++)
@@ -133,10 +134,16 @@ public sealed class MimirChirpBinTimeline
             }
         }
 
+        var maxExpectedEvents = Math.Max(
+            8,
+            (int)Math.Ceiling(samples.Length / (double)sampleRate / EventSpacingSeconds * ProposalBudgetMultiplier));
         var frames = new List<MimirChirpletTransformFrame>();
-        foreach (var proposal in proposals)
+        foreach (var proposal in proposals
+                     .OrderByDescending(offset => energyTrace[Math.Clamp(offset / hopSamples, 0, energyTrace.Length - 1)])
+                     .Take(maxExpectedEvents)
+                     .Order())
         {
-            var frame = ClassifyAt(samples, sampleRate, proposal, sampleRate / 120);
+            var frame = ClassifyAt(samples, sampleRate, proposal, sampleRate / 1_000);
             if (frame != null)
             {
                 frames.Add(frame);
@@ -163,7 +170,7 @@ public sealed class MimirChirpBinTimeline
         var bestOffset = predictedOffset;
         MimirChirpletSymbolCandidate[] bestCandidates = [];
         var bestEnergy = 0.0;
-        var step = Math.Max(2, searchRadiusSamples / 24);
+        var step = Math.Max(2, sampleRate / 4_000);
         for (var offset = start; offset <= end; offset += step)
         {
             var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset);
@@ -176,9 +183,10 @@ public sealed class MimirChirpBinTimeline
             }
         }
 
-        var localStart = Math.Max(start, bestOffset - step);
-        var localEnd = Math.Min(end, bestOffset + step);
-        for (var offset = localStart; offset <= localEnd; offset++)
+        var localStep = Math.Max(1, step / 8);
+        var localStart = Math.Max(start, bestOffset - localStep * 4);
+        var localEnd = Math.Min(end, bestOffset + localStep * 4);
+        for (var offset = localStart; offset <= localEnd; offset += localStep)
         {
             var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset);
             var energy = candidates.Length == 0 ? 0.0 : candidates[0].Energy;
@@ -196,9 +204,37 @@ public sealed class MimirChirpBinTimeline
         }
 
         var refinedOffset = RefineOffset(samples, sampleRate, bestOffset, bestCandidates[0].SymbolId, chirpSamples);
+        var timingBinSamples = BinShiftSamples(sampleRate);
+        var correctedCandidates = new List<MimirChirpletSymbolCandidate>(bestCandidates.Length * (MaxTimingBinShift * 2 + 1));
+        foreach (var candidate in bestCandidates)
+        {
+            for (var timingBinShift = -MaxTimingBinShift; timingBinShift <= MaxTimingBinShift; timingBinShift++)
+            {
+                var canonicalSymbol = ShiftSymbol(candidate.SymbolId, -timingBinShift);
+                var canonicalOffset = refinedOffset - timingBinShift * timingBinSamples;
+                var roundedOffset = (int)Math.Round(canonicalOffset);
+                if (roundedOffset <= 0 || roundedOffset >= samples.Length - chirpSamples - 1)
+                {
+                    continue;
+                }
+
+                var correctedOffset = RefineOffset(samples, sampleRate, roundedOffset, canonicalSymbol, chirpSamples);
+                var correctedEnergy = ScoreSymbolEnergy(
+                    samples.Slice((int)Math.Round(correctedOffset), chirpSamples),
+                    sampleRate,
+                    canonicalSymbol);
+                correctedCandidates.Add(new MimirChirpletSymbolCandidate(
+                    canonicalSymbol,
+                    correctedOffset,
+                    Math.Max(candidate.Energy, correctedEnergy) / (1.0 + Math.Abs(timingBinShift) * 0.15)));
+            }
+        }
+
         return new MimirChirpletTransformFrame(
             refinedOffset,
-            bestCandidates.Select(candidate => candidate with { SampleOffset = refinedOffset }).ToArray());
+            correctedCandidates
+                .OrderByDescending(candidate => candidate.Energy)
+                .ToArray());
     }
 
     private static MimirChirpletSymbolCandidate[] ScoreBins(
@@ -232,29 +268,6 @@ public sealed class MimirChirpBinTimeline
             .OrderByDescending(candidate => candidate.Energy)
             .Take(MaxSymbolCandidatesPerFrame)
             .ToArray();
-    }
-
-    private static double ScoreBestBinEnergy(ReadOnlySpan<float> samples, int sampleRate)
-    {
-        var kernels = KernelSets.GetOrAdd(sampleRate, BuildKernelSet);
-        var sampleEnergy = 0.0;
-        for (var index = 0; index < samples.Length; index++)
-        {
-            sampleEnergy += samples[index] * samples[index];
-        }
-
-        if (sampleEnergy <= 1.0e-12 || kernels.ReferenceEnergy <= 1.0e-12)
-        {
-            return 0.0;
-        }
-
-        var best = 0.0;
-        foreach (var kernel in kernels.Symbols)
-        {
-            best = Math.Max(best, DechirpedBin(samples, kernel));
-        }
-
-        return 2.0 * best / Math.Sqrt(sampleEnergy * kernels.ReferenceEnergy);
     }
 
     private static double ScoreSymbolEnergy(ReadOnlySpan<float> samples, int sampleRate, int symbolId)
@@ -349,19 +362,14 @@ public sealed class MimirChirpBinTimeline
             foreach (var first in firstFrame.Candidates)
             foreach (var second in secondFrame.Candidates)
             foreach (var third in thirdFrame.Candidates)
-            for (var timingBinShift = -MaxTimingBinShift; timingBinShift <= MaxTimingBinShift; timingBinShift++)
             {
-                var code = TripleCode(
-                    ShiftSymbol(first.SymbolId, -timingBinShift),
-                    ShiftSymbol(second.SymbolId, -timingBinShift),
-                    ShiftSymbol(third.SymbolId, -timingBinShift));
+                var code = TripleCode(first.SymbolId, second.SymbolId, third.SymbolId);
                 if (!TripleToIndex.TryGetValue(code, out var eventIndex))
                 {
                     continue;
                 }
 
                 var firstEvent = Default.EventForIndex((ulong)eventIndex);
-                var correctedFirstOffset = first.SampleOffset - timingBinShift * BinShiftSamples(sampleRate);
                 var measuredGapA = (second.SampleOffset - first.SampleOffset) / sampleRate;
                 var measuredGapB = (third.SampleOffset - second.SampleOffset) / sampleRate;
                 var gapError = Math.Abs(measuredGapA - EventSpacingSeconds) + Math.Abs(measuredGapB - EventSpacingSeconds);
@@ -375,12 +383,12 @@ public sealed class MimirChirpBinTimeline
                 candidates.Add(new MimirChirpletTimelineAnchor(
                     (ulong)eventIndex,
                     firstEvent.StartSeconds,
-                    correctedFirstOffset,
-                    (gapConfidence * 0.60 + energyConfidence * 0.40) / (1.0 + Math.Abs(timingBinShift) * 0.15),
+                    first.SampleOffset,
+                    gapConfidence * 0.60 + energyConfidence * 0.40,
                     [
-                        new MimirChirpletSymbolObservation(ShiftSymbol(first.SymbolId, -timingBinShift), correctedFirstOffset, first.Energy),
-                        new MimirChirpletSymbolObservation(ShiftSymbol(second.SymbolId, -timingBinShift), second.SampleOffset - timingBinShift * BinShiftSamples(sampleRate), second.Energy),
-                        new MimirChirpletSymbolObservation(ShiftSymbol(third.SymbolId, -timingBinShift), third.SampleOffset - timingBinShift * BinShiftSamples(sampleRate), third.Energy),
+                        new MimirChirpletSymbolObservation(first.SymbolId, first.SampleOffset, first.Energy),
+                        new MimirChirpletSymbolObservation(second.SymbolId, second.SampleOffset, second.Energy),
+                        new MimirChirpletSymbolObservation(third.SymbolId, third.SampleOffset, third.Energy),
                     ]));
             }
         }
@@ -495,13 +503,19 @@ public sealed class MimirChirpBinTimeline
             meanAbsoluteError);
     }
 
-    private static float[] BuildDechirpedEnergyTrace(ReadOnlySpan<float> samples, int sampleRate, int windowSamples, int hopSamples)
+    private static float[] BuildWindowEnergyTrace(ReadOnlySpan<float> samples, int windowSamples, int hopSamples)
     {
         var output = new float[1 + (samples.Length - windowSamples) / hopSamples];
+        var prefix = new double[samples.Length + 1];
+        for (var index = 0; index < samples.Length; index++)
+        {
+            prefix[index + 1] = prefix[index] + samples[index] * samples[index];
+        }
+
         for (var frame = 0; frame < output.Length; frame++)
         {
             var offset = frame * hopSamples;
-            output[frame] = (float)ScoreBestBinEnergy(samples.Slice(offset, windowSamples), sampleRate);
+            output[frame] = (float)((prefix[offset + windowSamples] - prefix[offset]) / windowSamples);
         }
 
         return output;

@@ -102,29 +102,29 @@ accepted_design:
     windows before any watermark is needed. Negative passive lags are
     contradictory evidence and carry zero confidence; single-window passive
     confidence is capped below certainty until repeated state earns it.
-    `MimirChirpBinTimeline` is the active hybrid watermark path: one fixed chirp
-    slope/window, 32 widened symbol frequency bins, dechirped bin-energy
-    proposal scoring, cached per-sample-rate kernels, sub-sample matched-peak
-    refinement, then the existing de Bruijn triplet anchor and clock-fit
-    machine. Reports and sync states expose delay in microseconds as well as
-    fractional samples. Hybrid emits it as low-gain half-second bursts every two
-    seconds while passive confidence is weak, never as catch-up backlog. The
-    analyzer no longer applies the passive two-second window floor to chirp-bin
-    fallback; `dotnet run --project
-    .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --hybrid-sync-self-test`
-    proves a one-second rolling-buffer chirp-bin window can recover a
-    317.375-sample fractional delay from code-valid anchors with 0.369 us
-    error. The synthetic codebook proof remains `dotnet run --project
+    `MimirChirpBinTimeline` is the active calibration path for both chirp-only
+    and hybrid: one fixed chirp slope/window, 32 widened symbol frequency bins,
+    cheap bounded energy/onset proposals, dechirp plus fixed Goertzel bin
+    classification, explicit time/frequency ambiguity candidates, then the
+    existing de Bruijn triplet anchor and clock-fit machine. The analyzer refines
+    final active delay with constrained local waveform correlation around the
+    decoded anchor delay. Reports and sync states expose delay in microseconds
+    as well as fractional samples. Hybrid emits it as low-gain half-second
+    bursts every two seconds while passive confidence is weak, never as catch-up
+    backlog. The analyzer no longer applies the passive two-second window floor
+    to active fallback; `dotnet run --project
+    .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-only-sync-self-test --sample-rate 192000`
+    and `--hybrid-sync-self-test --sample-rate 192000` both recover a
+    1269.5-sample synthetic delay with printed 0.000 us error. The synthetic
+    codebook proof remains `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`.
-    `Mimir.BufferSmoke --render-chirplet-f32` plus
+    `Mimir.BufferSmoke --render-chirp-bin-f32` plus
     `native/probes/asio_audio_cadence --play-f32-mono --record-f32-interleaved`
-    now provides a real Scarlett ASIO artifact proof for chirp-only mode.
-    At 192 kHz, Loopback 1 -> Loopback 2 decoded at 0.000 us with 7 anchors and
-    0.896 confidence. Physical input 2 decoded at about 616.226 samples /
-    3209.508 us with 3 anchors and 0.516 confidence; physical input 1 did not
-    decode in that capture. The proof cost roughly 100 seconds for one 2-second
-    192 kHz matched-kernel comparison, so the current chirplet decoder is a
-    diagnostic witness, not the runtime hot path.
+    now provides a real Scarlett ASIO artifact proof for active mode. At 192 kHz,
+    Loopback 1 -> Loopback 2 decoded at 0.000 us with 12 anchors and 0.999
+    confidence. Physical inputs did not produce matched anchors in that chirp-bin
+    run, so acoustic robustness remains open. The old arbitrary-chirplet matcher
+    is a diagnostic/reference artifact only, not the runtime hot path.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.
@@ -223,10 +223,9 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Replace the diagnostic chirp-only matched-kernel decoder with the efficient
-    streaming transform before calling chirp-only runtime-ready at 192 kHz, then
-    feed Scarlett ASIO callbacks directly into Mimir.Runtime and add the
-    synchronization actuator.
+    Prove the active chirp-bin path through real microphones, then feed Scarlett
+    ASIO callbacks directly into Mimir.Runtime and add the synchronization
+    actuator.
     Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the continuous

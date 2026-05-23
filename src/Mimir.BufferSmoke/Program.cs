@@ -20,11 +20,24 @@ if (args.Any(arg => string.Equals(arg, "--hybrid-sync-self-test", StringComparis
     return RunHybridSyncSelfTest(ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate));
 }
 
+if (args.Any(arg => string.Equals(arg, "--chirp-only-sync-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunActiveSyncSelfTest(ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate), MimirAudioSyncMode.ChirpOnly);
+}
+
 if (args.Any(arg => string.Equals(arg, "--render-chirplet-f32", StringComparison.OrdinalIgnoreCase)))
 {
     return RenderChirpletFloat32(
         ParseStringOption(args, "--output", "artifacts/asio/chirplet-f32.raw"),
         ParseIntOption(args, "--sample-rate", MimirChirpletTimeline.SampleRate),
+        ParseDoubleOption(args, "--seconds", 3.0));
+}
+
+if (args.Any(arg => string.Equals(arg, "--render-chirp-bin-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return RenderChirpBinFloat32(
+        ParseStringOption(args, "--output", "artifacts/asio/chirp-bin-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate),
         ParseDoubleOption(args, "--seconds", 3.0));
 }
 
@@ -276,6 +289,11 @@ static int RunPassiveSyncSelfTest()
 
 static int RunHybridSyncSelfTest(int sampleRate)
 {
+    return RunActiveSyncSelfTest(sampleRate, MimirAudioSyncMode.Hybrid);
+}
+
+static int RunActiveSyncSelfTest(int sampleRate, MimirAudioSyncMode mode)
+{
     const string referenceSourceId = "loopback-test";
     const string candidateSourceId = "mic-test";
     var delaySamples = 317.375 * sampleRate / (double)MimirChirpBinTimeline.SampleRate;
@@ -298,29 +316,34 @@ static int RunHybridSyncSelfTest(int sampleRate)
     AppendFloatBlock(candidateBuffer, candidateSourceId, candidate, sampleRate);
 
     var analyzer = new MimirAudioSynchronizationAnalyzer();
-    var reports = analyzer.Analyze([referenceBuffer, candidateBuffer], referenceSourceId, MimirAudioSyncMode.Hybrid);
+    var reports = analyzer.Analyze([referenceBuffer, candidateBuffer], referenceSourceId, mode);
     var report = reports.SingleOrDefault();
     foreach (var trace in analyzer.LastDecodeTraces)
     {
         Console.WriteLine(
-            $"hybrid-sync-trace {trace.ReferenceSourceId}->{trace.SourceId}: status={trace.Status} compared={trace.ComparedSamples} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
+            $"{SyncModeLabel(mode)}-sync-trace {trace.ReferenceSourceId}->{trace.SourceId}: status={trace.Status} compared={trace.ComparedSamples} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
     }
 
     if (report == null)
     {
-        Console.Error.WriteLine("hybrid sync self-test failed: analyzer did not report from a short chirp-bin window");
+        Console.Error.WriteLine($"{SyncModeLabel(mode)} sync self-test failed: analyzer did not report from a short chirp-bin window");
         return 1;
     }
 
     var error = Math.Abs(report.FractionalDelaySamples - delaySamples);
     Console.WriteLine(
-        $"hybrid-sync-self-test evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} expected={delaySamples:0.000000} errorSamples={error:0.000000} errorUs={error * 1_000_000.0 / report.SampleRate:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
+        $"{SyncModeLabel(mode)}-sync-self-test evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} expected={delaySamples:0.000000} errorSamples={error:0.000000} errorUs={error * 1_000_000.0 / report.SampleRate:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
     return string.Equals(report.EvidenceKind, "chirp-bin", StringComparison.Ordinal) &&
         report.TimelineMatchedEvents >= 3 &&
         report.Confidence > 0.70 &&
         error * 1_000_000.0 / report.SampleRate < 1.0
             ? 0
             : 1;
+}
+
+static string SyncModeLabel(MimirAudioSyncMode mode)
+{
+    return mode == MimirAudioSyncMode.ChirpOnly ? "chirp-only" : "hybrid";
 }
 
 static int RenderChirpletFloat32(string outputPath, int sampleRate, double seconds)
@@ -352,6 +375,38 @@ static int RenderChirpletFloat32(string outputPath, int sampleRate, double secon
 
     File.WriteAllBytes(outputPath, bytes);
     Console.WriteLine($"chirplet-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count}");
+    return 0;
+}
+
+static int RenderChirpBinFloat32(string outputPath, int sampleRate, double seconds)
+{
+    var segmentCount = Math.Max(1, (int)Math.Ceiling(seconds / MimirChirpBinTimeline.SegmentSeconds));
+    var samples = new List<float>(Math.Max(1, (int)Math.Ceiling(seconds * sampleRate)));
+    for (var segment = 0; segment < segmentCount; segment++)
+    {
+        samples.AddRange(MimirChirpBinTimeline.Default.RenderSegmentMonoFloat((ulong)segment, sampleRate));
+    }
+
+    var requestedSamples = Math.Max(1, (int)Math.Round(seconds * sampleRate));
+    if (samples.Count > requestedSamples)
+    {
+        samples.RemoveRange(requestedSamples, samples.Count - requestedSamples);
+    }
+
+    var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+    if (!string.IsNullOrEmpty(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+
+    var bytes = new byte[samples.Count * sizeof(float)];
+    for (var index = 0; index < samples.Count; index++)
+    {
+        BitConverter.TryWriteBytes(bytes.AsSpan(index * sizeof(float), sizeof(float)), samples[index]);
+    }
+
+    File.WriteAllBytes(outputPath, bytes);
+    Console.WriteLine($"chirp-bin-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count}");
     return 0;
 }
 

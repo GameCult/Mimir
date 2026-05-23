@@ -52,11 +52,7 @@ timing evidence Mimir is allowed to emit:
   buffer.
 - `hybrid`: prefer passive program-audio evidence when confidence is high, then
   emit a watermark when confidence falls. The passive side uses bounded
-  GCC-PHAT-style phase correlation. The active fallback now uses
-  `MimirChirpBinTimeline`: a fixed-slope chirp-bin watermark whose symbols are
-  decoded by one dechirp and a fixed Goertzel bin bank instead of dense sliding
-  matched filters. Hybrid emission is pulsed, not continuous: when passive
-  confidence is weak, Mimir emits one half-second coded burst every two seconds.
+  GCC-PHAT-style phase correlation.
 
 The mode belongs to the runtime, not the decoder. The decoder should consume
 known timing evidence; it should not decide whether Mimir is allowed to make
@@ -71,14 +67,19 @@ evidence and carry zero confidence. A single passive window is also capped below
 certainty; full confidence belongs to repeated coherent state over time, not
 one attractive correlation peak.
 
-The active watermark path is deliberately receiver-cheap. `MimirChirpBinTimeline`
-uses a common chirp duration, chirp slope, and Hann window for every symbol.
-Symbol identity is the dechirped frequency bin. The synthetic invariant is
+The active calibration path is deliberately receiver-cheap in both `chirp-only`
+and `hybrid`. `MimirChirpBinTimeline` uses a common chirp duration, chirp slope,
+and window for every symbol. Acquisition is a cheap bounded energy/onset pass;
+classification is dechirp plus a fixed Goertzel bin bank; timeline placement is
+the de Bruijn triplet trellis. A constrained local waveform correlation around
+the decoded anchor delay provides the final fractional offset. The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
 it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and
-requires code-valid triplet anchors plus a stable source clock. Default hybrid
-watermark gain is intentionally low (`watermarkGain`, or
-`MIMIR_WATERMARK_GAIN`) and separate from the louder chirp-only lab gain.
+requires code-valid triplet anchors plus a stable source clock. `chirp-only`
+emits this witness continuously; `hybrid` emits one low-gain half-second coded
+burst every two seconds only while passive confidence is weak. Default hybrid
+watermark gain is intentionally low (`watermarkGain`, or `MIMIR_WATERMARK_GAIN`)
+and separate from the louder chirp-only lab gain.
 
 Research notes:
 
@@ -236,10 +237,9 @@ timeline anchors. Current synthetic proof detects all 15 emitted chirps, keeps
 device runs still depend on loopback capture staying live; the local Scarlett
 loopback has intermittently stopped advancing during short headless sniffs.
 
-The older `MimirChirpletTimeline` matcher is now the chirp-only lab path, not
-the hybrid fallback. `BuildChirpletEnergyTrace` still behaves like a dense
-sliding matched-filter bank and should not retake the hot path. The active
-hybrid watermark belongs to the chirp-bin machine.
+The older `MimirChirpletTimeline` matcher is a diagnostic/reference artifact,
+not the active runtime path. `BuildChirpletEnergyTrace` still behaves like a
+dense sliding matched-filter bank and should not retake authority.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,

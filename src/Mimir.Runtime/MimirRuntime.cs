@@ -179,7 +179,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         var batch = RenderCalibrationBatchPcm16Base64(
             calibrationSegmentIndex,
             segmentCount,
-            audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid,
+            UseChirpBinTimeline(audioSyncSettings.Mode),
             out var peak);
         visualRuntime.Audio.EnqueuePcm16Base64(
             batch,
@@ -244,6 +244,11 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         return Convert.ToBase64String(bytes);
+    }
+
+    private static bool UseChirpBinTimeline(MimirAudioSyncMode mode)
+    {
+        return mode is MimirAudioSyncMode.ChirpOnly or MimirAudioSyncMode.Hybrid;
     }
 
     private string DescribeBuffers()

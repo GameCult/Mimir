@@ -85,33 +85,31 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirRuntime` queues chirplet timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
-  emission, and hybrid emits the active pilot only while passive confidence is
-  below threshold.
+  emission, chirp-only emits the active witness continuously, and hybrid emits
+  the active pilot only while passive confidence is below threshold.
 - `MimirPassiveAudioSynchronizationEstimator` is the first program-audio timing
   path. It estimates loopback-to-mic delay with PHAT-weighted cross-spectrum
   correlation so music can act as the default timing witness before any audible
   watermark is needed.
-- `MimirChirpBinTimeline` is the active hybrid watermark path. It renders a
-  fixed-slope chirp-bin codebook and decodes symbols with one dechirp plus
-  fixed Goertzel bins, then feeds the same de Bruijn triplet timeline-anchor
-  machine. The detector scores dechirped bin energy directly, caches chirp
-  kernels per sample rate, and uses a widened 32-symbol codebook so sub-frame
-  timing error does not masquerade as neighboring symbol identity. The matched
-  chirp-bin peak is refined below one sample and reports/states expose delay in
-  microseconds as well as fractional samples. Hybrid emits this as low-gain
-  half-second bursts every two seconds only while passive confidence is weak.
+- `MimirChirpBinTimeline` is the active calibration path for both `chirp-only`
+  and `hybrid`. It renders a fixed-slope chirp-bin codebook and decodes symbols
+  with cheap event-energy proposals, dechirp plus fixed Goertzel bins, and the
+  same de Bruijn triplet timeline-anchor machine. The detector keeps
+  time/frequency ambiguity as candidate symbol/offset pairs so code constraints
+  can choose the coherent path. The analyzer refines the final fractional delay
+  with constrained local waveform correlation around the decoded active delay.
+  Reports/states expose delay in microseconds as well as fractional samples.
+  Hybrid emits this as low-gain half-second bursts every two seconds only while
+  passive confidence is weak.
   Use `--chirp-bin-self-test` to prove the codebook/decoder and
   `--hybrid-sync-self-test` to prove that the analyzer can recover a fractional
   delay from a one-second rolling-buffer chirp-bin window. The current synthetic
   microsecond proof recovers a 317.375-sample delay with 0.369 us error.
-- `Mimir.BufferSmoke --render-chirplet-f32` and `--analyze-asio-f32` provide the
-  current chirp-only Scarlett artifact proof. A 192 kHz run decoded Focusrite
-  `Loopback 1 -> Loopback 2` at `0.000 us` with 7 matched anchors and 0.896
-  confidence. Physical input 2 decoded at about 616.226 samples / 3209.508 us
-  with 3 matched anchors and 0.516 confidence; physical input 1 did not decode
-  in that capture. This proves the timing evidence can survive the real ASIO
-  path, but the matched-kernel chirplet decoder took roughly 100 seconds for one
-  2-second 192 kHz comparison and is not the runtime hot path.
+- `Mimir.BufferSmoke --render-chirp-bin-f32` and `--analyze-asio-f32` provide
+  the current active Scarlett artifact proof. A 192 kHz chirp-bin run decoded
+  Focusrite `Loopback 1 -> Loopback 2` at `0.000 us` with 12 matched anchors and
+  0.999 confidence. Physical inputs did not produce matched anchors in that run,
+  so acoustic robustness remains separate from the clean loopback timing proof.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -147,8 +145,8 @@ a named invariant that the native runtime cannot protect yet.
    workers for local mic, loopback, and network audio feeds. Use the verified
    Focusrite ASIO path for Scarlett capture; WASAPI remains a diagnostic
    witness, not the Scarlett hot path.
-4. Replace the diagnostic chirp-only matched-kernel decoder with the efficient
-   streaming transform before using chirp-only at 192 kHz in the hot path.
+4. Prove the active chirp-bin path through real microphones, not only Scarlett
+   loopback; tune acoustic bands/gain/code spacing from measured mic response.
 5. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the constrained chirplet
