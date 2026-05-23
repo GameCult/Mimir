@@ -464,6 +464,47 @@ Invariant:
 - The target machine is not "whatever the current adapters happen to do." The
   config says who owns what.
 
+### Other Configuration JSON Surfaces
+
+Sources:
+
+- `config/audio-field.example.json`
+- `config/localcast.example.json`
+- `config/mimir-runtime.example.json`
+- `config/mimir-runtime.probes.example.json`
+- `config/mimir-runtime.sync-smoke.example.json`
+- `config/sensor-fusion.example.json`
+- `calibration/targets/charuco-8x6-dict4x4-100.json`
+- `state/branches.json`
+
+Blocks:
+
+- `audio-field.example.json`: older/fuller audio-field target shape. It maps
+  sample rate, block size, capture policy, clock model, passive/active
+  calibration strategy, ambisonic bus, local/Raven machines, mic identities,
+  speaker positions, and sweep parameters.
+- `localcast.example.json`: legacy bridge sender config for receiver SRT host,
+  desktop video encode, and separate audio endpoints.
+- `mimir-runtime.example.json`: general runtime config with native video
+  sources, disabled frame-event diagnostics, native Focusrite placeholder, and
+  disabled network video process source.
+- `mimir-runtime.probes.example.json`: current probe-heavy runtime config:
+  ASIO source, KS camera frame events, PS3 Eye frame events, WASAPI mic blocks,
+  and loopback blocks.
+- `mimir-runtime.sync-smoke.example.json`: small two-mic sync smoke config.
+- `sensor-fusion.example.json`: older visual fusion target surface with max
+  pairing/reprojection constraints, Spout render bridge settings, camera
+  intrinsics, world transforms, and latency estimates.
+- `charuco-8x6-dict4x4-100.json`: calibration target metadata pointing at the
+  generated ChArUco image.
+- `state/branches.json`: persistence helper branch/hypothesis ledger. It is
+  operational state, not runtime config.
+
+Cut line:
+
+- These JSON files are contracts, examples, or evidence. Live hot-path state
+  belongs in runtime/native memory, not in a file poller.
+
 ## Stage 4: Source Adapters
 
 ### `IMimirStreamSource.cs`
@@ -1074,6 +1115,7 @@ Owns:
 Blocks:
 
 - CMake target for `asio_audio_cadence`.
+- CMake links `ole32` and `oleaut32`, uses C++20, and targets Windows 10.
 - Minimal ASIO ABI definitions.
 - `CaptureState`: callback-owned buffers, counters, playback/capture state.
 - COM helpers.
@@ -1094,6 +1136,8 @@ Owns:
 
 Blocks:
 
+- CMake target for `wasapi_audio_cadence`, linked against `ole32`, `avrt`, and
+  `crypt32`.
 - COM/WAVEFORMAT RAII helpers.
 - Encoding/helpers: narrow/widen, sample format, CLI parsing, base64.
 - Endpoint listing.
@@ -1114,6 +1158,7 @@ Owns:
 
 Blocks:
 
+- CMake target for `ks_camera_cadence`, linked against `setupapi` and `ksuser`.
 - Handle/device RAII structs.
 - Capture/control structs: pin candidates, multi-KS profiles, control sets,
   saved controls, control scenarios.
@@ -1145,6 +1190,9 @@ Owns:
 
 Blocks:
 
+- CMake builds local static `libusb_static`, static `ps3eye`, and
+  `ps3eye_dual_cadence`, using a psmoveapi checkout under
+  `%TEMP%/mimir-driver-probes/psmoveapi` by default.
 - `nowNs`, `hasArg`: timing/CLI helpers.
 - `Stats`: per-camera frame/byte/time counters.
 - `main`: opens requested number of PS3 Eyes, starts worker threads, pulls raw
@@ -1209,6 +1257,20 @@ Blocks:
 - Producer C API: create by hash or source bytes, destroy, next sequence,
   generic push, audio-block push, render-packet push.
 - `localcast_runtime_push_typed`: shared typed push implementation.
+- Test module:
+  - stable source-id hashing and empty-source rejection;
+  - one-edge expiry across every sample kind;
+  - typed views sharing storage without owning retention;
+  - indexed reads for total buffer and typed views;
+  - latest-for-sensor scoping by kind and sensor;
+  - invisibility of late samples outside the rolling window;
+  - C ABI push/read/latest behavior;
+  - diagnostic/unknown flag rejection;
+  - null and unknown-kind rejection;
+  - runtime typed producer routing into one rolling buffer;
+  - producer-owned source identity, sequence, and live flags;
+  - audio block and render packet descriptors as typed payload boundaries;
+  - fixed render point layout for Fensalir decoding.
 
 Invariant:
 
@@ -1391,4 +1453,3 @@ This map describes the repo's code shape. It is not a replacement for:
 - `docs/native-capture-cadence.md` for camera/USB evidence.
 - `docs/implementation-plan.md` for current build plan.
 - `state/map.yaml` for canonical repo state.
-
