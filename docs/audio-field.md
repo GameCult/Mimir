@@ -103,6 +103,12 @@ buffer, and captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz.
 The next cut is not more WASAPI probing; it is feeding those ASIO buffers
 directly into `Mimir.Runtime`.
 
+The probe also has a `--monitor-sweep` mode for measuring the acoustic ceiling.
+At 192 kHz, ASIO loopback detected emitted 8-40 kHz tones cleanly, but the
+current studio-monitor-to-Scarlett-mic acoustic path was already weak by
+14-16 kHz and very weak above 20 kHz. Treat ultrasonic acoustic sync as
+unproven until a measured transducer/mic path earns it.
+
 The full probe runtime config now enables sample-bearing blocks for every local
 audio source. `MimirChirpletTimeline` owns the emitted calibration stream and
 the matched-filter shape used to analyze it. The default timeline is a

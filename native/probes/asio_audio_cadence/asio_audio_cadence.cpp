@@ -2,7 +2,9 @@
 #include <objbase.h>
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -16,6 +18,7 @@ using ASIOSampleRate = double;
 using ASIOSampleType = long;
 
 constexpr ASIOError ASE_OK = 0;
+constexpr double Pi = 3.1415926535897932384626433832795;
 
 struct ASIODriverInfo
 {
@@ -103,7 +106,22 @@ struct CaptureState
 {
     std::vector<ASIOBufferInfo>* buffers = nullptr;
     std::vector<ASIOChannelInfo>* channels = nullptr;
+    std::vector<ASIOBufferInfo>* outputBuffers = nullptr;
+    std::vector<ASIOChannelInfo>* outputChannels = nullptr;
     long bufferSize = 0;
+    long inputCount = 0;
+    long outputCount = 0;
+    double sampleRate = 0.0;
+    double sweepToneSeconds = 0.0;
+    double sweepGapSeconds = 0.0;
+    double sweepGain = 0.0;
+    std::vector<double> sweepFrequencies;
+    std::vector<double> sweepEnergy;
+    std::vector<double> sweepPeak;
+    std::vector<double> sweepSin;
+    std::vector<double> sweepCos;
+    std::vector<unsigned long long> sweepSamples;
+    unsigned long long sweepFrame = 0;
     std::atomic<unsigned long long> callbacks{0};
     std::atomic<unsigned long long> frames{0};
     std::atomic<unsigned long long> nonZeroSamples{0};
@@ -140,17 +158,178 @@ bool sampleIsNonZero(const unsigned char* sample, int byteCount)
     return false;
 }
 
+double readSample(const unsigned char* sample, ASIOSampleType type)
+{
+    switch (type)
+    {
+    case 16:
+        return *reinterpret_cast<const short*>(sample) / 32768.0;
+    case 17:
+    {
+        int value = sample[0] | (sample[1] << 8) | (sample[2] << 16);
+        if ((value & 0x00800000) != 0)
+        {
+            value |= static_cast<int>(0xff000000);
+        }
+        return value / 8388608.0;
+    }
+    case 18:
+    case 24:
+    case 25:
+    case 26:
+    case 27:
+        return *reinterpret_cast<const int*>(sample) / 2147483648.0;
+    case 19:
+        return *reinterpret_cast<const float*>(sample);
+    case 20:
+        return *reinterpret_cast<const double*>(sample);
+    default:
+        return 0.0;
+    }
+}
+
+void writeSample(unsigned char* sample, ASIOSampleType type, double value)
+{
+    value = std::clamp(value, -0.98, 0.98);
+    switch (type)
+    {
+    case 16:
+        *reinterpret_cast<short*>(sample) = static_cast<short>(value * 32767.0);
+        break;
+    case 18:
+    case 24:
+    case 25:
+    case 26:
+    case 27:
+        *reinterpret_cast<int*>(sample) = static_cast<int>(value * 2147483647.0);
+        break;
+    case 19:
+        *reinterpret_cast<float*>(sample) = static_cast<float>(value);
+        break;
+    case 20:
+        *reinterpret_cast<double*>(sample) = value;
+        break;
+    default:
+        break;
+    }
+}
+
+void processOutput(long doubleBufferIndex)
+{
+    if (!g_capture.outputBuffers || !g_capture.outputChannels || g_capture.sweepFrequencies.empty())
+    {
+        return;
+    }
+
+    const auto toneFrames = static_cast<unsigned long long>(g_capture.sweepToneSeconds * g_capture.sampleRate);
+    const auto gapFrames = static_cast<unsigned long long>(g_capture.sweepGapSeconds * g_capture.sampleRate);
+    const auto slotFrames = toneFrames + gapFrames;
+    if (slotFrames == 0)
+    {
+        return;
+    }
+
+    for (long frame = 0; frame < g_capture.bufferSize; ++frame)
+    {
+        const auto absoluteFrame = g_capture.sweepFrame + static_cast<unsigned long long>(frame);
+        const auto slot = absoluteFrame / slotFrames;
+        const auto slotOffset = absoluteFrame % slotFrames;
+        double sampleValue = 0.0;
+        if (slot < g_capture.sweepFrequencies.size() && slotOffset < toneFrames)
+        {
+            const auto fadeFrames = static_cast<unsigned long long>(0.01 * g_capture.sampleRate);
+            auto envelope = 1.0;
+            if (fadeFrames > 0 && slotOffset < fadeFrames)
+            {
+                envelope = static_cast<double>(slotOffset) / static_cast<double>(fadeFrames);
+            }
+            else if (fadeFrames > 0 && toneFrames - slotOffset < fadeFrames)
+            {
+                envelope = static_cast<double>(toneFrames - slotOffset) / static_cast<double>(fadeFrames);
+            }
+
+            const auto phase = 2.0 * Pi * g_capture.sweepFrequencies[slot] *
+                (static_cast<double>(slotOffset) / g_capture.sampleRate);
+            sampleValue = std::sin(phase) * envelope * g_capture.sweepGain;
+        }
+
+        for (size_t channel = 0; channel < g_capture.outputBuffers->size(); ++channel)
+        {
+            auto& buffer = (*g_capture.outputBuffers)[channel];
+            auto& info = (*g_capture.outputChannels)[channel];
+            auto* raw = static_cast<unsigned char*>(buffer.buffers[doubleBufferIndex]);
+            const auto sampleBytes = bytesPerSample(info.type);
+            if (raw && sampleBytes > 0)
+            {
+                writeSample(raw + frame * sampleBytes, info.type, sampleValue);
+            }
+        }
+    }
+}
+
+void processSweepInput(long doubleBufferIndex)
+{
+    if (!g_capture.buffers || !g_capture.channels || g_capture.sweepFrequencies.empty())
+    {
+        return;
+    }
+
+    const auto toneFrames = static_cast<unsigned long long>(g_capture.sweepToneSeconds * g_capture.sampleRate);
+    const auto gapFrames = static_cast<unsigned long long>(g_capture.sweepGapSeconds * g_capture.sampleRate);
+    const auto slotFrames = toneFrames + gapFrames;
+    if (slotFrames == 0)
+    {
+        return;
+    }
+
+    for (long frame = 0; frame < g_capture.bufferSize; ++frame)
+    {
+        const auto absoluteFrame = g_capture.sweepFrame + static_cast<unsigned long long>(frame);
+        const auto slot = absoluteFrame / slotFrames;
+        const auto slotOffset = absoluteFrame % slotFrames;
+        if (slot >= g_capture.sweepFrequencies.size() || slotOffset >= toneFrames)
+        {
+            continue;
+        }
+
+        for (size_t channel = 0; channel < static_cast<size_t>(g_capture.inputCount); ++channel)
+        {
+            auto& buffer = (*g_capture.buffers)[channel];
+            auto& info = (*g_capture.channels)[channel];
+            auto* raw = static_cast<unsigned char*>(buffer.buffers[doubleBufferIndex]);
+            const auto sampleBytes = bytesPerSample(info.type);
+            if (!raw || sampleBytes <= 0)
+            {
+                continue;
+            }
+
+            const auto value = readSample(raw + frame * sampleBytes, info.type);
+            const auto index = slot * static_cast<size_t>(g_capture.inputCount) + channel;
+            const auto phase = 2.0 * Pi * g_capture.sweepFrequencies[slot] *
+                (static_cast<double>(slotOffset) / g_capture.sampleRate);
+            g_capture.sweepEnergy[index] += value * value;
+            g_capture.sweepPeak[index] = std::max(g_capture.sweepPeak[index], std::abs(value));
+            g_capture.sweepSin[index] += value * std::sin(phase);
+            g_capture.sweepCos[index] += value * std::cos(phase);
+            ++g_capture.sweepSamples[index];
+        }
+    }
+}
+
 void bufferSwitch(long doubleBufferIndex, ASIOBool)
 {
     g_capture.callbacks.fetch_add(1, std::memory_order_relaxed);
     g_capture.frames.fetch_add(static_cast<unsigned long long>(g_capture.bufferSize), std::memory_order_relaxed);
+    processOutput(doubleBufferIndex);
+    processSweepInput(doubleBufferIndex);
+    g_capture.sweepFrame += static_cast<unsigned long long>(g_capture.bufferSize);
     if (!g_capture.buffers || !g_capture.channels)
     {
         return;
     }
 
     unsigned long long nonZero = 0;
-    for (size_t channel = 0; channel < g_capture.buffers->size(); ++channel)
+    for (size_t channel = 0; channel < static_cast<size_t>(g_capture.inputCount); ++channel)
     {
         auto& buffer = (*g_capture.buffers)[channel];
         auto& info = (*g_capture.channels)[channel];
@@ -232,6 +411,18 @@ double doubleOption(int argc, char** argv, const char* name, double fallback)
     return raw ? std::atof(raw) : fallback;
 }
 
+bool hasArg(int argc, char** argv, const char* name)
+{
+    for (int index = 1; index < argc; ++index)
+    {
+        if (std::strcmp(argv[index], name) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string hresultString(HRESULT hr)
 {
     char buffer[32]{};
@@ -293,6 +484,10 @@ int main(int argc, char** argv)
     const char* driverLabel = option(argc, argv, "--driver", "Focusrite USB ASIO");
     const auto captureSeconds = doubleOption(argc, argv, "--capture-seconds", 0.0);
     const auto setSampleRate = doubleOption(argc, argv, "--set-sample-rate", 0.0);
+    const bool monitorSweep = hasArg(argc, argv, "--monitor-sweep");
+    const auto sweepGain = doubleOption(argc, argv, "--sweep-gain", 0.03);
+    const auto sweepToneSeconds = doubleOption(argc, argv, "--sweep-tone-seconds", 0.55);
+    const auto sweepGapSeconds = doubleOption(argc, argv, "--sweep-gap-seconds", 0.20);
     const auto clsid = clsidFromString(clsidText);
 
     ComInit com;
@@ -410,10 +605,38 @@ int main(int argc, char** argv)
             info.name);
     }
 
-    if (captureSeconds > 0.0)
+    const long outputChannelLimit = outputs < 8 ? outputs : 8;
+    for (long channel = 0; channel < outputChannelLimit; ++channel)
     {
-        std::vector<ASIOBufferInfo> buffers(static_cast<size_t>(inputs));
+        ASIOChannelInfo info{};
+        info.channel = channel;
+        info.isInput = 0;
+        asioError = driver->getChannelInfo(&info);
+        std::printf(
+            "asio output[%ld]: status=%s active=%ld group=%ld type=%s name=\"%s\"\n",
+            channel,
+            asioErrorName(asioError).c_str(),
+            info.isActive,
+            info.channelGroup,
+            sampleTypeName(info.type).c_str(),
+            info.name);
+    }
+
+    if (captureSeconds > 0.0 || monitorSweep)
+    {
+        std::vector<double> sweepFrequencies;
+        if (monitorSweep)
+        {
+            sweepFrequencies = {8000.0, 10000.0, 12000.0, 14000.0, 16000.0, 18000.0, 20000.0, 22000.0, 24000.0, 28000.0, 32000.0, 40000.0};
+        }
+
+        const auto runSeconds = monitorSweep
+            ? (sweepToneSeconds + sweepGapSeconds) * static_cast<double>(sweepFrequencies.size()) + 0.25
+            : captureSeconds;
+
+        std::vector<ASIOBufferInfo> buffers(static_cast<size_t>(inputs + (monitorSweep ? outputs : 0)));
         std::vector<ASIOChannelInfo> channels(static_cast<size_t>(inputs));
+        std::vector<ASIOChannelInfo> outputChannels(static_cast<size_t>(monitorSweep ? outputs : 0));
         for (long channel = 0; channel < inputs; ++channel)
         {
             buffers[static_cast<size_t>(channel)].isInput = 1;
@@ -422,6 +645,18 @@ int main(int argc, char** argv)
             channels[static_cast<size_t>(channel)].isInput = 1;
             driver->getChannelInfo(&channels[static_cast<size_t>(channel)]);
         }
+        if (monitorSweep)
+        {
+            for (long channel = 0; channel < outputs; ++channel)
+            {
+                const auto bufferIndex = static_cast<size_t>(inputs + channel);
+                buffers[bufferIndex].isInput = 0;
+                buffers[bufferIndex].channelNum = channel;
+                outputChannels[static_cast<size_t>(channel)].channel = channel;
+                outputChannels[static_cast<size_t>(channel)].isInput = 0;
+                driver->getChannelInfo(&outputChannels[static_cast<size_t>(channel)]);
+            }
+        }
 
         ASIOCallbacks callbacks{};
         callbacks.bufferSwitch = bufferSwitch;
@@ -429,7 +664,7 @@ int main(int argc, char** argv)
         callbacks.asioMessage = asioMessage;
         callbacks.bufferSwitchTimeInfo = bufferSwitchTimeInfo;
 
-        asioError = driver->createBuffers(buffers.data(), inputs, preferredSize, &callbacks);
+        asioError = driver->createBuffers(buffers.data(), static_cast<long>(buffers.size()), preferredSize, &callbacks);
         if (asioError != ASE_OK)
         {
             std::fprintf(stderr, "createBuffers failed: %s\n", asioErrorName(asioError).c_str());
@@ -438,7 +673,28 @@ int main(int argc, char** argv)
 
         g_capture.buffers = &buffers;
         g_capture.channels = &channels;
+        g_capture.outputBuffers = monitorSweep ? reinterpret_cast<std::vector<ASIOBufferInfo>*>(nullptr) : nullptr;
+        std::vector<ASIOBufferInfo> outputBuffers;
+        if (monitorSweep)
+        {
+            outputBuffers.assign(buffers.begin() + inputs, buffers.end());
+            g_capture.outputBuffers = &outputBuffers;
+            g_capture.outputChannels = &outputChannels;
+        }
         g_capture.bufferSize = preferredSize;
+        g_capture.inputCount = inputs;
+        g_capture.outputCount = outputs;
+        g_capture.sampleRate = currentRate;
+        g_capture.sweepFrequencies = sweepFrequencies;
+        g_capture.sweepToneSeconds = sweepToneSeconds;
+        g_capture.sweepGapSeconds = sweepGapSeconds;
+        g_capture.sweepGain = sweepGain;
+        g_capture.sweepFrame = 0;
+        g_capture.sweepEnergy.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
+        g_capture.sweepPeak.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
+        g_capture.sweepSin.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
+        g_capture.sweepCos.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);
+        g_capture.sweepSamples.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0);
         g_capture.callbacks.store(0, std::memory_order_relaxed);
         g_capture.frames.store(0, std::memory_order_relaxed);
         g_capture.nonZeroSamples.store(0, std::memory_order_relaxed);
@@ -452,7 +708,7 @@ int main(int argc, char** argv)
         }
 
         const auto captureStart = std::chrono::steady_clock::now();
-        std::this_thread::sleep_for(std::chrono::duration<double>(captureSeconds));
+        std::this_thread::sleep_for(std::chrono::duration<double>(runSeconds));
         driver->stop();
         const auto captureStop = std::chrono::steady_clock::now();
         const auto elapsed = std::chrono::duration<double>(captureStop - captureStart).count();
@@ -471,8 +727,45 @@ int main(int argc, char** argv)
             inputs,
             preferredSize);
 
+        if (monitorSweep)
+        {
+            std::printf("asio monitor-sweep: sampleRate=%.0f gain=%.5f toneSeconds=%.3f gapSeconds=%.3f\n",
+                currentRate,
+                sweepGain,
+                sweepToneSeconds,
+                sweepGapSeconds);
+            for (size_t freqIndex = 0; freqIndex < sweepFrequencies.size(); ++freqIndex)
+            {
+                std::printf("sweep frequency %.0f Hz", sweepFrequencies[freqIndex]);
+                for (long channel = 0; channel < inputs; ++channel)
+                {
+                    const auto index = freqIndex * static_cast<size_t>(inputs) + static_cast<size_t>(channel);
+                    const auto count = g_capture.sweepSamples[index];
+                    const auto rms = count > 0
+                        ? std::sqrt(g_capture.sweepEnergy[index] / static_cast<double>(count))
+                        : 0.0;
+                    const auto detected = count > 0
+                        ? 2.0 * std::sqrt(
+                            g_capture.sweepSin[index] * g_capture.sweepSin[index] +
+                            g_capture.sweepCos[index] * g_capture.sweepCos[index]) / static_cast<double>(count)
+                        : 0.0;
+                    std::printf(
+                        " ch%ld_tone=%.8f ch%ld_rms=%.8f ch%ld_peak=%.8f",
+                        channel,
+                        detected,
+                        channel,
+                        rms,
+                        channel,
+                        g_capture.sweepPeak[index]);
+                }
+                std::printf("\n");
+            }
+        }
+
         g_capture.buffers = nullptr;
         g_capture.channels = nullptr;
+        g_capture.outputBuffers = nullptr;
+        g_capture.outputChannels = nullptr;
         driver->disposeBuffers();
     }
 

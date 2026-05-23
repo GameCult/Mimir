@@ -50,7 +50,9 @@ a named invariant that the native runtime cannot protect yet.
   run a short input callback capture. Current Starfire Focusrite USB ASIO proof
   with the Scarlett Solo 4th Gen shows 4 inputs / 2 outputs, including
   `Loopback 1/2`, 192-frame preferred buffers, 44.1-192 kHz support, and
-  nonzero 4-channel `Int32LSB` input callbacks at 192 kHz.
+  nonzero 4-channel `Int32LSB` input callbacks at 192 kHz. `--monitor-sweep`
+  emits low-gain ASIO output bursts and synchronously measures loopback/mic
+  response per frequency so ultrasonic acoustic claims stay measured.
 - `MimirChirpletTimeline` owns the structured birdsong-like calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
   The default timeline is an order-3 de Bruijn symbol sequence over 32
