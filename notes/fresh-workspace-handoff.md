@@ -28,6 +28,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `src/Mimir.Runtime` owns `MimirSynchronizationHub`, configurable five-second
   rolling buffers, stream descriptors, source adapters, direct native ingest,
   audio chirplet delay estimation, and the video capture driver seam.
+- `docs/code-algorithm-map.md` and `docs/perfect-machine-domain-index.md` are
+  the fastest re-entry maps for source ownership and problem-domain cuts.
+- `research/perfect-machine-study-2026-05-23/` contains the architecture
+  rumination, optimization ledger, references, and sample code sketches for the
+  next decoder/DSP/native-ring implementation passes.
 - Local six-camera ingest should use direct driver adapters. Process-backed
   sources are bridge/network edges only.
 - Leap stereo IR is the first timing-camera candidate for direct ingest.

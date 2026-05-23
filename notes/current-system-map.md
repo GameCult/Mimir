@@ -1,6 +1,9 @@
 # Current System Map
 
 Source-level code ownership is mapped in `docs/code-algorithm-map.md`.
+The indexed problem-domain map is `docs/perfect-machine-domain-index.md`; the
+current architecture/optimization/sample-code study lives under
+`research/perfect-machine-study-2026-05-23/`.
 
 Mimir is the public Face and product name for this repo. A few lower native ABI
 names still use `localcast` until a deliberate rename cut exists.

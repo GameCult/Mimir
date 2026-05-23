@@ -164,6 +164,12 @@ accepted_design:
     reservoir views, and runtime policy.
   - `docs/code-algorithm-map.md` is the source-level ownership and algorithm map
     for the current repo code surface.
+  - `docs/perfect-machine-domain-index.md` indexes Mimir's full problem domain,
+    current evidence taxonomy, hot paths, and implementation cuts.
+  - `research/perfect-machine-study-2026-05-23/` preserves the architecture
+    rumination, optimization ledger, research references, and sample code
+    sketches for streaming chirp-bin decode, AVX2/GPU scoring, fractional-delay
+    actuation, and native capture rings.
   - `.voidbot` state is part of repo memory and must be committed separately
     whenever dirty.
 
