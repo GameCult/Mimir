@@ -38,8 +38,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
 
         var referenceSamples = ExtractMonoWindow(reference, out var referenceBlock);
         if (referenceSamples.Length == 0 ||
-            referenceBlock == null ||
-            referenceBlock.SampleFormat != MimirAudioSampleFormat.Float32)
+            referenceBlock == null)
         {
             return [];
         }
@@ -73,11 +72,6 @@ public sealed class MimirAudioSynchronizationAnalyzer
 
             var candidateSamples = ExtractMonoWindow(buffer, out var candidateBlock, commonEndNs);
             if (candidateSamples.Length == 0 || candidateBlock == null)
-            {
-                continue;
-            }
-
-            if (candidateBlock.SampleFormat != MimirAudioSampleFormat.Float32)
             {
                 continue;
             }
@@ -317,7 +311,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
         long endNs = long.MaxValue)
     {
         latestBlock = buffer.Latest?.AudioBlock;
-        if (latestBlock == null || latestBlock.SampleFormat != MimirAudioSampleFormat.Float32)
+        if (latestBlock == null || !IsSupportedPcmFormat(latestBlock.SampleFormat))
         {
             return [];
         }
@@ -328,12 +322,12 @@ public sealed class MimirAudioSynchronizationAnalyzer
                      .Reverse())
         {
             var block = sample.AudioBlock!;
-            if (block.SampleFormat != MimirAudioSampleFormat.Float32 || block.Channels <= 0)
+            if (!IsSupportedPcmFormat(block.SampleFormat) || block.Channels <= 0)
             {
                 continue;
             }
 
-            var mono = ExtractFirstChannel(sample.Data.Span, block.Channels);
+            var mono = ExtractFirstChannel(sample.Data.Span, block.Channels, block.SampleFormat);
             for (var index = mono.Length - 1; index >= 0 && samples.Count < MaxWindowSamples; index--)
             {
                 samples.Add(mono[index]);
@@ -349,19 +343,55 @@ public sealed class MimirAudioSynchronizationAnalyzer
         return samples.ToArray();
     }
 
-    private static float[] ExtractFirstChannel(ReadOnlySpan<byte> data, int channels)
+    private static bool IsSupportedPcmFormat(MimirAudioSampleFormat sampleFormat) =>
+        sampleFormat is MimirAudioSampleFormat.Float32 or
+            MimirAudioSampleFormat.Int16 or
+            MimirAudioSampleFormat.Int24 or
+            MimirAudioSampleFormat.Int32;
+
+    private static float[] ExtractFirstChannel(
+        ReadOnlySpan<byte> data,
+        int channels,
+        MimirAudioSampleFormat sampleFormat)
     {
-        const int bytesPerSample = sizeof(float);
+        var bytesPerSample = sampleFormat switch
+        {
+            MimirAudioSampleFormat.Float32 => sizeof(float),
+            MimirAudioSampleFormat.Int16 => sizeof(short),
+            MimirAudioSampleFormat.Int24 => 3,
+            MimirAudioSampleFormat.Int32 => sizeof(int),
+            _ => 0,
+        };
+        if (bytesPerSample <= 0)
+        {
+            return [];
+        }
+
         var frameCount = data.Length / (bytesPerSample * channels);
         var samples = new float[frameCount];
         for (var frame = 0; frame < frameCount; frame++)
         {
             var offset = frame * channels * bytesPerSample;
-            var bits = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, bytesPerSample));
-            samples[frame] = BitConverter.Int32BitsToSingle(bits);
+            samples[frame] = sampleFormat switch
+            {
+                MimirAudioSampleFormat.Float32 => BitConverter.Int32BitsToSingle(
+                    BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, sizeof(float)))),
+                MimirAudioSampleFormat.Int16 => BinaryPrimitives.ReadInt16LittleEndian(
+                    data.Slice(offset, sizeof(short))) / 32768.0f,
+                MimirAudioSampleFormat.Int24 => ReadInt24LittleEndian(data.Slice(offset, 3)) / 8388608.0f,
+                MimirAudioSampleFormat.Int32 => BinaryPrimitives.ReadInt32LittleEndian(
+                    data.Slice(offset, sizeof(int))) / 2147483648.0f,
+                _ => 0.0f,
+            };
         }
 
         return samples;
+    }
+
+    private static int ReadInt24LittleEndian(ReadOnlySpan<byte> data)
+    {
+        var value = data[0] | (data[1] << 8) | (data[2] << 16);
+        return (value & 0x00800000) != 0 ? value | unchecked((int)0xff000000) : value;
     }
 
     private static float[] ResampleToRate(float[] samples, int sourceRate, int targetRate)

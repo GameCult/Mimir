@@ -84,10 +84,14 @@ watermark gain is intentionally low (`watermarkGain`, or
 
 The current diagnostic witness is `native/probes/wasapi_audio_cadence`, which
 emits timestamped WASAPI `audio-block` metadata into `Mimir.Runtime` through the
-frame-event adapter. It has proven Focusrite mic, Kiyo Pro mic, Kiyo mic, both
-USB Camera / PS3 Eye mics, and Scarlett speaker loopback in rolling buffers when
-loopback audio is actively playing. One PS3 Eye mic previously enumerated but
-produced zero WASAPI packets until that Eye was unplugged and replugged.
+frame-event adapter. It can request and verify specific shared or exclusive
+formats for device diagnosis, but it is not the Focusrite hot path. Scarlett
+capture belongs on ASIO so the runtime can use the interface clock and the
+24-bit/192 kHz modes instead of the Windows shared engine. The probe has proven
+Focusrite mic, Kiyo Pro mic, Kiyo mic, both USB Camera / PS3 Eye mics, and
+Scarlett speaker loopback in rolling buffers when loopback audio is actively
+playing. One PS3 Eye mic previously enumerated but produced zero WASAPI packets
+until that Eye was unplugged and replugged.
 
 The full probe runtime config now enables sample-bearing blocks for every local
 audio source. `MimirChirpletTimeline` owns the emitted calibration stream and
@@ -202,4 +206,6 @@ hybrid watermark belongs to the chirp-bin machine.
 
 Next, replace the diagnostic bridge with native audio capture workers that
 append typed blocks into `Mimir.Runtime`, then expose buffer depth, clock state,
-delay estimates, and stem routing in Aquarium UI.
+delay estimates, and stem routing in Aquarium UI. The analyzer accepts Float32,
+Int16, Int24, and Int32 PCM windows so the direct driver path can preserve real
+interface formats before Faust/native DSP owns the hot resampling and alignment.

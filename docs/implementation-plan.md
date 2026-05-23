@@ -43,7 +43,8 @@ a named invariant that the native runtime cannot protect yet.
   decoder recovers sub-frame anchors without hardware.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
-  adapter.
+  adapter. It can probe requested shared/exclusive formats so driver state is
+  explicit, but Scarlett production capture belongs on ASIO.
 - `MimirChirpletTimeline` owns the structured birdsong-like calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
   The default timeline is an order-3 de Bruijn symbol sequence over 32
@@ -62,7 +63,8 @@ a named invariant that the native runtime cannot protect yet.
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline.
   The analyzer derives delay only from matched decoded triplet timeline anchors.
   A source without at least three matched anchors has no timing report for that
-  window.
+  window. It accepts Float32, Int16, Int24, and Int32 PCM windows so ASIO/native
+  capture can feed true interface formats without a pre-conversion shim.
 - `MimirAudioSynchronizationStateTracker` owns the first smoothed per-source
   sync state: latest fractional delay, smoothed delay, confidence, per-band
   response evidence, and delay-slope/SRO estimate in ppm.
@@ -123,8 +125,10 @@ a named invariant that the native runtime cannot protect yet.
    other cameras.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Replace the WASAPI frame-event diagnostic bridge with native audio capture
-   workers for local mic, loopback, and network audio feeds.
+3. Install/verify the Focusrite ASIO driver, then replace the WASAPI frame-event
+   diagnostic bridge with native audio capture workers for local mic, loopback,
+   and network audio feeds. WASAPI remains a diagnostic witness, not the
+   Scarlett hot path.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the constrained chirplet

@@ -89,7 +89,8 @@ not become the synchronized program authority.
 ## Audio Field
 
 The six-microphone path is separate from the bridge. Scarlett speaker loopback
-is the current timing authority when calibration chirplets are playing.
+is the current timing authority when calibration chirplets are playing, but
+Scarlett production capture belongs on ASIO rather than WASAPI shared mode.
 `MimirChirpletTimeline` owns the birdsong-like timeline fingerprint: an order-3
 de Bruijn sequence over 32 time/frequency constellation symbols. Start band,
 glide shape, duration, and following inter-chirp gap all carry code. Any three
@@ -130,6 +131,16 @@ loopback wakeup, live mic buffers, and confident online sync states, but the
 next proof is stable canonical anchors through real mic streams. Camera mics are
 spatial/context witnesses; Focusrite devices are dialogue anchors. Fractional
 delay and the hot resampler belong in Faust/native DSP.
+
+The WASAPI cadence probe is now a format/state diagnostic: it can request
+shared or exclusive sample rates, bit depths, channel counts, and float/PCM
+formats, then report the selected or closest format. Current local Scarlett
+state exposes only generic Windows audio behavior: shared Focusrite capture is
+48 kHz Float32, shared Scarlett loopback is 44.1 kHz Float32, no ASIO driver is
+registered, and strict WASAPI exclusive 24-bit/192 kHz requests are rejected
+until the Focusrite driver stack is installed. The runtime analyzer accepts
+Float32, Int16, Int24, and Int32 PCM windows so ASIO/native capture can preserve
+the interface format.
 
 ## Visual Fusion
 

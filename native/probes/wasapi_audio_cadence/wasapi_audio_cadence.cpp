@@ -7,6 +7,8 @@
 #include <wincrypt.h>
 
 #include <chrono>
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -49,6 +51,18 @@ struct PropVariant
     PROPVARIANT value{};
     PropVariant() { PropVariantInit(&value); }
     ~PropVariant() { PropVariantClear(&value); }
+};
+
+struct WaveFormatHolder
+{
+    WAVEFORMATEX* value = nullptr;
+    ~WaveFormatHolder()
+    {
+        if (value)
+        {
+            CoTaskMemFree(value);
+        }
+    }
 };
 
 long long nowNs()
@@ -147,6 +161,80 @@ const char* option(int argc, char** argv, const char* name, const char* fallback
     }
 
     return fallback;
+}
+
+int intOption(int argc, char** argv, const char* name, int fallback)
+{
+    const char* raw = option(argc, argv, name, nullptr);
+    return raw ? std::atoi(raw) : fallback;
+}
+
+std::string lower(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return value;
+}
+
+const char* shareModeName(AUDCLNT_SHAREMODE mode)
+{
+    return mode == AUDCLNT_SHAREMODE_EXCLUSIVE ? "exclusive" : "shared";
+}
+
+std::string describeFormat(const WAVEFORMATEX* format)
+{
+    char buffer[256]{};
+    std::snprintf(
+        buffer,
+        sizeof(buffer),
+        "%luHz %uch %ubit valid=%u block=%u %s",
+        static_cast<unsigned long>(format->nSamplesPerSec),
+        static_cast<unsigned>(format->nChannels),
+        static_cast<unsigned>(format->wBitsPerSample),
+        format->wFormatTag == WAVE_FORMAT_EXTENSIBLE
+            ? static_cast<unsigned>(reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->Samples.wValidBitsPerSample)
+            : static_cast<unsigned>(format->wBitsPerSample),
+        static_cast<unsigned>(format->nBlockAlign),
+        sampleFormat(format).c_str());
+    return buffer;
+}
+
+WAVEFORMATEX* buildRequestedFormat(
+    const WAVEFORMATEX* mixFormat,
+    int sampleRate,
+    int bitsPerSample,
+    const char* requestedFormat,
+    int requestedChannels)
+{
+    const WORD channels = static_cast<WORD>(requestedChannels > 0 ? requestedChannels : mixFormat->nChannels);
+    if (channels == 0 || sampleRate <= 0 || bitsPerSample <= 0)
+    {
+        return nullptr;
+    }
+
+    const auto normalizedFormat = lower(requestedFormat ? requestedFormat : "float");
+    const bool floatFormat = normalizedFormat == "float" || normalizedFormat == "float32";
+    const WORD containerBits = static_cast<WORD>(floatFormat ? 32 : bitsPerSample == 24 ? 24 : bitsPerSample);
+    auto* format = static_cast<WAVEFORMATEXTENSIBLE*>(CoTaskMemAlloc(sizeof(WAVEFORMATEXTENSIBLE)));
+    if (!format)
+    {
+        return nullptr;
+    }
+
+    std::memset(format, 0, sizeof(WAVEFORMATEXTENSIBLE));
+    format->Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    format->Format.nChannels = channels;
+    format->Format.nSamplesPerSec = static_cast<DWORD>(sampleRate);
+    format->Format.wBitsPerSample = containerBits;
+    format->Format.nBlockAlign = static_cast<WORD>(channels * ((containerBits + 7) / 8));
+    format->Format.nAvgBytesPerSec = format->Format.nSamplesPerSec * format->Format.nBlockAlign;
+    format->Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+    format->Samples.wValidBitsPerSample = static_cast<WORD>(bitsPerSample);
+    format->dwChannelMask = channels == 1 ? SPEAKER_FRONT_CENTER :
+        channels == 2 ? (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT) : 0;
+    format->SubFormat = floatFormat ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT : KSDATAFORMAT_SUBTYPE_PCM;
+    return &format->Format;
 }
 
 std::string base64(const BYTE* data, DWORD byteLength)
@@ -268,12 +356,25 @@ int main(int argc, char** argv)
     }
 
     const bool loopback = hasArg(argc, argv, "--loopback");
+    const bool exclusive = hasArg(argc, argv, "--exclusive");
+    const bool requireFormat = hasArg(argc, argv, "--require-format");
     const char* endpointId = option(argc, argv, "--endpoint", "default");
     const char* sourceId = option(argc, argv, "--source-id", loopback ? "host-loopback" : "host-mic");
     const double seconds = std::atof(option(argc, argv, "--seconds", "0"));
+    const int requestedSampleRate = intOption(argc, argv, "--sample-rate", 0);
+    const int requestedBits = intOption(argc, argv, "--bits", 0);
+    const int requestedChannels = intOption(argc, argv, "--channels", 0);
+    const char* requestedFormat = option(argc, argv, "--format", "float");
     const bool emitJsonBlocks = hasArg(argc, argv, "--emit-json-blocks");
     const bool includeSamples = hasArg(argc, argv, "--include-samples");
     const EDataFlow flow = loopback ? eRender : eCapture;
+    const AUDCLNT_SHAREMODE shareMode = exclusive && !loopback
+        ? AUDCLNT_SHAREMODE_EXCLUSIVE
+        : AUDCLNT_SHAREMODE_SHARED;
+    if (exclusive && loopback)
+    {
+        std::fprintf(stderr, "WASAPI loopback uses the shared render engine; ignoring --exclusive.\n");
+    }
 
     ComPtr<IMMDevice> device;
     device.value = openEndpoint(enumerator.value, flow, endpointId);
@@ -303,26 +404,92 @@ int main(int argc, char** argv)
         return 5;
     }
 
-    WAVEFORMATEX* rawFormat = nullptr;
-    hr = audioClient->GetMixFormat(&rawFormat);
-    if (FAILED(hr) || !rawFormat)
+    WaveFormatHolder mixFormat;
+    hr = audioClient->GetMixFormat(&mixFormat.value);
+    if (FAILED(hr) || !mixFormat.value)
     {
         std::fprintf(stderr, "GetMixFormat failed: 0x%08lx\n", static_cast<unsigned long>(hr));
         return 6;
     }
 
+    WaveFormatHolder requestedHolder;
+    WaveFormatHolder closestHolder;
+    WAVEFORMATEX* selectedFormat = mixFormat.value;
+    const bool hasRequestedFormat = requestedSampleRate > 0 || requestedBits > 0 || requestedChannels > 0;
+    if (hasRequestedFormat)
+    {
+        requestedHolder.value = buildRequestedFormat(
+            mixFormat.value,
+            requestedSampleRate > 0 ? requestedSampleRate : static_cast<int>(mixFormat.value->nSamplesPerSec),
+            requestedBits > 0 ? requestedBits : static_cast<int>(mixFormat.value->wBitsPerSample),
+            requestedFormat,
+            requestedChannels);
+        if (!requestedHolder.value)
+        {
+            std::fprintf(stderr, "Could not build requested WASAPI format.\n");
+            return 7;
+        }
+
+        WAVEFORMATEX* closest = nullptr;
+        hr = audioClient->IsFormatSupported(shareMode, requestedHolder.value, shareMode == AUDCLNT_SHAREMODE_SHARED ? &closest : nullptr);
+        if (hr == S_OK)
+        {
+            selectedFormat = requestedHolder.value;
+        }
+        else if (hr == S_FALSE && closest)
+        {
+            closestHolder.value = closest;
+            if (requireFormat)
+            {
+                std::fprintf(
+                    stderr,
+                    "Requested WASAPI format unsupported in %s mode: requested=%s closest=%s\n",
+                    shareModeName(shareMode),
+                    describeFormat(requestedHolder.value).c_str(),
+                    describeFormat(closestHolder.value).c_str());
+                return 7;
+            }
+
+            selectedFormat = closestHolder.value;
+        }
+        else
+        {
+            if (closest)
+            {
+                CoTaskMemFree(closest);
+            }
+            if (requireFormat)
+            {
+                std::fprintf(
+                    stderr,
+                    "Requested WASAPI format unsupported in %s mode: requested=%s hr=0x%08lx\n",
+                    shareModeName(shareMode),
+                    describeFormat(requestedHolder.value).c_str(),
+                    static_cast<unsigned long>(hr));
+                return 7;
+            }
+        }
+    }
+
+    std::fprintf(
+        stderr,
+        "wasapi format: source=%s mode=%s mix=%s selected=%s\n",
+        sourceId,
+        shareModeName(shareMode),
+        describeFormat(mixFormat.value).c_str(),
+        describeFormat(selectedFormat).c_str());
+
     const REFERENCE_TIME requestedDuration = 1000000; // 100 ms
     hr = audioClient->Initialize(
-        AUDCLNT_SHAREMODE_SHARED,
+        shareMode,
         loopback ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0,
         requestedDuration,
-        0,
-        rawFormat,
+        shareMode == AUDCLNT_SHAREMODE_EXCLUSIVE ? requestedDuration : 0,
+        selectedFormat,
         nullptr);
     if (FAILED(hr))
     {
         std::fprintf(stderr, "IAudioClient Initialize failed: 0x%08lx\n", static_cast<unsigned long>(hr));
-        CoTaskMemFree(rawFormat);
         return 7;
     }
 
@@ -331,7 +498,6 @@ int main(int argc, char** argv)
     if (FAILED(hr) || !captureClient)
     {
         std::fprintf(stderr, "IAudioCaptureClient failed: 0x%08lx\n", static_cast<unsigned long>(hr));
-        CoTaskMemFree(rawFormat);
         return 8;
     }
 
@@ -341,7 +507,7 @@ int main(int argc, char** argv)
 
     const long long start = nowNs();
     const long long deadline = seconds > 0.0 ? start + static_cast<long long>(seconds * 1000000000.0) : 0;
-    const std::string format = sampleFormat(rawFormat);
+    const std::string format = sampleFormat(selectedFormat);
     unsigned long long sequence = 0;
     unsigned long long totalFrames = 0;
 
@@ -359,11 +525,10 @@ int main(int argc, char** argv)
             {
                 std::fprintf(stderr, "GetBuffer failed: 0x%08lx\n", static_cast<unsigned long>(hr));
                 audioClient->Stop();
-                CoTaskMemFree(rawFormat);
                 return 9;
             }
 
-            const int byteLength = static_cast<int>(frames * rawFormat->nBlockAlign);
+            const int byteLength = static_cast<int>(frames * selectedFormat->nBlockAlign);
             totalFrames += frames;
             ++sequence;
             if (emitJsonBlocks)
@@ -382,8 +547,8 @@ int main(int argc, char** argv)
                     sourceId,
                     nowNs(),
                     sequence,
-                    static_cast<unsigned long>(rawFormat->nSamplesPerSec),
-                    static_cast<unsigned>(rawFormat->nChannels),
+                    static_cast<unsigned long>(selectedFormat->nSamplesPerSec),
+                    static_cast<unsigned>(selectedFormat->nChannels),
                     format.c_str(),
                     static_cast<unsigned>(frames),
                     byteLength);
@@ -411,9 +576,8 @@ int main(int argc, char** argv)
         sequence,
         totalFrames,
         elapsed,
-        static_cast<unsigned long>(rawFormat->nSamplesPerSec),
-        static_cast<unsigned>(rawFormat->nChannels),
+        static_cast<unsigned long>(selectedFormat->nSamplesPerSec),
+        static_cast<unsigned>(selectedFormat->nChannels),
         format.c_str());
-    CoTaskMemFree(rawFormat);
     return 0;
 }

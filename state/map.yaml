@@ -130,6 +130,8 @@ active_subgoals:
   - Implement the first concrete Leap direct capture driver and measure cadence.
   - Add remaining local camera drivers through `IMimirVideoCaptureDriver`.
   - Add native audio capture workers for mic, loopback, and network audio feeds.
+  - Install and verify the Focusrite ASIO driver before cutting the Scarlett
+    hot audio path; WASAPI remains a diagnostic witness.
   - Bind Aquarium UI to stream health, buffer depth, source timestamps,
     settings, and output management.
   - Keep PowerShell/FFmpeg/SRT as bridge utilities until direct program output
@@ -226,5 +228,9 @@ current_status:
     for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
     calibration chirplets are playing. Treat PS3 Eye audio as
     enumeration/runtime-fragile, not unavailable. Keep the Focusrite away from
-    the Leap USB neighborhood and treat Kiyo Pro as a ~25 fps source until its
-    SuperSpeed negotiation is fixed.
+    the Leap USB neighborhood. Current Scarlett audio is still generic Windows
+    USB audio: no ASIO driver is registered, shared WASAPI exposes Focusrite
+    capture at 48 kHz Float32 and Scarlett loopback at 44.1 kHz Float32, and
+    strict WASAPI exclusive 24-bit/192 kHz requests are rejected until the
+    Focusrite driver stack is installed. Treat Kiyo Pro as a ~25 fps source
+    until its SuperSpeed negotiation is fixed.
