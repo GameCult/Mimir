@@ -48,6 +48,8 @@ Start with:
   camera/sensor evidence.
 - [docs/code-algorithm-map.md](docs/code-algorithm-map.md) for the current
   source-level code map.
+- [docs/perfect-machine-domain-index.md](docs/perfect-machine-domain-index.md)
+  for the indexed problem-domain map and implementation cuts.
 
 Naming note: **Fensalir** is the engine/windowing/rendering/D3D12 layer. Older
 research notes may still use the previous engine name.

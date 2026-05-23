@@ -1418,6 +1418,10 @@ Linked notes:
 - `research/feedback-calibration/summary.md`: room/speaker/mic calibration.
 - `research/perfect-machine-hypotheses/summary.md`: hypotheses added by this
   documentation pass.
+- `docs/perfect-machine-domain-index.md`: indexed domain map for future
+  implementation passes.
+- `research/perfect-machine-study-2026-05-23/`: architecture rumination,
+  optimization ledger, references, and sample implementation sketches.
 
 Hypotheses:
 
