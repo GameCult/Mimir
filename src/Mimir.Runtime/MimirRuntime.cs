@@ -3,7 +3,7 @@ using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
-using Aquarium.LocalCast;
+using Aquarium.Fensalir;
 using Mimir.Runtime.Synchronization;
 using System.Diagnostics;
 
@@ -16,7 +16,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const double CalibrationStartSeconds = 0.5;
     private const int CalibrationBatchSegments = 120;
     private const int HybridWatermarkIntervalSegments = 4;
-    private readonly LocalCastRuntime visualRuntime;
+    private readonly IAquariumRuntime visualRuntime;
     private readonly MimirSynchronizationHub synchronization;
     private readonly AquariumUiDocument ui;
     private readonly MimirAudioSynchronizationSettings audioSyncSettings;
@@ -55,7 +55,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         IEnumerable<IMimirStreamSource> streamSources)
     {
         Options = options;
-        visualRuntime = new LocalCastRuntime(options);
+        visualRuntime = new FensalirRuntimeFactory().Create(options);
         synchronization = new MimirSynchronizationHub(settings);
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();

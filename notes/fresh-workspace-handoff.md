@@ -87,11 +87,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
   short-window analyzer floor instead of inheriting the passive two-second gate.
   It uses cheap energy/onset proposals, dechirp plus fixed Goertzel bins,
   explicit time/frequency ambiguity candidates, and constrained local waveform
-  correlation for final fractional delay. `Mimir.BufferSmoke
+  correlation for final fractional delay. It also supports standalone source
+  offset recovery from schedule/codebook state, which is the Raven/phone shape.
+  `Mimir.BufferSmoke
   --chirp-only-sync-self-test --sample-rate 192000` and
   `--hybrid-sync-self-test --sample-rate 192000` both recover a 1269.5-sample
   synthetic delay with printed 0.000 us error. Reports and sync states expose
-  `delayUs`.
+  `delayUs`. `--standalone-chirp-bin-self-test --sample-rate 192000
+  --delay-samples 96000` recovers a 500 ms delayed stream below printed
+  microsecond precision without loopback.
   Actual
   Mimir.App testing proves Fensalir audio can wake Scarlett
   loopback, keep mic buffers live, and produce confident online passive sync
@@ -112,8 +116,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   comparison and is now diagnostic only. A real Scarlett chirp-bin artifact run
   at 192 kHz decoded `Loopback 1 -> Loopback 2` at `0.000 us` delay with 12
   matched anchors and 0.999 confidence in the normal active analyzer. Physical
-  inputs did not produce matched anchors in that chirp-bin run, so acoustic
-  robustness is still open.
+  input 2 independently decoded a coherent clock, but its clock-offset
+  difference was a period alias outside the live latency horizon and is rejected
+  as insufficient anchors. Acoustic robustness is still open.
 - Raven also has a 192 kHz loopback-capable Scarlett for co-streamer/game timing
   evidence. Do not move the heavy soundfield or sensor-fusion workload there.
 

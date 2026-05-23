@@ -8,6 +8,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
     private const double MinPassiveWindowSeconds = 2.0;
     private const double MinChirpletWindowSeconds = 2.0;
     private const double MinChirpBinWindowSeconds = 0.40;
+    private const double MaxPairClockFitDelaySeconds = 10.0;
     private const double PassiveReportConfidence = 0.08;
     private readonly List<MimirAudioSynchronizationDecodeTrace> lastDecodeTraces = [];
     private readonly MimirPassiveAudioSynchronizationEstimator passiveEstimator = new();
@@ -288,6 +289,18 @@ public sealed class MimirAudioSynchronizationAnalyzer
             var countConfidence = Math.Clamp(matched.Count / 12.0, 0.0, 1.0);
             var energyConfidence = Math.Clamp(totalWeight / matched.Count, 0.0, 1.0);
             return (delay, residualConfidence * 0.50 + countConfidence * 0.25 + energyConfidence * 0.25, matched.Count);
+        }
+
+        if (reference.ClockFit.Confidence >= 0.50 && candidate.ClockFit.Confidence >= 0.50)
+        {
+            var delay = candidate.ClockFit.SourceOffsetSamples - reference.ClockFit.SourceOffsetSamples;
+            if (Math.Abs(delay) <= reference.ClockFit.EffectiveSampleRate * MaxPairClockFitDelaySeconds)
+            {
+                var residualConfidence = 1.0 / (1.0 + (reference.ClockFit.MeanAbsoluteErrorSamples + candidate.ClockFit.MeanAbsoluteErrorSamples) / 64.0);
+                var countConfidence = Math.Clamp(Math.Min(reference.ClockFit.AnchorCount, candidate.ClockFit.AnchorCount) / 12.0, 0.0, 1.0);
+                var clockConfidence = Math.Sqrt(reference.ClockFit.Confidence * candidate.ClockFit.Confidence);
+                return (delay, residualConfidence * 0.35 + countConfidence * 0.25 + clockConfidence * 0.40, Math.Min(reference.ClockFit.AnchorCount, candidate.ClockFit.AnchorCount));
+            }
         }
 
         var referenceFirst = reference.Anchors.Min(anchor => anchor.TimelineSeconds);

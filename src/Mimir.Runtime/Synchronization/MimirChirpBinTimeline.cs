@@ -73,6 +73,12 @@ public sealed class MimirChirpBinTimeline
             .ToArray();
         var anchors = DecodeAnchors(frames, sampleRate);
         var clock = FitClock(anchors, sampleRate);
+        if (clock != null)
+        {
+            var refinedOffset = RefineSourceOffset(samples, sampleRate, clock.SourceOffsetSamples);
+            clock = clock with { SourceOffsetSamples = refinedOffset };
+        }
+
         return new MimirChirpletStreamDecode(frames, symbols, anchors, clock);
     }
 
@@ -501,6 +507,66 @@ public sealed class MimirChirpBinTimeline
             residualConfidence * 0.45 + countConfidence * 0.25 + anchorConfidence * 0.30,
             anchors.Count,
             meanAbsoluteError);
+    }
+
+    private static double RefineSourceOffset(ReadOnlySpan<float> samples, int sampleRate, double initialOffsetSamples)
+    {
+        var radius = Math.Max(4, (int)Math.Ceiling(sampleRate * 0.00008));
+        var center = (int)Math.Round(initialOffsetSamples);
+        var firstOffset = center - radius;
+        var lastOffset = center + radius;
+        var bestOffset = center;
+        var bestScore = double.NegativeInfinity;
+        for (var offset = firstOffset; offset <= lastOffset; offset++)
+        {
+            var score = ScheduledWaveformScore(samples, sampleRate, offset);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestOffset = offset;
+            }
+        }
+
+        if (bestOffset <= firstOffset || bestOffset >= lastOffset)
+        {
+            return bestOffset;
+        }
+
+        var left = ScheduledWaveformScore(samples, sampleRate, bestOffset - 1);
+        var middle = ScheduledWaveformScore(samples, sampleRate, bestOffset);
+        var right = ScheduledWaveformScore(samples, sampleRate, bestOffset + 1);
+        var denominator = left - 2.0 * middle + right;
+        if (Math.Abs(denominator) <= 1.0e-12)
+        {
+            return bestOffset;
+        }
+
+        return bestOffset + Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+    }
+
+    private static double ScheduledWaveformScore(ReadOnlySpan<float> samples, int sampleRate, int sourceOffsetSamples)
+    {
+        var timelineStartSeconds = -sourceOffsetSamples / (double)sampleRate;
+        var timelineDurationSeconds = samples.Length / (double)sampleRate;
+        var reference = new float[samples.Length];
+        foreach (var timelineEvent in Default.EventsOverlapping(timelineStartSeconds, timelineDurationSeconds))
+        {
+            AddChirp(reference, sampleRate, timelineEvent, timelineStartSeconds);
+        }
+
+        var dot = 0.0;
+        var sampleEnergy = 0.0;
+        var referenceEnergy = 0.0;
+        for (var index = 0; index < samples.Length; index++)
+        {
+            dot += samples[index] * reference[index];
+            sampleEnergy += samples[index] * samples[index];
+            referenceEnergy += reference[index] * reference[index];
+        }
+
+        return sampleEnergy <= 1.0e-12 || referenceEnergy <= 1.0e-12
+            ? double.NegativeInfinity
+            : dot / Math.Sqrt(sampleEnergy * referenceEnergy);
     }
 
     private static float[] BuildWindowEnergyTrace(ReadOnlySpan<float> samples, int windowSamples, int hopSamples)

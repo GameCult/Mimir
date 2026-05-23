@@ -10,6 +10,13 @@ if (args.Any(arg => string.Equals(arg, "--chirp-bin-self-test", StringComparison
     return RunChirpBinSelfTest();
 }
 
+if (args.Any(arg => string.Equals(arg, "--standalone-chirp-bin-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunStandaloneChirpBinSelfTest(
+        ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate),
+        ParseDoubleOption(args, "--delay-samples", 1269.5));
+}
+
 if (args.Any(arg => string.Equals(arg, "--passive-sync-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunPassiveSyncSelfTest();
@@ -232,6 +239,46 @@ static int RunChirpBinSelfTest()
     if (decode.ClockFit == null || decode.Anchors.Count < 16 || meanAbsoluteError > 2.0)
     {
         Console.Error.WriteLine("chirp-bin self-test failed: dechirp/bin decoder did not recover stable timeline anchors");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int RunStandaloneChirpBinSelfTest(int sampleRate, double delaySamples)
+{
+    var timeline = MimirChirpBinTimeline.Default;
+    var samples = new List<float>();
+    for (ulong segment = 0; segment < 8; segment++)
+    {
+        samples.AddRange(timeline.RenderSegmentMonoFloat(segment, sampleRate));
+    }
+
+    var delayed = ApplyFractionalDelay(samples.ToArray(), delaySamples);
+    var decode = timeline.DecodeStreamWindow(delayed, sampleRate);
+    var expectedDelay = delaySamples;
+    var actualDelay = decode.ClockFit?.SourceOffsetSamples ?? double.NaN;
+    var error = Math.Abs(actualDelay - expectedDelay);
+    Console.WriteLine(
+        $"standalone-chirp-bin-self-test frames={decode.Frames.Count} anchors={decode.Anchors.Count} " +
+        $"clock={(decode.ClockFit is null ? "none" : decode.ClockFit.EffectiveSampleRate.ToString("0.000000"))} " +
+        $"sourceOffset={actualDelay:0.000000} expected={expectedDelay:0.000000} errorSamples={error:0.000000} " +
+        $"errorUs={error * 1_000_000.0 / sampleRate:0.000} confidence={(decode.ClockFit?.Confidence ?? 0.0):0.000}");
+
+    foreach (var anchor in decode.Anchors.Take(16))
+    {
+        var expected = timeline.EventForIndex(anchor.EventIndex).StartSeconds * sampleRate + expectedDelay;
+        Console.WriteLine(
+            $"standalone-anchor event={anchor.EventIndex} actual={anchor.SampleOffset:0.000} expected={expected:0.000} " +
+            $"error={anchor.SampleOffset - expected:0.000} confidence={anchor.Confidence:0.000}");
+    }
+
+    if (decode.ClockFit == null ||
+        decode.Anchors.Count < 12 ||
+        decode.ClockFit.Confidence < 0.70 ||
+        error * 1_000_000.0 / sampleRate > 1.0)
+    {
+        Console.Error.WriteLine("standalone chirp-bin self-test failed: receiver did not recover canonical source time from delayed audio alone");
         return 1;
     }
 

@@ -40,7 +40,9 @@ a named invariant that the native runtime cannot protect yet.
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
   empty declared sensor buffer should fail the run. Use `--chirplet-self-test`
   to render the canonical timeline into memory and verify that the constrained
-  decoder recovers sub-frame anchors without hardware.
+  decoder recovers sub-frame anchors without hardware. Use
+  `--standalone-chirp-bin-self-test` to verify that a receiver with only the
+  codebook/schedule can recover canonical source offset from delayed audio.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter. It can probe requested shared/exclusive formats so driver state is
@@ -110,6 +112,9 @@ a named invariant that the native runtime cannot protect yet.
   Focusrite `Loopback 1 -> Loopback 2` at `0.000 us` with 12 matched anchors and
   0.999 confidence. Physical inputs did not produce matched anchors in that run,
   so acoustic robustness remains separate from the clean loopback timing proof.
+  A standalone 192 kHz synthetic receiver test recovers a 500 ms delayed audio
+  stream to below printed microsecond precision using only the chirp-bin
+  codebook and schedule state.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -146,7 +151,8 @@ a named invariant that the native runtime cannot protect yet.
    Focusrite ASIO path for Scarlett capture; WASAPI remains a diagnostic
    witness, not the Scarlett hot path.
 4. Prove the active chirp-bin path through real microphones, not only Scarlett
-   loopback; tune acoustic bands/gain/code spacing from measured mic response.
+   loopback; tune acoustic bands/gain/code spacing from measured mic response
+   without weakening the standalone codebook/schedule receiver invariant.
 5. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the constrained chirplet

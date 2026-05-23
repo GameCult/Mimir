@@ -116,15 +116,20 @@ accepted_design:
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-only-sync-self-test --sample-rate 192000`
     and `--hybrid-sync-self-test --sample-rate 192000` both recover a
     1269.5-sample synthetic delay with printed 0.000 us error. The synthetic
+    standalone receiver proof `--standalone-chirp-bin-self-test --sample-rate
+    192000 --delay-samples 96000` recovers a 500 ms delayed stream below printed
+    microsecond precision using only the codebook/schedule. The synthetic
     codebook proof remains `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`.
     `Mimir.BufferSmoke --render-chirp-bin-f32` plus
     `native/probes/asio_audio_cadence --play-f32-mono --record-f32-interleaved`
     now provides a real Scarlett ASIO artifact proof for active mode. At 192 kHz,
     Loopback 1 -> Loopback 2 decoded at 0.000 us with 12 anchors and 0.999
-    confidence. Physical inputs did not produce matched anchors in that chirp-bin
-    run, so acoustic robustness remains open. The old arbitrary-chirplet matcher
-    is a diagnostic/reference artifact only, not the runtime hot path.
+    confidence. Physical input 2 independently decoded a coherent clock, but its
+    clock-offset difference was a period alias outside the live latency horizon
+    and is rejected as insufficient anchors. Acoustic robustness remains open.
+    The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
+    not the runtime hot path.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
     seam for Leap, Media Foundation, DirectShow, libusb, LeapC, or shared
     texture capture.

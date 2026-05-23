@@ -107,11 +107,16 @@ still needs a longer program-audio window, while the chirp-bin witness can decod
 short pilot windows once at least a code-valid triplet is present. The chirp-bin
 detector now uses cheap bounded energy/onset proposals, dechirp plus fixed
 Goertzel bins, explicit time/frequency ambiguity candidates, and a constrained
-local waveform correlation for final fractional delay. Reports/states expose
-`delayUs` next to fractional sample delay. `Mimir.BufferSmoke
+scheduled-waveform correlation for standalone source-offset refinement. Pairwise
+sync compares matched anchors first, then only accepts independent clock-fit
+offsets inside the live latency horizon so period aliases do not become absurd
+reports. Reports/states expose `delayUs` next to fractional sample delay.
+`Mimir.BufferSmoke
 --chirp-only-sync-self-test --sample-rate 192000` and `--hybrid-sync-self-test
 --sample-rate 192000` both recover a 1269.5-sample synthetic delay with printed
-0.000 us error.
+0.000 us error. `--standalone-chirp-bin-self-test --sample-rate 192000
+--delay-samples 96000` proves a receiver with only codebook/schedule state can
+recover a 500 ms delayed stream to below printed microsecond precision.
 Reports now carry fractional delay and per-band matched energy. The first
 `MimirChirpletSymbolCodebook` owns separable symbol definitions; every symbol
 has a unique chirp shape, with rhythm as additional evidence. `MimirChirpletStreamDecoder`
@@ -149,9 +154,11 @@ Focusrite outputs while capturing every ASIO input as raw interleaved Float32.
 `Mimir.BufferSmoke --analyze-asio-f32` feeds those captured channels into the
 same runtime active analyzer. A real 192 kHz chirp-bin Scarlett artifact decoded
 `Loopback 1 -> Loopback 2` at exactly `0.000 us` with 12 matched anchors and
-0.999 confidence. Physical inputs did not produce matched anchors in that
-chirp-bin run; acoustic robustness is now the open problem, not clean loopback
-timing or active decoder shape.
+0.999 confidence. Physical input 2 independently decoded a coherent clock in
+that artifact, but its event path did not overlap loopback and its raw
+clock-offset difference was a period alias far outside the live latency horizon,
+so Mimir correctly rejected it as insufficient anchors. Acoustic robustness is
+now the open problem, not clean loopback timing or standalone decoder shape.
 
 ## Visual Fusion
 
