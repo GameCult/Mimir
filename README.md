@@ -6,10 +6,37 @@ Mimir is the realtime field machine for turning a roomful of cameras,
 microphones, speakers, loopbacks, and network feeds into one coherent
 OBS-facing program surface.
 
-The point is not to collect impressive device counts. The point is to recover a
-live volumetric field: synchronized video evidence for Fensalir GPU fusion,
-synchronized audio evidence for a volumetric sound field, and final outputs
-that OBS can use without pretending raw unsynchronized sources are a world.
+The plain version: Mimir is trying to make a room computable.
+
+A normal streaming setup sees loose devices. A webcam has its clock, a mic has
+another clock, speakers add their own delay, and OBS receives whatever arrives.
+That is enough for a flat livestream. It is not enough to know where a voice
+came from, how a sound moved through the room, where a hand was in space, or how
+multiple cameras should agree about the same body.
+
+Mimir treats the room as one measured field instead. If the system can line up
+audio and video evidence tightly enough, the computer can stop guessing from
+isolated feeds and start reconstructing events in space and time.
+
+That unlocks the real value:
+
+- volumetric sound fields, where voices and reflections can be placed in the
+  room instead of flattened into left/right audio;
+- realtime voice separation, because each microphone hears the same source at a
+  slightly different time and frequency shape;
+- precise localization of chirp emitters and receivers, because a coded chirp
+  can act like an acoustic ruler through the room;
+- marker-free, or preferably marker-assisted, motion capture from synchronized
+  cameras and timing sensors;
+- realtime "4D" Gaussian splatting, where Fensalir can update a live volumetric
+  scene over time instead of rendering a static reconstruction;
+- augmented reality and virtual avatar mapping that are anchored to the actual
+  room, not just a camera overlay.
+
+The work is not to collect impressive device counts. The work is to recover a
+live field: synchronized video evidence for Fensalir GPU fusion, synchronized
+audio evidence for a volumetric sound field, and final outputs that OBS can use
+without pretending raw unsynchronized sources are a world.
 
 Start with:
 
@@ -52,6 +79,40 @@ Ownership is deliberately narrow:
 The default runtime window is five seconds. That is not accidental latency. It
 is the compute budget for lining up independent clocks, absorbing late network
 feeds, and extracting a coherent field before the audience sees it.
+
+## Why The Precision Matters
+
+Mimir's sync work is not audiophile fussing. At room scale, tiny timing errors
+turn directly into location errors. Sound moves about 34 centimeters in one
+millisecond. At microsecond precision, delay already becomes useful spatial
+evidence. At the nanosecond-precision target, timing is no longer a vague
+latency number; it is a measurement surface.
+
+The active audio calibration uses coded chirps. A chirp sweeps through
+frequencies; a chirplet transform lets Mimir identify exactly which little sweep
+arrived, when it arrived, and how the speaker, room, and microphone changed its
+frequency response. That gives the system two useful facts at once:
+
+- timing: how late each microphone or receiver is relative to the reference;
+- coloration: which frequencies each path hears clearly, weakly, or falsely.
+
+Timing alignment lets voices separate because the same voice reaches each mic
+at a different moment. Frequency-response normalization makes those microphones
+more comparable, so the separation and spatialization code is not constantly
+fooled by one device being brighter, duller, or more room-colored than another.
+
+The same idea applies to chirp emitters and receivers in space. If Mimir knows
+when a coded sound was emitted and when each receiver heard it, the delay
+measurements become distance constraints. Enough constraints let the system
+localize where emitters and receivers are inside the room.
+
+On the visual side, Fensalir's sensor fusion and reservoir sampling work are
+the matching half of the same argument. Instead of treating every camera frame
+as a disposable picture, Fensalir can preserve a rolling, sampled memory of
+visual evidence across time: features, surfaces, splats, confidence, and
+motion. Combined with synchronized cameras and timing sensors, that reservoir
+is what can support live "4D" Gaussian splatting, marker-assisted or
+marker-free motion capture, AR anchoring, and avatar mapping.
 
 ## Current Audio Spine
 
