@@ -1,40 +1,161 @@
-﻿# Mimir
+# Mimir
 
-Mimir turns a roomful of local cameras, microphones, speakers, and timing
-signals into one realtime coherent volumetric field.
+Mimir is the realtime field machine for turning a roomful of cameras,
+microphones, speakers, loopbacks, and network feeds into one coherent
+OBS-facing program surface.
 
-The public job is simple: make the physical room available as a synchronized
-OBS-facing program surface. The actual machine stays disciplined. Mimir owns
-configuration, calibration, launch, status, and typed contracts; Aquarium owns
-GPU fusion and Spout publication; Faust owns hot audio DSP; OBS owns broadcast
-composition. The SRT bridge is compatibility scaffolding over the same boring
-truth: stable endpoints beat theatrical plumbing.
+The point is not to collect impressive device counts. The point is to recover a
+live volumetric field: synchronized video evidence for Aquarium GPU fusion,
+synchronized audio evidence for a volumetric sound field, and final outputs
+that OBS can use without pretending raw unsynchronized sources are a world.
 
-Start with `docs/perfect-machine.md` for the live architecture.
+Start with:
 
-## Branding
+- [docs/perfect-machine.md](docs/perfect-machine.md) for the target machine.
+- [docs/viable-stream-app.md](docs/viable-stream-app.md) for the first usable
+  app cut.
+- [docs/audio-field.md](docs/audio-field.md) for the current audio-side map.
+- [docs/native-capture-cadence.md](docs/native-capture-cadence.md) for measured
+  camera/sensor evidence.
 
-Working display name: **Mimir**.
+## Machine Shape
 
-Short pitch:
+```mermaid
+flowchart TD
+    C["direct camera drivers"] --> R["Mimir.Runtime rolling buffers"]
+    A["ASIO mic + loopback drivers"] --> R
+    N["network feed producers"] --> R
+    R --> Q["Aquarium UI + GPU fusion"]
+    R --> F["Faust/native DSP"]
+    Q --> V["Spout2 / program video"]
+    F --> S["program stems + spatial bed"]
+    V --> O["OBS"]
+    S --> O
+```
 
-> Local sensors, coherent field.
+Ownership is deliberately narrow:
 
-Icon exploration lives in `assets/branding/`. The current contact sheet pairs
-four pixel-art Imagegen outputs with the prompts used to make them:
+- `Mimir.Runtime` owns stream identity, bounded rolling buffers, timing state,
+  and synchronization contracts.
+- Native capture workers own device reads and append typed sample handles.
+- Aquarium owns the window, UI, D3D12 bridge, visual fusion, and program video
+  publication.
+- Faust/native DSP owns hot audio alignment, resampling, suppression,
+  separation, spatialization, and stems.
+- OBS owns broadcast composition. It does not own synchronization.
 
-![Mimir avatar](assets/branding/mimir-avatar-256.png)
+The default runtime window is five seconds. That is not accidental latency. It
+is the compute budget for lining up independent clocks, absorbing late network
+feeds, and extracting a coherent field before the audience sees it.
 
-![Mimir icon exploration](assets/branding/mimir-icon-contact-sheet.png)
+## Current Audio Spine
 
-Mimir is also the repo Face: a persistent agent identity that uses the VoidBot
-layer for communication and heartbeats. Its birth memory, jurisdiction, voice,
-and heartbeat contract live in `docs/mimir-face.md`; its VoidBot-facing identity
-and typed Face state live under `.voidbot/voice/` and `.voidbot/state/`.
+Starfire, the main Mimir host, now has a Scarlett Solo 4th Gen on Focusrite USB
+ASIO:
 
-V1 does not fork OBS. OBS already accepts SRT Media Sources, and FFmpeg can
-capture Windows desktop/audio while encoding video with `h264_nvenc`. The first
-LAN bridge is:
+- 4 ASIO inputs / 2 outputs at up to `192 kHz`
+- `Input 1`, `Input 2`, `Loopback 1`, `Loopback 2`
+- `Int32LSB` sample format
+- 192-frame preferred ASIO buffers
+
+The important result is local ownership of the timing reference. We do not need
+Raven, the game machine, to carry the soundfield workload just to get program
+loopback. Raven can run games; Starfire can capture ASIO mic inputs plus ASIO
+loopback and do the alignment work.
+
+The repo contains a native ASIO probe:
+
+```powershell
+cmake -S native/probes/asio_audio_cadence -B native/probes/asio_audio_cadence/build
+cmake --build native/probes/asio_audio_cadence/build --config Release
+
+.\native\probes\asio_audio_cadence\build\Release\asio_audio_cadence.exe `
+  --set-sample-rate 192000 `
+  --capture-seconds 5
+```
+
+It also has a monitor sweep mode:
+
+```powershell
+.\native\probes\asio_audio_cadence\build\Release\asio_audio_cadence.exe `
+  --set-sample-rate 192000 `
+  --monitor-sweep `
+  --sweep-gain 0.02
+```
+
+That sweep proved the digital ASIO loopback path cleanly detects emitted tones
+through `40 kHz`, while the current studio-monitor-to-mic acoustic path falls
+off hard above the high audible band. Translation: ASIO loopback is an excellent
+local timing reference; strong ultrasonic room sync still needs measured
+hardware that earns the claim.
+
+Next audio cuts:
+
+1. Feed ASIO callbacks directly into `Mimir.Runtime` buffers.
+2. Use ASIO loopback as the canonical program/timing reference.
+3. Align all mic streams with fractional-delay and sample-rate-offset state.
+4. Move the hot actuator into Faust/native DSP.
+5. Emit separately controllable OBS stems plus a spatial bed from the same
+   synchronized window.
+
+## Chirplet And Watermark Sync
+
+Mimir has three audio timing modes:
+
+- `passive`: stay silent and estimate delay from program audio using
+  PHAT-weighted cross-spectrum correlation.
+- `chirp-only`: emit the deterministic calibration timeline and decode timing
+  from active chirplet evidence.
+- `hybrid`: prefer passive timing, then emit a low-gain coded watermark only
+  while passive confidence is weak.
+
+The active sync machine is intentionally codebook-shaped. The research trail
+showed that generic dense chirplet matching is the wrong hot path for our
+controlled beacon. The current hybrid watermark uses `MimirChirpBinTimeline`: a
+fixed-slope chirp-bin codebook decoded by dechirp plus a small Goertzel/bin
+bank, then code-valid de Bruijn triplets become canonical timeline anchors.
+Reports expose fractional delay and `delayUs`; the synthetic proof currently
+recovers a `317.375` sample offset with about `0.369 us` error.
+
+For the long-form reasoning and source trail, read:
+
+- [docs/audio-field.md](docs/audio-field.md) for the live decoder model,
+  timing modes, and ASIO/acoustic measurements.
+- [research/chirplet-sync-decoder/summary.md](research/chirplet-sync-decoder/summary.md)
+  for the dechirp/FFT correction and what got cut.
+- [research/chirplet-sync-decoder/bibliography.md](research/chirplet-sync-decoder/bibliography.md)
+  for mirrored papers and code references.
+- [research/live-adaptive-sync/summary.md](research/live-adaptive-sync/summary.md)
+  for passive sync and sample-rate-offset research.
+- [research/feedback-calibration/summary.md](research/feedback-calibration/summary.md)
+  for room/speaker/mic feedback calibration.
+
+## Current Visual Spine
+
+The local camera rig is being pulled close to the drivers, not through OpenCV or
+general-purpose media stacks in the hot loop. Current evidence lives in
+[docs/native-capture-cadence.md](docs/native-capture-cadence.md).
+
+Known shape:
+
+- Leap stereo IR is the timing-camera candidate.
+- PS3 Eyes are high-rate tracking witnesses.
+- Kiyo/Kiyo Pro provide RGB context, with the Kiyo Pro still limited by its
+  current USB/cadence behavior.
+- Aquarium owns the GPU fusion work: feature extraction, temporal accumulation,
+  splats/surface claims, material fitting, rendering, UI, and Spout2 output.
+
+Next visual cuts:
+
+1. Replace diagnostic frame-event probes with direct native capture workers.
+2. Preserve device or immediate receipt timestamps at the driver boundary.
+3. Feed typed frame handles into `Mimir.Runtime` and the native reservoir.
+4. Let Aquarium consume the synchronized window for volumetric sensor fusion.
+
+## Bridge Scripts
+
+The repo still keeps FFmpeg/SRT scripts because they are useful OBS-compatible
+edges. They are not the final synchronization authority.
 
 ```mermaid
 flowchart LR
@@ -47,58 +168,74 @@ flowchart LR
     E --> H["OBS Media Source: audio source 2"]
 ```
 
-The video stream is encoded on the sender. Audio sources are separate endpoints
-so OBS can mix, mute, filter, and monitor them independently.
+Use the bridge when OBS needs a stable LAN input today. Do not mistake it for
+the coherent field machine.
 
-## Audio Field
+## Repo Shape
 
-The expanded rig has a separate audio-field spine for six microphones and two calibration speakers. Start with `docs/audio-field.md` and `config/audio-field.example.json`.
-
-That path is stricter than the OBS endpoint path: microphones feeding the Ambisonic field need one synchronized capture device, explicit geometry, and calibration before they become an AmbiX FOA bus. Separate USB microphones can still be investigated, but they do not get waved through as a coherent field just because the JSON is feeling brave.
-
-## Current Status
-
-This repo now has a C# app/runtime surface plus the first native reservoir
-crate. `src/Mimir.Runtime` owns the rolling synchronization buffers and direct
-driver ingest seams; `src/Mimir.App` hosts the Aquarium Engine window/render
-bridge. The Windows scripts remain a plain LAN bridge into OBS while the native
-field machine grows teeth.
+- `Mimir.slnx`: C# app/runtime solution.
+- `src/Mimir.App`: Aquarium-hosted window/render app.
+- `src/Mimir.Runtime`: rolling buffers, stream sources, synchronization state,
+  and runtime contracts.
+- `native/reservoir`: lower native rolling-buffer ABI for Aquarium/Faust
+  integration.
+- `native/probes`: direct hardware probes and cadence witnesses.
+- `config/*.example.json`: live system profiles.
+- `state/` and `notes/`: current map, handoff, and evidence ledger.
 
 ## Quick Start
 
-1. Install OBS on the receiver.
-2. Install FFmpeg on the sender, with `srt` protocol and `h264_nvenc` encoder enabled.
-3. Copy `config/localcast.example.json` to `config/localcast.json`.
-4. On the sender, list capture devices:
+Build the app/runtime:
+
+```powershell
+dotnet build .\Mimir.slnx
+```
+
+Build the current ASIO probe:
+
+```powershell
+cmake -S native/probes/asio_audio_cadence -B native/probes/asio_audio_cadence/build
+cmake --build native/probes/asio_audio_cadence/build --config Release
+```
+
+Run the synthetic sync proofs:
+
+```powershell
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --hybrid-sync-self-test
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --passive-sync-self-test
+```
+
+Run the old OBS bridge only when you need the compatibility path:
 
 ```powershell
 .\scripts\sender-discover.ps1
-```
-
-5. Edit `config/localcast.json` with the receiver IP and chosen DirectShow audio device names.
-6. Dry-run the generated FFmpeg commands:
-
-```powershell
 .\scripts\sender-start.ps1 -Config .\config\localcast.json -DryRun
 ```
 
-7. Start the sender:
+## Helping
 
-```powershell
-.\scripts\sender-start.ps1 -Config .\config\localcast.json
-```
+Audio-side help is especially useful around:
 
-8. In OBS on the receiver, add one Media Source per URL from `docs/obs-receiver-setup.md`.
-9. Before expanding the receiver path, run the bounded OBS smoke ledger in
-   `docs/obs-v1-smoke-test.md`.
+- ASIO callback capture into `Mimir.Runtime` without stdout/process payloads.
+- Fractional-delay lines and variable-rate resampling.
+- Sample-rate-offset estimation over a rolling window.
+- GCC-PHAT/passive program-audio timing under music/game audio.
+- Low-annoyance watermark design that remains decodable under room coloration.
+- Faust/native DSP integration for aligned stems and spatial bed generation.
 
-## Why SRT Media Sources First
+Visual-side help is useful around:
 
-OBS documents SRT playback through VLC Source or Media Source, and Media Source can listen on `srt://0.0.0.0:PORT?mode=listener&timeout=5000000` with `mpegts` input format. FFmpeg also documents SRT protocol support and Windows capture devices through `dshow`/`gdigrab`. That gives us a standard, inspectable path before native OBS code starts making expensive promises.
+- Direct Windows camera capture paths and timestamp preservation.
+- GPU-resident frame handles and D3D12 interop.
+- Cross-camera feature matching, temporal accumulation, splats, and surface
+  confidence.
+- Aquarium UI surfaces for buffer depth, health, drift, and calibration state.
 
-## Repo State
+## Rehydrate State
 
-Rehydrate with the map, handoff, and git. No helper runtime is required:
+For current local truth, read the map and evidence rather than guessing from
+old scars:
 
 ```powershell
 git status --short --branch
@@ -106,5 +243,25 @@ git log --oneline -5
 Get-Content .\state\map.yaml
 Get-Content .\notes\fresh-workspace-handoff.md
 Get-Content .\notes\current-system-map.md
-Get-Content .\state\evidence.jsonl -Tail 8
+Get-Content .\state\evidence.jsonl -Tail 12
 ```
+
+## Branding
+
+Working display name: **Mimir**.
+
+Short pitch:
+
+> Local sensors, coherent field.
+
+Icon exploration lives in `assets/branding/`.
+
+![Mimir avatar](assets/branding/mimir-avatar-256.png)
+
+![Mimir icon exploration](assets/branding/mimir-icon-contact-sheet.png)
+
+Mimir is also the repo Face: a persistent agent identity that uses the VoidBot
+layer for communication and heartbeats. Its birth memory, jurisdiction, voice,
+and heartbeat contract live in [docs/mimir-face.md](docs/mimir-face.md); its
+VoidBot-facing identity and typed Face state live under `.voidbot/voice/` and
+`.voidbot/state/`.

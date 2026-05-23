@@ -80,6 +80,17 @@ requires code-valid triplet anchors plus a stable source clock. Default hybrid
 watermark gain is intentionally low (`watermarkGain`, or
 `MIMIR_WATERMARK_GAIN`) and separate from the louder chirp-only lab gain.
 
+Research notes:
+
+- `research/chirplet-sync-decoder/summary.md` explains why the hot hybrid path
+  moved from dense chirplet matching to dechirp plus FFT/Goertzel bin decoding.
+- `research/chirplet-sync-decoder/bibliography.md` links the mirrored chirplet,
+  LoRa/chirp-decoder, and fast-transform references.
+- `research/live-adaptive-sync/summary.md` covers passive program-audio sync,
+  GCC-PHAT, and sample-rate-offset estimation.
+- `research/feedback-calibration/summary.md` covers online speaker/room/mic
+  response calibration.
+
 ## Next Cut
 
 The current diagnostic witness is `native/probes/wasapi_audio_cadence`, which

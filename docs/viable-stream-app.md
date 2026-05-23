@@ -12,7 +12,8 @@ is the budget that lets late network packets, independent capture clocks,
 audio/video alignment, and debug controls converge before OBS sees the result.
 Mimir is explicitly trading latency and memory for throughput and extraction
 quality: the app may spend that buffered window lining streams up and crunching
-audio/video data to recover as much of the volumetric sound field as possible.
+audio/video data to recover as much of the volumetric audio field and
+volumetric sensor field as possible.
 Do not optimize the window away unless a replacement invariant preserves that
 alignment and field-reconstruction budget.
 
@@ -52,8 +53,8 @@ flowchart TD
   can choose coherence over immediacy.
 - Aquarium owns the running app, UI, debug state, settings changes, output
   management, GPU fusion/rendering, and Spout/video publication.
-- Faust/native DSP owns audio alignment, voice separation, suppression, stems,
-  and spatial bed generation.
+- Faust/native DSP owns audio alignment, voice separation, suppression,
+  volumetric sound-field extraction, stems, and spatial bed generation.
 - OBS receives synchronized program surfaces. Raw unsynchronized feeds may be
   diagnostic inputs, not broadcast truth.
 - Networked feeds are producers into the same reservoir. They do not own clocks,
@@ -73,6 +74,8 @@ The first cut should be deliberately boring:
 4. Create one producer per configured feed using native source-id hashing.
 5. Ingest video feeds as timed camera-frame or render-packet handles.
 6. Ingest audio feeds as timed `LocalcastAudioBlockDescriptor` handles.
+   Starfire's Focusrite USB ASIO path is the current local target for mic plus
+   loopback ingest.
 7. Expose Aquarium UI readouts for reservoir edge, window start, per-kind
    counts, feed health, delay estimate, output status, and current settings.
 8. Render one synchronized program video output from the reservoir.

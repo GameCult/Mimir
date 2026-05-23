@@ -16,6 +16,19 @@ Use it to shape native implementation decisions:
 - Faust/native DSP;
 - OBS-facing program outputs.
 
+Audio timing research entry points:
+
+- `chirplet-sync-decoder/summary.md`: chirplet transform notes, why dense
+  matched-filter search was cut from the hybrid hot path, and the current
+  dechirp plus FFT/Goertzel decoder shape.
+- `live-adaptive-sync/summary.md`: passive program-audio synchronization and
+  sample-rate-offset estimation.
+- `feedback-calibration/summary.md`: online room/speaker/mic response
+  calibration.
+- `ambisonic-aquasynth/summary.md`: spatial audio and Ambisonic reference
+  material; useful background, not a license to call unsynchronized mics a
+  coherent field.
+
 Do not promote mirrored examples, old probes, or external library demos into the
 Mimir hot path just because they exist here. If research points at a concept,
 rebuild the live version in the Mimir/Aquarium/native stack with a clear owner

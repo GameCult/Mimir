@@ -3,16 +3,19 @@
 ## Objective
 
 Build one synchronized spatial stream machine from six cameras, six microphones,
-two speakers, Leap timing, Aquarium GPU rendering, Faust DSP, and OBS output.
+program loopback, speakers, Leap timing, Aquarium GPU rendering, Faust DSP, and
+OBS output.
 
 The product is not a pile of bridge scripts. The product is a coherent live
-field with explicit owners.
+volumetric field with explicit owners: visual evidence becomes Aquarium sensor
+fusion, audio evidence becomes a synchronized sound field, and OBS receives
+only program outputs.
 
 ## Current Mechanism
 
 ```mermaid
 flowchart TD
-    A["direct capture / network producers"] --> B["Mimir.Runtime rolling buffers"]
+    A["direct camera / audio / network producers"] --> B["Mimir.Runtime rolling buffers"]
     B --> C["native reservoir handles"]
     C --> D["Aquarium GPU + UI"]
     C --> E["Faust/native DSP"]
@@ -49,7 +52,7 @@ render packets.
 `Mimir.Runtime` is the app-level synchronization surface that Aquarium hosts and
 debugs.
 
-## Visual Fusion
+## Volumetric Sensor Fusion
 
 Camera fusion is cross-view evidence across the rolling window, not
 latest-frame display. Leap stereo IR is the timing ground-truth candidate. The
@@ -57,12 +60,16 @@ driver path should deliver frame descriptors with device timestamps and native
 or GPU handles, then Aquarium should do feature extraction, flow, matching,
 material estimation, brush/splat budgeting, and final presentation on GPU.
 
-## Audio Fusion
+## Volumetric Audio Field
 
 The audio path aligns all microphones and loopbacks into one presentation
 timeline, feeds Faust/native DSP with bounded blocks, and emits host voice,
 co-streamer voice, ambient, transients, local loopback, co-streamer loopback,
-and spatial bed as synchronized outputs.
+and spatial bed as synchronized outputs. Starfire currently owns the local
+Focusrite USB ASIO path: Scarlett Solo 4th Gen input channels plus ASIO
+`Loopback 1/2` at up to 192 kHz. That loopback is the local program/timing
+reference; room microphones are aligned to it before any volumetric field or
+stem claim is allowed to cross into OBS.
 
 Raw estimator detail stays inside the audio runtime. Meaning crosses the
 boundary.
