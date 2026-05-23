@@ -1,5 +1,7 @@
 # Mimir
 
+![Mimir logo](assets/branding/mimir-avatar-256.png)
+
 Mimir is the realtime field machine for turning a roomful of cameras,
 microphones, speakers, loopbacks, and network feeds into one coherent
 OBS-facing program surface.
@@ -253,20 +255,6 @@ Get-Content .\notes\fresh-workspace-handoff.md
 Get-Content .\notes\current-system-map.md
 Get-Content .\state\evidence.jsonl -Tail 12
 ```
-
-## Branding
-
-Working display name: **Mimir**.
-
-Short pitch:
-
-> Local sensors, coherent field.
-
-Icon exploration lives in `assets/branding/`.
-
-![Mimir avatar](assets/branding/mimir-avatar-256.png)
-
-![Mimir icon exploration](assets/branding/mimir-icon-contact-sheet.png)
 
 Mimir is also the repo Face: a persistent agent identity that uses the VoidBot
 layer for communication and heartbeats. Its birth memory, jurisdiction, voice,
