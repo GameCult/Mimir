@@ -96,11 +96,12 @@ until that Eye was unplugged and replugged.
 `native/probes/asio_audio_cadence` is the first direct ASIO witness. It opens
 the registered `Focusrite USB ASIO` COM driver, reports channel counts, buffer
 size, sample-rate support, input sample type, and can run a short callback
-capture. After installing the Focusrite driver, the Scarlett Solo exposes 2
-inputs and 2 outputs, accepts 44.1 through 192 kHz, reports a 192-frame
-preferred buffer, and captures nonzero 2-channel `Int32LSB` input callbacks at
-192 kHz. The next cut is not more WASAPI probing; it is feeding those ASIO
-buffers directly into `Mimir.Runtime`.
+capture. With the Scarlett Solo 4th Gen attached to Starfire, Focusrite USB
+ASIO exposes 4 inputs and 2 outputs: `Input 1`, `Input 2`, `Loopback 1`, and
+`Loopback 2`. It accepts 44.1 through 192 kHz, reports a 192-frame preferred
+buffer, and captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz.
+The next cut is not more WASAPI probing; it is feeding those ASIO buffers
+directly into `Mimir.Runtime`.
 
 The full probe runtime config now enables sample-bearing blocks for every local
 audio source. `MimirChirpletTimeline` owns the emitted calibration stream and

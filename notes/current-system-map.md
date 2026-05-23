@@ -135,9 +135,11 @@ delay and the hot resampler belong in Faust/native DSP.
 The WASAPI cadence probe is now a format/state diagnostic: it can request
 shared or exclusive sample rates, bit depths, channel counts, and float/PCM
 formats, then report the selected or closest format. The Focusrite driver stack
-is now installed and registers `Focusrite USB ASIO`. `native/probes/asio_audio_cadence`
+is now installed and registers `Focusrite USB ASIO`. The Scarlett Solo 4th Gen
+is attached to Starfire and exposes 4 ASIO inputs / 2 outputs: `Input 1`,
+`Input 2`, `Loopback 1`, and `Loopback 2`. `native/probes/asio_audio_cadence`
 can instantiate that driver, verify 44.1-192 kHz support, and capture nonzero
-2-channel `Int32LSB` callbacks at 192 kHz with 192-frame preferred buffers. The
+4-channel `Int32LSB` callbacks at 192 kHz with 192-frame preferred buffers. The
 runtime analyzer accepts Float32, Int16, Int24, and Int32 PCM windows so
 ASIO/native capture can preserve the interface format.
 

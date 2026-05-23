@@ -97,12 +97,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
   enumeration/runtime-fragile: one run saw both mic buffers empty while both
   cameras were live, then a replug made both PS3 Eye mic buffers emit
   480-frame WASAPI blocks again.
-- Scarlett ASIO is usable. The Focusrite driver install registered
-  `Focusrite USB ASIO`; `native/probes/asio_audio_cadence` opens it, sees 2
-  inputs / 2 outputs, 192-frame preferred buffers, 44.1-192 kHz support, and
-  captures nonzero 2-channel `Int32LSB` input callbacks at 192 kHz. The next
+- Scarlett ASIO loopback is usable on Starfire. The Scarlett Solo 4th Gen
+  (`USB\VID_1235&PID_8218`) is now local; `native/probes/asio_audio_cadence`
+  opens `Focusrite USB ASIO`, sees 4 inputs / 2 outputs including
+  `Loopback 1/2`, 192-frame preferred buffers, 44.1-192 kHz support, and
+  captures nonzero 4-channel `Int32LSB` input callbacks at 192 kHz. The next
   audio cut is feeding ASIO buffers into `Mimir.Runtime`, not more WASAPI
-  probing.
+  probing or Raven loopback offload.
 
 ## Immediate Re-entry Instruction
 
