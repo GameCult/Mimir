@@ -54,7 +54,7 @@ public sealed class MimirSynchronizationHub : IDisposable
         }
     }
 
-    public int PollSources(int maxSamplesPerSource = 256)
+    public int PollSources(int maxSamplesPerSource = 8192)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         var consumed = 0;

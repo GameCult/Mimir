@@ -14,6 +14,7 @@ public sealed record MimirAsioStreamSourceOptions(
 public sealed class MimirAsioStreamSource : IMimirStreamSource
 {
     private const string DefaultClsid = "{AC4D0455-50D7-4498-B3CD-9A41D130B759}";
+    private const int MaxQueuedBlocks = 32768;
     private readonly ConcurrentQueue<MimirStreamSample> samples = new();
     private readonly ManualResetEventSlim started = new();
     private readonly Thread captureThread;
@@ -145,7 +146,7 @@ public sealed class MimirAsioStreamSource : IMimirStreamSource
                         frameCount,
                         timestampNs)));
 
-                while (samples.Count > 8192 && samples.TryDequeue(out _))
+                while (samples.Count > MaxQueuedBlocks && samples.TryDequeue(out _))
                 {
                 }
             }
