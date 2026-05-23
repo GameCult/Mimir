@@ -4,7 +4,7 @@ namespace Mimir.Runtime.Synchronization;
 
 public sealed class MimirAudioSynchronizationAnalyzer
 {
-    private const int MaxWindowSamples = 48_000 * 2;
+    private const double MaxWindowSeconds = 2.0;
     private const double MinPassiveWindowSeconds = 2.0;
     private const double MinChirpletWindowSeconds = 2.0;
     private const double MinChirpBinWindowSeconds = 0.40;
@@ -215,7 +215,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
 
     private static int MinWindowSamples(int sampleRate, double seconds)
     {
-        return Math.Min(MaxWindowSamples, (int)Math.Ceiling(sampleRate * seconds));
+        return (int)Math.Ceiling(sampleRate * seconds);
     }
 
     private static MimirAudioSynchronizationDecodeTrace InsufficientWindowTrace(
@@ -316,7 +316,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
             return [];
         }
 
-        var samples = new List<float>(MaxWindowSamples);
+        var maxWindowSamples = (int)Math.Ceiling(latestBlock.SampleRate * MaxWindowSeconds);
+        var samples = new List<float>(maxWindowSamples);
         foreach (var sample in buffer.Snapshot()
                      .Where(sample => sample.AudioBlock != null && !sample.Data.IsEmpty && sample.TimestampNs <= endNs)
                      .Reverse())
@@ -328,12 +329,12 @@ public sealed class MimirAudioSynchronizationAnalyzer
             }
 
             var mono = ExtractFirstChannel(sample.Data.Span, block.Channels, block.SampleFormat);
-            for (var index = mono.Length - 1; index >= 0 && samples.Count < MaxWindowSamples; index--)
+            for (var index = mono.Length - 1; index >= 0 && samples.Count < maxWindowSamples; index--)
             {
                 samples.Add(mono[index]);
             }
 
-            if (samples.Count >= MaxWindowSamples)
+            if (samples.Count >= maxWindowSamples)
             {
                 break;
             }

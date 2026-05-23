@@ -123,6 +123,13 @@ current studio-monitor-to-Scarlett-mic acoustic path was already weak by
 14-16 kHz and very weak above 20 kHz. Treat ultrasonic acoustic sync as
 unproven until a measured transducer/mic path earns it.
 
+The synthetic chirp-bin timing proof now runs at arbitrary sample rates with
+`--hybrid-sync-self-test --sample-rate N`. On the same physical delay, measured
+in memory, the active chirp-bin path recovered about 0.369 us error at 48 kHz,
+0.168 us at 96 kHz, and below printed microsecond precision at 192 kHz. That
+proves the timing kernel benefits from the Scarlett ASIO rate; the live proof
+still depends on feeding ASIO callbacks into `Mimir.Runtime`.
+
 The full probe runtime config now enables sample-bearing blocks for every local
 audio source. `MimirChirpletTimeline` owns the emitted calibration stream and
 the matched-filter shape used to analyze it. The default timeline is a

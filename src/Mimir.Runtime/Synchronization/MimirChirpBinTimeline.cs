@@ -42,12 +42,15 @@ public sealed class MimirChirpBinTimeline
     public IReadOnlyList<MimirChirpBinSymbolDefinition> Codebook => Symbols;
 
     public float[] RenderSegmentMonoFloat(ulong segmentIndex)
+        => RenderSegmentMonoFloat(segmentIndex, SampleRate);
+
+    public float[] RenderSegmentMonoFloat(ulong segmentIndex, int sampleRate)
     {
         var segmentStartSeconds = segmentIndex * SegmentSeconds;
-        var samples = new float[(int)Math.Round(SegmentSeconds * SampleRate)];
+        var samples = new float[(int)Math.Round(SegmentSeconds * sampleRate)];
         foreach (var timelineEvent in EventsOverlapping(segmentStartSeconds, SegmentSeconds))
         {
-            AddChirp(samples, SampleRate, timelineEvent, segmentStartSeconds);
+            AddChirp(samples, sampleRate, timelineEvent, segmentStartSeconds);
         }
 
         return samples;
@@ -165,7 +168,7 @@ public sealed class MimirChirpBinTimeline
         {
             var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset);
             var energy = candidates.Length == 0 ? 0.0 : candidates[0].Energy;
-            if (energy > bestEnergy || (energy >= bestEnergy * 0.995 && offset > bestOffset))
+            if (energy > bestEnergy || PreferLaterPlateauOffset(sampleRate, energy, bestEnergy, offset, bestOffset))
             {
                 bestEnergy = energy;
                 bestOffset = offset;
@@ -179,7 +182,7 @@ public sealed class MimirChirpBinTimeline
         {
             var candidates = ScoreBins(samples.Slice(offset, chirpSamples), sampleRate, offset);
             var energy = candidates.Length == 0 ? 0.0 : candidates[0].Energy;
-            if (energy > bestEnergy || (energy >= bestEnergy * 0.995 && offset > bestOffset))
+            if (energy > bestEnergy || PreferLaterPlateauOffset(sampleRate, energy, bestEnergy, offset, bestOffset))
             {
                 bestEnergy = energy;
                 bestOffset = offset;
@@ -295,6 +298,18 @@ public sealed class MimirChirpBinTimeline
 
         var delta = 0.5 * (left - right) / denominator;
         return bestOffset + Math.Clamp(delta, -0.5, 0.5);
+    }
+
+    private static bool PreferLaterPlateauOffset(
+        int sampleRate,
+        double energy,
+        double bestEnergy,
+        int offset,
+        int bestOffset)
+    {
+        return sampleRate <= SampleRate &&
+            energy >= bestEnergy * 0.995 &&
+            offset > bestOffset;
     }
 
     private static double DechirpedBin(ReadOnlySpan<float> samples, ChirpBinKernel kernel)

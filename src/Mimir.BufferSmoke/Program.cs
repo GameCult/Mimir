@@ -17,7 +17,7 @@ if (args.Any(arg => string.Equals(arg, "--passive-sync-self-test", StringCompari
 
 if (args.Any(arg => string.Equals(arg, "--hybrid-sync-self-test", StringComparison.OrdinalIgnoreCase)))
 {
-    return RunHybridSyncSelfTest();
+    return RunHybridSyncSelfTest(ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate));
 }
 
 var duration = TimeSpan.FromSeconds(ParseDoubleOption(args, "--seconds", 10.0));
@@ -256,14 +256,14 @@ static int RunPassiveSyncSelfTest()
     return 0;
 }
 
-static int RunHybridSyncSelfTest()
+static int RunHybridSyncSelfTest(int sampleRate)
 {
     const string referenceSourceId = "loopback-test";
     const string candidateSourceId = "mic-test";
-    const double delaySamples = 317.375;
+    var delaySamples = 317.375 * sampleRate / (double)MimirChirpBinTimeline.SampleRate;
 
-    var firstSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(0);
-    var secondSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(1);
+    var firstSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(0, sampleRate);
+    var secondSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(1, sampleRate);
     var reference = new float[firstSegment.Length + secondSegment.Length];
     Array.Copy(firstSegment, 0, reference, 0, firstSegment.Length);
     Array.Copy(secondSegment, 0, reference, firstSegment.Length, secondSegment.Length);
@@ -276,8 +276,8 @@ static int RunHybridSyncSelfTest()
         new MimirStreamDescriptor(candidateSourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice),
         TimeSpan.FromSeconds(5));
 
-    AppendFloatBlock(referenceBuffer, referenceSourceId, reference, MimirChirpBinTimeline.SampleRate);
-    AppendFloatBlock(candidateBuffer, candidateSourceId, candidate, MimirChirpBinTimeline.SampleRate);
+    AppendFloatBlock(referenceBuffer, referenceSourceId, reference, sampleRate);
+    AppendFloatBlock(candidateBuffer, candidateSourceId, candidate, sampleRate);
 
     var analyzer = new MimirAudioSynchronizationAnalyzer();
     var reports = analyzer.Analyze([referenceBuffer, candidateBuffer], referenceSourceId, MimirAudioSyncMode.Hybrid);
@@ -303,6 +303,20 @@ static int RunHybridSyncSelfTest()
         error * 1_000_000.0 / report.SampleRate < 1.0
             ? 0
             : 1;
+}
+
+static int ParseIntOption(string[] args, string name, int fallback)
+{
+    for (var index = 0; index < args.Length - 1; index++)
+    {
+        if (string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(args[index + 1], out var value))
+        {
+            return value;
+        }
+    }
+
+    return fallback;
 }
 
 static float[] ApplyFractionalDelay(float[] source, double delaySamples)
