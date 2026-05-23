@@ -167,7 +167,10 @@ persists the response/confusion/delay model, and `--analyze-asio-f32
 --calibration ...` loads it into the active decoder. The ASIO worker also
 supports `--emit-json-blocks`, so Focusrite ASIO callbacks can feed
 sample-bearing `audio-block` events into `Mimir.Runtime` continuously through
-the existing frame-event adapter while the native ABI cut is pending. A real
+the existing frame-event adapter while the native ABI cut is pending. The
+minimal `config/mimir-runtime.asio.example.json` proof ingested 13,324
+sample-bearing 192 kHz blocks across `asio-ch0` through `asio-ch3` in two
+seconds, all from the same ASIO callback stream. A real
 192 kHz chirp-bin Scarlett artifact decoded
 `Loopback 1 -> Loopback 2` at exactly `0.000 us` with 12 matched anchors and
 0.999 confidence. The same analyzer now prints calibration profiles for

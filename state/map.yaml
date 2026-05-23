@@ -144,6 +144,10 @@ accepted_design:
     pairwise timing against loopback in the stored artifact, but decoded mic
     channels now leave calibration models; physical input 1 produced two reliable
     symbols and a different strongest measured band set.
+    `config/mimir-runtime.asio.example.json` proves continuous ASIO runtime
+    ingest: a two-second BufferSmoke run at 192 kHz ingested 13,324 sample-bearing
+    blocks across `asio-ch0` through `asio-ch3`, all from the Focusrite ASIO
+    callback stream.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.

@@ -131,7 +131,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   artifact, physical input 1 produced two reliable symbols and a different
   strongest-bin profile while failing pairwise timing. The ASIO native worker
   also supports `--emit-json-blocks` so `Mimir.Runtime` can ingest Focusrite ASIO
-  callbacks continuously through the frame-event adapter. Acoustic robustness is
+  callbacks continuously through the frame-event adapter. The minimal
+  `config/mimir-runtime.asio.example.json` proof ingested 13,324 sample-bearing
+  192 kHz blocks across `asio-ch0` through `asio-ch3` in two seconds. Acoustic robustness is
   still open, but failed timing now leaves response evidence.
 - Raven also has a 192 kHz loopback-capable Scarlett for co-streamer/game timing
   evidence. Do not move the heavy soundfield or sensor-fusion workload there.

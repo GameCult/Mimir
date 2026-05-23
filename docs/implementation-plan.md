@@ -128,6 +128,14 @@ a named invariant that the native runtime cannot protect yet.
   with two reliable symbols. Acoustic robustness remains separate from the clean
   loopback timing proof, but failed timing windows now leave usable response
   evidence instead of silence.
+- `config/mimir-runtime.asio.example.json` is the minimal continuous Scarlett
+  runtime ingest proof. It starts the ASIO worker at 192 kHz with
+  `--emit-json-blocks` and declares `asio-ch0` through `asio-ch3` as accepted
+  audio sources. A two-second BufferSmoke run ingested 13,324 sample-bearing
+  blocks, 3,331 per channel, proving loopback and mic channels enter
+  `Mimir.Runtime` together in one ASIO clock domain. BufferSmoke does not emit
+  speaker calibration audio, so that proof is ingest-only rather than a sync
+  report.
   A standalone 192 kHz synthetic receiver test recovers a 500 ms delayed audio
   stream to below printed microsecond precision using only the chirp-bin
   codebook and schedule state.
