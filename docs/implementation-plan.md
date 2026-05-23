@@ -5,6 +5,8 @@
 Mimir is now a C# app/runtime plus native reservoir project. The live stream
 machine must be direct-driver and native-buffer first:
 
+For the source-level ownership map, read `docs/code-algorithm-map.md`.
+
 - `src/Mimir.App` hosts Fensalir for windowing, rendering, and the D3D12
   bridge.
 - `src/Mimir.Runtime` owns stream descriptors, source polling, direct push

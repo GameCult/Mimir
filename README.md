@@ -46,6 +46,8 @@ Start with:
 - [docs/audio-field.md](docs/audio-field.md) for the current audio-side map.
 - [docs/native-capture-cadence.md](docs/native-capture-cadence.md) for measured
   camera/sensor evidence.
+- [docs/code-algorithm-map.md](docs/code-algorithm-map.md) for the current
+  source-level code map.
 
 Naming note: **Fensalir** is the engine/windowing/rendering/D3D12 layer. Older
 research notes may still use the previous engine name.

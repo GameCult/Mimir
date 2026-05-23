@@ -1,5 +1,7 @@
 # Current System Map
 
+Source-level code ownership is mapped in `docs/code-algorithm-map.md`.
+
 Mimir is the public Face and product name for this repo. A few lower native ABI
 names still use `localcast` until a deliberate rename cut exists.
 
