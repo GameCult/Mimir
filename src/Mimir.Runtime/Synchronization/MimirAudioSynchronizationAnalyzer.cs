@@ -11,9 +11,13 @@ public sealed class MimirAudioSynchronizationAnalyzer
     private const double MaxPairClockFitDelaySeconds = 10.0;
     private const double PassiveReportConfidence = 0.08;
     private readonly List<MimirAudioSynchronizationDecodeTrace> lastDecodeTraces = [];
+    private readonly Dictionary<string, MimirChirpBinCalibrationProfile> lastCalibrationProfiles = new(StringComparer.Ordinal);
     private readonly MimirPassiveAudioSynchronizationEstimator passiveEstimator = new();
 
     public IReadOnlyList<MimirAudioSynchronizationDecodeTrace> LastDecodeTraces => lastDecodeTraces;
+
+    public IReadOnlyList<MimirChirpBinCalibrationProfile> LastCalibrationProfiles =>
+        lastCalibrationProfiles.Values.OrderBy(profile => profile.SourceId, StringComparer.Ordinal).ToArray();
 
     public IReadOnlyList<MimirAudioSynchronizationReport> Analyze(
         IEnumerable<MimirRollingStreamBuffer> buffers,
@@ -46,6 +50,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
 
         var reports = new List<MimirAudioSynchronizationReport>();
         lastDecodeTraces.Clear();
+        lastCalibrationProfiles.Clear();
         foreach (var buffer in audioBuffers)
         {
             if (ReferenceEquals(buffer, reference))
@@ -168,6 +173,12 @@ public sealed class MimirAudioSynchronizationAnalyzer
             var candidateDecode = useChirpBinTimeline
                 ? MimirChirpBinTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate)
                 : MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate);
+            if (useChirpBinTimeline)
+            {
+                StoreCalibrationProfile(reference.Descriptor.SourceId, activeReferenceBlock.SampleRate, comparedReferenceDecode);
+                StoreCalibrationProfile(buffer.Descriptor.SourceId, activeReferenceBlock.SampleRate, candidateDecode);
+            }
+
             var deterministicFit = EstimateDelayFromDecodedTimeline(comparedReferenceDecode, candidateDecode);
             lastDecodeTraces.Add(new MimirAudioSynchronizationDecodeTrace(
                 reference.Descriptor.SourceId,
@@ -215,6 +226,14 @@ public sealed class MimirAudioSynchronizationAnalyzer
         }
 
         return reports;
+    }
+
+    private void StoreCalibrationProfile(
+        string sourceId,
+        int sampleRate,
+        MimirChirpletStreamDecode decode)
+    {
+        lastCalibrationProfiles[sourceId] = MimirChirpBinCalibrationProfile.FromDecode(sourceId, sampleRate, decode);
     }
 
     private static int MinWindowSamples(int sampleRate, double seconds)

@@ -90,8 +90,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   correlation for final fractional delay. It also supports standalone source
   offset recovery from schedule/codebook state, which is the Raven/phone shape.
   Each classified chirp carries the full dechirped bin-energy surface; sync
-  reports expose those bands so the same stream can become frequency-response
-  calibration evidence.
+  reports expose those bands, and `MimirChirpBinCalibrationProfile` preserves
+  per-source calibration evidence even when timing is rejected.
   `Mimir.BufferSmoke
   --chirp-only-sync-self-test --sample-rate 192000` and
   `--hybrid-sync-self-test --sample-rate 192000` both recover a 1269.5-sample
@@ -119,16 +119,20 @@ Get-Content .\state\evidence.jsonl -Tail 8
   comparison and is now diagnostic only. A real Scarlett chirp-bin artifact run
   at 192 kHz decoded `Loopback 1 -> Loopback 2` at `0.000 us` delay with 12
   matched anchors and 0.999 confidence in the normal active analyzer. Physical
-  input 2 independently decoded a coherent clock, but its clock-offset
-  difference was a period alias outside the live latency horizon and is rejected
-  as insufficient anchors. Acoustic robustness is still open.
+  inputs still do not earn accepted timing against loopback, but the active
+  analyzer now prints calibration profiles for decoded channels. In the stored
+  artifact, physical input 1 produced 14 frames, 12 anchors, 0.865 clock
+  confidence, and a different strongest-bin profile while failing pairwise
+  timing. Acoustic robustness is still open, but failed timing now leaves
+  response evidence.
 - Raven also has a 192 kHz loopback-capable Scarlett for co-streamer/game timing
   evidence. Do not move the heavy soundfield or sensor-fusion workload there.
 
 ## Immediate Re-entry Instruction
 
-Prove the active chirp-bin path through real microphones, then feed Scarlett
-ASIO callbacks into `Mimir.Runtime` and turn decoded clock fits into the
-SRO/fractional-delay actuator. Keep loopback as timing authority. Do not call
-synchronization analysis from UI/telemetry readouts. Do not restore deleted
-script infrastructure because a stale doc once missed it.
+Use the chirp-bin calibration profiles from real microphones to tune the active
+codebook/bands/weighting, then feed Scarlett ASIO callbacks into `Mimir.Runtime`
+and turn decoded clock fits into the SRO/fractional-delay actuator. Keep
+loopback as timing authority. Do not call synchronization analysis from
+UI/telemetry readouts. Do not restore deleted script infrastructure because a
+stale doc once missed it.

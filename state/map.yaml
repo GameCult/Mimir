@@ -110,7 +110,12 @@ accepted_design:
     final active delay with constrained local waveform correlation around the
     decoded anchor delay. Each classified chirp carries the full dechirped
     bin-energy surface, and decodes aggregate that into per-band response
-    evidence for frequency-response normalization. Reports and sync states expose
+    evidence for frequency-response normalization. `MimirChirpBinCalibrationProfile`
+    now preserves that evidence per source with frame count, anchor count, clock
+    confidence, anchor error, usable band count, and strongest measured bins.
+    The analyzer keeps calibration profiles even when a source fails pairwise
+    timing, so physical mic failures can still guide acoustic codebook and
+    response-weighting work. Reports and sync states expose
     delay in microseconds as well as fractional samples. Hybrid emits it as low-gain half-second
     bursts every two seconds while passive confidence is weak, never as catch-up
     backlog. The analyzer no longer applies the passive two-second window floor
@@ -127,9 +132,11 @@ accepted_design:
     `native/probes/asio_audio_cadence --play-f32-mono --record-f32-interleaved`
     now provides a real Scarlett ASIO artifact proof for active mode. At 192 kHz,
     Loopback 1 -> Loopback 2 decoded at 0.000 us with 12 anchors and 0.999
-    confidence. Physical input 2 independently decoded a coherent clock, but its
-    clock-offset difference was a period alias outside the live latency horizon
-    and is rejected as insufficient anchors. Acoustic robustness remains open.
+    confidence. Physical inputs still fail accepted pairwise timing against
+    loopback in the stored artifact, but decoded mic channels now leave
+    calibration profiles; physical input 1 produced 14 frames, 12 anchors, 0.865
+    clock confidence, and strongest measured bins around 4525, 4075, and 7225 Hz.
+    Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.
   - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the live
@@ -230,8 +237,9 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Prove the active chirp-bin path through real microphones, then feed Scarlett
-    ASIO callbacks directly into Mimir.Runtime and add the synchronization
+    Use chirp-bin calibration profiles from real microphones to tune the active
+    codebook/bands/weighting, then feed Scarlett ASIO callbacks directly into
+    Mimir.Runtime and add the synchronization
     actuator.
     Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as

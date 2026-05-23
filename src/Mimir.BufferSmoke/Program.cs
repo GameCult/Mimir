@@ -133,6 +133,11 @@ foreach (var trace in hub.AudioSynchronizationDecodeTraces.OrderBy(trace => trac
         $"sync-decode {trace.ReferenceSourceId}->{trace.SourceId}: status={trace.Status} compared={trace.ComparedSamples} rate={trace.SampleRate} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} refClock={trace.ReferenceClockConfidence:0.000} refEnergy={trace.ReferenceBestEnergy:0.000} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} candClock={trace.CandidateClockConfidence:0.000} candEnergy={trace.CandidateBestEnergy:0.000} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
 }
 
+foreach (var profile in hub.AudioChirpBinCalibrationProfiles)
+{
+    Console.WriteLine(DescribeCalibrationProfile("sync-calibration", profile));
+}
+
 if (requireSamples && emptyBuffers.Count > 0)
 {
     Console.Error.WriteLine($"empty buffers: {string.Join(", ", emptyBuffers)}");
@@ -175,6 +180,18 @@ static string DescribeBands(IReadOnlyList<MimirChirpletBandResponse> bands)
     return bands.Count == 0
         ? "none"
         : string.Join(",", bands.Select(band => $"{band.CenterHz:0}Hz:{band.Energy:0.000}"));
+}
+
+static string DescribeCalibrationProfile(string prefix, MimirChirpBinCalibrationProfile profile)
+{
+    var top = profile.Bands.Count == 0
+        ? "none"
+        : string.Join(",", profile.StrongestBands(8).Select(band =>
+            $"{band.CenterHz:0}Hz:mean={band.MeanEnergy:0.000}:rel={band.RelativeGain:0.000}:n={band.ObservationCount}"));
+    var mae = double.IsFinite(profile.MeanAnchorErrorSamples)
+        ? profile.MeanAnchorErrorSamples.ToString("0.000")
+        : "none";
+    return $"{prefix} {profile.SourceId}: sampleRate={profile.SampleRate} frames={profile.FrameCount} anchors={profile.AnchorCount} clock={profile.ClockConfidence:0.000} maeSamples={mae} usableBins={profile.UsableBandCount}/{profile.Bands.Count} top={top}";
 }
 
 static int RunChirpletSelfTest()
@@ -523,6 +540,11 @@ static int AnalyzeAsioFloat32(string inputPath, int sampleRate, int channels, in
     {
         Console.WriteLine(
             $"asio-f32-trace {trace.ReferenceSourceId}->{trace.SourceId}: status={trace.Status} compared={trace.ComparedSamples} refFrames={trace.ReferenceFrames} refAnchors={trace.ReferenceAnchors} refClock={trace.ReferenceClockConfidence:0.000} candFrames={trace.CandidateFrames} candAnchors={trace.CandidateAnchors} candClock={trace.CandidateClockConfidence:0.000} matched={trace.MatchedEvents} confidence={trace.Confidence:0.000}");
+    }
+
+    foreach (var profile in analyzer.LastCalibrationProfiles)
+    {
+        Console.WriteLine(DescribeCalibrationProfile("asio-f32-calibration", profile));
     }
 
     foreach (var report in reports.OrderBy(report => report.SourceId, StringComparer.Ordinal))

@@ -36,6 +36,9 @@ public sealed class MimirSynchronizationHub : IDisposable
     public IReadOnlyList<MimirAudioSynchronizationDecodeTrace> AudioSynchronizationDecodeTraces =>
         audioSynchronization.LastDecodeTraces;
 
+    public IReadOnlyList<MimirChirpBinCalibrationProfile> AudioChirpBinCalibrationProfiles =>
+        audioSynchronization.LastCalibrationProfiles;
+
     public void AddSource(IMimirStreamSource source)
     {
         ObjectDisposedException.ThrowIf(disposed, this);

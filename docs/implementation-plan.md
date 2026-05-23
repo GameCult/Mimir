@@ -102,8 +102,11 @@ a named invariant that the native runtime cannot protect yet.
   with constrained local waveform correlation around the decoded active delay.
   Each classified chirp carries the full bin-energy response surface, and stream
   decodes aggregate that into per-band calibration evidence for frequency
-  response normalization. Reports/states expose delay in microseconds as well
-  as fractional samples.
+  response normalization. `MimirChirpBinCalibrationProfile` preserves that
+  evidence per source, including frames, anchors, clock confidence, anchor
+  error, usable band count, and strongest measured bins, even when the source
+  does not produce a timing report. Reports/states expose delay in microseconds
+  as well as fractional samples.
   Hybrid emits this as low-gain half-second bursts every two seconds only while
   passive confidence is weak.
   Use `--chirp-bin-self-test` to prove the codebook/decoder and
@@ -113,8 +116,12 @@ a named invariant that the native runtime cannot protect yet.
 - `Mimir.BufferSmoke --render-chirp-bin-f32` and `--analyze-asio-f32` provide
   the current active Scarlett artifact proof. A 192 kHz chirp-bin run decoded
   Focusrite `Loopback 1 -> Loopback 2` at `0.000 us` with 12 matched anchors and
-  0.999 confidence. Physical inputs did not produce matched anchors in that run,
-  so acoustic robustness remains separate from the clean loopback timing proof.
+  0.999 confidence. The ASIO analyzer now prints chirp-bin calibration profiles
+  for every decoded source; physical input 1 still failed pairwise timing in
+  the stored artifact, but it produced 14 frames, 12 anchors, 0.865 clock
+  confidence, and a different strongest band set. Acoustic robustness remains
+  separate from the clean loopback timing proof, but failed timing windows now
+  leave usable response evidence instead of silence.
   A standalone 192 kHz synthetic receiver test recovers a 500 ms delayed audio
   stream to below printed microsecond precision using only the chirp-bin
   codebook and schedule state.
@@ -153,9 +160,9 @@ a named invariant that the native runtime cannot protect yet.
    workers for local mic, loopback, and network audio feeds. Use the verified
    Focusrite ASIO path for Scarlett capture; WASAPI remains a diagnostic
    witness, not the Scarlett hot path.
-4. Prove the active chirp-bin path through real microphones, not only Scarlett
-   loopback; tune acoustic bands/gain/code spacing from measured mic response
-   without weakening the standalone codebook/schedule receiver invariant.
+4. Use chirp-bin calibration profiles from real microphones to tune acoustic
+   bands, gain, and code spacing without weakening the standalone
+   codebook/schedule receiver invariant.
 5. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the constrained chirplet

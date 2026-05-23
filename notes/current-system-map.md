@@ -111,8 +111,11 @@ scheduled-waveform correlation for standalone source-offset refinement. Pairwise
 sync compares matched anchors first, then only accepts independent clock-fit
 offsets inside the live latency horizon so period aliases do not become absurd
 reports. Each classified chirp carries the full dechirped bin-energy surface,
-and decodes aggregate that into per-band response evidence for future
-frequency-response normalization. Reports/states expose `delayUs` next to
+and decodes aggregate that into a `MimirChirpBinCalibrationProfile` per source
+with frames, anchors, clock confidence, anchor error, usable band count, and
+strongest bins. The analyzer keeps those profiles even when no timing report is
+accepted, so a physical mic path can fail synchronization while still teaching
+the next decoder which bands survived. Reports/states expose `delayUs` next to
 fractional sample delay.
 `Mimir.BufferSmoke
 --chirp-only-sync-self-test --sample-rate 192000` and `--hybrid-sync-self-test
@@ -157,11 +160,12 @@ Focusrite outputs while capturing every ASIO input as raw interleaved Float32.
 `Mimir.BufferSmoke --analyze-asio-f32` feeds those captured channels into the
 same runtime active analyzer. A real 192 kHz chirp-bin Scarlett artifact decoded
 `Loopback 1 -> Loopback 2` at exactly `0.000 us` with 12 matched anchors and
-0.999 confidence. Physical input 2 independently decoded a coherent clock in
-that artifact, but its event path did not overlap loopback and its raw
-clock-offset difference was a period alias far outside the live latency horizon,
-so Mimir correctly rejected it as insufficient anchors. Acoustic robustness is
-now the open problem, not clean loopback timing or standalone decoder shape.
+0.999 confidence. The same analyzer now prints calibration profiles for
+decoded sources. Physical input 1 still fails pairwise timing in the stored
+artifact, but it leaves a concrete response profile: 14 frames, 12 anchors,
+0.865 clock confidence, and strongest bins around 4525, 4075, and 7225 Hz.
+Acoustic robustness is now the open problem, not clean loopback timing,
+standalone decoder shape, or basic response evidence.
 
 ## Visual Fusion
 

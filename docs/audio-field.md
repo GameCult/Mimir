@@ -75,7 +75,12 @@ the de Bruijn triplet trellis. A constrained local waveform correlation around
 the decoded anchor delay provides the final fractional offset. The decoder keeps
 the full bin-energy surface for each classified chirp and aggregates it into
 per-band response evidence, so the same stream can calibrate timing and the
-speaker/room/mic transfer function. The synthetic invariant is
+speaker/room/mic transfer function. `MimirChirpBinCalibrationProfile` is the
+first named surface for that evidence: it summarizes frames, anchors, clock
+confidence, anchor error, usable bands, and strongest measured bins per source.
+The profile is kept even when a timing report is rejected, because a failed
+sync window can still teach us which bands survived the speaker/room/mic path.
+The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
 it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and
 requires code-valid triplet anchors plus a stable source clock. `chirp-only`
@@ -168,12 +173,13 @@ produce at least three matched canonical anchors, it has not decoded timing for
 that window. Reports carry rounded integer delay, fractional delay, and the
 count/confidence of timeline-symbol anchors used to derive the report.
 
-The same timeline also starts the frequency-response path. Each active report
-includes per-band dechirped energy for the chirp-bin bank. That is not a
-finished room/mic normalizer yet, but it is the live surface that will become
-response-curve estimation: loopback carries what was emitted, each mic carries
-what survived speaker, air, room, and capsule, and the ratio over the continuous
-timeline becomes gain/phase correction evidence.
+The same timeline also starts the frequency-response path. Each active chirp-bin
+decode emits a calibration profile for the source, whether or not that source
+earns a timing report. That is not a finished room/mic normalizer yet, but it is
+the live surface that will become response-curve estimation: loopback carries
+what was emitted, each mic carries what survived speaker, air, room, and
+capsule, and the ratio over the continuous timeline becomes gain/phase
+correction evidence.
 
 `MimirAudioSynchronizationStateTracker` turns continuous observations into
 state. It confidence-gates reports, smooths fractional delay per source, and
@@ -206,7 +212,7 @@ flowchart TD
     H --> L["triplet timeline anchors"]
     L --> M["per-source clock fit"]
     M --> N["delay + SRO"]
-    G --> I["per-band response estimates"]
+    G --> I["per-source calibration profile"]
     N --> J["fractional delay / resampler actuator"]
     I --> K["frequency response normalization"]
 ```
@@ -223,6 +229,12 @@ Continuous chirplet evidence gives both the current delay and the drift/SRO by
 watching delay change over time. Per-band energy over the same stream gives the
 normalization curve. The important constraint is that all three measurements
 must be tied to the same emitted timeline, not three separately invented probes.
+The current ASIO artifact proves why this matters: Scarlett loopback channel 2
+and loopback channel 3 both decode 12 anchors with 0.996 clock confidence, while
+physical input 1 decodes a noisier independent clock and a different strongest
+band set but still fails pairwise timing because no canonical events overlap
+the loopback path. That is not a blank failure anymore; it is calibration data
+for the next codebook/weighting cut.
 
 The symbol layer is intentionally redundant. It does not rely on one fixed
 frequency shelf: timing gaps, chirp duration, start band, and glide shape all
