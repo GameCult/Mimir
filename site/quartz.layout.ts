@@ -13,13 +13,7 @@ const MimirGraphShell = Component.GameCultGraphSpaShell({
 export const sharedPageComponents: SharedLayout = {
   head: Component.Head(),
   header: [MimirThemeLock(), MimirMasthead(), Component.Search()],
-  afterBody: [
-    Component.ConditionalRender({
-      component: MimirGraphShell,
-      condition: (page) =>
-        page.fileData.slug === "Mimir-Vault" || page.fileData.slug === "index",
-    }),
-  ],
+  afterBody: [],
   footer: Component.Footer({
     links: {},
   }),
@@ -49,7 +43,13 @@ export const defaultContentPageLayout: PageLayout = {
         page.fileData.slug !== "Mimir-Vault",
     }),
   ],
-  afterBody: [],
+  afterBody: [
+    Component.ConditionalRender({
+      component: MimirGraphShell,
+      condition: (page) =>
+        page.fileData.slug === "Mimir-Vault" || page.fileData.slug === "index",
+    }),
+  ],
   left: [MimirOverviewSidebar()],
   right: [
     Component.DesktopOnly(Component.TableOfContents()),
