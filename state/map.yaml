@@ -118,7 +118,10 @@ accepted_design:
     waveform correlation around the decoded anchor delay. Each detected motif
     carries per-band response evidence, and the next calibration cut should use
     those profiles to tune contours, formants, usable bands, gain, and rhythm
-    weighting. `MimirChirpBinTimeline` remains the controlled chirp-bin
+    weighting. `Mimir.BufferSmoke --bioacoustic-cepstral-smoke` now proves the
+    non-brute-force receiver direction: degraded mel-cepstral calls are decoded
+    by an augmented MFCC/projection-hash word index before any expensive
+    confirmation. `MimirChirpBinTimeline` remains the controlled chirp-bin
     calibration/reference artifact with ASIO tooling and
     `MimirChirpBinCalibrationModel`; keep those captures as response evidence,
     not the active runtime sound. Reports and sync states expose delay in
@@ -272,8 +275,9 @@ current_status:
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
     Use the new bioacoustic timeline watermark as the active acoustic sync
-    direction. Cut the next implementation in this order: streaming log-mel
-    motif decoder state, calibration-session command/replay proof that learns
+    direction. Cut the next implementation in this order: streaming indexed
+    log-mel/MFCC motif decoder state with a global clock hypothesis,
+    calibration-session command/replay proof that learns
     per-output/mic motif/formant response, fractional-delay/SRO actuator, then
     native camera payload handles and Fensalir lowering. Keep chirp-bin
     calibration captures as reference evidence, not the runtime target.

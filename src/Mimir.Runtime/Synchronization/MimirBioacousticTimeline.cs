@@ -80,6 +80,13 @@ public sealed class MimirBioacousticTimeline
         return samples;
     }
 
+    public float[] RenderEventMonoFloat(ulong eventIndex, int sampleRate)
+    {
+        var samples = new float[(int)Math.Round(MotifDurationSeconds * sampleRate)];
+        AddMotif(samples, sampleRate, EventForIndex(eventIndex), EventStartSeconds(eventIndex), Gain);
+        return samples;
+    }
+
     public MimirChirpletStreamDecode DecodeStreamWindow(ReadOnlySpan<float> samples, int sampleRate)
     {
         if (samples.Length == 0)
@@ -728,12 +735,12 @@ public sealed class MimirBioacousticTimeline
 
     private static int SymbolForEvent(ulong eventIndex)
     {
-        var word = (int)(eventIndex % WordCount);
+        var word = (int)((eventIndex / SpeakerCount) % WordCount);
         return word * SpeakerCount + (int)SpeakerForEvent(eventIndex);
     }
 
     private static int EventIndexForSymbol(int symbolId) =>
-        Math.Clamp(symbolId / SpeakerCount, 0, WordCount - 1);
+        Math.Clamp(symbolId / SpeakerCount, 0, WordCount - 1) * SpeakerCount + (symbolId & 1);
 
     private static MimirBioacousticSpeaker SpeakerForEvent(ulong eventIndex) =>
         (eventIndex & 1UL) == 0UL ? MimirBioacousticSpeaker.Left : MimirBioacousticSpeaker.Right;

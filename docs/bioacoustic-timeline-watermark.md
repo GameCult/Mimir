@@ -96,6 +96,9 @@ Expected state:
   from codebook/schedule state alone.
 - `--chirp-only-sync-self-test` reports `evidence=bioacoustic` and recovers
   fractional delay below printed microsecond precision.
+- `--bioacoustic-cepstral-smoke` round-trips the active call through a degraded
+  mel-cepstral representation, then decodes word identity with an augmented
+  projection-hash MFCC index instead of brute-forcing every word waveform.
 
 Render a raw Float32 preview:
 
@@ -105,14 +108,17 @@ dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --rende
 
 ## Next Cut
 
-The current decoder is still a motif matched-filter proof. The next coherent
-cut is a true streaming log-mel receiver:
+The current runtime decoder still uses a motif matched-filter proof. The smoke
+harness now carries the next receiver shape: indexed MFCC/log-mel word
+fingerprints with path-degradation augmentation. The next coherent cut is to
+promote that shape into a true streaming log-mel receiver:
 
 ```text
 audio window
 -> log-mel / constant-Q evidence surface
 -> motif/formant/contour candidates
--> direct word identity decode
+-> projection-hash / ANN candidate retrieval
+-> direct word identity decode over a tiny candidate set
 -> global delay and clock hypothesis
 -> path response model
 ```

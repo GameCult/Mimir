@@ -99,7 +99,10 @@ it renders the bioacoustic timeline, decodes direct word anchors, and requires a
 stable source clock. The standalone invariant is
 `--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`;
 it proves that a delayed receiver can recover canonical source time from the
-known codebook and schedule alone. `chirp-only` emits this witness continuously;
+known codebook and schedule alone. `--bioacoustic-cepstral-smoke` proves the
+next receiver shape: degraded mel-cepstral calls are decoded through an
+augmented MFCC/projection-hash word index, not through dense waveform
+brute-force. `chirp-only` emits this witness continuously;
 `hybrid` still prefers passive program-audio evidence, then emits the low-gain
 bioacoustic witness only when passive confidence is weak. Default hybrid
 watermark gain is intentionally low (`watermarkGain`, or `MIMIR_WATERMARK_GAIN`).
@@ -160,7 +163,11 @@ analyzer path. `--bioacoustic-self-test` proves direct word anchors,
 `--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`
 proves a receiver can recover canonical source time from delayed audio alone,
 and `--chirp-only-sync-self-test --sample-rate 48000` recovers a 317.375-sample
-delay with printed 0.000 us error using `evidence=bioacoustic`. The live ingest
+delay with printed 0.000 us error using `evidence=bioacoustic`.
+`--bioacoustic-cepstral-smoke` runs an automated degradation panel over
+mel-cepstral warping and separable 5-tap blur; the current indexed MFCC decoder
+recovers word identity through the panel, while timing error remains a visible
+pressure for the global clock-hypothesis stage. The live ingest
 proof now feeds ASIO callbacks into `Mimir.Runtime` without a process/stdout
 bridge: a two-second BufferSmoke run at 192 kHz ingested more than 12,000
 sample-bearing blocks and retained 2,048 blocks per channel across `asio-ch0`
