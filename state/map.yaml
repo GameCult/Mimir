@@ -167,9 +167,17 @@ accepted_design:
   - `docs/perfect-machine-domain-index.md` indexes Mimir's full problem domain,
     current evidence taxonomy, hot paths, and implementation cuts.
   - `research/perfect-machine-study-2026-05-23/` preserves the architecture
-    rumination, optimization ledger, research references, and sample code
-    sketches for streaming chirp-bin decode, AVX2/GPU scoring, fractional-delay
-    actuation, and native capture rings.
+    rumination, optimization ledger, research references, source/hotspot audits,
+    Fensalir/native boundary maps, benchmark plan, calibration-session spec,
+    distributed receiver spec, failure-mode ledger, data dictionary, low-level
+    implementation notes, and sample code sketches for streaming chirp-bin
+    decode, AVX2/GPU scoring, batched native ABI, fractional-delay/SRO
+    actuation, acoustic source localization, Mimir-to-Fensalir lowering, and
+    native capture rings. The corrected deep-study pass ran from
+    `2026-05-23T23:54:42.9041588+01:00` through at least
+    `2026-05-24T01:54:56.9747630+01:00`; use
+    `research/perfect-machine-study-2026-05-23/reading-guide.md` as the
+    re-entry index.
   - `.voidbot` state is part of repo memory and must be committed separately
     whenever dirty.
 
@@ -262,8 +270,12 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Use chirp-bin calibration models from real microphones to tune the active
-    codebook/bands/weighting, then add the synchronization actuator.
+    Use the new study index to cut the next implementation in this order:
+    streaming calibration-weighted chirp-bin decoder state, calibration-session
+    command/replay proof, fractional-delay/SRO actuator, then native camera
+    payload handles and Fensalir lowering. Use chirp-bin calibration models from
+    real microphones to tune the active codebook/bands/weighting, then add the
+    synchronization actuator.
     Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the continuous
