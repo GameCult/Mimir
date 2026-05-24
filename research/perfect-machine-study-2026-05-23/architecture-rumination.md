@@ -6,6 +6,9 @@
   dedicated pass mapping, researching, distilling, ruminating, and writing
   sample options.
 - Active pass start recorded locally: `2026-05-23T23:41:19+01:00`.
+- Corrected no-shortcut pass start recorded locally after the final instruction:
+  `2026-05-23T23:54:42.9041588+01:00`. Do not treat this directory as complete
+  until at least `2026-05-24T01:54:42.9041588+01:00`.
 
 ## Prime Cut
 
@@ -210,4 +213,3 @@ Reason:
   that is how bandwidth dies in a formal suit.
 - Treating 192 kHz as magic: it improves timing granularity and ultrasonic
   options only where transducers and path response actually preserve signal.
-

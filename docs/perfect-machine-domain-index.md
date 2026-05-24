@@ -15,8 +15,14 @@ Read this with:
   the long-form design argument.
 - `research/perfect-machine-study-2026-05-23/index.md` for the study directory
   and sample-code index.
+- `research/perfect-machine-study-2026-05-23/reading-guide.md` for task-oriented
+  navigation through the study.
 - `research/perfect-machine-study-2026-05-23/optimization-ledger.md` for hot
   loop candidates.
+- `research/perfect-machine-study-2026-05-23/fensalir-integration-map.md` for
+  the Mimir/Fensalir ownership cut.
+- `research/perfect-machine-study-2026-05-23/calibration-session-spec.md` for
+  the planned physical-path calibration command.
 - `research/perfect-machine-study-2026-05-23/samples/README.md` for sample
   implementation sketches.
 

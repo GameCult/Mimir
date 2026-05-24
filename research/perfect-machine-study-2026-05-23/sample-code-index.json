@@ -1,0 +1,97 @@
+{
+  "schema": "gamecult.mimir.sample_code_index.v1",
+  "created": "2026-05-23",
+  "samples": [
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/StreamingChirpBinDecoderSketch.cs",
+      "domain": "audio-sync",
+      "purpose": "Incremental chirp-bin decoder state model",
+      "productionTarget": "Mimir.Runtime streaming active decoder",
+      "promoteWhen": "Matches current analyzer outputs while avoiding full-window rescans"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/Avx2DechirpGoertzelSketch.cpp",
+      "domain": "audio-sync",
+      "purpose": "AVX2/FMA dechirp plus bin scoring sketch",
+      "productionTarget": "native chirp-bin scorer",
+      "promoteWhen": "Profiling shows C# scalar bin scoring dominates"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/BatchedChirpScoreAbiSketch.h",
+      "domain": "audio-sync",
+      "purpose": "Native batched scoring ABI boundary for chirp candidate/bin work",
+      "productionTarget": "Mimir native scorer interop layer",
+      "promoteWhen": "Scalar scoring dominates and batching proves interop cost is amortized"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/ChirpBinScore.compute.hlsl",
+      "domain": "audio-sync-gpu",
+      "purpose": "D3D12 compute candidate/bin scoring sketch",
+      "productionTarget": "Fensalir compute scoring pass",
+      "promoteWhen": "Candidate/bin/channel batches are large enough to beat CPU SIMD"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/FarrowFractionalDelaySketch.cpp",
+      "domain": "audio-dsp",
+      "purpose": "Cubic Farrow fractional delay actuator sketch",
+      "productionTarget": "Faust/native DSP alignment actuator",
+      "promoteWhen": "Runtime state can drive a test resampler/delay line with measured improvement"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/SpscAudioBlockRingSketch.cpp",
+      "domain": "native-capture",
+      "purpose": "Low-jitter SPSC audio block handoff sketch",
+      "productionTarget": "native ASIO/camera capture handoff",
+      "promoteWhen": "Managed queues or payload copies show measurable capture pressure"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/CalibrationWeightedChirpLikelihoodSketch.cs",
+      "domain": "audio-sync",
+      "purpose": "Calibration-weighted symbol likelihood before codebook solving",
+      "productionTarget": "MimirChirpBinTimeline scoring path",
+      "promoteWhen": "Physical mic captures show unweighted symbol likelihood is the failure point"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/SroPllAsrcControllerSketch.cpp",
+      "domain": "audio-dsp",
+      "purpose": "Control loop turning delay observations into ASRC/fractional delay commands",
+      "productionTarget": "Faust/native DSP actuator control",
+      "promoteWhen": "Runtime reports are stable enough to move samples instead of only logging state"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/GaussianSplatClaimUpdate.compute.hlsl",
+      "domain": "visual-fusion",
+      "purpose": "D3D12 compute sketch for live splat claim updates",
+      "productionTarget": "Fensalir visual fusion pass",
+      "promoteWhen": "Direct camera drivers feed synchronized feature observations"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/AquariumGpuSensorFrameBridgeSketch.cs",
+      "domain": "fensalir-integration",
+      "purpose": "Lower runtime video observations into Fensalir GPU sensor frame contracts",
+      "productionTarget": "Mimir app-to-Fensalir bridge",
+      "promoteWhen": "Runtime buffers carry pixel/native handles and lowering benchmarks allocation-free"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/AcousticConstraintLoweringSketch.cs",
+      "domain": "fensalir-integration",
+      "purpose": "Lower decoded audio anchors and mic geometry into Fensalir acoustic constraints",
+      "productionTarget": "Mimir acoustic field bridge",
+      "promoteWhen": "Decoder reports stable anchors and Fensalir consumes constraints in diagnostics"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/TemporalEvidenceCandidateSketch.cs",
+      "domain": "sensor-fusion",
+      "purpose": "Convert Mimir observations into reservoir candidates without owning stable tracks",
+      "productionTarget": "Fensalir temporal evidence lowering path",
+      "promoteWhen": "Mimir emits synchronized visual/acoustic candidates and Fensalir reservoir accepts them"
+    },
+    {
+      "path": "research/perfect-machine-study-2026-05-23/samples/SrpPhatGridSketch.cpp",
+      "domain": "volumetric-audio",
+      "purpose": "Minimal grid scoring from pairwise mic delays to source-position hypotheses",
+      "productionTarget": "native acoustic source localization proof",
+      "promoteWhen": "At least two physical mics produce calibrated stable delay anchors"
+    }
+  ]
+}
