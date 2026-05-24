@@ -11,6 +11,7 @@ artifacts/asio/
 tools/drivers/
 tools/obs-spout2-plugin/
 tools/src/
+GameCult-Quartz/
 target/
 native/**/target/
 native/**/build/

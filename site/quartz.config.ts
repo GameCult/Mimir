@@ -56,6 +56,8 @@ const config: QuartzConfig = {
       "config/**",
       "faust",
       "faust/**",
+      "GameCult-Quartz",
+      "GameCult-Quartz/**",
       "logs",
       "logs/**",
       "native/**/build",

@@ -6,8 +6,41 @@ import MimirThemeLock from "./quartz/components/MimirThemeLock";
 
 const MimirGraphShell = Component.GameCultGraphSpaShell({
   stylesheetHref:
-    "/static/epiphany-graph/assets/viewer.css?v=graph-mimir-20260524",
-  moduleSrc: "/static/epiphany-graph/assets/viewer.js?v=graph-mimir-20260524",
+    "/static/epiphany-graph/assets/viewer.css?v=graph-mimir-corpus-20260524",
+  moduleSrc: "/static/epiphany-graph/assets/viewer.js?v=graph-mimir-corpus-20260524",
+  config: {
+    title: "Mimir Knowledge Graph",
+    architectureDescription:
+      "Notes are Mimir-owned docs, research, and implementation maps. Their edges are Quartz wiki links, with incoming backlinks counted into each node.",
+    allowedSlugPrefixes: [
+      "README",
+      "index",
+      "Mimir-Vault",
+      "docs",
+      "notes",
+      "research",
+      "native",
+    ],
+    blockedSlugPrefixes: [
+      "GameCult-Quartz",
+      "quartz-site",
+      "site",
+      "scripts",
+      "src",
+      "state",
+      "tools",
+    ],
+    blockedPathSegments: [
+      "/GameCult-Quartz/",
+      "/node_modules/",
+      "/quartz-site/",
+      "/site/",
+      "/scripts/",
+      "/src/",
+      "/state/",
+      "/tools/",
+    ],
+  },
 });
 
 export const sharedPageComponents: SharedLayout = {
