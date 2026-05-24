@@ -48,7 +48,9 @@ a named invariant that the native runtime cannot protect yet.
   to render the active motif timeline into memory and verify that the decoder
   recovers direct word anchors. Use `--standalone-bioacoustic-self-test` to
   verify that a receiver with only the codebook/schedule can recover canonical
-  source offset from delayed audio.
+  source offset from delayed audio. Use `--bioacoustic-train` to run the
+  indexed cepstral receiver hypothesis panel and write CultCache/audio receipts
+  under `artifacts/bioacoustic-training/`.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter. It can probe requested shared/exclusive formats so driver state is
@@ -187,7 +189,9 @@ a named invariant that the native runtime cannot protect yet.
    contour, formant, band, gain, rhythm weighting, and left/right speaker
    separation without weakening the standalone word-identity receiver invariant.
    Keep chirp-bin calibration artifacts as reference data, not the runtime
-   target.
+   target. Promote the `--bioacoustic-train` receipt shape into a real
+   calibration loop: detected words should feed a global delay/clock/path
+   hypothesis and learned per-output/mic response, not per-case threshold rules.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the bioacoustic motif decoder

@@ -1,0 +1,89 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:baseline-mfcc-index:warp-light",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "baseline-mfcc-index",
+  "HypothesisNotes": "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
+  "DegradationName": "warp-light",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 4,
+  "CorrectAnchors": 3,
+  "Precision": 0.75,
+  "Recall": 1,
+  "Confidence": 0.8964671480715712,
+  "TimingMeanAbsoluteErrorSamples": 5123.999999999999,
+  "DecodeMilliseconds": 182.7798,
+  "RealtimeFactor": 2.7355320445694766,
+  "IdentityScore": 0.8771467148071572,
+  "TimingScore": 0.0447427293064877,
+  "SpeedScore": 0.05471064089138953,
+  "TotalScore": 0.5628267826338831,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 9.12669517854302E-07,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-light/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-light/post-warp.wav",
+      "ContentHash": "fc695aa2e0579eab784d91523d9162deb58e036333ee6f19c185bdb90a449630"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "baseline-mfcc-index/warp-light/reconstructed-from-detections.wav",
+      "ContentHash": "ab3de6b3d1062ba8cb5bb47a3dbc0fbcb7b888155bb55ba26c7cb1033e4da928"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "baseline-mfcc-index/warp-light/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 3840,
+      "Confidence": 0.9304741075993451
+    },
+    {
+      "EventIndex": 3,
+      "SampleOffset": 13440,
+      "Confidence": 0.8292640500764266
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 17280,
+      "Confidence": 0.8973217506582013
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9288086839523123
+    }
+  ]
+}

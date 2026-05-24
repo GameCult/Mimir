@@ -1,0 +1,84 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:baseline-mfcc-index:clean-roundtrip",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "baseline-mfcc-index",
+  "HypothesisNotes": "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
+  "DegradationName": "clean-roundtrip",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 3,
+  "CorrectAnchors": 3,
+  "Precision": 1,
+  "Recall": 1,
+  "Confidence": 0.9711336256626195,
+  "TimingMeanAbsoluteErrorSamples": 432,
+  "DecodeMilliseconds": 162.5302,
+  "RealtimeFactor": 3.0763513488570124,
+  "IdentityScore": 0.997113362566262,
+  "TimingScore": 0.35714285714285715,
+  "SpeedScore": 0.06152702697714025,
+  "TotalScore": 0.6948014044722247,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.008886063472396654,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "baseline-mfcc-index/clean-roundtrip/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "baseline-mfcc-index/clean-roundtrip/post-warp.wav",
+      "ContentHash": "f803fceaf796518f32920b9c777b27e7017379fcdbc6acb46e2c89889ef1aa74"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "baseline-mfcc-index/clean-roundtrip/reconstructed-from-detections.wav",
+      "ContentHash": "06c93a4247b73e9ed46e7d18737924aa0923baa3f3ffe10ccb3a216684a93173"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "baseline-mfcc-index/clean-roundtrip/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 3840,
+      "Confidence": 0.9681068418929425
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 11520,
+      "Confidence": 0.9751340322412796
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9701600028536365
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:baseline-mfcc-index:warp-heavy-blur",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "baseline-mfcc-index",
+  "HypothesisNotes": "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
+  "DegradationName": "warp-heavy-blur",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 3,
+  "CorrectAnchors": 2,
+  "Precision": 0.6666666666666666,
+  "Recall": 0.6666666666666666,
+  "Confidence": 0.9146826945312526,
+  "TimingMeanAbsoluteErrorSamples": 6831.999999999999,
+  "DecodeMilliseconds": 200.7895,
+  "RealtimeFactor": 2.490170053712968,
+  "IdentityScore": 0.6914682694531252,
+  "TimingScore": 0.03393665158371041,
+  "SpeedScore": 0.04980340107425936,
+  "TotalScore": 0.44477960456085736,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.00033629216572444076,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-heavy-blur/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-heavy-blur/post-warp.wav",
+      "ContentHash": "f9a185f36c36e210bd3673e625234a7ced9bfb7b199b08d83e11d4ec8ccd93e9"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "baseline-mfcc-index/warp-heavy-blur/reconstructed-from-detections.wav",
+      "ContentHash": "7623c69fcd283397293985122b0c55baeab03173cb128733a8a02a3ab837d66e"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "baseline-mfcc-index/warp-heavy-blur/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 0,
+      "Confidence": 0.9501302695423681
+    },
+    {
+      "EventIndex": 3,
+      "SampleOffset": 11520,
+      "Confidence": 0.8335026537145045
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9604151603368851
+    }
+  ]
+}

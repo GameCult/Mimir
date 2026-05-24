@@ -1,0 +1,83 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:compact-fast-index:clean-roundtrip",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "compact-fast-index",
+  "HypothesisNotes": "Smaller feature and table shape. It should run faster if identity survives; otherwise it dies with a receipt.",
+  "DegradationName": "clean-roundtrip",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 3,
+  "CorrectAnchors": 3,
+  "Precision": 1,
+  "Recall": 1,
+  "Confidence": 0.9734685897698672,
+  "TimingMeanAbsoluteErrorSamples": 432,
+  "DecodeMilliseconds": 118.0861,
+  "RealtimeFactor": 4.234198605932451,
+  "IdentityScore": 0.9973468589769867,
+  "TimingScore": 0.35714285714285715,
+  "SpeedScore": 0.08468397211864902,
+  "TotalScore": 0.6995775612751758,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.008886063472396654,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 32,
+    "CepstralCoefficients": 10,
+    "TableCount": 3,
+    "HashBits": 12,
+    "NearHashRadius": 3,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 6,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "compact-fast-index/clean-roundtrip/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "compact-fast-index/clean-roundtrip/post-warp.wav",
+      "ContentHash": "f803fceaf796518f32920b9c777b27e7017379fcdbc6acb46e2c89889ef1aa74"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "compact-fast-index/clean-roundtrip/reconstructed-from-detections.wav",
+      "ContentHash": "315a1e8cc8b7d35e659a692afc9a96e15a35e1fba859b57a2f147f477f560a9b"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "compact-fast-index/clean-roundtrip/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 3840,
+      "Confidence": 0.9697246459110085
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 11520,
+      "Confidence": 0.9778715287480338
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9728095946505593
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:compact-fast-index:warp-heavy-blur",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "compact-fast-index",
+  "HypothesisNotes": "Smaller feature and table shape. It should run faster if identity survives; otherwise it dies with a receipt.",
+  "DegradationName": "warp-heavy-blur",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 6,
+  "CorrectAnchors": 2,
+  "Precision": 0.3333333333333333,
+  "Recall": 0.6666666666666666,
+  "Confidence": 0.642324401027618,
+  "TimingMeanAbsoluteErrorSamples": 232856,
+  "DecodeMilliseconds": 99.7631,
+  "RealtimeFactor": 5.0118731274389035,
+  "IdentityScore": 0.5142324401027618,
+  "TimingScore": 0.0010296186978755535,
+  "SpeedScore": 0.10023746254877806,
+  "TotalScore": 0.33905693673908555,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.00033629216572444076,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 32,
+    "CepstralCoefficients": 10,
+    "TableCount": 3,
+    "HashBits": 12,
+    "NearHashRadius": 3,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 6,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "compact-fast-index/warp-heavy-blur/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "compact-fast-index/warp-heavy-blur/post-warp.wav",
+      "ContentHash": "f9a185f36c36e210bd3673e625234a7ced9bfb7b199b08d83e11d4ec8ccd93e9"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "compact-fast-index/warp-heavy-blur/reconstructed-from-detections.wav",
+      "ContentHash": "e2c15c0fdbbc805e3eba515fdcde5921dc44f604e4b91b789c4d0b4d9c0a6780"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "compact-fast-index/warp-heavy-blur/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 0,
+      "Confidence": 0.9551977551518811
+    },
+    {
+      "EventIndex": 13,
+      "SampleOffset": 7680,
+      "Confidence": 0.6949601234449054
+    },
+    {
+      "EventIndex": 32,
+      "SampleOffset": 9600,
+      "Confidence": 0.5239472197964249
+    },
+    {
+      "EventIndex": 55,
+      "SampleOffset": 11520,
+      "Confidence": 0.39955705873729075
+    },
+    {
+      "EventIndex": 85,
+      "SampleOffset": 15360,
+      "Confidence": 0.3168909673131934
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9633932817220121
+    }
+  ]
+}

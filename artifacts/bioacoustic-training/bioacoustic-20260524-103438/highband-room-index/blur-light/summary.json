@@ -1,0 +1,84 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:highband-room-index:blur-light",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "highband-room-index",
+  "HypothesisNotes": "Bias toward the measured useful upper speech/birdcall band and away from low room junk.",
+  "DegradationName": "blur-light",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 3,
+  "CorrectAnchors": 3,
+  "Precision": 1,
+  "Recall": 1,
+  "Confidence": 0.9777684902055078,
+  "TimingMeanAbsoluteErrorSamples": 672,
+  "DecodeMilliseconds": 127.2228,
+  "RealtimeFactor": 3.930113155817982,
+  "IdentityScore": 0.9977768490205507,
+  "TimingScore": 0.2631578947368421,
+  "SpeedScore": 0.07860226311635964,
+  "TotalScore": 0.681710520068645,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.0007356480619029866,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.035,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "highband-room-index/blur-light/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "highband-room-index/blur-light/post-warp.wav",
+      "ContentHash": "46984f1c8f4b37f309173dc8926769b24a95403f15b279da9d9fb1e6a1f971be"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "highband-room-index/blur-light/reconstructed-from-detections.wav",
+      "ContentHash": "515dd1055208673fdadb6db370480b779d056fdcc1ca43e6ccab2f577d8f0251"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "highband-room-index/blur-light/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 3360,
+      "Confidence": 0.98044860544398
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 11760,
+      "Confidence": 0.9785031453289712
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9743537198435719
+    }
+  ]
+}

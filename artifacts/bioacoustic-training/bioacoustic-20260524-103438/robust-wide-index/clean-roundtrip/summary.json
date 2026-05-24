@@ -1,0 +1,85 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:robust-wide-index:clean-roundtrip",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "robust-wide-index",
+  "HypothesisNotes": "More cepstra and a wider augmentation bank. It pays more CPU for warped-room survival.",
+  "DegradationName": "clean-roundtrip",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 3,
+  "CorrectAnchors": 3,
+  "Precision": 1,
+  "Recall": 1,
+  "Confidence": 0.9696885094694774,
+  "TimingMeanAbsoluteErrorSamples": 592,
+  "DecodeMilliseconds": 188.5116,
+  "RealtimeFactor": 2.6523566719501614,
+  "IdentityScore": 0.9969688509469478,
+  "TimingScore": 0.28846153846153844,
+  "SpeedScore": 0.053047133439003226,
+  "TotalScore": 0.6806531911979852,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.008886063472396654,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 192,
+    "MelBins": 48,
+    "CepstralCoefficients": 18,
+    "TableCount": 5,
+    "HashBits": 15,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.03,
+    "ProposalBudgetMultiplier": 9,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur",
+      "template-warp-heavy"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "robust-wide-index/clean-roundtrip/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "robust-wide-index/clean-roundtrip/post-warp.wav",
+      "ContentHash": "f803fceaf796518f32920b9c777b27e7017379fcdbc6acb46e2c89889ef1aa74"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "robust-wide-index/clean-roundtrip/reconstructed-from-detections.wav",
+      "ContentHash": "6d83bb12aa7e63fa8e172ff14a5fbe0eb31141655097d8da27844bc167d4ecc9"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "robust-wide-index/clean-roundtrip/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 4320,
+      "Confidence": 0.967394265955218
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 11520,
+      "Confidence": 0.9729967476603155
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9686745147928985
+    }
+  ]
+}

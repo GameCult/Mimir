@@ -1,0 +1,19 @@
+{
+  "runId": "bioacoustic-20260524-103438",
+  "startedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "sampleRate": 48000,
+  "seconds": 0.5,
+  "resultCount": 20,
+  "cache": "bioacoustic-training.cc",
+  "best": {
+    "ResultId": "bioacoustic-20260524-103438:compact-fast-index:clean-roundtrip",
+    "HypothesisId": "compact-fast-index",
+    "DegradationName": "clean-roundtrip",
+    "TotalScore": 0.6995775612751758,
+    "IdentityScore": 0.9973468589769867,
+    "TimingScore": 0.35714285714285715,
+    "SpeedScore": 0.08468397211864902,
+    "DecodeMilliseconds": 118.0861,
+    "RealtimeFactor": 4.234198605932451
+  }
+}

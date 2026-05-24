@@ -99,6 +99,10 @@ Expected state:
 - `--bioacoustic-cepstral-smoke` round-trips the active call through a degraded
   mel-cepstral representation, then decodes word identity with an augmented
   projection-hash MFCC index instead of brute-forcing every word waveform.
+- `--bioacoustic-train` runs a hypothesis panel over decoder shapes and writes
+  CultCache receipts plus pre-warp, post-warp, and reconstructed-from-detections
+  WAV artifacts. See [[bioacoustic-training-harness|Bioacoustic Training
+  Harness]].
 
 Render a raw Float32 preview:
 
@@ -126,3 +130,8 @@ audio window
 Do not add a pile of threshold rules to make one room capture look good. The
 right extension is learned path weighting over motif parts: which contours,
 partials, and time gaps survive each output/mic path.
+
+The latest training receipt says identity can survive the current
+mel-cepstral degradation panel, but timing collapses under warped domains. That
+points the next cut at a global delay/clock/path hypothesis over detected words,
+not a larger brute-force dictionary.

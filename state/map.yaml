@@ -49,6 +49,10 @@ invariants:
   - Faust/native DSP owns hot audio alignment, separation, spatialization, and
     stems.
   - Local secrets remain untracked.
+  - Mimir is a CultMesh app. Codebooks, schedules, calibration receipts, path
+    response, and compute-offload work need typed mesh-syncable state surfaces
+    so phones, microcontrollers, Raven, and Starfire can cooperate without
+    becoming independent timing authorities.
 
 accepted_design:
   - `Mimir.slnx` owns the app surface.
@@ -121,7 +125,14 @@ accepted_design:
     weighting. `Mimir.BufferSmoke --bioacoustic-cepstral-smoke` now proves the
     non-brute-force receiver direction: degraded mel-cepstral calls are decoded
     by an augmented MFCC/projection-hash word index before any expensive
-    confirmation. `MimirChirpBinTimeline` remains the controlled chirp-bin
+    confirmation. `Mimir.BufferSmoke --bioacoustic-train` now runs a
+    receipt-backed hypothesis panel over indexed cepstral decoder shapes and
+    writes typed CultCache results plus pre-warp/post-warp/reconstructed WAV
+    artifacts under `artifacts/bioacoustic-training/`. The latest receipt
+    `bioacoustic-20260524-103438` shows compact indexing is fastest on clean
+    audio, baseline indexing is more stable under light warp, highband indexing
+    can win blur/warp-blur cases, and timing error under domain warp remains
+    the pressure for a global clock/path hypothesis. `MimirChirpBinTimeline` remains the controlled chirp-bin
     calibration/reference artifact with ASIO tooling and
     `MimirChirpBinCalibrationModel`; keep those captures as response evidence,
     not the active runtime sound. Reports and sync states expose delay in
@@ -276,8 +287,8 @@ current_status:
   next_action: >
     Use the new bioacoustic timeline watermark as the active acoustic sync
     direction. Cut the next implementation in this order: streaming indexed
-    log-mel/MFCC motif decoder state with a global clock hypothesis,
-    calibration-session command/replay proof that learns
+    log-mel/MFCC motif decoder state with a global clock/path hypothesis fed by
+    `--bioacoustic-train` receipts, calibration-session command/replay proof that learns
     per-output/mic motif/formant response, fractional-delay/SRO actuator, then
     native camera payload handles and Fensalir lowering. Keep chirp-bin
     calibration captures as reference evidence, not the runtime target.

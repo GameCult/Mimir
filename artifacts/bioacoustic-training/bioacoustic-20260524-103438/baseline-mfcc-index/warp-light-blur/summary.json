@@ -1,0 +1,89 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:baseline-mfcc-index:warp-light-blur",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "baseline-mfcc-index",
+  "HypothesisNotes": "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
+  "DegradationName": "warp-light-blur",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 4,
+  "CorrectAnchors": 3,
+  "Precision": 0.75,
+  "Recall": 1,
+  "Confidence": 0.9031864011599247,
+  "TimingMeanAbsoluteErrorSamples": 15684.000000000002,
+  "DecodeMilliseconds": 223.0421,
+  "RealtimeFactor": 2.2417292520111674,
+  "IdentityScore": 0.8778186401159925,
+  "TimingScore": 0.015071590052750564,
+  "SpeedScore": 0.04483458504022335,
+  "TotalScore": 0.5559273600894551,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.0003236487418848957,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-light-blur/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-light-blur/post-warp.wav",
+      "ContentHash": "a7747c66b5bd084995a439c886b9867bf2578532f204d625e03772f58a31b16e"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "baseline-mfcc-index/warp-light-blur/reconstructed-from-detections.wav",
+      "ContentHash": "622fe5efa1313fc63c95c322ddf08ab68e15a2011d7147d8c24164ed3bc35da8"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "baseline-mfcc-index/warp-light-blur/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 1920,
+      "Confidence": 0.9562809085213103
+    },
+    {
+      "EventIndex": 8,
+      "SampleOffset": 7680,
+      "Confidence": 0.7797562610548343
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 9600,
+      "Confidence": 0.905395380105711
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.971313054957843
+    }
+  ]
+}

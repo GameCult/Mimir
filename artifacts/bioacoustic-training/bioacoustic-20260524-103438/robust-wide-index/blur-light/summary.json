@@ -1,0 +1,90 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:robust-wide-index:blur-light",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "robust-wide-index",
+  "HypothesisNotes": "More cepstra and a wider augmentation bank. It pays more CPU for warped-room survival.",
+  "DegradationName": "blur-light",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 4,
+  "CorrectAnchors": 3,
+  "Precision": 0.75,
+  "Recall": 1,
+  "Confidence": 0.9655822854926099,
+  "TimingMeanAbsoluteErrorSamples": 5016,
+  "DecodeMilliseconds": 220.4362,
+  "RealtimeFactor": 2.268229991262778,
+  "IdentityScore": 0.8840582285492611,
+  "TimingScore": 0.04566210045662101,
+  "SpeedScore": 0.04536459982525556,
+  "TotalScore": 0.5654081997477847,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.0007356480619029866,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 192,
+    "MelBins": 48,
+    "CepstralCoefficients": 18,
+    "TableCount": 5,
+    "HashBits": 15,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.03,
+    "ProposalBudgetMultiplier": 9,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur",
+      "template-warp-heavy"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "robust-wide-index/blur-light/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "robust-wide-index/blur-light/post-warp.wav",
+      "ContentHash": "46984f1c8f4b37f309173dc8926769b24a95403f15b279da9d9fb1e6a1f971be"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "robust-wide-index/blur-light/reconstructed-from-detections.wav",
+      "ContentHash": "5b9293a84d99d9d83cb4914b6a031365b64719af40f8f1eb372e8cf531091966"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "robust-wide-index/blur-light/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 2880,
+      "Confidence": 0.984991303643638
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 10080,
+      "Confidence": 0.9775920300109124
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9830328920804959
+    },
+    {
+      "EventIndex": 4,
+      "SampleOffset": 18192,
+      "Confidence": 0.9167129162353933
+    }
+  ]
+}

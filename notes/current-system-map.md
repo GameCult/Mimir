@@ -35,6 +35,10 @@ Ownership:
 
 - Mimir owns configuration, calibration truth, launch, status, persistence, and
   runtime contracts.
+- Mimir is a CultMesh app: typed state surfaces for codebooks, schedules,
+  calibration receipts, path response, and offload work must be mesh-syncable so
+  phones, microcontrollers, Raven, and Starfire can participate without
+  becoming independent clock authorities.
 - `Mimir.Runtime` owns app-level stream buffers and synchronization.
 - Native capture workers own device reads.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
@@ -131,6 +135,13 @@ proves a receiver with only codebook/schedule state can recover delayed source
 time to below printed microsecond precision. `--chirp-only-sync-self-test
 --sample-rate 48000` recovers a 317.375-sample synthetic delay with printed
 0.000 us error using `evidence=bioacoustic`.
+`--bioacoustic-train` is now the receipt-backed tuning harness: it runs
+multiple indexed cepstral decoder hypotheses across mel-cepstral warp/blur
+degradations and writes typed CultCache results plus pre-warp, post-warp, and
+reconstructed-from-detections WAV artifacts. The latest local receipt under
+`artifacts/bioacoustic-training/bioacoustic-20260524-103438/` shows identity
+survives many degradations, but timing still fails under warped domains, so the
+next receiver cut is a global delay/clock/path hypothesis over detected words.
 Reports now carry fractional delay and per-band matched energy. The older
 `MimirChirpletSymbolCodebook` / `MimirChirpletStreamDecoder` path remains a
 diagnostic reference for constrained chirplet-transform work. The active

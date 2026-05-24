@@ -1,0 +1,83 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:compact-fast-index:blur-light",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "compact-fast-index",
+  "HypothesisNotes": "Smaller feature and table shape. It should run faster if identity survives; otherwise it dies with a receipt.",
+  "DegradationName": "blur-light",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 3,
+  "CorrectAnchors": 3,
+  "Precision": 1,
+  "Recall": 1,
+  "Confidence": 0.9821983546360261,
+  "TimingMeanAbsoluteErrorSamples": 2352,
+  "DecodeMilliseconds": 113.8517,
+  "RealtimeFactor": 4.3916779459595245,
+  "IdentityScore": 0.9982198354636026,
+  "TimingScore": 0.09259259259259259,
+  "SpeedScore": 0.0878335589191905,
+  "TotalScore": 0.6531296764379384,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.0007356480619029866,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 32,
+    "CepstralCoefficients": 10,
+    "TableCount": 3,
+    "HashBits": 12,
+    "NearHashRadius": 3,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 6,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "compact-fast-index/blur-light/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "compact-fast-index/blur-light/post-warp.wav",
+      "ContentHash": "46984f1c8f4b37f309173dc8926769b24a95403f15b279da9d9fb1e6a1f971be"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "compact-fast-index/blur-light/reconstructed-from-detections.wav",
+      "ContentHash": "afb10e7ff19086f72fb86e3a59b8eb3252654707080845ec5cc906808462f978"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "compact-fast-index/blur-light/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 7680,
+      "Confidence": 0.9832276994197949
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 9600,
+      "Confidence": 0.976671497123334
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9866958673649495
+    }
+  ]
+}

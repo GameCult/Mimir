@@ -1,0 +1,84 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:baseline-mfcc-index:blur-light",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "baseline-mfcc-index",
+  "HypothesisNotes": "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
+  "DegradationName": "blur-light",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 3,
+  "CorrectAnchors": 3,
+  "Precision": 1,
+  "Recall": 1,
+  "Confidence": 0.9817037980063056,
+  "TimingMeanAbsoluteErrorSamples": 1712,
+  "DecodeMilliseconds": 151.211,
+  "RealtimeFactor": 3.3066377446085267,
+  "IdentityScore": 0.9981703798006306,
+  "TimingScore": 0.12295081967213116,
+  "SpeedScore": 0.06613275489217053,
+  "TotalScore": 0.6542233339958087,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.0007356480619029866,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "baseline-mfcc-index/blur-light/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "baseline-mfcc-index/blur-light/post-warp.wav",
+      "ContentHash": "46984f1c8f4b37f309173dc8926769b24a95403f15b279da9d9fb1e6a1f971be"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "baseline-mfcc-index/blur-light/reconstructed-from-detections.wav",
+      "ContentHash": "5c4d4cda22373af4034310c85510c724cfe807d11de6fc094ffb09414813c7c3"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "baseline-mfcc-index/blur-light/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 1920,
+      "Confidence": 0.9842773002273854
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 9600,
+      "Confidence": 0.9759566210616761
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9848774727298553
+    }
+  ]
+}

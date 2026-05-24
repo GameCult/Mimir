@@ -1,5 +1,10 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Security.Cryptography;
+using System.Text.Json;
+using GameCult.Caching;
+using GameCult.Caching.MessagePack;
+using MessagePack;
 using Mimir.Runtime.Synchronization;
 
 if (args.Any(arg => string.Equals(arg, "--chirplet-self-test", StringComparison.OrdinalIgnoreCase)))
@@ -29,6 +34,14 @@ if (args.Any(arg => string.Equals(arg, "--bioacoustic-cepstral-smoke", StringCom
     return RunBioacousticCepstralSmoke(
         ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
         ParseDoubleOption(args, "--seconds", 0.75));
+}
+
+if (args.Any(arg => string.Equals(arg, "--bioacoustic-train", StringComparison.OrdinalIgnoreCase)))
+{
+    return await RunBioacousticTrainingAsync(
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseDoubleOption(args, "--seconds", 0.75),
+        ParseStringOption(args, "--output", "artifacts/bioacoustic-training")).ConfigureAwait(false);
 }
 
 if (args.Any(arg => string.Equals(arg, "--standalone-chirp-bin-self-test", StringComparison.OrdinalIgnoreCase)))
@@ -480,6 +493,180 @@ static int RunBioacousticCepstralSmoke(int sampleRate, double seconds)
     return 0;
 }
 
+static async Task<int> RunBioacousticTrainingAsync(int sampleRate, double seconds, string outputRoot)
+{
+    var runStarted = DateTimeOffset.UtcNow;
+    var runId = $"bioacoustic-{runStarted:yyyyMMdd-HHmmss}";
+    var runDirectory = Path.GetFullPath(Path.Combine(outputRoot, runId));
+    Directory.CreateDirectory(runDirectory);
+
+    var timeline = MimirBioacousticTimeline.Default;
+    var segmentCount = Math.Max(1, (int)Math.Ceiling(seconds / MimirBioacousticTimeline.SegmentSeconds));
+    var samples = new List<float>(Math.Max(1, (int)Math.Ceiling(seconds * sampleRate)));
+    for (ulong segment = 0; segment < (ulong)segmentCount; segment++)
+    {
+        samples.AddRange(timeline.RenderSegmentMonoFloat(segment, sampleRate));
+    }
+
+    var requestedSamples = Math.Max(1, (int)Math.Round(seconds * sampleRate));
+    if (samples.Count > requestedSamples)
+    {
+        samples.RemoveRange(requestedSamples, samples.Count - requestedSamples);
+    }
+
+    var source = samples.ToArray();
+    var degradations = new[]
+    {
+        new CepstralDegradationSetting("clean-roundtrip", 0.0, 0.0, 0),
+        new CepstralDegradationSetting("blur-light", 0.0, 0.0, 1),
+        new CepstralDegradationSetting("warp-light", 0.75, 1.25, 0),
+        new CepstralDegradationSetting("warp-light-blur", 0.75, 1.25, 1),
+        new CepstralDegradationSetting("warp-heavy-blur", 1.25, 1.75, 1),
+    };
+    var hypotheses = BioacousticTrainingHypotheses();
+    var expectedEvents = timeline.EventsOverlapping(0.0, source.Length / (double)sampleRate)
+        .Select(timelineEvent => timelineEvent.Index)
+        .ToHashSet();
+    var cachePath = Path.Combine(runDirectory, "bioacoustic-training.cc");
+    var results = new List<BioacousticTrainingResult>();
+
+    WriteWave(Path.Combine(runDirectory, "source-pre-warp.wav"), source, sampleRate);
+    foreach (var hypothesis in hypotheses)
+    {
+        var hypothesisDirectory = Path.Combine(runDirectory, hypothesis.Id);
+        Directory.CreateDirectory(hypothesisDirectory);
+        var templateIndex = BuildCepstralWordIndex(sampleRate, hypothesis.Decoder);
+        foreach (var degradation in degradations)
+        {
+            var settingDirectory = Path.Combine(hypothesisDirectory, degradation.Name);
+            Directory.CreateDirectory(settingDirectory);
+            var preWarpPath = Path.Combine(settingDirectory, "pre-warp.wav");
+            var postWarpPath = Path.Combine(settingDirectory, "post-warp.wav");
+            var reconstructedPath = Path.Combine(settingDirectory, "reconstructed-from-detections.wav");
+            var summaryPath = Path.Combine(settingDirectory, "summary.json");
+
+            WriteWave(preWarpPath, source, sampleRate);
+            var degraded = RoundTripThroughDegradedCepstrum(source, sampleRate, degradation, out var analysis);
+            WriteWave(postWarpPath, degraded, sampleRate);
+
+            var decodeStamp = Stopwatch.GetTimestamp();
+            var observations = DecodeCepstralIndexedWordsWithIndex(degraded, sampleRate, expectedEvents.Count, hypothesis.Decoder, templateIndex);
+            var decodeMilliseconds = Stopwatch.GetElapsedTime(decodeStamp).TotalMilliseconds;
+            var correctAnchors = observations.Count(observation => expectedEvents.Contains(observation.EventIndex));
+            var precision = observations.Count == 0 ? 0.0 : correctAnchors / (double)observations.Count;
+            var recall = expectedEvents.Count == 0 ? 0.0 : correctAnchors / (double)expectedEvents.Count;
+            var confidence = observations.Count == 0 ? 0.0 : observations.Average(observation => observation.Confidence);
+            var timingMae = MeanCepstralTimingError(observations, timeline, sampleRate);
+            var realtime = decodeMilliseconds <= 0.0 ? double.PositiveInfinity : seconds * 1000.0 / decodeMilliseconds;
+            var identityScore = precision * 0.45 + recall * 0.45 + confidence * 0.10;
+            var timingScore = double.IsFinite(timingMae)
+                ? 1.0 / (1.0 + timingMae / Math.Max(1.0, sampleRate * 0.005))
+                : 0.0;
+            var speedScore = Math.Clamp(realtime / 50.0, 0.0, 1.0);
+            var totalScore = identityScore * 0.62 + timingScore * 0.18 + speedScore * 0.20;
+            var reconstructed = ReconstructDetectedBioacousticSong(observations, source.Length, sampleRate);
+            WriteWave(reconstructedPath, reconstructed, sampleRate);
+
+            var artifactRoot = RelativePath(runDirectory, settingDirectory);
+            var result = new BioacousticTrainingResult(
+                $"{runId}:{hypothesis.Id}:{degradation.Name}",
+                runId,
+                runStarted.ToString("O"),
+                "Mimir.BufferSmoke --bioacoustic-train",
+                hypothesis.Id,
+                hypothesis.Notes,
+                degradation.Name,
+                sampleRate,
+                seconds,
+                expectedEvents.Count,
+                observations.Count,
+                correctAnchors,
+                precision,
+                recall,
+                confidence,
+                timingMae,
+                decodeMilliseconds,
+                realtime,
+                identityScore,
+                timingScore,
+                speedScore,
+                totalScore,
+                analysis.MelBins,
+                analysis.CepstralCoefficients,
+                analysis.FrameCount,
+                analysis.RmsRatio,
+                new BioacousticTrainingDecoderSnapshot(
+                    hypothesis.Decoder.FftSize,
+                    hypothesis.Decoder.HopSize,
+                    hypothesis.Decoder.MelBins,
+                    hypothesis.Decoder.CepstralCoefficients,
+                    hypothesis.Decoder.TableCount,
+                    hypothesis.Decoder.HashBits,
+                    hypothesis.Decoder.NearHashRadius,
+                    hypothesis.Decoder.DenseStepSeconds,
+                    hypothesis.Decoder.ProposalBudgetMultiplier,
+                    hypothesis.Decoder.TemplateAugmentations.Select(setting => setting.Name).ToArray()),
+                [
+                    new BioacousticTrainingArtifact("pre-warp-audio", $"{artifactRoot}/pre-warp.wav", Sha256File(preWarpPath)),
+                    new BioacousticTrainingArtifact("post-warp-audio", $"{artifactRoot}/post-warp.wav", Sha256File(postWarpPath)),
+                    new BioacousticTrainingArtifact("reconstructed-from-detections", $"{artifactRoot}/reconstructed-from-detections.wav", Sha256File(reconstructedPath)),
+                    new BioacousticTrainingArtifact("summary-json", $"{artifactRoot}/summary.json", "")
+                ],
+                observations
+                    .Select(observation => new BioacousticTrainingObservation(
+                        observation.EventIndex,
+                        observation.SampleOffset,
+                        observation.Confidence))
+                    .ToArray());
+
+            await File.WriteAllTextAsync(
+                summaryPath,
+                JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            result = result with
+            {
+                Artifacts = result.Artifacts
+                    .Select(artifact => artifact.Kind == "summary-json"
+                        ? artifact with { ContentHash = Sha256File(summaryPath) }
+                        : artifact)
+                    .ToArray()
+            };
+            results.Add(result);
+            Console.WriteLine(
+                $"bioacoustic-train hypothesis={hypothesis.Id} degradation={degradation.Name} total={totalScore:0.000} identity={identityScore:0.000} timing={timingScore:0.000} speed={speedScore:0.000} " +
+                $"precision={precision:0.000} recall={recall:0.000} confidence={confidence:0.000} mae={timingMae:0.000} decodeMs={decodeMilliseconds:0.000} realtime={realtime:0.0}x artifacts={RelativePath(Directory.GetCurrentDirectory(), settingDirectory)}");
+        }
+    }
+
+    await WriteBioacousticTrainingCacheAsync(cachePath, results).ConfigureAwait(false);
+    var best = results.OrderByDescending(result => result.TotalScore).First();
+    var runSummaryPath = Path.Combine(runDirectory, "run-summary.json");
+    await File.WriteAllTextAsync(
+        runSummaryPath,
+        JsonSerializer.Serialize(new
+        {
+            runId,
+            startedAtUtc = runStarted.ToString("O"),
+            sampleRate,
+            seconds,
+            resultCount = results.Count,
+            cache = Path.GetFileName(cachePath),
+            best = new
+            {
+                best.ResultId,
+                best.HypothesisId,
+                best.DegradationName,
+                best.TotalScore,
+                best.IdentityScore,
+                best.TimingScore,
+                best.SpeedScore,
+                best.DecodeMilliseconds,
+                best.RealtimeFactor
+            }
+        }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+    Console.WriteLine($"bioacoustic-training-run path={runDirectory} cache={cachePath} results={results.Count} best={best.HypothesisId}/{best.DegradationName} total={best.TotalScore:0.000}");
+    return 0;
+}
+
 static int RunPassiveSyncSelfTest()
 {
     const int sampleRate = 48_000;
@@ -700,6 +887,76 @@ static int RenderBioacousticFloat32(string outputPath, int sampleRate, double se
     File.WriteAllBytes(outputPath, bytes);
     Console.WriteLine($"bioacoustic-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count} words={MimirBioacousticTimeline.WordCount} speakers={MimirBioacousticTimeline.SpeakerCount}");
     return 0;
+}
+
+static IReadOnlyList<BioacousticTrainingHypothesis> BioacousticTrainingHypotheses()
+{
+    var clean = new CepstralDegradationSetting("template-clean", 0.0, 0.0, 0);
+    var blur = new CepstralDegradationSetting("template-blur", 0.0, 0.0, 1);
+    var warp = new CepstralDegradationSetting("template-warp-light", 0.75, 1.25, 0);
+    var warpBlur = new CepstralDegradationSetting("template-warp-blur", 0.75, 1.25, 1);
+    return
+    [
+        new(
+            "baseline-mfcc-index",
+            "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
+            CepstralDecoderOptions.Default),
+        new(
+            "compact-fast-index",
+            "Smaller feature and table shape. It should run faster if identity survives; otherwise it dies with a receipt.",
+            new CepstralDecoderOptions(
+                FftSize: 1024,
+                HopSize: 256,
+                MelBins: 32,
+                CepstralCoefficients: 10,
+                MinFrequencyHz: 300,
+                MaxFrequencyHz: 14_500,
+                TableCount: 3,
+                HashBits: 12,
+                NearHashRadius: 3,
+                DenseStepSeconds: 0.040,
+                ProposalBudgetMultiplier: 6.0,
+                TemplateAugmentations: [clean, blur, warpBlur])),
+        new(
+            "robust-wide-index",
+            "More cepstra and a wider augmentation bank. It pays more CPU for warped-room survival.",
+            new CepstralDecoderOptions(
+                FftSize: 1024,
+                HopSize: 192,
+                MelBins: 48,
+                CepstralCoefficients: 18,
+                MinFrequencyHz: 180,
+                MaxFrequencyHz: 15_500,
+                TableCount: 5,
+                HashBits: 15,
+                NearHashRadius: 4,
+                DenseStepSeconds: 0.030,
+                ProposalBudgetMultiplier: 9.0,
+                TemplateAugmentations:
+                [
+                    clean,
+                    blur,
+                    warp,
+                    warpBlur,
+                    new("template-warp-heavy", 1.25, 1.75, 1)
+                ])),
+        new(
+            "highband-room-index",
+            "Bias toward the measured useful upper speech/birdcall band and away from low room junk.",
+            new CepstralDecoderOptions(
+                FftSize: 1024,
+                HopSize: 256,
+                MelBins: 40,
+                CepstralCoefficients: 14,
+                MinFrequencyHz: 1_200,
+                MaxFrequencyHz: 16_000,
+                TableCount: 4,
+                HashBits: 14,
+                NearHashRadius: 4,
+                DenseStepSeconds: 0.035,
+                ProposalBudgetMultiplier: 8.0,
+                TemplateAugmentations: [clean, blur, warp, warpBlur]))
+    ];
 }
 
 static MimirChirpBinCalibrationModel? LoadOptionalCalibration(string[] args)
@@ -1048,9 +1305,26 @@ static float[] RoundTripThroughDegradedCepstrum(
 
 static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWords(float[] samples, int sampleRate, int expectedEventCount)
 {
-    const int tableCount = 4;
-    const int hashBits = 14;
-    var templateIndex = BuildCepstralWordIndex(sampleRate, tableCount, hashBits);
+    return DecodeCepstralIndexedWordsWithOptions(samples, sampleRate, expectedEventCount, CepstralDecoderOptions.Default);
+}
+
+static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWordsWithOptions(
+    float[] samples,
+    int sampleRate,
+    int expectedEventCount,
+    CepstralDecoderOptions options)
+{
+    var templateIndex = BuildCepstralWordIndex(sampleRate, options);
+    return DecodeCepstralIndexedWordsWithIndex(samples, sampleRate, expectedEventCount, options, templateIndex);
+}
+
+static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWordsWithIndex(
+    float[] samples,
+    int sampleRate,
+    int expectedEventCount,
+    CepstralDecoderOptions options,
+    CepstralWordIndex templateIndex)
+{
     var motifSamples = MimirBioacousticTimeline.Default.RenderEventMonoFloat(0, sampleRate).Length;
     var hopSamples = Math.Max(1, sampleRate / 1_000);
     var energyTrace = WindowEnergy(samples, motifSamples, hopSamples);
@@ -1068,13 +1342,13 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWords(float[]
         }
     }
 
-    var denseStep = Math.Max(1, (int)Math.Round(sampleRate * 0.040));
+    var denseStep = Math.Max(1, (int)Math.Round(sampleRate * options.DenseStepSeconds));
     for (var offset = 0; offset + motifSamples <= samples.Length; offset += denseStep)
     {
         proposals.Add(offset);
     }
 
-    var proposalBudget = Math.Max(expectedEventCount * 8, 16);
+    var proposalBudget = Math.Max((int)Math.Ceiling(expectedEventCount * options.ProposalBudgetMultiplier), 16);
     var observations = new List<CepstralWordObservation>();
     foreach (var offset in proposals
                  .OrderByDescending(offset => energyTrace[Math.Clamp(offset / hopSamples, 0, energyTrace.Length - 1)])
@@ -1086,11 +1360,11 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWords(float[]
             continue;
         }
 
-        var feature = CepstralFingerprint(samples.AsSpan(offset, motifSamples), sampleRate);
+        var feature = CepstralFingerprintWithOptions(samples.AsSpan(offset, motifSamples), sampleRate, options);
         var candidateIndexes = new HashSet<int>();
-        for (var table = 0; table < tableCount; table++)
+        for (var table = 0; table < options.TableCount; table++)
         {
-            var key = ProjectionHash(feature, table, hashBits);
+            var key = ProjectionHash(feature, table, options.HashBits);
             if (templateIndex.Buckets.TryGetValue((table, key), out var bucket))
             {
                 foreach (var candidate in bucket)
@@ -1103,7 +1377,7 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWords(float[]
             {
                 foreach (var near in templateIndex.Buckets
                              .Where(pair => pair.Key.Table == table &&
-                                 HammingDistance(pair.Key.Hash, key) <= 4)
+                                 HammingDistance(pair.Key.Hash, key) <= options.NearHashRadius)
                              .SelectMany(pair => pair.Value))
                 {
                     candidateIndexes.Add(near);
@@ -1154,34 +1428,27 @@ static ulong PredictedBioacousticEventIndex(double sampleOffset, int sampleRate)
     return (ulong)Math.Max(0, index);
 }
 
-static CepstralWordIndex BuildCepstralWordIndex(int sampleRate, int tableCount, int hashBits)
+static CepstralWordIndex BuildCepstralWordIndex(int sampleRate, CepstralDecoderOptions options)
 {
-    var augmentationSettings = new[]
-    {
-        new CepstralDegradationSetting("template-clean", 0.0, 0.0, 0),
-        new CepstralDegradationSetting("template-blur", 0.0, 0.0, 1),
-        new CepstralDegradationSetting("template-warp-light", 0.75, 1.25, 0),
-        new CepstralDegradationSetting("template-warp-blur", 0.75, 1.25, 1),
-    };
     var templates = new List<CepstralWordTemplate>(MimirBioacousticTimeline.SymbolCount);
     for (ulong eventIndex = 0; eventIndex < MimirBioacousticTimeline.SymbolCount; eventIndex++)
     {
         var samples = MimirBioacousticTimeline.Default.RenderEventMonoFloat(eventIndex, sampleRate);
-        foreach (var setting in augmentationSettings)
+        foreach (var setting in options.TemplateAugmentations)
         {
             var templateSamples = setting.BlurPasses == 0 && setting.WarpFrames == 0.0 && setting.WarpCoefficients == 0.0
                 ? samples
                 : RoundTripThroughDegradedCepstrum(samples, sampleRate, setting, out _);
-            templates.Add(new CepstralWordTemplate(eventIndex, CepstralFingerprint(templateSamples, sampleRate)));
+            templates.Add(new CepstralWordTemplate(eventIndex, CepstralFingerprintWithOptions(templateSamples, sampleRate, options)));
         }
     }
 
     var buckets = new Dictionary<(int Table, int Hash), List<int>>();
     for (var index = 0; index < templates.Count; index++)
     {
-        for (var table = 0; table < tableCount; table++)
+        for (var table = 0; table < options.TableCount; table++)
         {
-            var key = (table, ProjectionHash(templates[index].Feature, table, hashBits));
+            var key = (table, ProjectionHash(templates[index].Feature, table, options.HashBits));
             if (!buckets.TryGetValue(key, out var bucket))
             {
                 bucket = [];
@@ -1195,24 +1462,20 @@ static CepstralWordIndex BuildCepstralWordIndex(int sampleRate, int tableCount, 
     return new CepstralWordIndex(templates.ToArray(), buckets);
 }
 
-static double[] CepstralFingerprint(ReadOnlySpan<float> samples, int sampleRate)
+static double[] CepstralFingerprintWithOptions(ReadOnlySpan<float> samples, int sampleRate, CepstralDecoderOptions options)
 {
-    const int fftSize = 1024;
-    const int hopSize = 256;
-    const int melBins = 40;
-    const int cepstralCoefficients = 14;
-    var window = HannWindow(fftSize);
-    var melFilters = BuildMelFilterBank(melBins, fftSize, sampleRate, 180.0, 15_000.0);
+    var window = HannWindow(options.FftSize);
+    var melFilters = BuildMelFilterBank(options.MelBins, options.FftSize, sampleRate, options.MinFrequencyHz, options.MaxFrequencyHz);
     var melNormalizer = melFilters.Select(filter => Math.Max(1.0e-12, filter.Sum())).ToArray();
-    var frameCount = Math.Max(1, 1 + Math.Max(0, samples.Length - fftSize) / hopSize);
-    var mean = new double[cepstralCoefficients];
-    var delta = new double[cepstralCoefficients];
+    var frameCount = Math.Max(1, 1 + Math.Max(0, samples.Length - options.FftSize) / options.HopSize);
+    var mean = new double[options.CepstralCoefficients];
+    var delta = new double[options.CepstralCoefficients];
     double[]? previous = null;
     for (var frame = 0; frame < frameCount; frame++)
     {
-        var offset = frame * hopSize;
-        var spectrum = new Complex[fftSize];
-        for (var index = 0; index < fftSize; index++)
+        var offset = frame * options.HopSize;
+        var spectrum = new Complex[options.FftSize];
+        for (var index = 0; index < options.FftSize; index++)
         {
             var sampleIndex = offset + index;
             var sample = sampleIndex < samples.Length ? samples[sampleIndex] : 0.0f;
@@ -1220,8 +1483,8 @@ static double[] CepstralFingerprint(ReadOnlySpan<float> samples, int sampleRate)
         }
 
         FastFourierTransform(spectrum, inverse: false);
-        var cepstrum = Dct(SpectrumToLogMel(spectrum, melFilters, melNormalizer), cepstralCoefficients);
-        for (var coefficient = 0; coefficient < cepstralCoefficients; coefficient++)
+        var cepstrum = Dct(SpectrumToLogMel(spectrum, melFilters, melNormalizer), options.CepstralCoefficients);
+        for (var coefficient = 0; coefficient < options.CepstralCoefficients; coefficient++)
         {
             mean[coefficient] += cepstrum[coefficient];
             if (previous != null)
@@ -1233,11 +1496,11 @@ static double[] CepstralFingerprint(ReadOnlySpan<float> samples, int sampleRate)
         previous = cepstrum;
     }
 
-    var output = new double[cepstralCoefficients * 2];
-    for (var coefficient = 0; coefficient < cepstralCoefficients; coefficient++)
+    var output = new double[options.CepstralCoefficients * 2];
+    for (var coefficient = 0; coefficient < options.CepstralCoefficients; coefficient++)
     {
         output[coefficient] = coefficient == 0 ? 0.0 : mean[coefficient] / frameCount;
-        output[coefficient + cepstralCoefficients] = delta[coefficient] / Math.Max(1, frameCount - 1);
+        output[coefficient + options.CepstralCoefficients] = delta[coefficient] / Math.Max(1, frameCount - 1);
     }
 
     NormalizeFeature(output);
@@ -1756,6 +2019,80 @@ static void AppendFloatBlock(MimirRollingStreamBuffer buffer, string sourceId, f
             1_000_000_000L)));
 }
 
+static float[] ReconstructDetectedBioacousticSong(IReadOnlyList<CepstralWordObservation> observations, int sampleCount, int sampleRate)
+{
+    var output = new float[sampleCount];
+    foreach (var observation in observations)
+    {
+        var eventSamples = MimirBioacousticTimeline.Default.RenderEventMonoFloat(observation.EventIndex, sampleRate);
+        var offset = (int)Math.Round(observation.SampleOffset);
+        for (var index = 0; index < eventSamples.Length; index++)
+        {
+            var target = offset + index;
+            if (target >= 0 && target < output.Length)
+            {
+                output[target] += eventSamples[index] * (float)Math.Clamp(observation.Confidence, 0.0, 1.0);
+            }
+        }
+    }
+
+    return output;
+}
+
+static async Task WriteBioacousticTrainingCacheAsync(string cachePath, IReadOnlyList<BioacousticTrainingResult> results)
+{
+    using var cache = await CultCacheMessagePack.OpenAsync(cachePath, new CultCacheOpenOptions
+    {
+        PullOnOpen = File.Exists(cachePath)
+    }).ConfigureAwait(false);
+    foreach (var result in results)
+    {
+        await cache.UpsertAsync(
+            result,
+            new CultRecordHandle<BioacousticTrainingResult>(new CultRecordKey($"bioacoustic-training-result:{result.ResultId}")))
+            .ConfigureAwait(false);
+    }
+
+    await cache.FlushAsync().ConfigureAwait(false);
+}
+
+static void WriteWave(string path, IReadOnlyList<float> samples, int sampleRate)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".");
+    using var stream = File.Create(path);
+    using var writer = new BinaryWriter(stream);
+    var dataBytes = samples.Count * sizeof(short);
+    writer.Write("RIFF"u8);
+    writer.Write(36 + dataBytes);
+    writer.Write("WAVE"u8);
+    writer.Write("fmt "u8);
+    writer.Write(16);
+    writer.Write((short)1);
+    writer.Write((short)1);
+    writer.Write(sampleRate);
+    writer.Write(sampleRate * sizeof(short));
+    writer.Write((short)sizeof(short));
+    writer.Write((short)16);
+    writer.Write("data"u8);
+    writer.Write(dataBytes);
+    for (var index = 0; index < samples.Count; index++)
+    {
+        writer.Write((short)Math.Clamp(Math.Round(samples[index] * short.MaxValue), short.MinValue, short.MaxValue));
+    }
+}
+
+static string Sha256File(string path)
+{
+    using var stream = File.OpenRead(path);
+    return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+}
+
+static string RelativePath(string root, string path)
+{
+    var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
+    return relative == "." ? "" : relative;
+}
+
 internal sealed class DisposableConfiguration : IDisposable
 {
     private readonly List<IMimirStreamSource> ownedSources;
@@ -1788,6 +2125,46 @@ internal sealed record CepstralDegradationSetting(
     double WarpCoefficients,
     int BlurPasses);
 
+internal sealed record CepstralDecoderOptions(
+    int FftSize,
+    int HopSize,
+    int MelBins,
+    int CepstralCoefficients,
+    double MinFrequencyHz,
+    double MaxFrequencyHz,
+    int TableCount,
+    int HashBits,
+    int NearHashRadius,
+    double DenseStepSeconds,
+    double ProposalBudgetMultiplier,
+    IReadOnlyList<CepstralDegradationSetting> TemplateAugmentations)
+{
+    public static CepstralDecoderOptions Default { get; } = new(
+        FftSize: 1024,
+        HopSize: 256,
+        MelBins: 40,
+        CepstralCoefficients: 14,
+        MinFrequencyHz: 180.0,
+        MaxFrequencyHz: 15_000.0,
+        TableCount: 4,
+        HashBits: 14,
+        NearHashRadius: 4,
+        DenseStepSeconds: 0.040,
+        ProposalBudgetMultiplier: 8.0,
+        TemplateAugmentations:
+        [
+            new CepstralDegradationSetting("template-clean", 0.0, 0.0, 0),
+            new CepstralDegradationSetting("template-blur", 0.0, 0.0, 1),
+            new CepstralDegradationSetting("template-warp-light", 0.75, 1.25, 0),
+            new CepstralDegradationSetting("template-warp-blur", 0.75, 1.25, 1)
+        ]);
+}
+
+internal sealed record BioacousticTrainingHypothesis(
+    string Id,
+    string Notes,
+    CepstralDecoderOptions Decoder);
+
 internal sealed record CepstralRoundTripAnalysis(
     int FrameCount,
     int MelBins,
@@ -1806,3 +2183,63 @@ internal sealed record CepstralWordObservation(
 internal sealed record CepstralWordIndex(
     IReadOnlyList<CepstralWordTemplate> Templates,
     IReadOnlyDictionary<(int Table, int Hash), List<int>> Buckets);
+
+[CultDocument("mimir.bioacoustic_training_result", "mimir.bioacoustic_training_result.v1")]
+[MessagePackObject]
+public sealed record BioacousticTrainingResult(
+    [property: Key(0)]
+    [property: CultName]
+    string ResultId,
+    [property: Key(1)] string RunId,
+    [property: Key(2)] string StartedAtUtc,
+    [property: Key(3)] string Toolchain,
+    [property: Key(4)] string HypothesisId,
+    [property: Key(5)] string HypothesisNotes,
+    [property: Key(6)] string DegradationName,
+    [property: Key(7)] int SampleRate,
+    [property: Key(8)] double Seconds,
+    [property: Key(9)] int ExpectedEvents,
+    [property: Key(10)] int ObservationCount,
+    [property: Key(11)] int CorrectAnchors,
+    [property: Key(12)] double Precision,
+    [property: Key(13)] double Recall,
+    [property: Key(14)] double Confidence,
+    [property: Key(15)] double TimingMeanAbsoluteErrorSamples,
+    [property: Key(16)] double DecodeMilliseconds,
+    [property: Key(17)] double RealtimeFactor,
+    [property: Key(18)] double IdentityScore,
+    [property: Key(19)] double TimingScore,
+    [property: Key(20)] double SpeedScore,
+    [property: Key(21)] double TotalScore,
+    [property: Key(22)] int RoundTripMelBins,
+    [property: Key(23)] int RoundTripCepstralCoefficients,
+    [property: Key(24)] int RoundTripFrameCount,
+    [property: Key(25)] double RoundTripRmsRatio,
+    [property: Key(26)] BioacousticTrainingDecoderSnapshot Decoder,
+    [property: Key(27)] BioacousticTrainingArtifact[] Artifacts,
+    [property: Key(28)] BioacousticTrainingObservation[] Observations);
+
+[MessagePackObject]
+public sealed record BioacousticTrainingDecoderSnapshot(
+    [property: Key(0)] int FftSize,
+    [property: Key(1)] int HopSize,
+    [property: Key(2)] int MelBins,
+    [property: Key(3)] int CepstralCoefficients,
+    [property: Key(4)] int TableCount,
+    [property: Key(5)] int HashBits,
+    [property: Key(6)] int NearHashRadius,
+    [property: Key(7)] double DenseStepSeconds,
+    [property: Key(8)] double ProposalBudgetMultiplier,
+    [property: Key(9)] string[] TemplateAugmentations);
+
+[MessagePackObject]
+public sealed record BioacousticTrainingArtifact(
+    [property: Key(0)] string Kind,
+    [property: Key(1)] string Uri,
+    [property: Key(2)] string ContentHash);
+
+[MessagePackObject]
+public sealed record BioacousticTrainingObservation(
+    [property: Key(0)] ulong EventIndex,
+    [property: Key(1)] double SampleOffset,
+    [property: Key(2)] double Confidence);

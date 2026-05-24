@@ -1,0 +1,89 @@
+{
+  "ResultId": "bioacoustic-20260524-103438:highband-room-index:clean-roundtrip",
+  "RunId": "bioacoustic-20260524-103438",
+  "StartedAtUtc": "2026-05-24T10:34:38.4598729\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "highband-room-index",
+  "HypothesisNotes": "Bias toward the measured useful upper speech/birdcall band and away from low room junk.",
+  "DegradationName": "clean-roundtrip",
+  "SampleRate": 48000,
+  "Seconds": 0.5,
+  "ExpectedEvents": 3,
+  "ObservationCount": 4,
+  "CorrectAnchors": 3,
+  "Precision": 0.75,
+  "Recall": 1,
+  "Confidence": 0.9482728927761414,
+  "TimingMeanAbsoluteErrorSamples": 5963.999999999999,
+  "DecodeMilliseconds": 123.188,
+  "RealtimeFactor": 4.058836899698022,
+  "IdentityScore": 0.8823272892776142,
+  "TimingScore": 0.03868471953578337,
+  "SpeedScore": 0.08117673799396044,
+  "TotalScore": 0.5702415164673539,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 43,
+  "RoundTripRmsRatio": 0.008886063472396654,
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.035,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "highband-room-index/clean-roundtrip/pre-warp.wav",
+      "ContentHash": "e72bae7434ebccd1826ae87389724ae617b5158316e80fd90a35d4d7a90c87f2"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "highband-room-index/clean-roundtrip/post-warp.wav",
+      "ContentHash": "f803fceaf796518f32920b9c777b27e7017379fcdbc6acb46e2c89889ef1aa74"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "highband-room-index/clean-roundtrip/reconstructed-from-detections.wav",
+      "ContentHash": "eadc71a086a97c50063fb45ca7df295f33a9e7634bb656ab7574c006c70cd6c4"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "highband-room-index/clean-roundtrip/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 3360,
+      "Confidence": 0.9687346267460094
+    },
+    {
+      "EventIndex": 3,
+      "SampleOffset": 5040,
+      "Confidence": 0.8772393131190942
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 11760,
+      "Confidence": 0.976267321923383
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 17904,
+      "Confidence": 0.9708503093160791
+    }
+  ]
+}
