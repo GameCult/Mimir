@@ -134,7 +134,7 @@ public static class MimirBioacousticContestants
         LowestRootHz: 2_800.0,
         HighestRootHz: 10_600.0,
         Gain: 0.024,
-        PayloadBitsPerEvent: 8,
+        PayloadBitsPerEvent: 2,
         "A higher-throughput singing modem candidate: compact, bright, and less apologetic about being a packet.");
 
     public static MimirBioacousticContestantProfile FinchBurstPacket { get; } = new(
@@ -173,8 +173,13 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
 
     public float[] RenderEventMonoFloat(ulong eventIndex, int sampleRate)
     {
+        return RenderEventMonoFloat(eventIndex, sampleRate, PayloadSymbolForEvent(eventIndex));
+    }
+
+    public float[] RenderEventMonoFloat(ulong eventIndex, int sampleRate, int payloadSymbol)
+    {
         var samples = new float[Math.Max(1, (int)Math.Round(Profile.MotifDurationSeconds * sampleRate))];
-        AddEvent(samples, sampleRate, eventIndex, EventStartSeconds(eventIndex), EventStartSeconds(eventIndex));
+        AddEvent(samples, sampleRate, eventIndex, payloadSymbol, EventStartSeconds(eventIndex), EventStartSeconds(eventIndex));
         return samples;
     }
 
@@ -184,7 +189,8 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
         var lastEvent = Math.Max(0, (int)Math.Ceiling((seconds - MimirBioacousticContestants.FirstEventSeconds) / Profile.EventSpacingSeconds) + 2);
         for (var eventIndex = 0; eventIndex <= lastEvent; eventIndex++)
         {
-            AddEvent(samples, sampleRate, (ulong)eventIndex, EventStartSeconds((ulong)eventIndex), 0.0);
+            var payload = PayloadSymbolForEvent((ulong)eventIndex);
+            AddEvent(samples, sampleRate, (ulong)eventIndex, payload, EventStartSeconds((ulong)eventIndex), 0.0);
         }
 
         return samples;
@@ -202,10 +208,9 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
         return mask == 0 ? 0 : (int)(Mix((int)(eventIndex & 0x7fff), (uint)Profile.Kind + 0xC0DEu) & (uint)mask);
     }
 
-    private void AddEvent(float[] output, int sampleRate, ulong eventIndex, double eventStartSeconds, double bufferStartSeconds)
+    private void AddEvent(float[] output, int sampleRate, ulong eventIndex, int payload, double eventStartSeconds, double bufferStartSeconds)
     {
         var symbolId = SymbolForEvent(eventIndex);
-        var payload = PayloadSymbolForEvent(eventIndex);
         var root = RootForSymbol(symbolId);
         var rng = Mix(symbolId ^ (payload << 9), (uint)Profile.Kind);
         for (var syllable = 0; syllable < Profile.SyllableCount; syllable++)
@@ -227,6 +232,10 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
         var phase = ((symbolId * 17 + syllable * 31) & 255) / 255.0;
         var payloadPhase = ((payload * 29 + syllable * 47) & 255) / 255.0;
         var payloadStep = ((payload >> (syllable % Math.Max(1, Profile.PayloadBitsPerEvent))) & 7) - 3;
+        var payloadPair = (payload >> ((syllable * 2) % Math.Max(1, Profile.PayloadBitsPerEvent))) & 3;
+        var payloadCross = (payload >> ((syllable * 2 + 1) % Math.Max(1, Profile.PayloadBitsPerEvent))) & 3;
+        var payloadTone = payload & 3;
+        var payloadBand = (payload >> 2) & 1;
         return Profile.Kind switch
         {
             MimirBioacousticContestantKind.RedpollTrill => (
@@ -268,11 +277,11 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
                 Weight: syllable is 0 or 3 or 6 ? 0.94 : 0.56 + 0.22 * Math.Sin(payloadPhase * Math.Tau) * Math.Sin(payloadPhase * Math.Tau)),
             MimirBioacousticContestantKind.CanaryPacketTrill => (
                 StartSeconds: syllable * Profile.MotifDurationSeconds / (Profile.SyllableCount + 0.75) +
-                    (syllable < 2 ? 0.0 : 0.0014 * Math.Sin(payloadPhase * Math.Tau)),
-                DurationSeconds: Profile.MotifDurationSeconds * (syllable < 2 ? 0.070 : 0.086 + 0.010 * ((payload >> syllable) & 1)),
-                StartHz: root * Ratio((syllable < 2 ? -1.0 + syllable * 1.85 : -0.55 + syllable * 0.52) + payloadStep * 0.24),
-                EndHz: root * Ratio((syllable < 2 ? 1.25 + syllable * 1.35 : 0.10 + ((payload + syllable) & 7) * 0.19) - payloadStep * 0.16),
-                Weight: syllable < 2 ? 1.0 : 0.66 + 0.18 * (((payload >> syllable) & 1) == 0 ? 0.0 : 1.0)),
+                    (syllable < 2 ? 0.0 : 0.0012 * (payloadTone - 1.5)),
+                DurationSeconds: Profile.MotifDurationSeconds * (syllable < 2 ? 0.070 : 0.082 + 0.006 * payloadTone),
+                StartHz: root * Ratio((syllable < 2 ? -1.0 + syllable * 1.85 : -0.55 + syllable * 0.52) + payloadTone * 0.72),
+                EndHz: root * Ratio((syllable < 2 ? 1.25 + syllable * 1.35 : 0.10 + syllable * 0.19) + payloadTone * 0.58),
+                Weight: syllable < 2 ? 1.0 : 0.62 + 0.10 * payloadTone),
             MimirBioacousticContestantKind.FinchBurstPacket => (
                 StartSeconds: syllable * Profile.MotifDurationSeconds / (Profile.SyllableCount + 0.65) +
                     (syllable is 0 or 1 ? 0.0 : 0.0011 * Math.Sin((payloadPhase + 0.17) * Math.Tau)),

@@ -758,13 +758,20 @@ static async Task<int> RunBioacousticContestantsAsync(
                     decoder.Decoder,
                     index,
                     renderer);
-                var decodeMs = Stopwatch.GetElapsedTime(stamp).TotalMilliseconds;
                 var expectedObservations = observations
                     .Where(observation => expectedEvents.Contains(observation.EventIndex))
                     .ToArray();
+                var payloadClassifications = ClassifyContestantPayloads(
+                    degraded,
+                    sampleRate,
+                    decoder.Decoder,
+                    renderer,
+                    expectedObservations);
+                var decodeMs = Stopwatch.GetElapsedTime(stamp).TotalMilliseconds;
                 var correct = expectedObservations.Length;
                 var payloadCorrect = expectedObservations.Count(observation =>
-                    observation.PayloadSymbol == renderer.PayloadSymbolForEvent(observation.EventIndex));
+                    payloadClassifications.TryGetValue(observation.EventIndex, out var payload) &&
+                    payload == renderer.PayloadSymbolForEvent(observation.EventIndex));
                 var precision = observations.Count == 0 ? 0.0 : correct / (double)observations.Count;
                 var recall = expectedEvents.Count == 0 ? 0.0 : correct / (double)expectedEvents.Count;
                 var payloadAccuracy = observations.Count == 0 || expectedEvents.Count == 0
@@ -828,6 +835,7 @@ static async Task<int> RunBioacousticContestantsAsync(
                     observations.Select(observation => new BioacousticContestantObservation(
                         observation.EventIndex,
                         observation.PayloadSymbol,
+                        payloadClassifications.TryGetValue(observation.EventIndex, out var classifiedPayload) ? classifiedPayload : -1,
                         observation.SampleOffset,
                         observation.Confidence,
                         observation.ShapeAccuracy)).ToArray(),
@@ -2117,6 +2125,55 @@ static double ScoreContestantOffset(float[] samples, float[] template, int offse
         : dot / Math.Sqrt(sampleEnergy * templateEnergy);
 }
 
+static IReadOnlyDictionary<ulong, int> ClassifyContestantPayloads(
+    float[] samples,
+    int sampleRate,
+    CepstralDecoderOptions options,
+    MimirBioacousticContestantRenderer contestant,
+    IReadOnlyList<CepstralWordObservation> observations)
+{
+    if (observations.Count == 0)
+    {
+        return new Dictionary<ulong, int>();
+    }
+
+    var payloadCount = 1 << Math.Clamp(contestant.Profile.PayloadBitsPerEvent, 0, 8);
+    if (payloadCount <= 1)
+    {
+        return observations.ToDictionary(observation => observation.EventIndex, _ => 0);
+    }
+
+    var motifSamples = contestant.RenderEventMonoFloat(0, sampleRate).Length;
+    var decoded = new Dictionary<ulong, int>();
+    foreach (var observation in observations)
+    {
+        var offset = (int)Math.Round(observation.SampleOffset);
+        if (offset < 0 || offset + motifSamples > samples.Length)
+        {
+            continue;
+        }
+
+        var feature = CepstralFingerprintWithOptions(samples.AsSpan(offset, motifSamples), sampleRate, options);
+        var bestPayload = 0;
+        var bestDistance = double.PositiveInfinity;
+        for (var payload = 0; payload < payloadCount; payload++)
+        {
+            var template = contestant.RenderEventMonoFloat(observation.EventIndex, sampleRate, payload);
+            var templateFeature = CepstralFingerprintWithOptions(template, sampleRate, options);
+            var distance = CepstralDistance(feature, templateFeature);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestPayload = payload;
+            }
+        }
+
+        decoded[observation.EventIndex] = bestPayload;
+    }
+
+    return decoded;
+}
+
 static CepstralWordIndex BuildCepstralWordIndex(int sampleRate, CepstralDecoderOptions options)
 {
     var templates = new List<CepstralWordTemplate>(MimirBioacousticTimeline.SymbolCount);
@@ -3135,6 +3192,7 @@ public sealed record BioacousticContestantResult(
 public sealed record BioacousticContestantObservation(
     ulong EventIndex,
     int PayloadSymbol,
+    int ClassifiedPayloadSymbol,
     double SampleOffset,
     double Confidence,
     double ShapeAccuracy);

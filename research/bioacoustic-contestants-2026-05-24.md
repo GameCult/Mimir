@@ -49,11 +49,14 @@ language_score = realtime_multiplier
 
 This is raw enough to hurt. It rewards a receiver that is fast, places anchors
 accurately in time, preserves frequency/shape identity, and recovers
-data-bearing words. `payload_bitrate_bps` is currently computed from the
-profile's payload bits per event, event spacing, and payload accuracy. The
-payload stream is deterministic test data, not yet an arbitrary encrypted
-external message, but it does force the call shape and decoder to carry more
-than clock identity.
+data-bearing words. `payload_bitrate_bps` is computed from the profile's payload
+bits per event, event spacing, and payload accuracy.
+
+Important cut: payload accuracy is now classified from the observed word shape.
+For each anchored event, the harness compares the observed feature against that
+event's payload alphabet and records the classified payload symbol. This is
+slower and meaner than treating event identity as payload recovery, but it is
+the first score that deserves to be called bitrate evidence.
 
 The score also stopped using word precision as a fake frequency score. Each
 decoded observation now carries a cepstral shape accuracy from the winning
@@ -106,6 +109,49 @@ overvalue sparse perfection.
 
 ## Packet Contest Receipts
 
+### Current Honest Payload Receipt
+
+Run:
+
+```powershell
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-contestants --seconds 0.75 --song canary-packet-trill --decoder packet-razor-index --max-songs 1 --max-decoders 1 --max-degradations 5 --output artifacts/bioacoustic-contestants
+```
+
+Receipt:
+
+`artifacts/bioacoustic-contestants/contestants-20260524-191535/contestant-summary.json`
+
+Best result with independent payload classification:
+
+```text
+song=canary-packet-trill
+decoder=packet-razor-index
+degradation=clean-roundtrip
+language_score=42.944
+realtime=3.1x
+timing=1.000
+frequency=0.935
+payload_bitrate=14.6 bps
+payload_accuracy=0.913
+correct=5/5
+```
+
+Damage panel:
+
+```text
+blur-light        score=27.071 payload_bitrate=8.8 bps  payload=0.548 timing=1.000 frequency=0.953
+warp-light        score=0.000  payload_bitrate=0.0 bps  payload=0.000 timing=0.004 frequency=0.683
+warp-light-blur   score=16.114 payload_bitrate=6.4 bps  payload=0.400 timing=0.817 frequency=0.927
+warp-heavy-blur   score=13.867 payload_bitrate=3.6 bps  payload=0.224 timing=1.000 frequency=0.911
+```
+
+This is the current honest floor: a 2-bit payload alphabet carried by the
+canary packet. A 3-bit variant did not earn its keep; clean was similar, but
+degraded payload recovery collapsed to zero. The earlier 8-bit and 4-bit
+readings were schedule-entangled and are no longer treated as bitrate evidence.
+
+### Obsolete Schedule-Entangled Receipt
+
 The best current receipt is:
 
 ```powershell
@@ -116,7 +162,7 @@ Receipt:
 
 `artifacts/bioacoustic-contestants/contestants-20260524-185328/contestant-summary.json`
 
-Best result:
+Best result before independent payload classification:
 
 ```text
 song=canary-packet-trill
@@ -130,6 +176,10 @@ payload_bitrate=64.0 bps
 payload_accuracy=1.000
 correct=5/5
 ```
+
+This receipt is still useful for timing/frequency/speed pressure, but not as a
+bitrate claim. It assumed payload recovery from event identity instead of
+decoding the payload alphabet from the observed word.
 
 Worst result in that five-degradation panel:
 
