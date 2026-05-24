@@ -2362,7 +2362,10 @@ static MimirBioacousticClockHypothesis? FitContestantClockHypothesis(
             .Order()
             .ToArray();
         var medianResidual = residuals[residuals.Length / 2];
-        var inlierRadius = Math.Max(sampleRate * 0.003, medianResidual * 3.0 + sampleRate * 0.00025);
+        var inlierRadius = Math.Clamp(
+            medianResidual * 3.0 + sampleRate * 0.00025,
+            sampleRate * 0.003,
+            sampleRate * 0.006);
         var inliers = anchors
             .Where(anchor => Math.Abs(anchor.SampleOffset - (delayHypothesis + anchor.TimelineSeconds * sampleRate)) <= inlierRadius)
             .ToArray();
