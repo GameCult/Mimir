@@ -44,6 +44,13 @@ if (args.Any(arg => string.Equals(arg, "--bioacoustic-train", StringComparison.O
         ParseStringOption(args, "--output", "artifacts/bioacoustic-training")).ConfigureAwait(false);
 }
 
+if (args.Any(arg => string.Equals(arg, "--bioacoustic-actuator-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunBioacousticActuatorSelfTest(
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseDoubleOption(args, "--delay-samples", 317.375));
+}
+
 if (args.Any(arg => string.Equals(arg, "--standalone-chirp-bin-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunStandaloneChirpBinSelfTest(
@@ -470,6 +477,7 @@ static int RunBioacousticCepstralSmoke(int sampleRate, double seconds)
         var recall = expectedEvents.Count == 0 ? 0.0 : correctAnchors / (double)expectedEvents.Count;
         var confidence = observations.Count == 0 ? 0.0 : observations.Average(observation => observation.Confidence);
         var mae = MeanCepstralTimingError(observations, timeline, sampleRate);
+        var clock = FitBioacousticClockHypothesis(observations, timeline, sampleRate);
         var passed = correctAnchors >= Math.Min(3, expectedEvents.Count) &&
             precision >= 0.50 &&
             recall >= 0.35 &&
@@ -477,6 +485,7 @@ static int RunBioacousticCepstralSmoke(int sampleRate, double seconds)
         Console.WriteLine(
             $"bioacoustic-cepstral-smoke decoder=indexed-mfcc-word setting={setting.Name} observations={observations.Count} correct={correctAnchors}/{expectedEvents.Count} " +
             $"precision={precision:0.000} recall={recall:0.000} confidence={confidence:0.000} mae={mae:0.000} " +
+            $"globalAnchors={clock?.AnchorCount ?? 0} globalMae={clock?.MeanAbsoluteErrorSamples ?? double.PositiveInfinity:0.000} globalOffset={clock?.SourceOffsetSamples ?? double.NaN:0.000} globalRate={clock?.EffectiveSampleRate ?? double.NaN:0.000} " +
             $"melBins={analysis.MelBins} cepstra={analysis.CepstralCoefficients} stftFrames={analysis.FrameCount} rmsRatio={analysis.RmsRatio:0.000} pass={passed}");
         if (!passed)
         {
@@ -557,11 +566,12 @@ static async Task<int> RunBioacousticTrainingAsync(int sampleRate, double second
             var recall = expectedEvents.Count == 0 ? 0.0 : correctAnchors / (double)expectedEvents.Count;
             var confidence = observations.Count == 0 ? 0.0 : observations.Average(observation => observation.Confidence);
             var timingMae = MeanCepstralTimingError(observations, timeline, sampleRate);
+            var clock = FitBioacousticClockHypothesis(observations, timeline, sampleRate);
+            var globalTimingMae = clock?.MeanAbsoluteErrorSamples ?? double.PositiveInfinity;
+            var anchorCoverage = expectedEvents.Count == 0 || clock == null ? 0.0 : clock.AnchorCount / (double)expectedEvents.Count;
             var realtime = decodeMilliseconds <= 0.0 ? double.PositiveInfinity : seconds * 1000.0 / decodeMilliseconds;
             var identityScore = precision * 0.45 + recall * 0.45 + confidence * 0.10;
-            var timingScore = double.IsFinite(timingMae)
-                ? 1.0 / (1.0 + timingMae / Math.Max(1.0, sampleRate * 0.005))
-                : 0.0;
+            var timingScore = clock?.Confidence ?? 0.0;
             var speedScore = Math.Clamp(realtime / 50.0, 0.0, 1.0);
             var totalScore = identityScore * 0.62 + timingScore * 0.18 + speedScore * 0.20;
             var reconstructed = ReconstructDetectedBioacousticSong(observations, source.Length, sampleRate);
@@ -595,6 +605,16 @@ static async Task<int> RunBioacousticTrainingAsync(int sampleRate, double second
                 analysis.CepstralCoefficients,
                 analysis.FrameCount,
                 analysis.RmsRatio,
+                clock == null
+                    ? new BioacousticClockHypothesisSnapshot(0, 0, 0, 0, 0, 0, 0)
+                    : new BioacousticClockHypothesisSnapshot(
+                        clock.AnchorCount,
+                        clock.SourceOffsetSamples,
+                        clock.EffectiveSampleRate,
+                        clock.MeanAbsoluteErrorSamples,
+                        clock.Confidence,
+                        clock.Score,
+                        anchorCoverage),
                 new BioacousticTrainingDecoderSnapshot(
                     hypothesis.Decoder.FftSize,
                     hypothesis.Decoder.HopSize,
@@ -633,7 +653,7 @@ static async Task<int> RunBioacousticTrainingAsync(int sampleRate, double second
             results.Add(result);
             Console.WriteLine(
                 $"bioacoustic-train hypothesis={hypothesis.Id} degradation={degradation.Name} total={totalScore:0.000} identity={identityScore:0.000} timing={timingScore:0.000} speed={speedScore:0.000} " +
-                $"precision={precision:0.000} recall={recall:0.000} confidence={confidence:0.000} mae={timingMae:0.000} decodeMs={decodeMilliseconds:0.000} realtime={realtime:0.0}x artifacts={RelativePath(Directory.GetCurrentDirectory(), settingDirectory)}");
+                $"precision={precision:0.000} recall={recall:0.000} confidence={confidence:0.000} mae={timingMae:0.000} globalMae={globalTimingMae:0.000} globalAnchors={clock?.AnchorCount ?? 0} anchorCoverage={anchorCoverage:0.000} decodeMs={decodeMilliseconds:0.000} realtime={realtime:0.0}x artifacts={RelativePath(Directory.GetCurrentDirectory(), settingDirectory)}");
         }
     }
 
@@ -782,6 +802,66 @@ static int RunActiveSyncSelfTest(int sampleRate, MimirAudioSyncMode mode)
         error * 1_000_000.0 / report.SampleRate < 1.0
             ? 0
             : 1;
+}
+
+static int RunBioacousticActuatorSelfTest(int sampleRate, double delaySamples)
+{
+    var segments = Enumerable.Range(0, 4)
+        .Select(segment => MimirBioacousticTimeline.Default.RenderSegmentMonoFloat((ulong)segment, sampleRate))
+        .ToArray();
+    var reference = new float[segments.Sum(segment => segment.Length)];
+    var writeOffset = 0;
+    foreach (var segment in segments)
+    {
+        Array.Copy(segment, 0, reference, writeOffset, segment.Length);
+        writeOffset += segment.Length;
+    }
+
+    var delayed = ApplyFractionalDelay(reference, delaySamples);
+    var before = EstimateBioacousticDelay(reference, delayed, sampleRate);
+    if (before == null)
+    {
+        Console.Error.WriteLine("bioacoustic actuator self-test failed: analyzer could not estimate the delayed candidate");
+        return 1;
+    }
+
+    var corrected = ApplyFractionalDelay(delayed, -before.FractionalDelaySamples);
+    var after = EstimateBioacousticDelay(reference, corrected, sampleRate);
+    if (after == null)
+    {
+        Console.Error.WriteLine("bioacoustic actuator self-test failed: analyzer could not estimate the corrected candidate");
+        return 1;
+    }
+
+    var beforeError = Math.Abs(before.FractionalDelaySamples - delaySamples);
+    var afterResidual = Math.Abs(after.FractionalDelaySamples);
+    Console.WriteLine(
+        $"bioacoustic-actuator-self-test estimatedDelay={before.FractionalDelaySamples:0.000000} expected={delaySamples:0.000000} beforeErrorSamples={beforeError:0.000000} " +
+        $"correctedResidualSamples={afterResidual:0.000000} correctedResidualUs={afterResidual * 1_000_000.0 / sampleRate:0.000} beforeConfidence={before.Confidence:0.000} afterConfidence={after.Confidence:0.000}");
+    return beforeError < 0.05 &&
+        afterResidual * 1_000_000.0 / sampleRate < 1.0 &&
+        after.Confidence > 0.70
+            ? 0
+            : 1;
+}
+
+static MimirAudioSynchronizationReport? EstimateBioacousticDelay(float[] reference, float[] candidate, int sampleRate)
+{
+    const string referenceSourceId = "actuator-reference";
+    const string candidateSourceId = "actuator-candidate";
+    var referenceBuffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor(referenceSourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    var candidateBuffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor(candidateSourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    AppendFloatBlock(referenceBuffer, referenceSourceId, reference, sampleRate);
+    AppendFloatBlock(candidateBuffer, candidateSourceId, candidate, sampleRate);
+
+    var analyzer = new MimirAudioSynchronizationAnalyzer();
+    return analyzer
+        .Analyze([referenceBuffer, candidateBuffer], referenceSourceId, MimirAudioSyncMode.ChirpOnly)
+        .SingleOrDefault();
 }
 
 static string SyncModeLabel(MimirAudioSyncMode mode)
@@ -1543,6 +1623,151 @@ static double MeanCepstralTimingError(
         Math.Abs(observation.SampleOffset - timeline.EventForIndex(observation.EventIndex).StartSeconds * sampleRate));
 }
 
+static BioacousticClockHypothesis? FitBioacousticClockHypothesis(
+    IReadOnlyList<CepstralWordObservation> observations,
+    MimirBioacousticTimeline timeline,
+    int sampleRate)
+{
+    var anchors = observations
+        .Select(observation => new BioacousticClockAnchor(
+            observation.EventIndex,
+            timeline.EventForIndex(observation.EventIndex).StartSeconds,
+            observation.SampleOffset,
+            Math.Clamp(observation.Confidence, 0.001, 1.0)))
+        .OrderByDescending(anchor => anchor.Confidence)
+        .Take(24)
+        .ToArray();
+    if (anchors.Length == 0)
+    {
+        return null;
+    }
+
+    var candidates = new List<BioacousticClockHypothesis>();
+    foreach (var anchor in anchors)
+    {
+        var offset = anchor.SampleOffset - anchor.TimelineSeconds * sampleRate;
+        AddClockCandidate(candidates, anchors, sampleRate, offset, sampleRate);
+    }
+
+    if (anchors.Length >= 3)
+    {
+        for (var first = 0; first < anchors.Length; first++)
+        {
+            for (var second = first + 1; second < anchors.Length; second++)
+            {
+                var dt = anchors[second].TimelineSeconds - anchors[first].TimelineSeconds;
+                if (Math.Abs(dt) < 0.08)
+                {
+                    continue;
+                }
+
+                var rate = (anchors[second].SampleOffset - anchors[first].SampleOffset) / dt;
+                if (!double.IsFinite(rate) || rate < sampleRate * 0.98 || rate > sampleRate * 1.02)
+                {
+                    continue;
+                }
+
+                var offset = anchors[first].SampleOffset - anchors[first].TimelineSeconds * rate;
+                AddClockCandidate(candidates, anchors, sampleRate, offset, rate);
+            }
+        }
+    }
+
+    return candidates
+        .OrderByDescending(candidate => candidate.Score)
+        .ThenBy(candidate => candidate.MeanAbsoluteErrorSamples)
+        .FirstOrDefault();
+}
+
+static void AddClockCandidate(
+    List<BioacousticClockHypothesis> candidates,
+    IReadOnlyList<BioacousticClockAnchor> anchors,
+    int nominalSampleRate,
+    double sourceOffsetSamples,
+    double effectiveSampleRate)
+{
+    var tolerance = Math.Max(36.0, nominalSampleRate * 0.012);
+    var inliers = anchors
+        .Where(anchor => Math.Abs(anchor.SampleOffset - (sourceOffsetSamples + anchor.TimelineSeconds * effectiveSampleRate)) <= tolerance)
+        .ToArray();
+    if (inliers.Length == 0)
+    {
+        return;
+    }
+
+    var refined = FitBioacousticClockToInliers(inliers, nominalSampleRate);
+    if (refined != null)
+    {
+        candidates.Add(refined);
+    }
+}
+
+static BioacousticClockHypothesis? FitBioacousticClockToInliers(
+    IReadOnlyList<BioacousticClockAnchor> anchors,
+    int nominalSampleRate)
+{
+    if (anchors.Count == 0)
+    {
+        return null;
+    }
+
+    if (anchors.Count == 1)
+    {
+        var anchor = anchors[0];
+        var offset = anchor.SampleOffset - anchor.TimelineSeconds * nominalSampleRate;
+        var singleAnchorConfidence = anchor.Confidence * 0.20;
+        return new BioacousticClockHypothesis(
+            offset,
+            nominalSampleRate,
+            1,
+            0.0,
+            singleAnchorConfidence,
+            singleAnchorConfidence,
+            anchors.ToArray());
+    }
+
+    var totalWeight = anchors.Sum(anchor => Math.Max(1.0e-6, anchor.Confidence));
+    var meanTimeline = anchors.Sum(anchor => anchor.TimelineSeconds * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
+    var meanSample = anchors.Sum(anchor => anchor.SampleOffset * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
+    var covariance = 0.0;
+    var variance = 0.0;
+    foreach (var anchor in anchors)
+    {
+        var weight = Math.Max(1.0e-6, anchor.Confidence);
+        var dt = anchor.TimelineSeconds - meanTimeline;
+        covariance += weight * dt * (anchor.SampleOffset - meanSample);
+        variance += weight * dt * dt;
+    }
+
+    var effectiveSampleRate = anchors.Count >= 3 && variance > 1.0e-12 ? covariance / variance : nominalSampleRate;
+    if (!double.IsFinite(effectiveSampleRate) ||
+        effectiveSampleRate < nominalSampleRate * 0.98 ||
+        effectiveSampleRate > nominalSampleRate * 1.02)
+    {
+        effectiveSampleRate = nominalSampleRate;
+    }
+
+    var sourceOffset = meanSample - effectiveSampleRate * meanTimeline;
+    var weightedResidual = anchors.Sum(anchor =>
+    {
+        var predicted = sourceOffset + anchor.TimelineSeconds * effectiveSampleRate;
+        return Math.Abs(anchor.SampleOffset - predicted) * Math.Max(1.0e-6, anchor.Confidence);
+    }) / totalWeight;
+    var residualConfidence = 1.0 / (1.0 + weightedResidual / Math.Max(1.0, nominalSampleRate * 0.001));
+    var countConfidence = Math.Clamp(anchors.Count / 5.0, 0.0, 1.0);
+    var anchorConfidence = Math.Clamp(anchors.Average(anchor => anchor.Confidence), 0.0, 1.0);
+    var confidence = residualConfidence * 0.35 + countConfidence * 0.45 + anchorConfidence * 0.20;
+    var score = confidence + Math.Min(anchors.Count, 8) * 0.15 - weightedResidual / Math.Max(1.0, nominalSampleRate * 0.010);
+    return new BioacousticClockHypothesis(
+        sourceOffset,
+        effectiveSampleRate,
+        anchors.Count,
+        weightedResidual,
+        confidence,
+        score,
+        anchors.ToArray());
+}
+
 static double CepstralDistance(IReadOnlyList<double> first, IReadOnlyList<double> second)
 {
     var sum = 0.0;
@@ -2180,6 +2405,21 @@ internal sealed record CepstralWordObservation(
     double SampleOffset,
     double Confidence);
 
+internal sealed record BioacousticClockAnchor(
+    ulong EventIndex,
+    double TimelineSeconds,
+    double SampleOffset,
+    double Confidence);
+
+internal sealed record BioacousticClockHypothesis(
+    double SourceOffsetSamples,
+    double EffectiveSampleRate,
+    int AnchorCount,
+    double MeanAbsoluteErrorSamples,
+    double Confidence,
+    double Score,
+    IReadOnlyList<BioacousticClockAnchor> Anchors);
+
 internal sealed record CepstralWordIndex(
     IReadOnlyList<CepstralWordTemplate> Templates,
     IReadOnlyDictionary<(int Table, int Hash), List<int>> Buckets);
@@ -2215,9 +2455,20 @@ public sealed record BioacousticTrainingResult(
     [property: Key(23)] int RoundTripCepstralCoefficients,
     [property: Key(24)] int RoundTripFrameCount,
     [property: Key(25)] double RoundTripRmsRatio,
-    [property: Key(26)] BioacousticTrainingDecoderSnapshot Decoder,
-    [property: Key(27)] BioacousticTrainingArtifact[] Artifacts,
-    [property: Key(28)] BioacousticTrainingObservation[] Observations);
+    [property: Key(26)] BioacousticClockHypothesisSnapshot ClockHypothesis,
+    [property: Key(27)] BioacousticTrainingDecoderSnapshot Decoder,
+    [property: Key(28)] BioacousticTrainingArtifact[] Artifacts,
+    [property: Key(29)] BioacousticTrainingObservation[] Observations);
+
+[MessagePackObject]
+public sealed record BioacousticClockHypothesisSnapshot(
+    [property: Key(0)] int AnchorCount,
+    [property: Key(1)] double SourceOffsetSamples,
+    [property: Key(2)] double EffectiveSampleRate,
+    [property: Key(3)] double MeanAbsoluteErrorSamples,
+    [property: Key(4)] double Confidence,
+    [property: Key(5)] double Score,
+    [property: Key(6)] double AnchorCoverage);
 
 [MessagePackObject]
 public sealed record BioacousticTrainingDecoderSnapshot(

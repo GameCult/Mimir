@@ -1,0 +1,98 @@
+{
+  "ResultId": "bioacoustic-20260524-150729:robust-wide-index:blur-light",
+  "RunId": "bioacoustic-20260524-150729",
+  "StartedAtUtc": "2026-05-24T15:07:29.1407348\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "robust-wide-index",
+  "HypothesisNotes": "More cepstra and a wider augmentation bank. It pays more CPU for warped-room survival.",
+  "DegradationName": "blur-light",
+  "SampleRate": 48000,
+  "Seconds": 0.75,
+  "ExpectedEvents": 5,
+  "ObservationCount": 4,
+  "CorrectAnchors": 4,
+  "Precision": 1,
+  "Recall": 0.8,
+  "Confidence": 0.9847020912578779,
+  "TimingMeanAbsoluteErrorSamples": 1079.999999999999,
+  "DecodeMilliseconds": 263.8216,
+  "RealtimeFactor": 2.842830154922872,
+  "IdentityScore": 0.9084702091257879,
+  "TimingScore": 0.5332666824033109,
+  "SpeedScore": 0.05685660309845744,
+  "TotalScore": 0.6706108531102759,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 67,
+  "RoundTripRmsRatio": 0.0011363025982355157,
+  "ClockHypothesis": {
+    "AnchorCount": 3,
+    "SourceOffsetSamples": -1181.8986331291107,
+    "EffectiveSampleRate": 48214.77096170677,
+    "MeanAbsoluteErrorSamples": 204.79233215195967,
+    "Confidence": 0.5332666824033109,
+    "Score": 0.5566159904200616
+  },
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 192,
+    "MelBins": 48,
+    "CepstralCoefficients": 18,
+    "TableCount": 5,
+    "HashBits": 15,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.03,
+    "ProposalBudgetMultiplier": 9,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur",
+      "template-warp-heavy"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "robust-wide-index/blur-light/pre-warp.wav",
+      "ContentHash": "4862d46ea00c1d387387028f90147b98bd6e36fe594eefdcfa1b6360f7348f29"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "robust-wide-index/blur-light/post-warp.wav",
+      "ContentHash": "f36a51bdd08f1bd617e1109615168f334017f067fd94224422b9fe3d3d310e01"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "robust-wide-index/blur-light/reconstructed-from-detections.wav",
+      "ContentHash": "cf0fb32ebdc6e8d707cc0decd77fcf464c1130308a39920b2a36d16f6b5043dc"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "robust-wide-index/blur-light/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 2880,
+      "Confidence": 0.9844071734887759
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 10080,
+      "Confidence": 0.9762337381622903
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 20160,
+      "Confidence": 0.9866738086280044
+    },
+    {
+      "EventIndex": 3,
+      "SampleOffset": 25920,
+      "Confidence": 0.9914936447524411
+    }
+  ]
+}

@@ -128,11 +128,13 @@ accepted_design:
     confirmation. `Mimir.BufferSmoke --bioacoustic-train` now runs a
     receipt-backed hypothesis panel over indexed cepstral decoder shapes and
     writes typed CultCache results plus pre-warp/post-warp/reconstructed WAV
-    artifacts under `artifacts/bioacoustic-training/`. The latest receipt
-    `bioacoustic-20260524-103438` shows compact indexing is fastest on clean
-    audio, baseline indexing is more stable under light warp, highband indexing
-    can win blur/warp-blur cases, and timing error under domain warp remains
-    the pressure for a global clock/path hypothesis. `MimirChirpBinTimeline` remains the controlled chirp-bin
+    artifacts under `artifacts/bioacoustic-training/`. The first receipt
+    `bioacoustic-20260524-103438` showed compact indexing fastest on clean
+    audio and exposed timing error under domain warp. The corrected receipt
+    `bioacoustic-20260524-150729` adds global clock hypothesis scoring over a
+    longer window; compact indexing wins clean throughput, baseline indexing
+    remains steadier under degradation, highband indexing has warped-path value,
+    and anchor density needs its own metric. `MimirChirpBinTimeline` remains the controlled chirp-bin
     calibration/reference artifact with ASIO tooling and
     `MimirChirpBinCalibrationModel`; keep those captures as response evidence,
     not the active runtime sound. Reports and sync states expose delay in
@@ -146,7 +148,12 @@ accepted_design:
     correctly accepts strong passive evidence at 2.772 us error. The synthetic
     standalone receiver proof `--standalone-bioacoustic-self-test --sample-rate
     48000 --delay-samples 1269.5` recovers delayed source time below printed
-    microsecond precision using only the codebook/schedule. The synthetic
+    microsecond precision using only the codebook/schedule. `--bioacoustic-actuator-self-test
+    --sample-rate 48000 --delay-samples 317.375` now proves the first
+    measurement-to-sample-movement loop: estimate bioacoustic delay, apply
+    fractional correction, and remeasure residual below printed microsecond
+    precision. `faust/mimir_alignment_actuator.dsp` is the first Faust-owned
+    actuator surface for six channels of bounded fractional delay/gain. The synthetic
     codebook proof is `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`.
     `Mimir.BufferSmoke --render-chirp-bin-f32` plus

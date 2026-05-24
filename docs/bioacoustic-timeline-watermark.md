@@ -135,3 +135,11 @@ The latest training receipt says identity can survive the current
 mel-cepstral degradation panel, but timing collapses under warped domains. That
 points the next cut at a global delay/clock/path hypothesis over detected words,
 not a larger brute-force dictionary.
+
+That cut has started in the harness. `--bioacoustic-train` now persists a
+global clock hypothesis per result and scores timing through its confidence
+rather than raw absolute word offset. The latest corrected receipt is
+`artifacts/bioacoustic-training/bioacoustic-20260524-150729/`; it shows compact
+indexing still wins clean throughput, baseline indexing remains steadier under
+degradation, highband indexing has real warped-path value, and anchor density
+must become its own benchmark metric.

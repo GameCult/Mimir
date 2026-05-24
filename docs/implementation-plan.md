@@ -91,6 +91,9 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirAudioSynchronizationStateTracker` owns the first smoothed per-source
   sync state: latest fractional delay, smoothed delay, confidence, per-band
   response evidence, and delay-slope/SRO estimate in ppm.
+- `faust/mimir_alignment_actuator.dsp` is the first Faust-owned sample movement
+  surface: six channels of bounded fractional delay and gain controls. Mimir
+  estimates delay/SRO; Faust/native DSP applies correction.
 - `MimirRuntime` updates audio sync analysis online as a bounded rotating
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
@@ -153,7 +156,9 @@ a named invariant that the native runtime cannot protect yet.
   sync report.
   The active bioacoustic standalone receiver test recovers a delayed audio
   stream to below printed microsecond precision using only the motif codebook
-  and schedule state.
+  and schedule state. `--bioacoustic-actuator-self-test` estimates a synthetic
+  317.375-sample bioacoustic delay, applies the fractional correction, and
+  remeasures the residual below printed microsecond precision.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live

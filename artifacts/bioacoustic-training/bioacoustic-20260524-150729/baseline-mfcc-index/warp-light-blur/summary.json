@@ -1,0 +1,102 @@
+{
+  "ResultId": "bioacoustic-20260524-150729:baseline-mfcc-index:warp-light-blur",
+  "RunId": "bioacoustic-20260524-150729",
+  "StartedAtUtc": "2026-05-24T15:07:29.1407348\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "baseline-mfcc-index",
+  "HypothesisNotes": "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
+  "DegradationName": "warp-light-blur",
+  "SampleRate": 48000,
+  "Seconds": 0.75,
+  "ExpectedEvents": 5,
+  "ObservationCount": 5,
+  "CorrectAnchors": 4,
+  "Precision": 0.8,
+  "Recall": 0.8,
+  "Confidence": 0.9121532731255396,
+  "TimingMeanAbsoluteErrorSamples": 12672,
+  "DecodeMilliseconds": 129.1681,
+  "RealtimeFactor": 5.8063871807358005,
+  "IdentityScore": 0.8112153273125541,
+  "TimingScore": 0.8066634007245423,
+  "SpeedScore": 0.116127743614716,
+  "TotalScore": 0.6713784637871444,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 67,
+  "RoundTripRmsRatio": 0.00014185500315276218,
+  "ClockHypothesis": {
+    "AnchorCount": 3,
+    "SourceOffsetSamples": -1920.0000000000018,
+    "EffectiveSampleRate": 48000.000000000015,
+    "MeanAbsoluteErrorSamples": 7.414220374413076E-13,
+    "Confidence": 0.8066634007245423,
+    "Score": 1.2566634007245407
+  },
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-light-blur/pre-warp.wav",
+      "ContentHash": "4862d46ea00c1d387387028f90147b98bd6e36fe594eefdcfa1b6360f7348f29"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "baseline-mfcc-index/warp-light-blur/post-warp.wav",
+      "ContentHash": "c3bb1eb61dd15004724160816be15f8462944106a1a3f2077c5f97c7901342b9"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "baseline-mfcc-index/warp-light-blur/reconstructed-from-detections.wav",
+      "ContentHash": "bfe489671957fea685d911037927160c71abd4d1a3a2dfa7fc7b2c2e6a9040ee"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "baseline-mfcc-index/warp-light-blur/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 1920,
+      "Confidence": 0.9573043883272961
+    },
+    {
+      "EventIndex": 8,
+      "SampleOffset": 7680,
+      "Confidence": 0.780325467055781
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 9600,
+      "Confidence": 0.9019369466538933
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 19200,
+      "Confidence": 0.980489887703701
+    },
+    {
+      "EventIndex": 3,
+      "SampleOffset": 24960,
+      "Confidence": 0.9407096758870259
+    }
+  ]
+}

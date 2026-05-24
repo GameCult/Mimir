@@ -52,6 +52,42 @@ Speed tells whether the receiver shape can plausibly become a streaming machine.
 Run:
 
 ```text
+artifacts/bioacoustic-training/bioacoustic-20260524-150729/
+```
+
+This run adds global clock hypothesis scoring. Timing is no longer raw
+per-word absolute error; it is the confidence of a coherent clock/path fit over
+detected words. Single-anchor fits are deliberately weak, and sample-rate slope
+is only allowed when enough anchors exist.
+
+Best aggregate result:
+
+```text
+compact-fast-index / clean-roundtrip
+total=0.752 identity=0.908 timing=0.905 speed=0.132 realtime=6.6x
+```
+
+Useful observations:
+
+- `compact-fast-index` is still the clean-throughput winner when enough anchors
+  survive.
+- `baseline-mfcc-index` is still the steadier degraded-path receiver.
+- `highband-room-index` shows real value under warp, but needs more anchor
+  density before it can own timing.
+- `compact-fast-index` remains faster, but its warped-path identity and timing
+  confidence are weaker.
+- `robust-wide-index` still costs too much for the current panel, but it gives
+  useful pressure under heavier degradation.
+- The global clock hypothesis is the right scoring authority, but short windows
+  and weak degradations can still starve it. Future training runs should score
+  time-to-lock separately from identity. Anchor coverage is now persisted in the
+  CultCache clock snapshot so optimization can target lock density directly.
+
+Previous receipt:
+
+Run:
+
+```text
 artifacts/bioacoustic-training/bioacoustic-20260524-103438/
 ```
 

@@ -191,6 +191,12 @@ artifact, but it leaves a concrete response profile: 14 frames, 12 anchors,
 0.865 clock confidence, and strongest bins around 4525, 4075, and 7225 Hz.
 Acoustic robustness is now the open problem, not clean loopback timing,
 standalone decoder shape, or basic response evidence.
+The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
+six channels of bounded fractional delay/gain controls for Faust/native DSP,
+and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000
+--delay-samples 317.375` proves the control loop shape by estimating a
+bioacoustic delay, applying fractional correction, and remeasuring residual
+below printed microsecond precision.
 
 ## Visual Fusion
 

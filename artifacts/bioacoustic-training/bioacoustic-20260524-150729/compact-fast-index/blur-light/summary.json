@@ -1,0 +1,96 @@
+{
+  "ResultId": "bioacoustic-20260524-150729:compact-fast-index:blur-light",
+  "RunId": "bioacoustic-20260524-150729",
+  "StartedAtUtc": "2026-05-24T15:07:29.1407348\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "compact-fast-index",
+  "HypothesisNotes": "Smaller feature and table shape. It should run faster if identity survives; otherwise it dies with a receipt.",
+  "DegradationName": "blur-light",
+  "SampleRate": 48000,
+  "Seconds": 0.75,
+  "ExpectedEvents": 5,
+  "ObservationCount": 4,
+  "CorrectAnchors": 4,
+  "Precision": 1,
+  "Recall": 0.8,
+  "Confidence": 0.984348775069297,
+  "TimingMeanAbsoluteErrorSamples": 960.0000000000009,
+  "DecodeMilliseconds": 174.3146,
+  "RealtimeFactor": 4.302565591178249,
+  "IdentityScore": 0.9084348775069297,
+  "TimingScore": 0.7277010398918269,
+  "SpeedScore": 0.08605131182356499,
+  "TotalScore": 0.7114260735995384,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 67,
+  "RoundTripRmsRatio": 0.0011363025982355157,
+  "ClockHypothesis": {
+    "AnchorCount": 2,
+    "SourceOffsetSamples": 0,
+    "EffectiveSampleRate": 48000,
+    "MeanAbsoluteErrorSamples": 1.8236284626527456E-12,
+    "Confidence": 0.7277010398918269,
+    "Score": 1.0277010398918232
+  },
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 32,
+    "CepstralCoefficients": 10,
+    "TableCount": 3,
+    "HashBits": 12,
+    "NearHashRadius": 3,
+    "DenseStepSeconds": 0.04,
+    "ProposalBudgetMultiplier": 6,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "compact-fast-index/blur-light/pre-warp.wav",
+      "ContentHash": "4862d46ea00c1d387387028f90147b98bd6e36fe594eefdcfa1b6360f7348f29"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "compact-fast-index/blur-light/post-warp.wav",
+      "ContentHash": "f36a51bdd08f1bd617e1109615168f334017f067fd94224422b9fe3d3d310e01"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "compact-fast-index/blur-light/reconstructed-from-detections.wav",
+      "ContentHash": "7bb6731d2b7db07693b7fe7c31de6a7fccca5a867b47e9d6cd64fe6a1fe65a39"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "compact-fast-index/blur-light/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 1920,
+      "Confidence": 0.9850700939602861
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 9600,
+      "Confidence": 0.9753146073985
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 19200,
+      "Confidence": 0.9859841655055015
+    },
+    {
+      "EventIndex": 3,
+      "SampleOffset": 26880,
+      "Confidence": 0.9910262334129001
+    }
+  ]
+}

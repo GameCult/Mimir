@@ -1,0 +1,97 @@
+{
+  "ResultId": "bioacoustic-20260524-150729:highband-room-index:warp-light-blur",
+  "RunId": "bioacoustic-20260524-150729",
+  "StartedAtUtc": "2026-05-24T15:07:29.1407348\u002B00:00",
+  "Toolchain": "Mimir.BufferSmoke --bioacoustic-train",
+  "HypothesisId": "highband-room-index",
+  "HypothesisNotes": "Bias toward the measured useful upper speech/birdcall band and away from low room junk.",
+  "DegradationName": "warp-light-blur",
+  "SampleRate": 48000,
+  "Seconds": 0.75,
+  "ExpectedEvents": 5,
+  "ObservationCount": 4,
+  "CorrectAnchors": 4,
+  "Precision": 1,
+  "Recall": 0.8,
+  "Confidence": 0.955577364360123,
+  "TimingMeanAbsoluteErrorSamples": 2519.999999999999,
+  "DecodeMilliseconds": 126.3966,
+  "RealtimeFactor": 5.933703912921708,
+  "IdentityScore": 0.9055577364360123,
+  "TimingScore": 0.19533536690526754,
+  "SpeedScore": 0.11867407825843417,
+  "TotalScore": 0.6203409782849627,
+  "RoundTripMelBins": 48,
+  "RoundTripCepstralCoefficients": 20,
+  "RoundTripFrameCount": 67,
+  "RoundTripRmsRatio": 0.00014185500315276218,
+  "ClockHypothesis": {
+    "AnchorCount": 1,
+    "SourceOffsetSamples": 960,
+    "EffectiveSampleRate": 48000,
+    "MeanAbsoluteErrorSamples": 0,
+    "Confidence": 0.19533536690526754,
+    "Score": 0.19533536690526754
+  },
+  "Decoder": {
+    "FftSize": 1024,
+    "HopSize": 256,
+    "MelBins": 40,
+    "CepstralCoefficients": 14,
+    "TableCount": 4,
+    "HashBits": 14,
+    "NearHashRadius": 4,
+    "DenseStepSeconds": 0.035,
+    "ProposalBudgetMultiplier": 8,
+    "TemplateAugmentations": [
+      "template-clean",
+      "template-blur",
+      "template-warp-light",
+      "template-warp-blur"
+    ]
+  },
+  "Artifacts": [
+    {
+      "Kind": "pre-warp-audio",
+      "Uri": "highband-room-index/warp-light-blur/pre-warp.wav",
+      "ContentHash": "4862d46ea00c1d387387028f90147b98bd6e36fe594eefdcfa1b6360f7348f29"
+    },
+    {
+      "Kind": "post-warp-audio",
+      "Uri": "highband-room-index/warp-light-blur/post-warp.wav",
+      "ContentHash": "c3bb1eb61dd15004724160816be15f8462944106a1a3f2077c5f97c7901342b9"
+    },
+    {
+      "Kind": "reconstructed-from-detections",
+      "Uri": "highband-room-index/warp-light-blur/reconstructed-from-detections.wav",
+      "ContentHash": "667389c0a15519c9efa30dad5881ee77bd0a562f5ef1f7a7c0f8e69ea1f52181"
+    },
+    {
+      "Kind": "summary-json",
+      "Uri": "highband-room-index/warp-light-blur/summary.json",
+      "ContentHash": ""
+    }
+  ],
+  "Observations": [
+    {
+      "EventIndex": 0,
+      "SampleOffset": 1680,
+      "Confidence": 0.9603744762545714
+    },
+    {
+      "EventIndex": 1,
+      "SampleOffset": 15120,
+      "Confidence": 0.93464422622285
+    },
+    {
+      "EventIndex": 2,
+      "SampleOffset": 20160,
+      "Confidence": 0.9766768345263376
+    },
+    {
+      "EventIndex": 3,
+      "SampleOffset": 23520,
+      "Confidence": 0.9506139204367329
+    }
+  ]
+}
