@@ -302,19 +302,67 @@ Downloaded references:
   attempted but the downloaded file was only 1990 bytes and should be treated
   as invalid until re-fetched.
 
-FFmpeg is not installed on this workstation, so these MP3/OGG references were
-not decoded into mel-cepstral matrices in this pass. The generated contestants
-encode observations from the metadata and known birdcall structure first:
-redpoll-like trills, robin-like warbles, thrush-like interval ladders,
-thornbill-like high zig-zags, and nightingale-like cascades.
+FFmpeg is now installed through winget as `Gyan.FFmpeg 8.1.1`. The current
+shell used the installed binary directly from:
+
+```text
+C:\Users\Meta\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin\ffmpeg.exe
+```
+
+Decoded WAVs remain ignored scratch artifacts. Committed receipts live under
+`artifacts/spectra/real-birds-ffmpeg/`:
+
+- `lesser-redpoll/Acanthis_cabaret_-_Lesser_Redpoll_XC482789-log-mel.png`
+- `lesser-redpoll/Acanthis_cabaret_-_Lesser_Redpoll_XC482789-cepstrum.png`
+- `lesser-redpoll/Acanthis_cabaret_-_Lesser_Redpoll_XC482789-mel-cepstral-features.csv`
+- `wattled-guan/Aburria_aburri_-_Wattled_Guan_XC250442-log-mel.png`
+- `wattled-guan/Aburria_aburri_-_Wattled_Guan_XC250442-cepstrum.png`
+- `wattled-guan/Aburria_aburri_-_Wattled_Guan_XC250442-mel-cepstral-features.csv`
+
+The Brown Thornbill file remains invalid. FFmpeg reports:
+
+```text
+Failed to find two consecutive MPEG audio frames
+Invalid data found when processing input
+```
+
+The mel-cepstral receipt tool chooses the loudest active window when no start
+time is supplied, then writes log-mel, cepstrum, and per-frame feature CSV. The
+first real-bird readings:
+
+```text
+Lesser Redpoll active window: start=2.000s, duration=4.000s
+centroid median=2440 Hz, p90=3041 Hz, max=3981 Hz
+bandwidth median=2427 Hz, p90=2683 Hz
+peak-energy frame near 1.732s, centroid=3224 Hz, bandwidth=1768 Hz
+
+Wattled Guan active window: start=137.000s, duration=4.000s
+centroid median=2217 Hz, p90=4229 Hz, max=4445 Hz
+bandwidth median=1072 Hz, p90=1854 Hz
+peak-energy frame near 1.722s, centroid=2021 Hz, bandwidth=766 Hz
+```
+
+Read against the current `canary-packet-trill`, the lesson is blunt:
+
+- The Redpoll reference is not a neat de Bruijn-ish token stream. It has dense
+  chatter, short vertical attacks, noisy broadband texture, and repeated
+  contour fragments that stay recognizable even when individual peaks blur.
+- The Guan reference is the opposite useful witness: a slow, broad, curved
+  low-mid phrase with stable harmonic/cepstral structure. It is poor as a high
+  bitrate packet model but excellent for response/group-delay probing.
+- Our canary packet currently anchors time well because its syllables are
+  deliberately sharp, but it is still too ladder-like. Real birds are carrying
+  identity through redundant contour, roughness, onset statistics, and cepstral
+  envelope motion at the same time. That is the next scoring surface.
 
 ## Next Cut
 
-1. Install or vendor a decode path for Commons/Xeno-canto MP3/OGG references.
-2. Extract real mel-cepstral contours: syllable onset density, frequency glide
+1. Extract more real mel-cepstral contours: syllable onset density, frequency glide
    slope, formant spacing, rhythm variance, and motif repetition.
-3. Add per-formant frequency residual to the contestant score.
-4. Promote the two-stage refiner into a streaming state model: predict next
+2. Add per-formant frequency residual to the contestant score.
+3. Promote the two-stage refiner into a streaming state model: predict next
    expected word time from the current clock and only search a narrow basin.
+4. Teach the generator to combine Redpoll-style onset/chatter density with
+   Guan-style smooth cepstral envelope probes.
 5. Run the full contestant panel and keep mutating the top two shapes until
    score improves rather than spreading attention across ornamental variants.

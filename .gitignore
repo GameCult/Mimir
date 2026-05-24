@@ -10,6 +10,8 @@ artifacts/drivers/
 artifacts/asio/
 artifacts/bioacoustic-contestants/
 artifacts/birdsong-reference/
+artifacts/python-packages/
+artifacts/spectra/**/*.wav
 tools/drivers/
 tools/obs-spout2-plugin/
 tools/src/

@@ -54,6 +54,23 @@ def colorize(db: np.ndarray, floor_db: float, ceiling_db: float) -> Image.Image:
     return Image.fromarray(rgb, mode="RGB")
 
 
+def resolve_levels(db: np.ndarray, floor_db: float, ceiling_db: float, auto_level: bool) -> tuple[float, float]:
+    if not auto_level:
+        return floor_db, ceiling_db
+
+    finite = db[np.isfinite(db)]
+    if finite.size == 0:
+        return floor_db, ceiling_db
+
+    floor = float(np.percentile(finite, 8.0))
+    ceiling = float(np.percentile(finite, 99.4))
+    if ceiling - floor < 12.0:
+        midpoint = (floor + ceiling) * 0.5
+        floor = midpoint - 6.0
+        ceiling = midpoint + 6.0
+    return floor, ceiling
+
+
 def write_peak_csv(path: Path, magnitudes: np.ndarray, sample_rate: int, fft_size: int, hop: int, peak_count: int) -> None:
     freqs = np.fft.rfftfreq(fft_size, 1.0 / sample_rate)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -79,32 +96,42 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--fft", type=int, default=2048)
     parser.add_argument("--hop", type=int, default=128)
+    parser.add_argument("--start", type=float, default=0.0)
+    parser.add_argument("--duration", type=float, default=0.0)
     parser.add_argument("--floor-db", type=float, default=-95.0)
     parser.add_argument("--ceiling-db", type=float, default=-18.0)
+    parser.add_argument("--auto-level", action="store_true")
     parser.add_argument("--peaks", type=int, default=8)
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     sample_rate, samples = read_wav_mono(args.input)
+    start = max(0, int(round(args.start * sample_rate)))
+    if start > 0:
+        samples = samples[start:]
+    if args.duration > 0.0:
+        samples = samples[: max(1, int(round(args.duration * sample_rate)))]
     magnitudes = stft(samples, args.fft, args.hop)
     db = 20.0 * np.log10(np.maximum(magnitudes, 1.0e-9))
+    floor_db, ceiling_db = resolve_levels(db, args.floor_db, args.ceiling_db, args.auto_level)
 
     stem = args.input.stem
     linear_png = args.output_dir / f"{stem}-spectrogram-linear.png"
     log_png = args.output_dir / f"{stem}-spectrogram-log.png"
     peaks_csv = args.output_dir / f"{stem}-spectral-peaks.csv"
 
-    colorize(db, args.floor_db, args.ceiling_db).resize((max(800, db.shape[1] * 3), 640)).save(linear_png)
+    colorize(db, floor_db, ceiling_db).resize((max(800, db.shape[1] * 3), 640)).save(linear_png)
 
     # Log-frequency display by sampling rows at exponentially spaced bins.
     rows = 512
     max_bin = db.shape[0] - 1
     log_bins = np.geomspace(1, max_bin, rows).astype(int)
     log_db = db[log_bins, :]
-    colorize(log_db, args.floor_db, args.ceiling_db).resize((max(800, db.shape[1] * 3), 640)).save(log_png)
+    colorize(log_db, floor_db, ceiling_db).resize((max(800, db.shape[1] * 3), 640)).save(log_png)
     write_peak_csv(peaks_csv, magnitudes, sample_rate, args.fft, args.hop, args.peaks)
 
     print(f"spectrogram input={args.input} sampleRate={sample_rate} samples={len(samples)}")
+    print(f"levels floorDb={floor_db:.3f} ceilingDb={ceiling_db:.3f}")
     print(f"linear={linear_png}")
     print(f"log={log_png}")
     print(f"peaks={peaks_csv}")
