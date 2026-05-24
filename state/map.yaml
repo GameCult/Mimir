@@ -193,6 +193,13 @@ accepted_design:
     payload with 34.083 us MAE, and improves the cardioid to 31/37 payload
     with 92.996 us MAE. The next precision cut is intra-call contour anchors,
     not more sequence machinery.
+    `calibration/bioacoustic/scarlett-canary-packet-anchor-rich-192k.json`
+    is the first anchor-rich receipt: timing chips, formant pivots,
+    harmonic-envelope notches, payload ornaments, renderer template caching, and
+    per-event intra-call anchor measurements. It clears 10x realtime and
+    improves loopback to about 2.23 us MAE, but physical mics regress/hold at
+    tens of microseconds, so anchor survivability and path weighting are now the
+    problem.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.

@@ -37,6 +37,10 @@ what did this room/mic path do to the spectrum?
   syllable onsets, bends, formants, rhythm offsets, payload ornaments, and
   speaker-colored spectral features all become anchors in log-mel space. One
   successful call can pin a cluster of time/frequency constraints at once.
+- The first anchor-rich canary packet explicitly shapes timing chips, formant
+  pivots, harmonic-envelope notches, and payload ornaments. Calibration receipts
+  now persist those intra-call anchors so path learning can discover which
+  features survive each output/mic pair.
 - Runtime emission sends the left vocabulary to the left speaker and the right
   vocabulary to the right speaker, so microphones can learn each side of the
   room separately.
@@ -148,4 +152,6 @@ the first physical packet-song response model. The current Scarlett canary
 receipt clears 10x realtime and proves that a single song word can own local
 identity; the remaining work is to make each syllable/formant contour emit
 enough stable anchors that physical mic residuals collapse from tens of
-microseconds toward the one-microsecond target.
+microseconds toward the one-microsecond target. The first anchor-rich receipt
+improves loopback but not the physical mics, which means anchor observability is
+now present and anchor survivability is the next design problem.

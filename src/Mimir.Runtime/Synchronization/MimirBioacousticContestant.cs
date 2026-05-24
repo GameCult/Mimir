@@ -26,6 +26,22 @@ public sealed record MimirBioacousticContestantProfile(
     int PayloadBitsPerEvent,
     string BeautyNotes);
 
+public enum MimirBioacousticAnchorKind
+{
+    TimingChip,
+    FormantPivot,
+    HarmonicNotch,
+    PayloadOrnament
+}
+
+public sealed record MimirBioacousticContestantAnchor(
+    MimirBioacousticAnchorKind Kind,
+    int SyllableIndex,
+    double StartSeconds,
+    double DurationSeconds,
+    double CenterHz,
+    double Weight);
+
 public static class MimirBioacousticContestants
 {
     public const double FirstEventSeconds = 0.08;
@@ -166,6 +182,8 @@ public static class MimirBioacousticContestants
 
 public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestantProfile profile)
 {
+    private readonly Dictionary<(ulong EventIndex, int SampleRate, int PayloadSymbol), float[]> eventCache = [];
+
     public MimirBioacousticContestantProfile Profile { get; } = profile;
 
     public double EventStartSeconds(ulong eventIndex) =>
@@ -178,9 +196,61 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
 
     public float[] RenderEventMonoFloat(ulong eventIndex, int sampleRate, int payloadSymbol)
     {
+        if (eventCache.TryGetValue((eventIndex, sampleRate, payloadSymbol), out var cached))
+        {
+            return cached;
+        }
+
         var samples = new float[Math.Max(1, (int)Math.Round(Profile.MotifDurationSeconds * sampleRate))];
         AddEvent(samples, sampleRate, eventIndex, payloadSymbol, EventStartSeconds(eventIndex), EventStartSeconds(eventIndex));
+        eventCache[(eventIndex, sampleRate, payloadSymbol)] = samples;
         return samples;
+    }
+
+    public IReadOnlyList<MimirBioacousticContestantAnchor> AnchorPlan(ulong eventIndex)
+    {
+        var payload = PayloadSymbolForEvent(eventIndex);
+        var symbolId = SymbolForEvent(eventIndex);
+        var root = RootForSymbol(symbolId);
+        var rng = Mix(symbolId ^ (payload << 9), (uint)Profile.Kind);
+        var anchors = new List<MimirBioacousticContestantAnchor>(Profile.SyllableCount * 3);
+        for (var syllable = 0; syllable < Profile.SyllableCount; syllable++)
+        {
+            var contour = SyllableContour(symbolId, payload, syllable, root, rng);
+            var centerHz = Math.Sqrt(contour.StartHz * contour.EndHz);
+            anchors.Add(new MimirBioacousticContestantAnchor(
+                syllable < 2 ? MimirBioacousticAnchorKind.TimingChip : MimirBioacousticAnchorKind.FormantPivot,
+                syllable,
+                contour.StartSeconds,
+                Math.Min(contour.DurationSeconds, Profile.MotifDurationSeconds * 0.028),
+                centerHz,
+                syllable < 2 ? 1.25 : contour.Weight));
+            if (Profile.Kind == MimirBioacousticContestantKind.CanaryPacketTrill)
+            {
+                anchors.Add(new MimirBioacousticContestantAnchor(
+                    MimirBioacousticAnchorKind.HarmonicNotch,
+                    syllable,
+                    contour.StartSeconds + contour.DurationSeconds * 0.46,
+                    Math.Min(contour.DurationSeconds * 0.24, Profile.MotifDurationSeconds * 0.018),
+                    centerHz * (syllable % 2 == 0 ? 1.50 : 2.00),
+                    0.72));
+                if (syllable >= 2)
+                {
+                    anchors.Add(new MimirBioacousticContestantAnchor(
+                        MimirBioacousticAnchorKind.PayloadOrnament,
+                        syllable,
+                        contour.StartSeconds + contour.DurationSeconds * 0.72,
+                        Math.Min(contour.DurationSeconds * 0.18, Profile.MotifDurationSeconds * 0.014),
+                        centerHz * (1.20 + 0.08 * (payload & 3)),
+                        0.58));
+                }
+            }
+        }
+
+        return anchors
+            .Where(anchor => anchor.StartSeconds >= 0.0 && anchor.StartSeconds < Profile.MotifDurationSeconds)
+            .OrderBy(anchor => anchor.StartSeconds)
+            .ToArray();
     }
 
     public float[] RenderSequenceMonoFloat(double seconds, int sampleRate)
@@ -320,7 +390,7 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
         return value;
     }
 
-    private static void AddSyllable(
+    private void AddSyllable(
         float[] output,
         int sampleRate,
         double startSeconds,
@@ -346,8 +416,31 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
             phase += Math.Tau * (previousFrequency + frequency) * 0.5 / sampleRate;
             previousFrequency = frequency;
             var envelope = Math.Sin(Math.PI * Math.Clamp(t, 0.0, 1.0));
-            var harmonic = 0.28 * Math.Sin(phase * 2.0 + 0.25) + 0.12 * Math.Sin(phase * 3.0 + 0.7);
-            output[sample] += (float)(gain * envelope * (Math.Sin(phase) + harmonic));
+            var harmonicEnvelope = ProfileAwareHarmonicEnvelope(t, startHz, endHz);
+            var harmonic = harmonicEnvelope.Second * Math.Sin(phase * 2.0 + 0.25) +
+                harmonicEnvelope.Third * Math.Sin(phase * 3.0 + 0.7) +
+                harmonicEnvelope.Notch * Math.Sin(phase * 1.5 + 1.35);
+            var anchorClick = 0.18 * Math.Exp(-Math.Pow((t - 0.08) / 0.035, 2.0)) -
+                0.12 * Math.Exp(-Math.Pow((t - 0.52) / 0.045, 2.0)) +
+                0.09 * Math.Exp(-Math.Pow((t - 0.76) / 0.035, 2.0));
+            output[sample] += (float)(gain * envelope * (Math.Sin(phase) + harmonic + anchorClick * Math.Sin(phase * 2.5 + 0.4)));
         }
+    }
+
+    private (double Second, double Third, double Notch) ProfileAwareHarmonicEnvelope(double t, double startHz, double endHz)
+    {
+        if (Profile.Kind != MimirBioacousticContestantKind.CanaryPacketTrill)
+        {
+            return (0.28, 0.12, 0.0);
+        }
+
+        var sweep = Math.Abs(endHz - startHz) / Math.Max(1.0, startHz);
+        var attack = Math.Exp(-Math.Pow((t - 0.13) / 0.075, 2.0));
+        var pivot = Math.Exp(-Math.Pow((t - 0.48) / 0.060, 2.0));
+        var tail = Math.Exp(-Math.Pow((t - 0.78) / 0.070, 2.0));
+        return (
+            Second: 0.18 + 0.26 * attack + 0.10 * sweep,
+            Third: 0.08 + 0.22 * tail,
+            Notch: 0.16 * pivot);
     }
 }

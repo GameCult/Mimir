@@ -1762,7 +1762,7 @@ static int CalibrateContestantAsioFloat32(
     foreach (var channel in channelCalibrations)
     {
         Console.WriteLine(
-            $"contestant-calibration-channel {channel.SourceId}: events={channel.DetectedEvents}/{channel.ExpectedEvents} payload={channel.PayloadAccuracy:0.000} confidence={channel.Confidence:0.000} polarity={channel.Polarity:+0;-0;0} scheduleOffsetSamples={channel.ScheduleOffsetSamples:0.000} offsetSamples={channel.SourceOffsetSamples:0.000000} offsetUs={channel.SourceOffsetSamples * 1_000_000.0 / sampleRate:0.000} maeSamples={channel.MeanAbsoluteErrorSamples:0.000000} maeUs={channel.MeanAbsoluteErrorSamples * 1_000_000.0 / sampleRate:0.000} rms={channel.Rms:0.000000} peak={channel.Peak:0.000000} usableBands={channel.Bands.Count(band => band.Usable)}/{channel.Bands.Length}");
+            $"contestant-calibration-channel {channel.SourceId}: events={channel.DetectedEvents}/{channel.ExpectedEvents} payload={channel.PayloadAccuracy:0.000} confidence={channel.Confidence:0.000} polarity={channel.Polarity:+0;-0;0} scheduleOffsetSamples={channel.ScheduleOffsetSamples:0.000} offsetSamples={channel.SourceOffsetSamples:0.000000} offsetUs={channel.SourceOffsetSamples * 1_000_000.0 / sampleRate:0.000} maeSamples={channel.MeanAbsoluteErrorSamples:0.000000} maeUs={channel.MeanAbsoluteErrorSamples * 1_000_000.0 / sampleRate:0.000} anchors={channel.AnchorCount} anchorMeanResidualSamples={channel.MeanAnchorResidualSamples:0.000000} rms={channel.Rms:0.000000} peak={channel.Peak:0.000000} usableBands={channel.Bands.Count(band => band.Usable)}/{channel.Bands.Length}");
     }
 
     foreach (var path in paths)
@@ -2617,6 +2617,14 @@ static BioacousticPhysicalChannelCalibration CalibrateContestantChannel(
         }
 
         var residual = ComputeContestantResidual(samples, template, (int)Math.Round(refinedOffset), motifSamples, signedScore);
+        var anchors = MeasureContestantAnchors(
+            samples,
+            template,
+            renderer,
+            eventIndex,
+            sampleRate,
+            refinedOffset,
+            motifSamples);
         var delaySamples = refinedOffset - renderer.EventStartSeconds(eventIndex) * sampleRate;
         observations.Add(new BioacousticPhysicalEventCalibration(
             eventIndex,
@@ -2627,10 +2635,11 @@ static BioacousticPhysicalChannelCalibration CalibrateContestantChannel(
             Math.Clamp(Math.Abs(signedScore), 0.0, 1.0),
             polarity,
             residual,
-            EstimateContestantEventBands(samples, template, renderer, eventIndex, sampleRate, (int)Math.Round(refinedOffset), motifSamples)));
+            EstimateContestantEventBands(samples, template, renderer, eventIndex, sampleRate, (int)Math.Round(refinedOffset), motifSamples),
+            anchors));
     }
 
-    var clock = FitContestantClockHypothesis(
+    var wordClock = FitContestantClockHypothesis(
         observations
             .Select(observation => new CepstralWordObservation(
                 observation.EventIndex,
@@ -2642,6 +2651,12 @@ static BioacousticPhysicalChannelCalibration CalibrateContestantChannel(
         renderer,
         sampleRate,
         expectedEvents.Count);
+    var anchorClock = FitContestantClockFromAnchors(observations, renderer, sampleRate, expectedEvents.Count);
+    var clock = anchorClock != null &&
+        wordClock != null &&
+        anchorClock.MeanAbsoluteErrorSamples <= wordClock.MeanAbsoluteErrorSamples * 0.82
+            ? anchorClock
+            : wordClock ?? anchorClock;
     var sourceOffsetSamples = clock?.SourceOffsetSamples ?? 0.0;
     var meanAbsoluteErrorSamples = clock?.MeanAbsoluteErrorSamples ?? 0.0;
     var confidence = observations.Count == 0
@@ -2660,6 +2675,8 @@ static BioacousticPhysicalChannelCalibration CalibrateContestantChannel(
         sourceOffsetSamples * 1_000_000.0 / sampleRate,
         meanAbsoluteErrorSamples,
         meanAbsoluteErrorSamples * 1_000_000.0 / sampleRate,
+        observations.Sum(observation => observation.Anchors.Length),
+        observations.SelectMany(observation => observation.Anchors).DefaultIfEmpty().Average(anchor => anchor?.TimingResidualSamples ?? 0.0),
         samples.Length,
         RootMeanSquare(samples),
         samples.Length == 0 ? 0.0 : samples.Max(sample => Math.Abs(sample)),
@@ -2788,6 +2805,171 @@ static double RefineContestantExpectedPayloadOffset(float[] samples, float[] tem
     return Math.Abs(denominator) <= 1.0e-12
         ? bestOffset
         : bestOffset + Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+}
+
+static BioacousticPhysicalAnchorCalibration[] MeasureContestantAnchors(
+    float[] samples,
+    float[] template,
+    MimirBioacousticContestantRenderer renderer,
+    ulong eventIndex,
+    int sampleRate,
+    double eventSampleOffset,
+    int motifSamples)
+{
+    var anchors = renderer.AnchorPlan(eventIndex);
+    var output = new List<BioacousticPhysicalAnchorCalibration>(anchors.Count);
+    foreach (var anchor in anchors
+                 .OrderByDescending(anchor => anchor.Weight)
+                 .Take(8)
+                 .OrderBy(anchor => anchor.StartSeconds))
+    {
+        var anchorSamples = Math.Clamp(
+            (int)Math.Round(anchor.DurationSeconds * sampleRate),
+            Math.Max(12, sampleRate / 24_000),
+            Math.Max(16, motifSamples / 5));
+        var expectedLocalOffset = (int)Math.Round(anchor.StartSeconds * sampleRate);
+        var expectedObservedOffset = (int)Math.Round(eventSampleOffset) + expectedLocalOffset;
+        var templateStart = Math.Clamp(expectedLocalOffset, 0, Math.Max(0, template.Length - anchorSamples));
+        var observedStart = Math.Clamp(expectedObservedOffset, 0, Math.Max(0, samples.Length - anchorSamples));
+        if (templateStart + anchorSamples > template.Length ||
+            observedStart + anchorSamples > samples.Length)
+        {
+            continue;
+        }
+
+        var observedWindow = samples.AsSpan(observedStart, anchorSamples);
+        var expectedWindow = template.AsSpan(templateStart, anchorSamples);
+        var bestScore = ScoreAnchorWindow(observedWindow, expectedWindow);
+        var refinedOffset = observedStart +
+            EnergyCentroid(observedWindow) -
+            EnergyCentroid(expectedWindow);
+        var residual = refinedOffset - (eventSampleOffset + expectedLocalOffset);
+        var observedEnergy = WindowMeanSquare(observedWindow);
+        var expectedEnergy = WindowMeanSquare(expectedWindow);
+        output.Add(new BioacousticPhysicalAnchorCalibration(
+            anchor.Kind.ToString(),
+            anchor.SyllableIndex,
+            anchor.StartSeconds,
+            anchor.DurationSeconds,
+            anchor.CenterHz,
+            refinedOffset,
+            residual,
+            Math.Clamp(Math.Abs(bestScore) * anchor.Weight, 0.0, 1.0),
+            expectedEnergy <= 1.0e-12 ? 0.0 : Math.Sqrt(Math.Max(0.0, observedEnergy) / expectedEnergy)));
+    }
+
+    return output.ToArray();
+}
+
+static double ScoreAnchorWindow(ReadOnlySpan<float> observed, ReadOnlySpan<float> expected)
+{
+    var count = Math.Min(observed.Length, expected.Length);
+    if (count <= 0)
+    {
+        return double.NegativeInfinity;
+    }
+
+    var dot = 0.0;
+    var observedEnergy = 0.0;
+    var expectedEnergy = 0.0;
+    for (var index = 0; index < count; index++)
+    {
+        dot += observed[index] * expected[index];
+        observedEnergy += observed[index] * observed[index];
+        expectedEnergy += expected[index] * expected[index];
+    }
+
+    return observedEnergy <= 1.0e-12 || expectedEnergy <= 1.0e-12
+        ? double.NegativeInfinity
+        : dot / Math.Sqrt(observedEnergy * expectedEnergy);
+}
+
+static double EnergyCentroid(ReadOnlySpan<float> samples)
+{
+    var weighted = 0.0;
+    var energy = 0.0;
+    for (var index = 0; index < samples.Length; index++)
+    {
+        var value = samples[index] * samples[index];
+        weighted += index * value;
+        energy += value;
+    }
+
+    return energy <= 1.0e-12
+        ? samples.Length * 0.5
+        : weighted / energy;
+}
+
+static MimirBioacousticClockHypothesis? FitContestantClockFromAnchors(
+    IReadOnlyList<BioacousticPhysicalEventCalibration> observations,
+    MimirBioacousticContestantRenderer renderer,
+    int sampleRate,
+    int expectedEventCount)
+{
+    var wordAnchors = observations
+        .Select(observation => new MimirBioacousticClockAnchor(
+            observation.EventIndex,
+            renderer.EventStartSeconds(observation.EventIndex),
+            observation.SampleOffset,
+            Math.Clamp(observation.Confidence, 0.001, 1.0)));
+    var contourAnchors = observations.SelectMany(observation =>
+        observation.Anchors
+            .Where(anchor => anchor.Confidence >= 0.12)
+            .Select(anchor => new MimirBioacousticClockAnchor(
+                observation.EventIndex,
+                renderer.EventStartSeconds(observation.EventIndex) + anchor.ExpectedStartSeconds,
+                anchor.SampleOffset,
+                Math.Clamp(anchor.Confidence, 0.001, 1.0))));
+    var anchors = wordAnchors
+        .Concat(contourAnchors)
+        .OrderByDescending(anchor => anchor.Confidence)
+        .Take(160)
+        .ToArray();
+    if (anchors.Length < 3)
+    {
+        return null;
+    }
+
+    var totalWeight = anchors.Sum(anchor => Math.Max(1.0e-6, anchor.Confidence));
+    var meanTimeline = anchors.Sum(anchor => anchor.TimelineSeconds * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
+    var meanSample = anchors.Sum(anchor => anchor.SampleOffset * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
+    var covariance = 0.0;
+    var variance = 0.0;
+    foreach (var anchor in anchors)
+    {
+        var weight = Math.Max(1.0e-6, anchor.Confidence);
+        var dt = anchor.TimelineSeconds - meanTimeline;
+        covariance += weight * dt * (anchor.SampleOffset - meanSample);
+        variance += weight * dt * dt;
+    }
+
+    var effectiveRate = variance > 1.0e-12 ? covariance / variance : sampleRate;
+    if (!double.IsFinite(effectiveRate) || effectiveRate < sampleRate * 0.98 || effectiveRate > sampleRate * 1.02)
+    {
+        effectiveRate = sampleRate;
+    }
+
+    var sourceOffset = meanSample - effectiveRate * meanTimeline;
+    var residual = anchors.Sum(anchor =>
+    {
+        var predicted = sourceOffset + anchor.TimelineSeconds * effectiveRate;
+        return Math.Abs(anchor.SampleOffset - predicted) * Math.Max(1.0e-6, anchor.Confidence);
+    }) / totalWeight;
+    var residualConfidence = 1.0 / (1.0 + residual / Math.Max(1.0, sampleRate * 0.00025));
+    var countConfidence = Math.Clamp(anchors.Length / 80.0, 0.0, 1.0);
+    var anchorConfidence = Math.Clamp(anchors.Average(anchor => anchor.Confidence), 0.0, 1.0);
+    var confidence = residualConfidence * 0.45 + countConfidence * 0.30 + anchorConfidence * 0.25;
+    var coverage = expectedEventCount <= 0 ? 0.0 : observations.Count / (double)expectedEventCount;
+    var score = confidence + Math.Min(anchors.Length, 80) * 0.015 - residual / Math.Max(1.0, sampleRate * 0.004);
+    return new MimirBioacousticClockHypothesis(
+        sourceOffset,
+        effectiveRate,
+        anchors.Length,
+        coverage,
+        residual,
+        confidence,
+        score,
+        anchors);
 }
 
 static int ClassifyContestantPayloadAt(
@@ -4144,6 +4326,8 @@ public sealed record BioacousticPhysicalChannelCalibration(
     double SourceOffsetMicroseconds,
     double MeanAbsoluteErrorSamples,
     double MeanAbsoluteErrorMicroseconds,
+    int AnchorCount,
+    double MeanAnchorResidualSamples,
     int SampleCount,
     double Rms,
     double Peak,
@@ -4171,7 +4355,19 @@ public sealed record BioacousticPhysicalEventCalibration(
     double Confidence,
     int Polarity,
     double NormalizedResidual,
-    BioacousticPhysicalBandCalibration[] Bands);
+    BioacousticPhysicalBandCalibration[] Bands,
+    BioacousticPhysicalAnchorCalibration[] Anchors);
+
+public sealed record BioacousticPhysicalAnchorCalibration(
+    string Kind,
+    int SyllableIndex,
+    double ExpectedStartSeconds,
+    double DurationSeconds,
+    double CenterHz,
+    double SampleOffset,
+    double TimingResidualSamples,
+    double Confidence,
+    double Gain);
 
 public sealed record BioacousticPhysicalBandCalibration(
     double CenterHz,

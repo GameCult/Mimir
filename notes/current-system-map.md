@@ -214,6 +214,15 @@ co-streamer shotgun to 37/37 payload with 34.083 us MAE, and improves the
 cardioid event count to 31/37 while still measuring 92.996 us MAE. The next
 precision cut must extract intra-call contour anchors, not only one offset per
 packet word.
+The first anchor-rich canary packet is persisted at
+`calibration/bioacoustic/scarlett-canary-packet-anchor-rich-192k.json`.
+It adds timing chips, formant pivots, harmonic-envelope notches, payload
+ornaments, renderer-level template caching, and per-event intra-call anchor
+measurements. It clears 10x realtime and improves loopback to about 2.23 us
+MAE, but physical mics do not improve yet: shotgun is 36/37 payload at
+56.365 us MAE and cardioid is 27/37 payload at 101.522 us MAE. Treat this as
+anchor observability, not a finished anchor geometry. The next cut should learn
+which anchor kinds survive each acoustic path and weight or reshape them.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000
