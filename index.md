@@ -5,8 +5,8 @@ signals, and runtime evidence pulled into one coherent OBS-facing surface.
 
 ## Start Here
 
-- [Current System Map](notes/current-system-map.md)
-- [Perfect Machine Domain Index](docs/perfect-machine-domain-index.md)
-- [Code Algorithm Map](docs/code-algorithm-map.md)
-- [Implementation Plan](docs/implementation-plan.md)
-- [Study Reading Guide](research/perfect-machine-study-2026-05-23/reading-guide.md)
+- [[notes/current-system-map|Current System Map]]
+- [[docs/perfect-machine-domain-index|Perfect Machine Domain Index]]
+- [[docs/code-algorithm-map|Code Algorithm Map]]
+- [[docs/implementation-plan|Implementation Plan]]
+- [[research/perfect-machine-study-2026-05-23/reading-guide|Study Reading Guide]]

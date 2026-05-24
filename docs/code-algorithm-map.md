@@ -3,7 +3,7 @@
 ## What This File Is
 
 This is a source-grounded map of the code currently in this repo. It follows the
-style of `repixelizer/docs/lean-optimizer-algorithm-map.md`: stage-oriented,
+stage-oriented map style from the Repixelizer optimizer notes:
 plain about ownership, and explicit about which blocks deserve to live.
 
 Generated build trees under `native/**/build/` are not mapped as source. Stored
@@ -1410,17 +1410,24 @@ Live role:
 
 Linked notes:
 
-- `research/chirplet-sync-decoder/summary.md`: why the active path moved from
+- [[research/chirplet-sync-decoder/summary|Chirplet Sync Decoder Summary]]:
+  why the active path moved from
   dense chirplet matching to dechirp plus FFT/Goertzel-style bin classification.
-- `research/chirplet-sync-decoder/bibliography.md`: chirplet, LoRa/CSS, and
+- [[research/chirplet-sync-decoder/bibliography|Chirplet Sync Decoder Bibliography]]:
+  chirplet, LoRa/CSS, and
   transform references.
-- `research/live-adaptive-sync/summary.md`: passive timing, drift, and SRO.
-- `research/feedback-calibration/summary.md`: room/speaker/mic calibration.
-- `research/perfect-machine-hypotheses/summary.md`: hypotheses added by this
+- [[research/live-adaptive-sync/summary|Live Adaptive Sync Summary]]: passive
+  timing, drift, and SRO.
+- [[research/feedback-calibration/summary|Feedback Calibration Summary]]:
+  room/speaker/mic calibration.
+- [[research/perfect-machine-hypotheses/summary|Perfect Machine Hypotheses]]:
+  hypotheses added by this
   documentation pass.
-- `docs/perfect-machine-domain-index.md`: indexed domain map for future
+- [[perfect-machine-domain-index|Perfect Machine Domain Index]]: indexed
+  domain map for future
   implementation passes.
-- `research/perfect-machine-study-2026-05-23/`: architecture rumination,
+- [[research/perfect-machine-study-2026-05-23/index|Perfect Machine Study Index]]:
+  architecture rumination,
   optimization ledger, references, and sample implementation sketches.
 
 Hypotheses:
@@ -1453,7 +1460,8 @@ Hypotheses:
 
 This map describes the repo's code shape. It is not a replacement for:
 
-- `docs/audio-field.md` for the audio-side algorithm and measurement narrative.
-- `docs/native-capture-cadence.md` for camera/USB evidence.
-- `docs/implementation-plan.md` for current build plan.
+- [[audio-field|Audio Field]] for the audio-side algorithm and measurement
+  narrative.
+- [[native-capture-cadence|Native Capture Cadence]] for camera/USB evidence.
+- [[implementation-plan|Implementation Plan]] for current build plan.
 - `state/map.yaml` for canonical repo state.

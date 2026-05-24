@@ -31,7 +31,7 @@ OBS should be open before the sender starts if OBS is the SRT listener. If a sou
 ## V1 Smoke Gate
 
 Before adding receiver plugins, native OBS surfaces, or new bridge elegance, run
-the bounded witness ledger in `docs/obs-v1-smoke-test.md`.
+the bounded witness ledger in [[obs-v1-smoke-test|OBS V1 Smoke Test]].
 
 The required artifact is:
 

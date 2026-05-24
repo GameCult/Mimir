@@ -6,47 +6,47 @@ corpus.
 
 ## Start Here
 
-- [README](README.md)
-- [Current System Map](notes/current-system-map.md)
-- [Fresh Workspace Handoff](notes/fresh-workspace-handoff.md)
-- [Implementation Plan](docs/implementation-plan.md)
-- [Code Algorithm Map](docs/code-algorithm-map.md)
-- [Perfect Machine Domain Index](docs/perfect-machine-domain-index.md)
+- [[README]]
+- [[notes/current-system-map|Current System Map]]
+- [[notes/fresh-workspace-handoff|Fresh Workspace Handoff]]
+- [[docs/implementation-plan|Implementation Plan]]
+- [[docs/code-algorithm-map|Code Algorithm Map]]
+- [[docs/perfect-machine-domain-index|Perfect Machine Domain Index]]
 
 ## Live Architecture
 
-- [Architecture](docs/architecture.md)
-- [Perfect Machine](docs/perfect-machine.md)
-- [Viable Stream App](docs/viable-stream-app.md)
-- [Audio Field](docs/audio-field.md)
-- [Sensor Fusion Architecture](docs/sensor-fusion-architecture.md)
-- [Native Rebuild Plan](docs/native-rebuild-plan.md)
-- [Native Capture Cadence](docs/native-capture-cadence.md)
-- [Fensalir Spatial Audio](docs/fensalir-spatial-audio.md)
+- [[docs/architecture|Architecture]]
+- [[docs/perfect-machine|Perfect Machine]]
+- [[docs/viable-stream-app|Viable Stream App]]
+- [[docs/audio-field|Audio Field]]
+- [[docs/sensor-fusion-architecture|Sensor Fusion Architecture]]
+- [[docs/native-rebuild-plan|Native Rebuild Plan]]
+- [[docs/native-capture-cadence|Native Capture Cadence]]
+- [[docs/fensalir-spatial-audio|Fensalir Spatial Audio]]
 
 ## Current Deep Study
 
-- [Study Reading Guide](research/perfect-machine-study-2026-05-23/reading-guide.md)
-- [Study Index](research/perfect-machine-study-2026-05-23/index.md)
-- [Research Claims Digest](research/perfect-machine-study-2026-05-23/research-claims-digest.md)
-- [Implementation Roadmap](research/perfect-machine-study-2026-05-23/implementation-roadmap.md)
-- [Benchmark Plan](research/perfect-machine-study-2026-05-23/benchmark-plan.md)
-- [Calibration Session Spec](research/perfect-machine-study-2026-05-23/calibration-session-spec.md)
-- [Fensalir Integration Map](research/perfect-machine-study-2026-05-23/fensalir-integration-map.md)
-- [Native Boundary Map](research/perfect-machine-study-2026-05-23/native-boundary-map.md)
+- [[research/perfect-machine-study-2026-05-23/reading-guide|Study Reading Guide]]
+- [[research/perfect-machine-study-2026-05-23/index|Study Index]]
+- [[research/perfect-machine-study-2026-05-23/research-claims-digest|Research Claims Digest]]
+- [[research/perfect-machine-study-2026-05-23/implementation-roadmap|Implementation Roadmap]]
+- [[research/perfect-machine-study-2026-05-23/benchmark-plan|Benchmark Plan]]
+- [[research/perfect-machine-study-2026-05-23/calibration-session-spec|Calibration Session Spec]]
+- [[research/perfect-machine-study-2026-05-23/fensalir-integration-map|Fensalir Integration Map]]
+- [[research/perfect-machine-study-2026-05-23/native-boundary-map|Native Boundary Map]]
 
 ## Research Archives
 
-- [Research Index](research/README.md)
-- [Chirplet Sync Decoder](research/chirplet-sync-decoder/summary.md)
-- [Live Adaptive Sync](research/live-adaptive-sync/summary.md)
-- [GPU Fusion Splatting](research/gpu-fusion-splatting/summary.md)
-- [Visual Spatial Map](research/visual-spatial-map/summary.md)
-- [Ambisonic AquaSynth](research/ambisonic-aquasynth/summary.md)
-- [Feedback Calibration](research/feedback-calibration/summary.md)
-- [Playback Calibration](research/playback-calibration/summary.md)
-- [Spout OBS Bridge](research/spout-obs-bridge/summary.md)
+- [[research/README|Research Index]]
+- [[research/chirplet-sync-decoder/summary|Chirplet Sync Decoder]]
+- [[research/live-adaptive-sync/summary|Live Adaptive Sync]]
+- [[research/gpu-fusion-splatting/summary|GPU Fusion Splatting]]
+- [[research/visual-spatial-map/summary|Visual Spatial Map]]
+- [[research/ambisonic-aquasynth/summary|Ambisonic AquaSynth]]
+- [[research/feedback-calibration/summary|Feedback Calibration]]
+- [[research/playback-calibration/summary|Playback Calibration]]
+- [[research/spout-obs-bridge/summary|Spout OBS Bridge]]
 
 ## Persistence And Identity
 
-- [Mimir Face](docs/mimir-face.md)
+- [[docs/mimir-face|Mimir Face]]

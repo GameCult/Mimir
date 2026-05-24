@@ -8,26 +8,29 @@ open architectural cut.
 
 Read this with:
 
-- `docs/code-algorithm-map.md` for source-level ownership.
-- `docs/audio-field.md` for current audio sync narrative.
-- `docs/perfect-machine-full-field.md` for the article-form full-field vision:
+- [[code-algorithm-map|Code Algorithm Map]] for source-level ownership.
+- [[audio-field|Audio Field]] for current audio sync narrative.
+- [[perfect-machine-full-field|The Perfect Machine Full Field]] for the
+  article-form full-field vision:
   direct/network cameras, microphones, tracked phones, glowing markers,
   chirplet room mapping, motion capture, and the spatiotemporal reservoir.
-- `docs/native-capture-cadence.md` for measured camera/USB evidence.
-- `research/perfect-machine-study-2026-05-23/architecture-rumination.md` for
-  the long-form design argument.
-- `research/perfect-machine-study-2026-05-23/index.md` for the study directory
-  and sample-code index.
-- `research/perfect-machine-study-2026-05-23/reading-guide.md` for task-oriented
-  navigation through the study.
-- `research/perfect-machine-study-2026-05-23/optimization-ledger.md` for hot
+- [[native-capture-cadence|Native Capture Cadence]] for measured camera/USB
+  evidence.
+- [[research/perfect-machine-study-2026-05-23/architecture-rumination|Architecture Rumination]]
+  for the long-form design argument.
+- [[research/perfect-machine-study-2026-05-23/index|Perfect Machine Study Index]]
+  for the study directory and sample-code index.
+- [[research/perfect-machine-study-2026-05-23/reading-guide|Reading Guide]] for
+  task-oriented navigation through the study.
+- [[research/perfect-machine-study-2026-05-23/optimization-ledger|Optimization Ledger]]
+  for hot
   loop candidates.
-- `research/perfect-machine-study-2026-05-23/fensalir-integration-map.md` for
-  the Mimir/Fensalir ownership cut.
-- `research/perfect-machine-study-2026-05-23/calibration-session-spec.md` for
-  the planned physical-path calibration command.
-- `research/perfect-machine-study-2026-05-23/samples/README.md` for sample
-  implementation sketches.
+- [[research/perfect-machine-study-2026-05-23/fensalir-integration-map|Fensalir Integration Map]]
+  for the Mimir/Fensalir ownership cut.
+- [[research/perfect-machine-study-2026-05-23/calibration-session-spec|Calibration Session Spec]]
+  for the planned physical-path calibration command.
+- [[research/perfect-machine-study-2026-05-23/samples/README|Sample Implementation Sketches]]
+  for sample implementation sketches.
 
 ## One-Sentence Machine
 

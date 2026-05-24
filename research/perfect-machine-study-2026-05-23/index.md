@@ -10,36 +10,36 @@ needs the reason a cut exists.
 
 | File | Use It For |
 | --- | --- |
-| `architecture-rumination.md` | System ownership, current machine critique, coherent next cuts. |
-| `optimization-ledger.md` | Hot loop risks, low-level implementation options, micro-optimization candidates. |
-| `references.md` | Research links for chirplets, CSS/LoRa, GCC-PHAT, D3D12/FFT/GPU compute. |
-| `current-hotspot-audit.md` | Static audit of likely runtime allocation/scan/driver-pressure hotspots. |
-| `implementation-roadmap.md` | Phase plan, invariants, proofs, and benchmark harnesses. |
-| `questions-and-hypotheses.md` | Open questions and falsifiable hypotheses by domain. |
-| `reading-guide.md` | Task-oriented route through the study docs and samples. |
-| `data-dictionary.md` | Data object definitions for streams, samples, chirp anchors, clock fits, calibration paths, reports, and Fensalir constraints. |
-| `volumetric-audio-field.md` | Sound-field reconstruction decomposition and first practical audio target. |
-| `acoustic-field-models.md` | Field reconstruction models and the first honest acoustic source proof. |
-| `chirplet-transform-deep-dive.md` | Controlled chirp receiver versus generic chirplet transform. |
-| `decoder-architecture-options.md` | Active receiver implementation options and promotion criteria. |
-| `distributed-receiver-spec.md` | Raven/phone receiver shape for self-locating remote sensors using codebook and schedule state. |
-| `visual-fusion-4dgs-study.md` | Sensor fusion and realtime Gaussian splatting architecture study. |
-| `open-implementation-catalog.md` | Implementation families to study before inventing local machinery. |
-| `prior-research-synthesis.md` | Distillation of the older chirplet, adaptive sync, ambisonic, splatting, calibration, and visual archives. |
-| `research-claims-digest.md` | Claim-level digest of external literature and how it steers Mimir. |
-| `fensalir-integration-map.md` | Contract-level cut between Mimir runtime truth and Fensalir GPU/render ownership. |
-| `native-boundary-map.md` | Native/managed/Fensalir ownership boundaries for ASIO, cameras, reservoir, and GPU payloads. |
-| `option-matrix.md` | Implementation alternatives, failure modes, and deciding proofs for the major subsystems. |
-| `benchmark-plan.md` | Measurement plan for audio sync, acoustic field, camera capture, Fensalir lowering, and splat fusion. |
-| `calibration-session-spec.md` | Command/session shape for learning and validating real output/mic path models. |
-| `low-level-implementation-notes.md` | Concrete memory layout, SIMD/GPU, ASIO, camera, and instrumentation notes. |
-| `microsecond-sync-math.md` | Timing math for sample period, bandwidth, SNR, subsample delay, and acoustic distance. |
-| `state-machine-invariants.md` | Ownership limits for runtime, hub, buffers, decoders, calibration, DSP, capture, Fensalir, network, and OBS. |
-| `failure-mode-ledger.md` | Failure modes and coherent fixes across active witness, passive sync, actuator, camera, fusion, and network paths. |
-| `hot-path-pseudocode.md` | Code-shaped intended hot paths for streaming decode, calibration weighting, actuator, native rings, camera rings, and Fensalir lowering. |
-| `glossary.md` | Short definitions for the synchronization, acoustic, visual, and reservoir terms used across the study. |
+| [[architecture-rumination|Architecture Rumination]] | System ownership, current machine critique, coherent next cuts. |
+| [[optimization-ledger|Optimization Ledger]] | Hot loop risks, low-level implementation options, micro-optimization candidates. |
+| [[references|References]] | Research links for chirplets, CSS/LoRa, GCC-PHAT, D3D12/FFT/GPU compute. |
+| [[current-hotspot-audit|Current Hotspot Audit]] | Static audit of likely runtime allocation/scan/driver-pressure hotspots. |
+| [[implementation-roadmap|Implementation Roadmap]] | Phase plan, invariants, proofs, and benchmark harnesses. |
+| [[questions-and-hypotheses|Questions And Hypotheses]] | Open questions and falsifiable hypotheses by domain. |
+| [[reading-guide|Reading Guide]] | Task-oriented route through the study docs and samples. |
+| [[data-dictionary|Data Dictionary]] | Data object definitions for streams, samples, chirp anchors, clock fits, calibration paths, reports, and Fensalir constraints. |
+| [[volumetric-audio-field|Volumetric Audio Field]] | Sound-field reconstruction decomposition and first practical audio target. |
+| [[acoustic-field-models|Acoustic Field Models]] | Field reconstruction models and the first honest acoustic source proof. |
+| [[chirplet-transform-deep-dive|Chirplet Transform Deep Dive]] | Controlled chirp receiver versus generic chirplet transform. |
+| [[decoder-architecture-options|Decoder Architecture Options]] | Active receiver implementation options and promotion criteria. |
+| [[distributed-receiver-spec|Distributed Receiver Spec]] | Raven/phone receiver shape for self-locating remote sensors using codebook and schedule state. |
+| [[visual-fusion-4dgs-study|Visual Fusion 4DGS Study]] | Sensor fusion and realtime Gaussian splatting architecture study. |
+| [[open-implementation-catalog|Open Implementation Catalog]] | Implementation families to study before inventing local machinery. |
+| [[prior-research-synthesis|Prior Research Synthesis]] | Distillation of the older chirplet, adaptive sync, ambisonic, splatting, calibration, and visual archives. |
+| [[research-claims-digest|Research Claims Digest]] | Claim-level digest of external literature and how it steers Mimir. |
+| [[fensalir-integration-map|Fensalir Integration Map]] | Contract-level cut between Mimir runtime truth and Fensalir GPU/render ownership. |
+| [[native-boundary-map|Native Boundary Map]] | Native/managed/Fensalir ownership boundaries for ASIO, cameras, reservoir, and GPU payloads. |
+| [[option-matrix|Option Matrix]] | Implementation alternatives, failure modes, and deciding proofs for the major subsystems. |
+| [[benchmark-plan|Benchmark Plan]] | Measurement plan for audio sync, acoustic field, camera capture, Fensalir lowering, and splat fusion. |
+| [[calibration-session-spec|Calibration Session Spec]] | Command/session shape for learning and validating real output/mic path models. |
+| [[low-level-implementation-notes|Low-Level Implementation Notes]] | Concrete memory layout, SIMD/GPU, ASIO, camera, and instrumentation notes. |
+| [[microsecond-sync-math|Microsecond Sync Math]] | Timing math for sample period, bandwidth, SNR, subsample delay, and acoustic distance. |
+| [[state-machine-invariants|State Machine Invariants]] | Ownership limits for runtime, hub, buffers, decoders, calibration, DSP, capture, Fensalir, network, and OBS. |
+| [[failure-mode-ledger|Failure Mode Ledger]] | Failure modes and coherent fixes across active witness, passive sync, actuator, camera, fusion, and network paths. |
+| [[hot-path-pseudocode|Hot Path Pseudocode]] | Code-shaped intended hot paths for streaming decode, calibration weighting, actuator, native rings, camera rings, and Fensalir lowering. |
+| [[glossary|Glossary]] | Short definitions for the synchronization, acoustic, visual, and reservoir terms used across the study. |
 | `sample-code-index.json` | Machine-readable index for sample sketches. |
-| `samples/README.md` | Index of sample implementation sketches. |
+| [[samples/README|Sample Implementation Sketches]] | Index of sample implementation sketches. |
 
 ## Sample Code
 

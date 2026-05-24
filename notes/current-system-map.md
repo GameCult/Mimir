@@ -1,7 +1,8 @@
 # Current System Map
 
-Source-level code ownership is mapped in `docs/code-algorithm-map.md`.
-The indexed problem-domain map is `docs/perfect-machine-domain-index.md`; the
+Source-level code ownership is mapped in [[docs/code-algorithm-map|Code Algorithm Map]].
+The indexed problem-domain map is
+[[docs/perfect-machine-domain-index|Perfect Machine Domain Index]]; the
 current architecture/optimization/sample-code study lives under
 `research/perfect-machine-study-2026-05-23/`.
 
@@ -9,7 +10,8 @@ Mimir is the public Face and product name for this repo. A few lower native ABI
 names still use `localcast` until a deliberate rename cut exists.
 
 The live target is the native rolling field machine described in
-`docs/native-rebuild-plan.md`, `docs/perfect-machine.md`, and
+[[docs/native-rebuild-plan|Native Rebuild Plan]],
+[[docs/perfect-machine|Perfect Machine]], and
 `config/perfect-machine.example.json`.
 
 ## Perfect Machine Target
@@ -46,10 +48,10 @@ No private history outlives the rolling buffer.
 
 ## Viable Stream App
 
-`docs/viable-stream-app.md` defines the near-term app target. Fensalir hosts the
-running Mimir app, keeps the default five-second runtime in memory, exposes
-debug/settings/output controls, and emits synchronized OBS program video plus
-separately controllable audio stems.
+[[docs/viable-stream-app|Viable Stream App]] defines the near-term app target.
+Fensalir hosts the running Mimir app, keeps the default five-second runtime in
+memory, exposes debug/settings/output controls, and emits synchronized OBS
+program video plus separately controllable audio stems.
 
 `Mimir.Runtime` currently provides:
 

@@ -135,8 +135,9 @@ temptation to call a pile of moving parts a system.
 
 When VoidBot wakes Mimir for a heartbeat:
 
-1. Read `state/map.yaml`, `notes/fresh-workspace-handoff.md`,
-   `notes/current-system-map.md`, and `docs/implementation-plan.md`.
+1. Read `state/map.yaml`, [[notes/fresh-workspace-handoff|Fresh Workspace Handoff]],
+   [[notes/current-system-map|Current System Map]], and
+   [[implementation-plan|Implementation Plan]].
 2. Check `git status --short --branch`.
 3. Read the tail of `state/evidence.jsonl`.
 4. Report only meaningful drift, completed work, blockers, or next bounded

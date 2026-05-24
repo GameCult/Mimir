@@ -18,14 +18,18 @@ Use it to shape native implementation decisions:
 
 Audio timing research entry points:
 
-- `chirplet-sync-decoder/summary.md`: chirplet transform notes, why dense
+- [[chirplet-sync-decoder/summary|Chirplet Sync Decoder Summary]]: chirplet
+  transform notes, why dense
   matched-filter search was cut from the hybrid hot path, and the current
   dechirp plus FFT/Goertzel decoder shape.
-- `live-adaptive-sync/summary.md`: passive program-audio synchronization and
+- [[live-adaptive-sync/summary|Live Adaptive Sync Summary]]: passive
+  program-audio synchronization and
   sample-rate-offset estimation.
-- `feedback-calibration/summary.md`: online room/speaker/mic response
+- [[feedback-calibration/summary|Feedback Calibration Summary]]: online
+  room/speaker/mic response
   calibration.
-- `ambisonic-aquasynth/summary.md`: spatial audio and Ambisonic reference
+- [[ambisonic-aquasynth/summary|Ambisonic AquaSynth Summary]]: spatial audio
+  and Ambisonic reference
   material; useful background, not a license to call unsynchronized mics a
   coherent field.
 

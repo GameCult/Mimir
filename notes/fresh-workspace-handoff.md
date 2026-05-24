@@ -18,7 +18,7 @@ Get-Content .\state\evidence.jsonl -Tail 8
 ## Current Shape
 
 - Public brand/Face is Mimir.
-- Mimir's Face doctrine lives in `docs/mimir-face.md`.
+- Mimir's Face doctrine lives in [[docs/mimir-face|Mimir Face]].
 - VoidBot persona/state live under `.voidbot/voice/` and `.voidbot/state/`.
   Commit `.voidbot` dirt in a separate state commit whenever it appears.
 - V1 still has FFmpeg/SRT/OBS bridge utilities for LAN ingest.
@@ -28,14 +28,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `src/Mimir.Runtime` owns `MimirSynchronizationHub`, configurable five-second
   rolling buffers, stream descriptors, source adapters, direct native ingest,
   audio chirplet delay estimation, and the video capture driver seam.
-- `docs/code-algorithm-map.md` and `docs/perfect-machine-domain-index.md` are
+- [[docs/code-algorithm-map|Code Algorithm Map]] and
+  [[docs/perfect-machine-domain-index|Perfect Machine Domain Index]] are
   the fastest re-entry maps for source ownership and problem-domain cuts.
 - `research/perfect-machine-study-2026-05-23/` contains the architecture
   rumination, optimization ledger, references, boundary maps, benchmark plan,
   calibration-session spec, distributed receiver spec, failure ledger, data
   dictionary, low-level implementation notes, and sample code sketches for the
   next decoder/DSP/native-ring/Fensalir implementation passes. Start with
-  `research/perfect-machine-study-2026-05-23/reading-guide.md`.
+  [[research/perfect-machine-study-2026-05-23/reading-guide|Reading Guide]].
 - Local six-camera ingest should use direct driver adapters. Process-backed
   sources are bridge/network edges only.
 - Leap stereo IR is the first timing-camera candidate for direct ingest.

@@ -9,13 +9,13 @@ entering a future implementation pass cold.
 
 Read in order:
 
-1. `chirplet-transform-deep-dive.md`
-2. `decoder-architecture-options.md`
-3. `microsecond-sync-math.md`
-4. `current-hotspot-audit.md`
-5. `optimization-ledger.md`
-6. `low-level-implementation-notes.md`
-7. `benchmark-plan.md`
+1. [[chirplet-transform-deep-dive|Chirplet Transform Deep Dive]]
+2. [[decoder-architecture-options|Decoder Architecture Options]]
+3. [[microsecond-sync-math|Microsecond Sync Math]]
+4. [[current-hotspot-audit|Current Hotspot Audit]]
+5. [[optimization-ledger|Optimization Ledger]]
+6. [[low-level-implementation-notes|Low-Level Implementation Notes]]
+7. [[benchmark-plan|Benchmark Plan]]
 6. sample sketches:
    - `samples/StreamingChirpBinDecoderSketch.cs`
    - `samples/BatchedChirpScoreAbiSketch.h`
@@ -33,12 +33,12 @@ Decision:
 
 Read in order:
 
-1. `volumetric-audio-field.md`
-2. `acoustic-field-models.md`
-3. `calibration-session-spec.md`
-4. `prior-research-synthesis.md`
-5. `benchmark-plan.md`
-6. `references.md`
+1. [[volumetric-audio-field|Volumetric Audio Field]]
+2. [[acoustic-field-models|Acoustic Field Models]]
+3. [[calibration-session-spec|Calibration Session Spec]]
+4. [[prior-research-synthesis|Prior Research Synthesis]]
+5. [[benchmark-plan|Benchmark Plan]]
+6. [[references|References]]
 
 Decision:
 
@@ -51,9 +51,9 @@ Decision:
 
 Read in order:
 
-1. `prior-research-synthesis.md`
-2. `optimization-ledger.md`
-3. `benchmark-plan.md`
+1. [[prior-research-synthesis|Prior Research Synthesis]]
+2. [[optimization-ledger|Optimization Ledger]]
+3. [[benchmark-plan|Benchmark Plan]]
 4. sample sketches:
    - `samples/FarrowFractionalDelaySketch.cpp`
    - `samples/SroPllAsrcControllerSketch.cpp`
@@ -68,13 +68,13 @@ Decision:
 
 Read in order:
 
-1. `native-boundary-map.md`
-2. `visual-fusion-4dgs-study.md`
-3. `low-level-implementation-notes.md`
-4. `current-hotspot-audit.md`
-5. `benchmark-plan.md`
-6. `docs/native-capture-cadence.md`
-7. `docs/native-rebuild-plan.md`
+1. [[native-boundary-map|Native Boundary Map]]
+2. [[visual-fusion-4dgs-study|Visual Fusion 4DGS Study]]
+3. [[low-level-implementation-notes|Low-Level Implementation Notes]]
+4. [[current-hotspot-audit|Current Hotspot Audit]]
+5. [[benchmark-plan|Benchmark Plan]]
+6. [[docs/native-capture-cadence|Native Capture Cadence]]
+7. [[docs/native-rebuild-plan|Native Rebuild Plan]]
 
 Decision:
 
@@ -86,9 +86,9 @@ Decision:
 
 Read in order:
 
-1. `fensalir-integration-map.md`
-2. `native-boundary-map.md`
-3. `visual-fusion-4dgs-study.md`
+1. [[fensalir-integration-map|Fensalir Integration Map]]
+2. [[native-boundary-map|Native Boundary Map]]
+3. [[visual-fusion-4dgs-study|Visual Fusion 4DGS Study]]
 4. sample sketches:
    - `samples/AquariumGpuSensorFrameBridgeSketch.cs`
    - `samples/AcousticConstraintLoweringSketch.cs`
@@ -104,12 +104,12 @@ Decision:
 
 Read in order:
 
-1. `implementation-roadmap.md`
-2. `option-matrix.md`
-3. `research-claims-digest.md`
-4. `questions-and-hypotheses.md`
-5. `distributed-receiver-spec.md`
-6. `current-hotspot-audit.md`
+1. [[implementation-roadmap|Implementation Roadmap]]
+2. [[option-matrix|Option Matrix]]
+3. [[research-claims-digest|Research Claims Digest]]
+4. [[questions-and-hypotheses|Questions And Hypotheses]]
+5. [[distributed-receiver-spec|Distributed Receiver Spec]]
+6. [[current-hotspot-audit|Current Hotspot Audit]]
 
 Recommended next code cut:
 
@@ -121,10 +121,10 @@ Recommended next code cut:
 
 Read:
 
-1. `docs/perfect-machine-domain-index.md`
-2. `docs/code-algorithm-map.md`
-3. `notes/current-system-map.md`
-4. this directory's `index.md`
+1. [[docs/perfect-machine-domain-index|Perfect Machine Domain Index]]
+2. [[docs/code-algorithm-map|Code Algorithm Map]]
+3. [[notes/current-system-map|Current System Map]]
+4. this directory's [[index|Study Index]]
 
 Rule:
 
