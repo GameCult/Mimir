@@ -313,9 +313,11 @@ Decoded WAVs remain ignored scratch artifacts. Committed receipts live under
 `artifacts/spectra/real-birds-ffmpeg/`:
 
 - `lesser-redpoll/Acanthis_cabaret_-_Lesser_Redpoll_XC482789-log-mel.png`
+- `lesser-redpoll/Acanthis_cabaret_-_Lesser_Redpoll_XC482789-log-mel-flux.png`
 - `lesser-redpoll/Acanthis_cabaret_-_Lesser_Redpoll_XC482789-cepstrum.png`
 - `lesser-redpoll/Acanthis_cabaret_-_Lesser_Redpoll_XC482789-mel-cepstral-features.csv`
 - `wattled-guan/Aburria_aburri_-_Wattled_Guan_XC250442-log-mel.png`
+- `wattled-guan/Aburria_aburri_-_Wattled_Guan_XC250442-log-mel-flux.png`
 - `wattled-guan/Aburria_aburri_-_Wattled_Guan_XC250442-cepstrum.png`
 - `wattled-guan/Aburria_aburri_-_Wattled_Guan_XC250442-mel-cepstral-features.csv`
 
@@ -328,18 +330,26 @@ Invalid data found when processing input
 
 The mel-cepstral receipt tool chooses the loudest active window when no start
 time is supplied, then writes log-mel, cepstrum, and per-frame feature CSV. The
-first real-bird readings:
+feature CSV now includes positive log-mel spectral flux: frame-to-frame
+new-energy motion in mel space. This is a better timing-anchor surface than the
+plain cepstrum because sustained bands recede and attacks/glides light up.
+
+The first real-bird readings:
 
 ```text
 Lesser Redpoll active window: start=2.000s, duration=4.000s
 centroid median=2440 Hz, p90=3041 Hz, max=3981 Hz
 bandwidth median=2427 Hz, p90=2683 Hz
 peak-energy frame near 1.732s, centroid=3224 Hz, bandwidth=1768 Hz
+log-mel flux median=0.0870, p90=0.1166, p99=0.2079, max=0.3437
+top flux frames around 1.716-1.720s and 1.478-1.482s
 
 Wattled Guan active window: start=137.000s, duration=4.000s
 centroid median=2217 Hz, p90=4229 Hz, max=4445 Hz
 bandwidth median=1072 Hz, p90=1854 Hz
 peak-energy frame near 1.722s, centroid=2021 Hz, bandwidth=766 Hz
+log-mel flux median=0.0749, p90=0.1034, p99=0.1818, max=0.2370
+top flux frames around 0.034-0.036s and the 3.248-3.744s high-band shifts
 ```
 
 Read against the current `canary-packet-trill`, the lesson is blunt:
@@ -354,6 +364,11 @@ Read against the current `canary-packet-trill`, the lesson is blunt:
   deliberately sharp, but it is still too ladder-like. Real birds are carrying
   identity through redundant contour, roughness, onset statistics, and cepstral
   envelope motion at the same time. That is the next scoring surface.
+- The log-mel flux receipts are the clearest current clue. They expose repeated
+  curved strokes in Redpoll and slower phrase-boundary/harmonic-motion anchors
+  in Guan. The next decoder should treat flux ridges as anchor proposals, then
+  classify the surrounding log-mel/cepstral word shape instead of asking the
+  cepstrum to do all the work alone.
 
 ## Next Cut
 

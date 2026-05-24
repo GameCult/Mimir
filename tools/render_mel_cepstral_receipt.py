@@ -104,6 +104,16 @@ def colorize(surface: np.ndarray, floor: float | None = None, ceiling: float | N
     return Image.fromarray(np.stack([r, g, b], axis=2).astype(np.uint8), mode="RGB")
 
 
+def log_mel_flux(log_mel: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    if log_mel.shape[1] == 0:
+        return log_mel.copy(), np.empty((0,), dtype=np.float32)
+
+    delta = np.diff(log_mel, axis=1, prepend=log_mel[:, :1])
+    positive_delta = np.maximum(delta, 0.0)
+    flux = np.sqrt(np.mean(positive_delta * positive_delta, axis=0)).astype(np.float32)
+    return positive_delta.astype(np.float32), flux
+
+
 def select_active_window(samples: np.ndarray, sample_rate: int, duration: float) -> int:
     window = max(1, int(round(duration * sample_rate)))
     if len(samples) <= window:
@@ -124,6 +134,7 @@ def write_features(
     path: Path,
     log_mel: np.ndarray,
     cepstrum: np.ndarray,
+    spectral_flux: np.ndarray,
     centers_hz: np.ndarray,
     sample_rate: int,
     hop: int,
@@ -135,7 +146,7 @@ def write_features(
 
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        header = ["frame", "time_seconds", "log_energy", "centroid_hz", "bandwidth_hz"]
+        header = ["frame", "time_seconds", "log_energy", "centroid_hz", "bandwidth_hz", "log_mel_spectral_flux"]
         header.extend(f"cepstrum_{index}" for index in range(cepstrum.shape[0]))
         writer.writerow(header)
         for frame in range(log_mel.shape[1]):
@@ -145,6 +156,7 @@ def write_features(
                 f"{math.log(max(float(energy[frame]), 1.0e-12)):.6f}",
                 f"{float(centroid[frame]):.3f}",
                 f"{float(bandwidth[frame]):.3f}",
+                f"{float(spectral_flux[frame]):.6f}",
             ]
             row.extend(f"{float(value):.6f}" for value in cepstrum[:, frame])
             writer.writerow(row)
@@ -178,20 +190,24 @@ def main() -> int:
     bank, centers = mel_filterbank(sample_rate, args.fft, args.mel_bands, args.min_hz, min(args.max_hz, sample_rate * 0.5))
     mel_power = np.maximum(bank @ power, 1.0e-18)
     log_mel = np.log(mel_power)
+    flux_surface, spectral_flux = log_mel_flux(log_mel)
     cepstrum = dct_matrix(args.cepstra, args.mel_bands) @ log_mel
 
     stem = args.input.stem
     log_mel_png = args.output_dir / f"{stem}-log-mel.png"
+    flux_png = args.output_dir / f"{stem}-log-mel-flux.png"
     cepstrum_png = args.output_dir / f"{stem}-cepstrum.png"
     features_csv = args.output_dir / f"{stem}-mel-cepstral-features.csv"
 
     width = max(900, log_mel.shape[1] * 4)
     colorize(log_mel).resize((width, 640)).save(log_mel_png)
+    colorize(flux_surface, floor=0.0).resize((width, 640)).save(flux_png)
     colorize(cepstrum).resize((width, 420)).save(cepstrum_png)
-    write_features(features_csv, log_mel, cepstrum, centers, sample_rate, args.hop)
+    write_features(features_csv, log_mel, cepstrum, spectral_flux, centers, sample_rate, args.hop)
 
     print(f"mel-cepstral input={args.input} sampleRate={sample_rate} startSeconds={start / sample_rate:.6f} samples={len(samples)}")
     print(f"logMel={log_mel_png}")
+    print(f"logMelFlux={flux_png}")
     print(f"cepstrum={cepstrum_png}")
     print(f"features={features_csv}")
     return 0
