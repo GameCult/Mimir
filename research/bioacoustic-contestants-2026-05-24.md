@@ -119,16 +119,16 @@ dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj
 
 Receipt:
 
-`artifacts/bioacoustic-contestants/contestants-20260524-191535/contestant-summary.json`
+`artifacts/bioacoustic-contestants/contestants-20260524-191639/contestant-summary.json`
 
-Best result with independent payload classification:
+Best result with independent payload classification in the decoder sweep:
 
 ```text
 song=canary-packet-trill
 decoder=packet-razor-index
 degradation=clean-roundtrip
-language_score=42.944
-realtime=3.1x
+language_score=54.119
+realtime=4.0x
 timing=1.000
 frequency=0.935
 payload_bitrate=14.6 bps
@@ -139,16 +139,25 @@ correct=5/5
 Damage panel:
 
 ```text
-blur-light        score=27.071 payload_bitrate=8.8 bps  payload=0.548 timing=1.000 frequency=0.953
-warp-light        score=0.000  payload_bitrate=0.0 bps  payload=0.000 timing=0.004 frequency=0.683
-warp-light-blur   score=16.114 payload_bitrate=6.4 bps  payload=0.400 timing=0.817 frequency=0.927
-warp-heavy-blur   score=13.867 payload_bitrate=3.6 bps  payload=0.224 timing=1.000 frequency=0.911
+packet-razor blur-light        score=30.221 payload_bitrate=8.8 bps payload=0.548 timing=1.000 frequency=0.953
+baseline warp-light            score=9.480  payload_bitrate=5.8 bps payload=0.365 timing=0.844 frequency=0.925
+packet-razor warp-light        score=0.000  payload_bitrate=0.0 bps payload=0.000 timing=0.004 frequency=0.683
+packet-razor warp-light-blur   score=17.381 payload_bitrate=6.4 bps payload=0.400 timing=0.817 frequency=0.927
+packet-razor warp-heavy-blur   score=14.319 payload_bitrate=3.6 bps payload=0.224 timing=1.000 frequency=0.911
 ```
 
 This is the current honest floor: a 2-bit payload alphabet carried by the
 canary packet. A 3-bit variant did not earn its keep; clean was similar, but
 degraded payload recovery collapsed to zero. The earlier 8-bit and 4-bit
 readings were schedule-entangled and are no longer treated as bitrate evidence.
+
+The leaderboard is now split:
+
+- clean maximum: `canary-packet-trill + packet-razor-index`, `54.119`
+- best nonzero warp-light result in this sweep:
+  `canary-packet-trill + baseline-mfcc-index`, `9.480`
+- known failure: razor's warp-light timing/payload fit can still collapse to
+  zero even when clean and blur are strong.
 
 ### Obsolete Schedule-Entangled Receipt
 
