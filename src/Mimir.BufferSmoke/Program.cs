@@ -1727,7 +1727,12 @@ static int CalibrateContestantAsioFloat32(
     stopwatch.Stop();
     var reference = channelCalibrations[referenceChannel];
     var paths = channelCalibrations
-        .Select(channel => BuildContestantPathCalibration(reference, channel, sampleRate))
+        .Select((channel, index) => BuildContestantPathCalibration(
+            reference,
+            channel,
+            sampleRate,
+            channelSamples[referenceChannel],
+            channelSamples[index]))
         .ToArray();
     var analyzedAudioSeconds = captureSeconds * channels;
     var realtimeFactor = analyzedAudioSeconds / Math.Max(stopwatch.Elapsed.TotalSeconds, 1.0e-9);
@@ -1768,7 +1773,7 @@ static int CalibrateContestantAsioFloat32(
     foreach (var path in paths)
     {
         Console.WriteLine(
-            $"contestant-calibration-path {path.ReferenceSourceId}->{path.SourceId}: delaySamples={path.DelaySamples:0.000000} delayUs={path.DelayMicroseconds:0.000} syncMaeUs={path.SyncMeanAbsoluteErrorMicroseconds:0.000} confidence={path.Confidence:0.000} gain={path.RelativeGain:0.000} polarity={path.RelativePolarity:+0;-0;0} normalizedBands={path.ResponseNormalizationBands.Count(band => band.Usable)}/{path.ResponseNormalizationBands.Length}");
+            $"contestant-calibration-path {path.ReferenceSourceId}->{path.SourceId}: delaySamples={path.DelaySamples:0.000000} delayUs={path.DelayMicroseconds:0.000} syncMaeUs={path.SyncMeanAbsoluteErrorMicroseconds:0.000} confidence={path.Confidence:0.000} waveform={path.WaveformConfidence:0.000} gain={path.RelativeGain:0.000} polarity={path.RelativePolarity:+0;-0;0} matchedAnchors={path.MatchedAnchors} normalizedBands={path.ResponseNormalizationBands.Count(band => band.Usable)}/{path.ResponseNormalizationBands.Length}");
     }
 
     if (realtimeFactor < minRealtimeFactor)
@@ -2696,7 +2701,7 @@ static double EstimateContestantScheduleOffset(
     var coarseStep = Math.Max(4, sampleRate / 6_000);
     var stride = Math.Max(4, sampleRate / 24_000);
     var scoringEvents = expectedEvents
-        .Take(Math.Min(14, expectedEvents.Count))
+        .Take(Math.Min(8, expectedEvents.Count))
         .ToArray();
     var scoringTemplates = scoringEvents
         .Select(eventIndex => (
@@ -2820,7 +2825,7 @@ static BioacousticPhysicalAnchorCalibration[] MeasureContestantAnchors(
     var output = new List<BioacousticPhysicalAnchorCalibration>(anchors.Count);
     foreach (var anchor in anchors
                  .OrderByDescending(anchor => anchor.Weight)
-                 .Take(8)
+                 .Take(6)
                  .OrderBy(anchor => anchor.StartSeconds))
     {
         var anchorSamples = Math.Clamp(
@@ -3105,7 +3110,9 @@ static BioacousticPhysicalBandCalibration[] CollapseContestantBands(IReadOnlyLis
 static BioacousticPhysicalPathCalibration BuildContestantPathCalibration(
     BioacousticPhysicalChannelCalibration reference,
     BioacousticPhysicalChannelCalibration candidate,
-    int sampleRate)
+    int sampleRate,
+    float[] referenceSamples,
+    float[] candidateSamples)
 {
     var candidateByEvent = candidate.Events.ToDictionary(observation => observation.EventIndex);
     var matched = reference.Events
@@ -3123,6 +3130,37 @@ static BioacousticPhysicalPathCalibration BuildContestantPathCalibration(
     var mae = matched.Length == 0
         ? Math.Abs(candidate.MeanAbsoluteErrorSamples - reference.MeanAbsoluteErrorSamples)
         : matched.Sum(pair => Math.Abs(pair.Delay - delay) * Math.Max(pair.Weight, 1.0e-6)) / matched.Sum(pair => Math.Max(pair.Weight, 1.0e-6));
+    var anchorEstimate = EstimatePathDelayFromMatchedAnchors(reference, candidate);
+    if (anchorEstimate is { } anchorDelay &&
+        anchorDelay.MatchedAnchors >= 24 &&
+        anchorDelay.MeanAbsoluteErrorSamples < mae)
+    {
+        delay = anchorDelay.DelaySamples;
+        mae = anchorDelay.MeanAbsoluteErrorSamples;
+    }
+
+    var waveformEstimate = EstimatePathDelayFromWaveform(referenceSamples, candidateSamples, delay, sampleRate);
+    if (waveformEstimate is { Confidence: >= 0.18 } waveformDelay &&
+        waveformDelay.EstimatedErrorSamples < mae)
+    {
+        delay = waveformDelay.DelaySamples;
+        mae = waveformDelay.EstimatedErrorSamples;
+    }
+
+    var eventWaveformEstimate = EstimatePathDelayFromEventWaveforms(
+        reference,
+        candidate,
+        referenceSamples,
+        candidateSamples,
+        sampleRate,
+        delay);
+    if (eventWaveformEstimate is { MatchedEvents: >= 8 } eventWaveformDelay &&
+        eventWaveformDelay.MeanAbsoluteErrorSamples < mae)
+    {
+        delay = eventWaveformDelay.DelaySamples;
+        mae = eventWaveformDelay.MeanAbsoluteErrorSamples;
+    }
+
     var relativeGain = reference.Rms <= 1.0e-12 ? 0.0 : candidate.Rms / reference.Rms;
     var referenceBands = reference.Bands.ToDictionary(band => band.CenterHz);
     var normalizedBands = candidate.Bands
@@ -3146,7 +3184,270 @@ static BioacousticPhysicalPathCalibration BuildContestantPathCalibration(
         confidence,
         relativeGain,
         reference.Polarity * candidate.Polarity,
-        normalizedBands);
+        normalizedBands,
+        anchorEstimate?.MatchedAnchors ?? 0,
+        Math.Max(waveformEstimate?.Confidence ?? 0.0, eventWaveformEstimate?.Confidence ?? 0.0));
+}
+
+static (double DelaySamples, double MeanAbsoluteErrorSamples, int MatchedEvents, double Confidence)? EstimatePathDelayFromEventWaveforms(
+    BioacousticPhysicalChannelCalibration reference,
+    BioacousticPhysicalChannelCalibration candidate,
+    float[] referenceSamples,
+    float[] candidateSamples,
+    int sampleRate,
+    double initialDelaySamples)
+{
+    (double DelaySamples, double MeanAbsoluteErrorSamples, int MatchedEvents, double Confidence)? best = null;
+    foreach (var windowSeconds in new[] { 0.012, 0.026, 0.055 })
+    {
+        var estimate = EstimatePathDelayFromEventWaveformsForWindow(
+            reference,
+            candidate,
+            referenceSamples,
+            candidateSamples,
+            sampleRate,
+            initialDelaySamples,
+            Math.Max(256, (int)Math.Round(sampleRate * windowSeconds)));
+        if (estimate != null &&
+            (best == null || estimate.Value.MeanAbsoluteErrorSamples < best.Value.MeanAbsoluteErrorSamples))
+        {
+            best = estimate;
+        }
+    }
+
+    return best;
+}
+
+static (double DelaySamples, double MeanAbsoluteErrorSamples, int MatchedEvents, double Confidence)? EstimatePathDelayFromEventWaveformsForWindow(
+    BioacousticPhysicalChannelCalibration reference,
+    BioacousticPhysicalChannelCalibration candidate,
+    float[] referenceSamples,
+    float[] candidateSamples,
+    int sampleRate,
+    double initialDelaySamples,
+    int windowSamples)
+{
+    var candidateByEvent = candidate.Events.ToDictionary(e => e.EventIndex);
+    var searchRadius = Math.Max(4, sampleRate / 6_000);
+    var delays = new List<(double Value, double Weight)>();
+    foreach (var referenceEvent in reference.Events)
+    {
+        if (!candidateByEvent.TryGetValue(referenceEvent.EventIndex, out var candidateEvent) ||
+            referenceEvent.Confidence < 0.25 ||
+            candidateEvent.Confidence < 0.25)
+        {
+            continue;
+        }
+
+        var referenceStart = (int)Math.Round(referenceEvent.SampleOffset);
+        if (referenceStart < 0 || referenceStart + windowSamples >= referenceSamples.Length)
+        {
+            continue;
+        }
+
+        var centerLag = (int)Math.Round(initialDelaySamples);
+        var bestLag = centerLag;
+        var bestScore = double.NegativeInfinity;
+        for (var lag = centerLag - searchRadius; lag <= centerLag + searchRadius; lag++)
+        {
+            var candidateStart = referenceStart + lag;
+            if (candidateStart < 0 || candidateStart + windowSamples >= candidateSamples.Length)
+            {
+                continue;
+            }
+
+            var score = Math.Abs(ScoreAnchorWindow(
+                candidateSamples.AsSpan(candidateStart, windowSamples),
+                referenceSamples.AsSpan(referenceStart, windowSamples)));
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestLag = lag;
+            }
+        }
+
+        if (!double.IsFinite(bestScore) || bestScore < 0.035)
+        {
+            continue;
+        }
+
+        var refined = (double)bestLag;
+        if (bestLag > centerLag - searchRadius && bestLag < centerLag + searchRadius)
+        {
+            var left = Math.Abs(ScoreAnchorWindow(
+                candidateSamples.AsSpan(referenceStart + bestLag - 1, windowSamples),
+                referenceSamples.AsSpan(referenceStart, windowSamples)));
+            var middle = Math.Abs(ScoreAnchorWindow(
+                candidateSamples.AsSpan(referenceStart + bestLag, windowSamples),
+                referenceSamples.AsSpan(referenceStart, windowSamples)));
+            var right = Math.Abs(ScoreAnchorWindow(
+                candidateSamples.AsSpan(referenceStart + bestLag + 1, windowSamples),
+                referenceSamples.AsSpan(referenceStart, windowSamples)));
+            var denominator = left - 2.0 * middle + right;
+            if (Math.Abs(denominator) > 1.0e-12)
+            {
+                refined += Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+            }
+        }
+
+        delays.Add((refined, Math.Sqrt(referenceEvent.Confidence * candidateEvent.Confidence) * bestScore));
+    }
+
+    if (delays.Count < 3)
+    {
+        return null;
+    }
+
+    var median = WeightedMedian(delays);
+    var residuals = delays.Select(d => (Value: Math.Abs(d.Value - median), d.Weight)).ToArray();
+    var mad = WeightedMedian(residuals);
+    var radius = Math.Clamp(mad * 3.0 + 0.75, 1.5, 18.0);
+    var inliers = delays.Where(d => Math.Abs(d.Value - median) <= radius).ToArray();
+    if (inliers.Length < 3)
+    {
+        return null;
+    }
+
+    var totalWeight = inliers.Sum(d => Math.Max(d.Weight, 1.0e-6));
+    var delay = inliers.Sum(d => d.Value * Math.Max(d.Weight, 1.0e-6)) / totalWeight;
+    var mae = inliers.Sum(d => Math.Abs(d.Value - delay) * Math.Max(d.Weight, 1.0e-6)) / totalWeight;
+    var confidence = Math.Clamp(inliers.Average(d => d.Weight) * Math.Clamp(inliers.Length / 24.0, 0.0, 1.0), 0.0, 1.0);
+    return (delay, mae, inliers.Length, confidence);
+}
+
+static (double DelaySamples, double EstimatedErrorSamples, double Confidence)? EstimatePathDelayFromWaveform(
+    float[] referenceSamples,
+    float[] candidateSamples,
+    double initialDelaySamples,
+    int sampleRate)
+{
+    if (referenceSamples.Length == 0 || candidateSamples.Length == 0)
+    {
+        return null;
+    }
+
+    var radius = Math.Max(8, sampleRate / 1_500);
+    var center = (int)Math.Round(initialDelaySamples);
+    var first = Math.Max(0, center - radius);
+    var last = Math.Min(candidateSamples.Length - 2, center + radius);
+    if (first > last)
+    {
+        return null;
+    }
+
+    var bestLag = center;
+    var bestScore = double.NegativeInfinity;
+    var secondScore = double.NegativeInfinity;
+    for (var lag = first; lag <= last; lag++)
+    {
+        var score = Math.Abs(NormalizedPathLagScore(referenceSamples, candidateSamples, lag));
+        if (score > bestScore)
+        {
+            secondScore = bestScore;
+            bestScore = score;
+            bestLag = lag;
+        }
+        else if (score > secondScore)
+        {
+            secondScore = score;
+        }
+    }
+
+    var fractionalLag = (double)bestLag;
+    if (bestLag > first && bestLag < last)
+    {
+        var left = Math.Abs(NormalizedPathLagScore(referenceSamples, candidateSamples, bestLag - 1));
+        var middle = Math.Abs(NormalizedPathLagScore(referenceSamples, candidateSamples, bestLag));
+        var right = Math.Abs(NormalizedPathLagScore(referenceSamples, candidateSamples, bestLag + 1));
+        var denominator = left - 2.0 * middle + right;
+        if (Math.Abs(denominator) > 1.0e-12)
+        {
+            fractionalLag += Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+        }
+    }
+
+    var peakMargin = Math.Max(0.0, bestScore - (double.IsFinite(secondScore) ? secondScore : 0.0));
+    var confidence = Math.Clamp(bestScore * 0.65 + peakMargin * 80.0, 0.0, 1.0);
+    var estimatedError = 1.0 / Math.Max(0.04, confidence * 1.8);
+    return (fractionalLag, estimatedError, confidence);
+}
+
+static double NormalizedPathLagScore(float[] referenceSamples, float[] candidateSamples, int lag)
+{
+    var count = Math.Min(referenceSamples.Length, candidateSamples.Length - lag);
+    if (count <= 0)
+    {
+        return double.NegativeInfinity;
+    }
+
+    var dot = 0.0;
+    var referenceEnergy = 0.0;
+    var candidateEnergy = 0.0;
+    for (var index = 0; index < count; index++)
+    {
+        var reference = referenceSamples[index];
+        var candidate = candidateSamples[index + lag];
+        dot += reference * candidate;
+        referenceEnergy += reference * reference;
+        candidateEnergy += candidate * candidate;
+    }
+
+    return referenceEnergy <= 1.0e-12 || candidateEnergy <= 1.0e-12
+        ? double.NegativeInfinity
+        : dot / Math.Sqrt(referenceEnergy * candidateEnergy);
+}
+
+static (double DelaySamples, double MeanAbsoluteErrorSamples, int MatchedAnchors)? EstimatePathDelayFromMatchedAnchors(
+    BioacousticPhysicalChannelCalibration reference,
+    BioacousticPhysicalChannelCalibration candidate)
+{
+    var referenceAnchors = reference.Events
+        .SelectMany(e => e.Anchors.Select(anchor => (Event: e.EventIndex, Anchor: anchor)))
+        .Where(pair => pair.Anchor.Confidence >= 0.20)
+        .GroupBy(pair => (pair.Event, pair.Anchor.Kind, pair.Anchor.SyllableIndex))
+        .ToDictionary(
+            group => group.Key,
+            group => group.OrderByDescending(pair => pair.Anchor.Confidence).First().Anchor);
+    var delays = new List<(double Value, double Weight)>();
+    foreach (var candidateEvent in candidate.Events)
+    {
+        foreach (var candidateAnchor in candidateEvent.Anchors.Where(anchor => anchor.Confidence >= 0.20))
+        {
+            if (!referenceAnchors.TryGetValue(
+                    (candidateEvent.EventIndex, candidateAnchor.Kind, candidateAnchor.SyllableIndex),
+                    out var referenceAnchor))
+            {
+                continue;
+            }
+
+            var weight = Math.Sqrt(candidateAnchor.Confidence * referenceAnchor.Confidence);
+            delays.Add((candidateAnchor.SampleOffset - referenceAnchor.SampleOffset, weight));
+        }
+    }
+
+    if (delays.Count < 3)
+    {
+        return null;
+    }
+
+    var delay = WeightedMedian(delays);
+    var residuals = delays
+        .Select(pair => (Value: Math.Abs(pair.Value - delay), pair.Weight))
+        .ToArray();
+    var medianResidual = WeightedMedian(residuals);
+    var inlierRadius = Math.Clamp(medianResidual * 3.0 + 1.5, 3.0, 28.0);
+    var inliers = delays
+        .Where(pair => Math.Abs(pair.Value - delay) <= inlierRadius)
+        .ToArray();
+    if (inliers.Length < 3)
+    {
+        return null;
+    }
+
+    var totalWeight = inliers.Sum(pair => Math.Max(pair.Weight, 1.0e-6));
+    var refinedDelay = inliers.Sum(pair => pair.Value * Math.Max(pair.Weight, 1.0e-6)) / totalWeight;
+    var mae = inliers.Sum(pair => Math.Abs(pair.Value - refinedDelay) * Math.Max(pair.Weight, 1.0e-6)) / totalWeight;
+    return (refinedDelay, mae, inliers.Length);
 }
 
 static IReadOnlyDictionary<ulong, int> ClassifyContestantPayloads(
@@ -4344,7 +4645,9 @@ public sealed record BioacousticPhysicalPathCalibration(
     double Confidence,
     double RelativeGain,
     int RelativePolarity,
-    BioacousticPhysicalBandCalibration[] ResponseNormalizationBands);
+    BioacousticPhysicalBandCalibration[] ResponseNormalizationBands,
+    int MatchedAnchors,
+    double WaveformConfidence);
 
 public sealed record BioacousticPhysicalEventCalibration(
     ulong EventIndex,

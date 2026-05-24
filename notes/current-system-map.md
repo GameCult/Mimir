@@ -223,6 +223,17 @@ MAE, but physical mics do not improve yet: shotgun is 36/37 payload at
 56.365 us MAE and cardioid is 27/37 payload at 101.522 us MAE. Treat this as
 anchor observability, not a finished anchor geometry. The next cut should learn
 which anchor kinds survive each acoustic path and weight or reshape them.
+Path-level loopback truth is now part of the calibration receipt: candidate mic
+anchors are matched against loopback anchors, then event-local waveform
+correlation against the captured loopback packet refines path delay. On the
+stored anchor-rich capture this improves physical path precision to 7.576 us
+for the cardioid and 6.578 us for the shotgun while Release runs at 21.1x
+realtime. A fresh capture at
+`calibration/bioacoustic/scarlett-canary-packet-anchor-rich-latest-192k.json`
+keeps the shotgun around 5.916 us but worsens the cardioid to 18.930 us. The
+rejected razor timing-chip mutation made the mics worse and should not be
+revived without a better hypothesis. The remaining gap to one microsecond is
+phase/group-delay correction or a more survivable direct-path anchor family.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

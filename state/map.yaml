@@ -200,6 +200,14 @@ accepted_design:
     improves loopback to about 2.23 us MAE, but physical mics regress/hold at
     tens of microseconds, so anchor survivability and path weighting are now the
     problem.
+    Path-level loopback truth now compares candidate mic anchors directly
+    against loopback anchors, then refines delay with event-local waveform
+    correlation against the captured loopback packet. On the stored anchor-rich
+    capture, Release calibration runs at 21.1x realtime and improves physical
+    path precision to 7.576 us for the cardioid and 6.578 us for the shotgun.
+    A fresh room capture keeps the shotgun near 5.916 us but worsens the
+    cardioid to 18.930 us. The one-microsecond target remains open; next cut is
+    phase/group-delay correction or a better direct-path anchor family.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.
