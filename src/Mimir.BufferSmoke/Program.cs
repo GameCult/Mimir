@@ -70,6 +70,12 @@ if (args.Any(arg => string.Equals(arg, "--perfect-machine-manifest", StringCompa
         .ConfigureAwait(false);
 }
 
+if (args.Any(arg => string.Equals(arg, "--perfect-machine-lowering-benchmark", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunPerfectMachineLoweringBenchmark(
+        ParseIntOption(args, "--iterations", 10_000));
+}
+
 if (args.Any(arg => string.Equals(arg, "--standalone-chirp-bin-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunStandaloneChirpBinSelfTest(
@@ -1185,6 +1191,90 @@ static async Task<int> WritePerfectMachineManifestAsync(string outputPath)
         manifest.Publications.Count >= 3
             ? 0
             : 1;
+}
+
+static int RunPerfectMachineLoweringBenchmark(int iterations)
+{
+    iterations = Math.Max(1, iterations);
+    var buffers = new List<MimirRollingStreamBuffer>();
+    foreach (var profile in MimirNativeCaptureConfigurations.LocalSixCameraProfiles)
+    {
+        var buffer = new MimirRollingStreamBuffer(
+            new MimirStreamDescriptor(profile.Id, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+            TimeSpan.FromSeconds(profile.RollingBufferSeconds));
+        buffer.Append(new MimirStreamSample(
+            profile.Id,
+            MimirStreamKind.Video,
+            MimirStreamOrigin.LocalDevice,
+            TimestampNs: 1_000_000_000L,
+            ArrivalNs: 1_000_000_050L,
+            Sequence: 1,
+            PayloadHandle: 0,
+            VideoFrame: new MimirVideoFrameDescriptor(
+                Math.Max(1, profile.PreferredWidth),
+                Math.Max(1, profile.PreferredHeight),
+                profile.Id.Contains("leap", StringComparison.OrdinalIgnoreCase) ? MimirVideoPixelFormat.LeapStereoIr : MimirVideoPixelFormat.Bgra8,
+                Math.Max(1, profile.PreferredWidth) * 4,
+                1_000_000_000L,
+                NativeHandle: (ulong)(100 + buffers.Count),
+                NativeHandleKind: "benchmark-shared-texture")));
+        buffers.Add(buffer);
+    }
+
+    var states = new[]
+    {
+        new MimirAudioSynchronizationState(
+            "loopback-scarlett-speakers",
+            "scarlett-input-1",
+            192_000,
+            41.50,
+            41.50,
+            0.216,
+            0.30,
+            0.91,
+            [],
+            1_000_000_000L,
+            1,
+            1),
+        new MimirAudioSynchronizationState(
+            "loopback-scarlett-speakers",
+            "raven-scarlett-input-1",
+            192_000,
+            225.00,
+            225.00,
+            1.172,
+            -0.45,
+            0.78,
+            [],
+            1_000_000_000L,
+            1,
+            1)
+    };
+    var lowerer = new MimirFensalirFieldLowering();
+    _ = lowerer.BuildGpuSensorFrame(buffers);
+    _ = lowerer.BuildAcousticFieldFrame(states);
+
+    var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+    var stamp = Stopwatch.GetTimestamp();
+    var cameras = 0;
+    var constraints = 0;
+    for (var iteration = 0; iteration < iterations; iteration++)
+    {
+        var gpuFrame = lowerer.BuildGpuSensorFrame(buffers);
+        var acousticFrame = lowerer.BuildAcousticFieldFrame(states);
+        cameras += gpuFrame.Cameras.Count;
+        constraints += acousticFrame.Constraints.Count;
+    }
+
+    var elapsed = Stopwatch.GetElapsedTime(stamp);
+    var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+    var perIterationUs = elapsed.TotalMilliseconds * 1000.0 / iterations;
+    var allocatedPerIteration = allocatedBytes / (double)iterations;
+    Console.WriteLine(
+        $"perfect-machine-lowering-benchmark iterations={iterations} camerasPer={cameras / (double)iterations:0.0} constraintsPer={constraints / (double)iterations:0.0} elapsedMs={elapsed.TotalMilliseconds:0.000} perIterationUs={perIterationUs:0.000} allocatedPerIterationBytes={allocatedPerIteration:0.0}");
+    return perIterationUs < 250.0 && allocatedPerIteration < 10_000.0
+        ? 0
+        : 1;
 }
 
 static int RenderBioacousticFloat32(string outputPath, int sampleRate, double seconds)

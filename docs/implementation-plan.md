@@ -168,8 +168,11 @@ a named invariant that the native runtime cannot protect yet.
   lowering, and assembly plans. Use
   `Mimir.BufferSmoke --perfect-machine-profile-smoke` to prove the catalog
   assembles, `--perfect-machine-contract-smoke` to write a CultCache contract
-  proof, and `--perfect-machine-manifest` to export the module manifest for
-  tooling/UI/remote witness use.
+  proof, `--perfect-machine-manifest` to export the module manifest for
+  tooling/UI/remote witness use, and `--perfect-machine-lowering-benchmark` to
+  measure the Mimir-to-Fensalir lowering path. The current six-camera/two-audio
+  synthetic lowering benchmark runs at roughly 2.5 us per iteration with about
+  2.3 KB allocated per iteration.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live

@@ -14,8 +14,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
 
     public AquariumGpuSensorFrame BuildGpuSensorFrame(IEnumerable<MimirRollingStreamBuffer> buffers)
     {
-        var textures = new List<AquariumExternalGpuTexture>();
-        var cameras = new List<AquariumGpuSensorCamera>();
+        var capacity = buffers.TryGetNonEnumeratedCount(out var count) ? count : 0;
+        var textures = new List<AquariumExternalGpuTexture>(capacity);
+        var cameras = new List<AquariumGpuSensorCamera>(capacity);
         foreach (var buffer in buffers)
         {
             if (buffer.Descriptor.Kind != MimirStreamKind.Video || buffer.Latest?.VideoFrame is not { } frame)
@@ -62,21 +63,39 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
 
     public AquariumAcousticFieldFrame BuildAcousticFieldFrame(IEnumerable<MimirAudioSynchronizationState> states)
     {
-        var orderedStates = states
-            .OrderByDescending(state => state.Confidence)
-            .ThenBy(state => state.SourceId, StringComparer.Ordinal)
-            .ToArray();
-        var constraints = orderedStates
-            .Where(state => state.Confidence > 0.0)
-            .Select(state => new AquariumAcousticConstraint(
+        var capacity = states.TryGetNonEnumeratedCount(out var count) ? count : 0;
+        var orderedStates = new List<MimirAudioSynchronizationState>(capacity);
+        foreach (var state in states)
+        {
+            orderedStates.Add(state);
+        }
+
+        orderedStates.Sort(static (left, right) =>
+        {
+            var confidence = right.Confidence.CompareTo(left.Confidence);
+            return confidence != 0
+                ? confidence
+                : string.Compare(left.SourceId, right.SourceId, StringComparison.Ordinal);
+        });
+
+        var constraints = new List<AquariumAcousticConstraint>(orderedStates.Count);
+        foreach (var state in orderedStates)
+        {
+            if (state.Confidence <= 0.0)
+            {
+                continue;
+            }
+
+            constraints.Add(new AquariumAcousticConstraint(
                 $"{state.ReferenceSourceId}->{state.SourceId}",
                 AquariumAcousticConstraintKind.SpeakerProbe,
                 Vector3.Zero,
                 Vector3.Zero,
                 RadiusMeters: 0.10f,
                 Confidence: (float)Math.Clamp(state.Confidence, 0.0, 1.0),
-                TimestampNs: state.UpdatedAtNs))
-            .ToArray();
+                TimestampNs: state.UpdatedAtNs));
+        }
+
         var oracle = orderedStates.FirstOrDefault();
         return new AquariumAcousticFieldFrame
         {
