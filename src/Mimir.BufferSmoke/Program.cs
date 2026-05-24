@@ -962,6 +962,15 @@ static int RunPerfectMachineProfileSmoke()
         "raven-scarlett-witness",
         new HashSet<string>(["known-node", "matching-codebook", "clock-fit-confidence", "response-profile"], StringComparer.Ordinal),
         new HashSet<string>(StringComparer.Ordinal)));
+    var transport = new MimirNetworkTransportSelector().Select(new MimirNetworkTransportRequest(
+        MimirNetworkPayloadKind.TypedTimingState,
+        RequiresClockInfluence: true,
+        AllowsRawMedia: false,
+        MaximumLatencyMilliseconds: 25.0,
+        new HashSet<string>(
+            ["mimir.bioacoustic_codebook_state", "mimir.bioacoustic_decoder_state", "mimir.acoustic_path_state"],
+            StringComparer.Ordinal),
+        new HashSet<string>(StringComparer.Ordinal)));
 
     Console.WriteLine(
         $"perfect-machine-profile-smoke profiles={profiles.Count} calibrationPlans={calibrationPlans.Count} audioFields={audioFields.Count} visualFields={visualFields.Count} computePlans={computePlans.Count} assemblyPlans={assemblyPlans.Count} captureProfiles={captureProfiles.Count} publications={publications.Count} languageProfiles={languageProfiles.Count} pathLearning={pathLearningProfiles.Count} localization={localizationProfiles.Count} benchmarkPanels={benchmarkPanels.Count} actuatorStrategies={actuatorStrategies.Count} cameraIngest={cameraIngestStrategies.Count} reservoirs={reservoirStrategies.Count} distributedWitnesses={distributedWitnesses.Count} networkTransports={networkTransports.Count} authorityPolicies={authorityPolicies.Count} modules={moduleCatalog.Count}");
@@ -977,6 +986,8 @@ static int RunPerfectMachineProfileSmoke()
         $"perfect-machine-localization candidates={localizationGrid.Count} best=({localization?.PositionMeters.X ?? float.NaN:0.000},{localization?.PositionMeters.Y ?? float.NaN:0.000},{localization?.PositionMeters.Z ?? float.NaN:0.000}) score={localization?.Score ?? 0.0:0.000}");
     Console.WriteLine(
         $"perfect-machine-authority appliesTo=raven-scarlett-witness decision={authority.Decision} rule={authority.RuleId}");
+    Console.WriteLine(
+        $"perfect-machine-transport payload=TypedTimingState status={transport.Status} selected={transport.Transport?.Id ?? "none"}");
 
     return profiles.Count >= 6 &&
         calibrationPlans.Count >= 3 &&
@@ -1004,6 +1015,7 @@ static int RunPerfectMachineProfileSmoke()
         acousticFrame.HasInput &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
+        transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&
         clock is { AnchorCount: >= 4, Confidence: > 0.70 }
             ? 0
             : 1;
