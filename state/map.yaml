@@ -187,6 +187,12 @@ accepted_design:
     co-streamer shotgun is 37/37 payload with 58.785 us MAE, and the cardioid
     is 26/37 with 90.558 us MAE. This is a serious calibration surface, not yet
     true physical microsecond sync.
+    A fresh 192 kHz room receipt at
+    `calibration/bioacoustic/scarlett-canary-packet-192k-contour-fresh.json`
+    keeps loopback at 2.524 us MAE, improves the co-streamer shotgun to 37/37
+    payload with 34.083 us MAE, and improves the cardioid to 31/37 payload
+    with 92.996 us MAE. The next precision cut is intra-call contour anchors,
+    not more sequence machinery.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.

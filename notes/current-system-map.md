@@ -207,6 +207,13 @@ pairwise propagation delay. Current physical precision is loopback 2.524 us
 MAE, co-streamer shotgun 58.785 us MAE, and cardioid 90.558 us MAE; do not
 claim physical microsecond sync until those mic MAEs collapse by another order
 of magnitude.
+A fresh 192 kHz room run after the song-contour authority cut is persisted at
+`calibration/bioacoustic/scarlett-canary-packet-192k-contour-fresh.json`.
+It clears the 10x realtime budget, keeps loopback at 2.524 us MAE, improves the
+co-streamer shotgun to 37/37 payload with 34.083 us MAE, and improves the
+cardioid event count to 31/37 while still measuring 92.996 us MAE. The next
+precision cut must extract intra-call contour anchors, not only one offset per
+packet word.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000
