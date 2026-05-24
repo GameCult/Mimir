@@ -207,7 +207,12 @@ accepted_design:
     path precision to 7.576 us for the cardioid and 6.578 us for the shotgun.
     A fresh room capture keeps the shotgun near 5.916 us but worsens the
     cardioid to 18.930 us. The one-microsecond target remains open; next cut is
-    phase/group-delay correction or a better direct-path anchor family.
+    phase/group-delay correction or a better direct-path anchor family. A naive
+    recursive waveform phase-lock pass was tested and reverted because it could
+    improve one cardioid receipt while worsening the shotgun and locking a fresh
+    cardioid run onto a later reflection lobe. Recursion is only allowed back as
+    a constrained direct-path/group-delay model, not as unconstrained waveform
+    resampling with prettier decimals.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.

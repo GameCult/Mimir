@@ -234,6 +234,11 @@ keeps the shotgun around 5.916 us but worsens the cardioid to 18.930 us. The
 rejected razor timing-chip mutation made the mics worse and should not be
 revived without a better hypothesis. The remaining gap to one microsecond is
 phase/group-delay correction or a more survivable direct-path anchor family.
+A naive recursive waveform phase-lock pass was also rejected: it improved one
+cardioid receipt but worsened the shotgun and locked a fresh cardioid run onto
+a later reflection lobe. Recursive refinement remains a good architecture only
+after the path model can distinguish direct arrival, phase/group delay, and room
+reflection energy.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000
