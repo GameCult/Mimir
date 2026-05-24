@@ -8,6 +8,8 @@ quartz-site/
 calibration/runs/
 artifacts/drivers/
 artifacts/asio/
+artifacts/bioacoustic-contestants/
+artifacts/birdsong-reference/
 tools/drivers/
 tools/obs-spout2-plugin/
 tools/src/
