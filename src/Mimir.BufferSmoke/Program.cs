@@ -958,6 +958,10 @@ static int RunPerfectMachineProfileSmoke()
         [
             new MimirPairDelayObservation("mic-left", "mic-right", 0.0, 0.95)
         ]);
+    var authority = new MimirAuthorityPolicyEvaluator().Evaluate(new MimirAuthorityEvaluationInput(
+        "raven-scarlett-witness",
+        new HashSet<string>(["known-node", "matching-codebook", "clock-fit-confidence", "response-profile"], StringComparer.Ordinal),
+        new HashSet<string>(StringComparer.Ordinal)));
 
     Console.WriteLine(
         $"perfect-machine-profile-smoke profiles={profiles.Count} calibrationPlans={calibrationPlans.Count} audioFields={audioFields.Count} visualFields={visualFields.Count} computePlans={computePlans.Count} assemblyPlans={assemblyPlans.Count} captureProfiles={captureProfiles.Count} publications={publications.Count} languageProfiles={languageProfiles.Count} pathLearning={pathLearningProfiles.Count} localization={localizationProfiles.Count} benchmarkPanels={benchmarkPanels.Count} actuatorStrategies={actuatorStrategies.Count} cameraIngest={cameraIngestStrategies.Count} reservoirs={reservoirStrategies.Count} distributedWitnesses={distributedWitnesses.Count} networkTransports={networkTransports.Count} authorityPolicies={authorityPolicies.Count} modules={moduleCatalog.Count}");
@@ -971,6 +975,8 @@ static int RunPerfectMachineProfileSmoke()
         $"perfect-machine-fensalir gpuCameras={gpuFrame.Cameras.Count} gpuTextures={gpuFrame.ExternalTextures.Count} acousticConstraints={acousticFrame.Constraints.Count} timingConfidence={acousticFrame.TimingConfidence:0.000}");
     Console.WriteLine(
         $"perfect-machine-localization candidates={localizationGrid.Count} best=({localization?.PositionMeters.X ?? float.NaN:0.000},{localization?.PositionMeters.Y ?? float.NaN:0.000},{localization?.PositionMeters.Z ?? float.NaN:0.000}) score={localization?.Score ?? 0.0:0.000}");
+    Console.WriteLine(
+        $"perfect-machine-authority appliesTo=raven-scarlett-witness decision={authority.Decision} rule={authority.RuleId}");
 
     return profiles.Count >= 6 &&
         calibrationPlans.Count >= 3 &&
@@ -997,6 +1003,7 @@ static int RunPerfectMachineProfileSmoke()
         gpuFrame.HasInput &&
         acousticFrame.HasInput &&
         localization is { Score: > 0.90 } &&
+        authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         clock is { AnchorCount: >= 4, Confidence: > 0.70 }
             ? 0
             : 1;
