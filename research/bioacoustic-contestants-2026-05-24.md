@@ -119,50 +119,51 @@ dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj
 
 Receipt:
 
-`artifacts/bioacoustic-contestants/contestants-20260524-192551/contestant-summary.json`
+`artifacts/bioacoustic-contestants/contestants-20260524-192703/contestant-summary.json`
 
 Best result with independent payload classification in the decoder sweep:
 
 ```text
 song=canary-packet-trill
 decoder=packet-razor-index
-degradation=blur-light
-language_score=71.318
-realtime=4.7x
+degradation=warp-heavy-blur
+language_score=86.339
+realtime=6.9x
 timing=1.000
-frequency=0.953
-payload_bitrate=15.9 bps
-payload_accuracy=0.913
-correct=5/5
+frequency=0.922
+payload_bitrate=13.5 bps
+payload_accuracy=0.707
+correct=3/6
 ```
 
 Damage panel:
 
 ```text
-packet-razor clean-roundtrip   score=62.257 payload_bitrate=14.7 bps payload=0.845 timing=1.000 frequency=0.928
-packet-razor blur-light        score=71.318 payload_bitrate=15.9 bps payload=0.913 timing=1.000 frequency=0.953
-packet-razor warp-light        score=52.080 payload_bitrate=12.7 bps payload=0.730 timing=1.000 frequency=0.765
-packet-razor warp-light-blur   score=71.120 payload_bitrate=13.5 bps payload=0.775 timing=1.000 frequency=0.922
-packet-razor warp-heavy-blur   score=53.729 payload_bitrate=13.5 bps payload=0.775 timing=1.000 frequency=0.915
+packet-razor clean-roundtrip   score=75.852 payload_bitrate=19.0 bps payload=1.000 timing=0.859 frequency=0.931
+packet-razor blur-light        score=79.393 payload_bitrate=19.0 bps payload=1.000 timing=0.860 frequency=0.957
+packet-razor warp-light        score=62.099 payload_bitrate=17.4 bps payload=0.913 timing=0.872 frequency=0.776
+packet-razor warp-light-blur   score=69.249 payload_bitrate=13.5 bps payload=0.707 timing=1.000 frequency=0.922
+packet-razor warp-heavy-blur   score=86.339 payload_bitrate=13.5 bps payload=0.707 timing=1.000 frequency=0.922
 ```
 
 This is the current honest floor: a 2-bit payload alphabet carried by the
 canary packet. Payload classification is now direct waveform/template
 correlation over the anchored local payload alphabet, not MFCC identity reuse.
 That raised the honest score and made payload survive all current warp/blur
-cases. Tightening `canary-packet-trill` spacing from `0.125s` to `0.115s`
-improved bitrate and unexpectedly improved the degradation floor. A 3-bit
+cases. Tightening `canary-packet-trill` spacing from `0.125s` to `0.105s`
+improved bitrate and the degradation floor. A `0.100s` spacing was tested and
+rejected because overlap started eating anchor accuracy. A 3-bit
 variant did not earn its keep; clean was similar, but degraded payload recovery
 collapsed. The earlier 8-bit and 4-bit readings were schedule-entangled and are
 no longer treated as bitrate evidence.
 
 The leaderboard is now split:
 
-- clean maximum: `canary-packet-trill + packet-razor-index`, `62.257`
-- best overall: `canary-packet-trill + packet-razor-index` under blur-light,
-  `71.318`
-- remaining failure: warp-light frequency accuracy is still low at `0.765`,
-  but timing now stays locked.
+- clean result: `canary-packet-trill + packet-razor-index`, `75.852`
+- best overall: `canary-packet-trill + packet-razor-index` under
+  warp-heavy-blur, `86.339`
+- remaining failure: warp-light frequency accuracy is still low at `0.776`,
+  but timing and payload now stay alive.
 - rejected 3-bit dual-axis packet: best `12.849`, clean `8.084`, heavy warp
   nearly dead. A separate band/rhythm bit did not survive well enough to keep
   in the built-in contestant panel.

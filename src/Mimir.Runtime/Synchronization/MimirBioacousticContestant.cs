@@ -130,7 +130,7 @@ public static class MimirBioacousticContestants
         MimirBioacousticContestantKind.CanaryPacketTrill,
         SyllableCount: 6,
         MotifDurationSeconds: 0.096,
-        EventSpacingSeconds: 0.115,
+        EventSpacingSeconds: 0.105,
         LowestRootHz: 2_800.0,
         HighestRootHz: 10_600.0,
         Gain: 0.024,
