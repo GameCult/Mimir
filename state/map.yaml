@@ -174,6 +174,15 @@ accepted_design:
     192 kHz ingested more than 12,000 sample-bearing blocks across `asio-ch0`
     through `asio-ch3` and retained 2,048 blocks per channel, all from the
     Focusrite ASIO callback stream.
+    `Mimir.BufferSmoke --calibrate-contestant-asio-f32` now persists the active
+    packet-song physical response model under `calibration/bioacoustic/`,
+    including per-channel delay search, polarity, payload reliability,
+    response-normalization bands, gain, confidence, and pairwise propagation
+    delay. The latest canary-packet Scarlett receipt runs at 10.7x realtime
+    across four 192 kHz channels: loopback is 37/37 with 2.524 us MAE,
+    co-streamer shotgun is 37/37 payload with 58.785 us MAE, and the cardioid
+    is 26/37 with 90.558 us MAE. This is a serious calibration surface, not yet
+    true physical microsecond sync.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.

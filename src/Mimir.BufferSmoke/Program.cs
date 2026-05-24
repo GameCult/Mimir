@@ -168,6 +168,22 @@ if (args.Any(arg => string.Equals(arg, "--analyze-contestant-asio-f32", StringCo
         ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id));
 }
 
+if (args.Any(arg => string.Equals(arg, "--calibrate-contestant-asio-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return CalibrateContestantAsioFloat32(
+        ParseStringOption(args, "--input", "artifacts/asio/scarlett-canary-packet-f32.raw"),
+        ParseStringOption(args, "--output", "calibration/bioacoustic/latest.json"),
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--reference-channel", 2),
+        ParseDoubleOption(args, "--seconds", 3.0),
+        ParseDoubleOption(args, "--schedule-offset-samples", 0.0),
+        ParseDoubleOption(args, "--search-radius-us", 180.0),
+        ParseDoubleOption(args, "--delay-search-us", 6_000.0),
+        ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id),
+        ParseDoubleOption(args, "--min-realtime-factor", 10.0));
+}
+
 if (args.Any(arg => string.Equals(arg, "--calibrate-chirp-bin-asio-f32", StringComparison.OrdinalIgnoreCase)))
 {
     return CalibrateChirpBinAsioFloat32(
@@ -1640,6 +1656,130 @@ static int AnalyzeContestantAsioFloat32(
     return failures == 0 ? 0 : 1;
 }
 
+static int CalibrateContestantAsioFloat32(
+    string inputPath,
+    string outputPath,
+    int sampleRate,
+    int channels,
+    int referenceChannel,
+    double seconds,
+    double scheduleOffsetSamples,
+    double searchRadiusUs,
+    double delaySearchUs,
+    string songId,
+    double minRealtimeFactor)
+{
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"contestant calibration failed: input not found: {inputPath}");
+        return 1;
+    }
+
+    var profile = MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
+        string.Equals(profile.Id, songId, StringComparison.OrdinalIgnoreCase));
+    if (profile == null)
+    {
+        Console.Error.WriteLine($"contestant calibration failed: unknown song '{songId}'");
+        return 1;
+    }
+
+    if (referenceChannel < 0 || referenceChannel >= channels)
+    {
+        Console.Error.WriteLine("contestant calibration failed: reference channel is outside the capture channel count");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
+    if (frameCount == 0)
+    {
+        Console.Error.WriteLine("contestant calibration failed: capture file contains no complete frames");
+        return 1;
+    }
+
+    var captureSeconds = seconds > 0.0 ? Math.Min(seconds, frameCount / (double)sampleRate) : frameCount / (double)sampleRate;
+    var renderer = new MimirBioacousticContestantRenderer(profile);
+    var expectedEvents = renderer.ExpectedEvents(captureSeconds)
+        .Order()
+        .ToArray();
+    if (expectedEvents.Length == 0)
+    {
+        Console.Error.WriteLine("contestant calibration failed: no complete expected packet events in capture");
+        return 1;
+    }
+
+    var searchRadiusSamples = Math.Max(1, (int)Math.Round(searchRadiusUs * sampleRate / 1_000_000.0));
+    var delaySearchSamples = Math.Max(0, (int)Math.Round(delaySearchUs * sampleRate / 1_000_000.0));
+    var stopwatch = Stopwatch.StartNew();
+    var channelCalibrations = new List<BioacousticPhysicalChannelCalibration>(channels);
+    for (var channel = 0; channel < channels; channel++)
+    {
+        channelCalibrations.Add(CalibrateContestantChannel(
+            $"asio-ch{channel}",
+            channelSamples[channel],
+            sampleRate,
+            renderer,
+            expectedEvents,
+            scheduleOffsetSamples,
+            searchRadiusSamples,
+            delaySearchSamples));
+    }
+
+    stopwatch.Stop();
+    var reference = channelCalibrations[referenceChannel];
+    var paths = channelCalibrations
+        .Select(channel => BuildContestantPathCalibration(reference, channel, sampleRate))
+        .ToArray();
+    var analyzedAudioSeconds = captureSeconds * channels;
+    var realtimeFactor = analyzedAudioSeconds / Math.Max(stopwatch.Elapsed.TotalSeconds, 1.0e-9);
+    var model = new BioacousticPhysicalCalibrationModel(
+        Schema: "mimir.bioacoustic.physical-calibration.v1",
+        CreatedUtc: DateTimeOffset.UtcNow,
+        InputPath: inputPath,
+        SongId: profile.Id,
+        SampleRate: sampleRate,
+        Channels: channels,
+        ReferenceSourceId: reference.SourceId,
+        CaptureSeconds: captureSeconds,
+        SearchRadiusSamples: searchRadiusSamples,
+        ScheduleOffsetSamples: scheduleOffsetSamples,
+        DecodeMilliseconds: stopwatch.Elapsed.TotalMilliseconds,
+        RealtimeFactor: realtimeFactor,
+        ChannelsModel: channelCalibrations.ToArray(),
+        Paths: paths);
+
+    var outputDirectory = Path.GetDirectoryName(outputPath);
+    if (!string.IsNullOrWhiteSpace(outputDirectory))
+    {
+        Directory.CreateDirectory(outputDirectory);
+    }
+
+    File.WriteAllText(
+        outputPath,
+        JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine(
+        $"contestant-calibration path={outputPath} input={inputPath} song={profile.Id} sampleRate={sampleRate} channels={channels} events={expectedEvents.Length} decodeMs={stopwatch.Elapsed.TotalMilliseconds:0.000} realtime={realtimeFactor:0.0}x budget={minRealtimeFactor:0.0}x");
+    foreach (var channel in channelCalibrations)
+    {
+        Console.WriteLine(
+            $"contestant-calibration-channel {channel.SourceId}: events={channel.DetectedEvents}/{channel.ExpectedEvents} payload={channel.PayloadAccuracy:0.000} confidence={channel.Confidence:0.000} polarity={channel.Polarity:+0;-0;0} scheduleOffsetSamples={channel.ScheduleOffsetSamples:0.000} offsetSamples={channel.SourceOffsetSamples:0.000000} offsetUs={channel.SourceOffsetSamples * 1_000_000.0 / sampleRate:0.000} maeSamples={channel.MeanAbsoluteErrorSamples:0.000000} maeUs={channel.MeanAbsoluteErrorSamples * 1_000_000.0 / sampleRate:0.000} rms={channel.Rms:0.000000} peak={channel.Peak:0.000000} usableBands={channel.Bands.Count(band => band.Usable)}/{channel.Bands.Length}");
+    }
+
+    foreach (var path in paths)
+    {
+        Console.WriteLine(
+            $"contestant-calibration-path {path.ReferenceSourceId}->{path.SourceId}: delaySamples={path.DelaySamples:0.000000} delayUs={path.DelayMicroseconds:0.000} syncMaeUs={path.SyncMeanAbsoluteErrorMicroseconds:0.000} confidence={path.Confidence:0.000} gain={path.RelativeGain:0.000} polarity={path.RelativePolarity:+0;-0;0} normalizedBands={path.ResponseNormalizationBands.Count(band => band.Usable)}/{path.ResponseNormalizationBands.Length}");
+    }
+
+    if (realtimeFactor < minRealtimeFactor)
+    {
+        Console.Error.WriteLine($"contestant calibration failed budget: realtime={realtimeFactor:0.000}x below required {minRealtimeFactor:0.000}x");
+        return 2;
+    }
+
+    return 0;
+}
+
 static IReadOnlyList<BioacousticTrainingHypothesis> BioacousticTrainingHypotheses()
 {
     var baseProfiles = MimirBioacousticDecoderConfiguration.BuiltInProfiles
@@ -2413,6 +2553,418 @@ static double ScoreContestantOffset(float[] samples, float[] template, int offse
     return sampleEnergy <= 1.0e-12 || templateEnergy <= 1.0e-12
         ? double.NegativeInfinity
         : dot / Math.Sqrt(sampleEnergy * templateEnergy);
+}
+
+static BioacousticPhysicalChannelCalibration CalibrateContestantChannel(
+    string sourceId,
+    float[] samples,
+    int sampleRate,
+    MimirBioacousticContestantRenderer renderer,
+    IReadOnlyList<ulong> expectedEvents,
+    double scheduleOffsetSamples,
+    int searchRadiusSamples,
+    int delaySearchSamples)
+{
+    var motifSamples = renderer.RenderEventMonoFloat(0, sampleRate).Length;
+    var channelScheduleOffsetSamples = delaySearchSamples <= 0
+        ? scheduleOffsetSamples
+        : EstimateContestantScheduleOffset(
+            samples,
+            sampleRate,
+            renderer,
+            expectedEvents,
+            scheduleOffsetSamples,
+            delaySearchSamples,
+            motifSamples);
+    var observations = new List<BioacousticPhysicalEventCalibration>(expectedEvents.Count);
+    var payloadCorrect = 0;
+    foreach (var eventIndex in expectedEvents)
+    {
+        var expectedPayload = renderer.PayloadSymbolForEvent(eventIndex);
+        var template = renderer.RenderEventMonoFloat(eventIndex, sampleRate, expectedPayload);
+        var center = (int)Math.Round(renderer.EventStartSeconds(eventIndex) * sampleRate + channelScheduleOffsetSamples);
+        var start = Math.Max(0, center - searchRadiusSamples);
+        var end = Math.Min(samples.Length - motifSamples, center + searchRadiusSamples);
+        if (start > end)
+        {
+            continue;
+        }
+
+        var bestOffset = center;
+        var bestScore = double.NegativeInfinity;
+        for (var offset = start; offset <= end; offset += 2)
+        {
+            var score = ScoreStreamingPacketOffset(samples, template, offset, motifSamples);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestOffset = offset;
+            }
+        }
+
+        if (bestScore < 0.06)
+        {
+            continue;
+        }
+
+        var refinedOffset = RefineContestantExpectedPayloadOffset(samples, template, bestOffset, motifSamples);
+        var signedScore = ScoreContestantOffset(samples, template, (int)Math.Round(refinedOffset), motifSamples);
+        var polarity = signedScore < 0.0 ? -1 : 1;
+        var payload = ClassifyContestantPayloadAt(samples, sampleRate, renderer, eventIndex, refinedOffset, motifSamples);
+        if (payload == expectedPayload)
+        {
+            payloadCorrect++;
+        }
+
+        var residual = ComputeContestantResidual(samples, template, (int)Math.Round(refinedOffset), motifSamples, signedScore);
+        var delaySamples = refinedOffset - renderer.EventStartSeconds(eventIndex) * sampleRate;
+        observations.Add(new BioacousticPhysicalEventCalibration(
+            eventIndex,
+            expectedPayload,
+            payload,
+            refinedOffset,
+            delaySamples,
+            Math.Clamp(Math.Abs(signedScore), 0.0, 1.0),
+            polarity,
+            residual,
+            EstimateContestantEventBands(samples, template, renderer, eventIndex, sampleRate, (int)Math.Round(refinedOffset), motifSamples)));
+    }
+
+    var clock = FitContestantClockHypothesis(
+        observations
+            .Select(observation => new CepstralWordObservation(
+                observation.EventIndex,
+                observation.SampleOffset,
+                observation.Confidence,
+                observation.ExpectedPayloadSymbol,
+                observation.Confidence))
+            .ToArray(),
+        renderer,
+        sampleRate,
+        expectedEvents.Count);
+    var sourceOffsetSamples = clock?.SourceOffsetSamples ?? 0.0;
+    var meanAbsoluteErrorSamples = clock?.MeanAbsoluteErrorSamples ?? 0.0;
+    var confidence = observations.Count == 0
+        ? 0.0
+        : (clock?.Confidence ?? 0.0) * 0.55 + observations.Average(observation => observation.Confidence) * 0.30 + Math.Clamp(observations.Count / (double)expectedEvents.Count, 0.0, 1.0) * 0.15;
+    var polarityVote = observations.Sum(observation => observation.Polarity * observation.Confidence);
+    return new BioacousticPhysicalChannelCalibration(
+        sourceId,
+        expectedEvents.Count,
+        observations.Count,
+        expectedEvents.Count == 0 ? 0.0 : payloadCorrect / (double)expectedEvents.Count,
+        confidence,
+        polarityVote < 0.0 ? -1 : 1,
+        channelScheduleOffsetSamples,
+        sourceOffsetSamples,
+        sourceOffsetSamples * 1_000_000.0 / sampleRate,
+        meanAbsoluteErrorSamples,
+        meanAbsoluteErrorSamples * 1_000_000.0 / sampleRate,
+        samples.Length,
+        RootMeanSquare(samples),
+        samples.Length == 0 ? 0.0 : samples.Max(sample => Math.Abs(sample)),
+        CollapseContestantBands(observations),
+        observations.ToArray());
+}
+
+static double EstimateContestantScheduleOffset(
+    float[] samples,
+    int sampleRate,
+    MimirBioacousticContestantRenderer renderer,
+    IReadOnlyList<ulong> expectedEvents,
+    double seedOffsetSamples,
+    int delaySearchSamples,
+    int motifSamples)
+{
+    var coarseStep = Math.Max(4, sampleRate / 6_000);
+    var stride = Math.Max(4, sampleRate / 24_000);
+    var scoringEvents = expectedEvents
+        .Take(Math.Min(14, expectedEvents.Count))
+        .ToArray();
+    var scoringTemplates = scoringEvents
+        .Select(eventIndex => (
+            EventIndex: eventIndex,
+            Template: renderer.RenderEventMonoFloat(eventIndex, sampleRate, renderer.PayloadSymbolForEvent(eventIndex)),
+            TimelineSamples: renderer.EventStartSeconds(eventIndex) * sampleRate))
+        .ToArray();
+    var bestOffset = seedOffsetSamples;
+    var bestScore = double.NegativeInfinity;
+    for (var candidate = (int)Math.Round(seedOffsetSamples) - delaySearchSamples;
+         candidate <= (int)Math.Round(seedOffsetSamples) + delaySearchSamples;
+         candidate += coarseStep)
+    {
+        var score = 0.0;
+        var count = 0;
+        foreach (var scoringTemplate in scoringTemplates)
+        {
+            var offset = (int)Math.Round(scoringTemplate.TimelineSamples + candidate);
+            var eventScore = ScoreContestantOffsetStrided(samples, scoringTemplate.Template, offset, motifSamples, stride);
+            if (!double.IsFinite(eventScore))
+            {
+                continue;
+            }
+
+            score += Math.Abs(eventScore);
+            count++;
+        }
+
+        if (count == 0)
+        {
+            continue;
+        }
+
+        score /= count;
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestOffset = candidate;
+        }
+    }
+
+    var fineStart = (int)Math.Round(bestOffset) - coarseStep;
+    var fineEnd = (int)Math.Round(bestOffset) + coarseStep;
+    for (var candidate = fineStart; candidate <= fineEnd; candidate += 2)
+    {
+        var score = 0.0;
+        var count = 0;
+        foreach (var scoringTemplate in scoringTemplates)
+        {
+            var offset = (int)Math.Round(scoringTemplate.TimelineSamples + candidate);
+            var eventScore = ScoreContestantOffsetStrided(samples, scoringTemplate.Template, offset, motifSamples, stride);
+            if (!double.IsFinite(eventScore))
+            {
+                continue;
+            }
+
+            score += Math.Abs(eventScore);
+            count++;
+        }
+
+        if (count > 0 && score / count > bestScore)
+        {
+            bestScore = score / count;
+            bestOffset = candidate;
+        }
+    }
+
+    return bestOffset;
+}
+
+static double ScoreContestantOffsetStrided(float[] samples, float[] template, int offset, int motifSamples, int stride)
+{
+    if (offset < 0 || offset + motifSamples > samples.Length)
+    {
+        return double.NegativeInfinity;
+    }
+
+    var dot = 0.0;
+    var sampleEnergy = 0.0;
+    var templateEnergy = 0.0;
+    for (var index = 0; index < Math.Min(motifSamples, template.Length); index += Math.Max(1, stride))
+    {
+        var sample = samples[offset + index];
+        var expected = template[index];
+        dot += sample * expected;
+        sampleEnergy += sample * sample;
+        templateEnergy += expected * expected;
+    }
+
+    return sampleEnergy <= 1.0e-12 || templateEnergy <= 1.0e-12
+        ? double.NegativeInfinity
+        : dot / Math.Sqrt(sampleEnergy * templateEnergy);
+}
+
+static double RefineContestantExpectedPayloadOffset(float[] samples, float[] template, int bestOffset, int motifSamples)
+{
+    if (bestOffset <= 0 || bestOffset >= samples.Length - motifSamples - 1)
+    {
+        return bestOffset;
+    }
+
+    var left = ScoreStreamingPacketOffset(samples, template, bestOffset - 1, motifSamples);
+    var center = ScoreStreamingPacketOffset(samples, template, bestOffset, motifSamples);
+    var right = ScoreStreamingPacketOffset(samples, template, bestOffset + 1, motifSamples);
+    var denominator = left - 2.0 * center + right;
+    return Math.Abs(denominator) <= 1.0e-12
+        ? bestOffset
+        : bestOffset + Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+}
+
+static int ClassifyContestantPayloadAt(
+    float[] samples,
+    int sampleRate,
+    MimirBioacousticContestantRenderer renderer,
+    ulong eventIndex,
+    double sampleOffset,
+    int motifSamples)
+{
+    var payloadCount = 1 << Math.Clamp(renderer.Profile.PayloadBitsPerEvent, 0, 8);
+    var offset = (int)Math.Round(sampleOffset);
+    var bestPayload = 0;
+    var bestScore = double.NegativeInfinity;
+    for (var payload = 0; payload < payloadCount; payload++)
+    {
+        var template = renderer.RenderEventMonoFloat(eventIndex, sampleRate, payload);
+        var score = ScoreStreamingPacketOffset(samples, template, offset, motifSamples);
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestPayload = payload;
+        }
+    }
+
+    return bestPayload;
+}
+
+static double ComputeContestantResidual(float[] samples, float[] template, int offset, int motifSamples, double signedCorrelation)
+{
+    if (offset < 0 || offset + motifSamples > samples.Length)
+    {
+        return 1.0;
+    }
+
+    var sampleEnergy = 0.0;
+    var templateEnergy = 0.0;
+    var dot = 0.0;
+    for (var index = 0; index < Math.Min(motifSamples, template.Length); index++)
+    {
+        var sample = samples[offset + index];
+        var expected = template[index];
+        sampleEnergy += sample * sample;
+        templateEnergy += expected * expected;
+        dot += sample * expected;
+    }
+
+    if (sampleEnergy <= 1.0e-12 || templateEnergy <= 1.0e-12)
+    {
+        return 1.0;
+    }
+
+    var gain = dot / templateEnergy;
+    var residual = Math.Max(0.0, sampleEnergy - 2.0 * gain * dot + gain * gain * templateEnergy);
+    return Math.Sqrt(residual / sampleEnergy) * (signedCorrelation < 0.0 ? -1.0 : 1.0);
+}
+
+static BioacousticPhysicalBandCalibration[] EstimateContestantEventBands(
+    float[] samples,
+    float[] template,
+    MimirBioacousticContestantRenderer renderer,
+    ulong eventIndex,
+    int sampleRate,
+    int offset,
+    int motifSamples)
+{
+    if (offset < 0 || offset + motifSamples > samples.Length)
+    {
+        return [];
+    }
+
+    var bands = EstimateContestantBandCenters(renderer, eventIndex);
+    var output = new BioacousticPhysicalBandCalibration[bands.Length];
+    for (var index = 0; index < bands.Length; index++)
+    {
+        var centerHz = bands[index];
+        var bandStart = (int)Math.Round(index * motifSamples / (double)Math.Max(1, bands.Length + 1));
+        var bandLength = Math.Max(1, Math.Min(motifSamples - bandStart, motifSamples / Math.Max(3, bands.Length)));
+        var observed = WindowMeanSquare(samples.AsSpan(offset + bandStart, bandLength));
+        var expected = WindowMeanSquare(template.AsSpan(bandStart, Math.Min(bandLength, template.Length - bandStart)));
+        var gain = expected <= 1.0e-12 ? 0.0 : Math.Sqrt(Math.Max(0.0, observed) / expected);
+        output[index] = new BioacousticPhysicalBandCalibration(centerHz, observed, expected, gain, observed > expected * 0.08);
+    }
+
+    return output;
+}
+
+static double[] EstimateContestantBandCenters(MimirBioacousticContestantRenderer renderer, ulong eventIndex)
+{
+    var symbolId = (int)((eventIndex * 73UL + eventIndex / 5UL * 19UL) % MimirBioacousticContestants.SymbolCount);
+    var t = symbolId / (double)(MimirBioacousticContestants.SymbolCount - 1);
+    var root = Math.Exp(Math.Log(renderer.Profile.LowestRootHz) + (Math.Log(renderer.Profile.HighestRootHz) - Math.Log(renderer.Profile.LowestRootHz)) * t);
+    var centers = new double[Math.Min(renderer.Profile.SyllableCount, 8)];
+    for (var index = 0; index < centers.Length; index++)
+    {
+        centers[index] = Math.Clamp(root * Math.Pow(2.0, (-0.5 + index * 0.72) / 12.0), 200.0, renderer.Profile.HighestRootHz * 1.8);
+    }
+
+    return centers;
+}
+
+static double WindowMeanSquare(ReadOnlySpan<float> samples)
+{
+    if (samples.Length == 0)
+    {
+        return 0.0;
+    }
+
+    var energy = 0.0;
+    for (var index = 0; index < samples.Length; index++)
+    {
+        energy += samples[index] * samples[index];
+    }
+
+    return energy / samples.Length;
+}
+
+static BioacousticPhysicalBandCalibration[] CollapseContestantBands(IReadOnlyList<BioacousticPhysicalEventCalibration> observations)
+{
+    return observations
+        .SelectMany(observation => observation.Bands)
+        .GroupBy(band => Math.Round(band.CenterHz / 25.0) * 25.0)
+        .Select(group => new BioacousticPhysicalBandCalibration(
+            group.Key,
+            group.Average(band => band.ObservedEnergy),
+            group.Average(band => band.ExpectedEnergy),
+            group.Average(band => band.Gain),
+            group.Count(band => band.Usable) >= Math.Max(1, group.Count() / 2)))
+        .OrderBy(band => band.CenterHz)
+        .ToArray();
+}
+
+static BioacousticPhysicalPathCalibration BuildContestantPathCalibration(
+    BioacousticPhysicalChannelCalibration reference,
+    BioacousticPhysicalChannelCalibration candidate,
+    int sampleRate)
+{
+    var candidateByEvent = candidate.Events.ToDictionary(observation => observation.EventIndex);
+    var matched = reference.Events
+        .Where(observation => candidateByEvent.ContainsKey(observation.EventIndex))
+        .Select(observation =>
+        {
+            var other = candidateByEvent[observation.EventIndex];
+            var weight = Math.Sqrt(observation.Confidence * other.Confidence);
+            return (Delay: other.SampleOffset - observation.SampleOffset, Weight: weight);
+        })
+        .ToArray();
+    var delay = matched.Length == 0
+        ? candidate.SourceOffsetSamples - reference.SourceOffsetSamples
+        : matched.Sum(pair => pair.Delay * Math.Max(pair.Weight, 1.0e-6)) / matched.Sum(pair => Math.Max(pair.Weight, 1.0e-6));
+    var mae = matched.Length == 0
+        ? Math.Abs(candidate.MeanAbsoluteErrorSamples - reference.MeanAbsoluteErrorSamples)
+        : matched.Sum(pair => Math.Abs(pair.Delay - delay) * Math.Max(pair.Weight, 1.0e-6)) / matched.Sum(pair => Math.Max(pair.Weight, 1.0e-6));
+    var relativeGain = reference.Rms <= 1.0e-12 ? 0.0 : candidate.Rms / reference.Rms;
+    var referenceBands = reference.Bands.ToDictionary(band => band.CenterHz);
+    var normalizedBands = candidate.Bands
+        .Select(band =>
+        {
+            var normalizer = referenceBands.TryGetValue(band.CenterHz, out var referenceBand) && referenceBand.Gain > 1.0e-12
+                ? referenceBand.Gain
+                : 1.0;
+            return band with { Gain = band.Gain / normalizer };
+        })
+        .ToArray();
+    var confidence = Math.Sqrt(reference.Confidence * candidate.Confidence) *
+        (1.0 / (1.0 + mae / Math.Max(1.0, sampleRate * 0.00010)));
+    return new BioacousticPhysicalPathCalibration(
+        reference.SourceId,
+        candidate.SourceId,
+        delay,
+        delay * 1_000_000.0 / sampleRate,
+        mae,
+        mae * 1_000_000.0 / sampleRate,
+        confidence,
+        relativeGain,
+        reference.Polarity * candidate.Polarity,
+        normalizedBands);
 }
 
 static IReadOnlyDictionary<ulong, int> ClassifyContestantPayloads(
@@ -3563,3 +4115,67 @@ public sealed record BioacousticContestantObservation(
     double SampleOffset,
     double Confidence,
     double ShapeAccuracy);
+
+public sealed record BioacousticPhysicalCalibrationModel(
+    string Schema,
+    DateTimeOffset CreatedUtc,
+    string InputPath,
+    string SongId,
+    int SampleRate,
+    int Channels,
+    string ReferenceSourceId,
+    double CaptureSeconds,
+    int SearchRadiusSamples,
+    double ScheduleOffsetSamples,
+    double DecodeMilliseconds,
+    double RealtimeFactor,
+    BioacousticPhysicalChannelCalibration[] ChannelsModel,
+    BioacousticPhysicalPathCalibration[] Paths);
+
+public sealed record BioacousticPhysicalChannelCalibration(
+    string SourceId,
+    int ExpectedEvents,
+    int DetectedEvents,
+    double PayloadAccuracy,
+    double Confidence,
+    int Polarity,
+    double ScheduleOffsetSamples,
+    double SourceOffsetSamples,
+    double SourceOffsetMicroseconds,
+    double MeanAbsoluteErrorSamples,
+    double MeanAbsoluteErrorMicroseconds,
+    int SampleCount,
+    double Rms,
+    double Peak,
+    BioacousticPhysicalBandCalibration[] Bands,
+    BioacousticPhysicalEventCalibration[] Events);
+
+public sealed record BioacousticPhysicalPathCalibration(
+    string ReferenceSourceId,
+    string SourceId,
+    double DelaySamples,
+    double DelayMicroseconds,
+    double SyncMeanAbsoluteErrorSamples,
+    double SyncMeanAbsoluteErrorMicroseconds,
+    double Confidence,
+    double RelativeGain,
+    int RelativePolarity,
+    BioacousticPhysicalBandCalibration[] ResponseNormalizationBands);
+
+public sealed record BioacousticPhysicalEventCalibration(
+    ulong EventIndex,
+    int ExpectedPayloadSymbol,
+    int ObservedPayloadSymbol,
+    double SampleOffset,
+    double DelaySamples,
+    double Confidence,
+    int Polarity,
+    double NormalizedResidual,
+    BioacousticPhysicalBandCalibration[] Bands);
+
+public sealed record BioacousticPhysicalBandCalibration(
+    double CenterHz,
+    double ObservedEnergy,
+    double ExpectedEnergy,
+    double Gain,
+    bool Usable);

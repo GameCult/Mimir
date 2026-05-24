@@ -191,6 +191,18 @@ artifact, but it leaves a concrete response profile: 14 frames, 12 anchors,
 0.865 clock confidence, and strongest bins around 4525, 4075, and 7225 Hz.
 Acoustic robustness is now the open problem, not clean loopback timing,
 standalone decoder shape, or basic response evidence.
+`Mimir.BufferSmoke --calibrate-contestant-asio-f32` now owns the active
+packet-song physical calibration receipt. It runs the canary packet decoder
+against interleaved ASIO Float32 captures, performs a fast per-channel global
+delay hypothesis search, then tight scheduled packet scoring with sub-sample
+refinement. The latest persisted model at
+`calibration/bioacoustic/scarlett-canary-packet-192k-rerun.json` ran at 10.7x
+realtime across four 192 kHz channels and records per-channel polarity,
+schedule offset, payload reliability, gain, response-normalization bands, and
+pairwise propagation delay. Current physical precision is loopback 2.524 us
+MAE, co-streamer shotgun 58.785 us MAE, and cardioid 90.558 us MAE; do not
+claim physical microsecond sync until those mic MAEs collapse by another order
+of magnitude.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

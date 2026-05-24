@@ -145,6 +145,17 @@ a named invariant that the native runtime cannot protect yet.
   with two reliable symbols. Acoustic robustness remains separate from the clean
   loopback timing proof, but failed timing windows now leave usable response
   evidence instead of silence.
+- `Mimir.BufferSmoke --calibrate-contestant-asio-f32` persists the active
+  packet-song physical calibration model under `calibration/bioacoustic/`.
+  It learns per-channel schedule offset, polarity, payload reliability,
+  response-normalization bands, gain, confidence, and pairwise propagation
+  delay from the same 192 kHz ASIO capture. The latest Scarlett receipt
+  `calibration/bioacoustic/scarlett-canary-packet-192k-rerun.json` clears the
+  current hot-loop budget at 10.7x realtime across four channels. Loopback
+  channels decode 37/37 with 2.524 us MAE; the co-streamer shotgun decodes
+  37/37 payload with 58.785 us MAE; the cardioid decodes 26/37 with
+  90.558 us MAE. This is a real response/propagation-delay model, but not yet
+  microsecond-accurate physical mic sync.
 - `config/mimir-runtime.asio.example.json` is the minimal continuous Scarlett
   runtime ingest proof. It loads `native/asio_capture` in process at 192 kHz
   and declares `asio-ch0` through `asio-ch3` as accepted audio sources. A
