@@ -1,0 +1,24 @@
+name: Deploy Quartz
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    uses: GameCult/GameCult-Quartz/.github/workflows/quartz-pages.yml@main
+    with:
+      content-dir: .
+      overlay-dir: site
+      output-dir: quartz-site/public

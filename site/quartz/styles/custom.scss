@@ -1,0 +1,326 @@
+@use "./base.scss";
+@use "./variables.scss" as *;
+
+:root,
+:root[saved-theme="light"],
+:root[saved-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(
+      circle at 72% 10%,
+      rgba(100, 183, 255, 0.18),
+      transparent 18%
+    ),
+    radial-gradient(
+      circle at 16% 12%,
+      rgba(155, 216, 135, 0.11),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(255, 174, 88, 0.09),
+      transparent 30%
+    ),
+    linear-gradient(180deg, #03070d 0%, #061018 46%, #08120d 100%);
+  color: var(--darkgray);
+}
+
+.page {
+  position: relative;
+  max-width: 1680px;
+  padding: 0 1.2rem 2.5rem;
+}
+
+.page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(100, 183, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(155, 216, 135, 0.03) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent 95%);
+  opacity: 0.72;
+}
+
+.page > #quartz-body .center,
+.page > #quartz-body footer {
+  max-width: none;
+}
+
+.page > #quartz-body .left.sidebar {
+  gap: 0;
+  padding: 2.4rem 1rem 0 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.page > #quartz-body .center > .page-header {
+  margin-top: 2.4rem;
+}
+
+.page > #quartz-body .center header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem 1.25rem;
+  align-items: start;
+  margin: 0 0 1rem;
+  padding: 1rem 1.15rem 1.05rem;
+  border: 1px solid rgba(100, 183, 255, 0.16);
+  border-radius: 22px;
+  background:
+    radial-gradient(
+      circle at 82% 50%,
+      rgba(100, 183, 255, 0.15),
+      transparent 22%
+    ),
+    linear-gradient(135deg, rgba(7, 12, 19, 0.98), rgba(8, 18, 14, 0.95));
+  box-shadow:
+    0 20px 44px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.page > #quartz-body .center header > .search {
+  max-width: 9rem;
+  width: 100%;
+  justify-self: end;
+}
+
+.mimir-titlebar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  min-width: 0;
+}
+
+.mimir-titlebar-logo {
+  grid-row: 1 / span 2;
+  display: block;
+  width: clamp(4.2rem, 8vw, 6.4rem);
+  aspect-ratio: 1;
+  align-self: start;
+}
+
+.mimir-titlebar-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mimir-titlebar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.mimir-titlebar-title,
+.mimir-titlebar-title a {
+  margin: 0;
+  color: var(--dark);
+  font-family: var(--titleFont);
+  font-size: clamp(2.1rem, 4vw, 3.3rem);
+  font-weight: 200;
+  line-height: 0.92;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mimir-titlebar-tagline {
+  margin: 0;
+  color: rgba(196, 220, 229, 0.84);
+  font-family: var(--titleFont);
+  font-size: 0.88rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  max-width: 76ch;
+}
+
+.mimir-titlebar-nav {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.mimir-nav-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.15rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(100, 183, 255, 0.2);
+  background: rgba(100, 183, 255, 0.07);
+  color: #e8f7ff;
+  font-family: var(--titleFont);
+  font-size: 0.92rem;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+}
+
+.mimir-nav-chip:hover,
+.mimir-nav-chip.active {
+  background: rgba(155, 216, 135, 0.14);
+  border-color: rgba(155, 216, 135, 0.42);
+  color: #f2ffe8;
+}
+
+.article-title,
+article > h1,
+article > h2,
+article > h3,
+article > h4,
+article > h5,
+article > h6 {
+  font-family: var(--titleFont);
+  letter-spacing: 0.015em;
+}
+
+.article-title {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 2.85rem);
+  font-weight: 200;
+  line-height: 0.96;
+}
+
+.page > #quartz-body .center > article {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(9, 16, 22, 0.98), rgba(7, 14, 11, 0.96)),
+    linear-gradient(
+      180deg,
+      rgba(100, 183, 255, 0.02),
+      rgba(155, 216, 135, 0.02)
+    );
+  border: 1px solid rgba(100, 183, 255, 0.1);
+  border-radius: 24px;
+  box-shadow:
+    0 24px 52px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  padding: 1.45rem 1.7rem 1.9rem;
+  overflow: hidden;
+}
+
+body[data-slug="Mimir-Vault"] .page > #quartz-body .center > article {
+  padding-top: 0;
+}
+
+.mimir-hero-canvas {
+  display: block;
+  width: calc(100% + 3.4rem);
+  margin: 0 -1.7rem 1.35rem;
+  min-height: 360px;
+  border-bottom: 1px solid rgba(100, 183, 255, 0.12);
+  background: #03070d;
+}
+
+.page > #quartz-body .right.sidebar {
+  gap: 1rem;
+  padding: 2.4rem 0 0 1rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.toc,
+.backlinks,
+.mimir-overview {
+  border: 1px solid rgba(100, 183, 255, 0.12);
+  border-radius: 20px;
+  background: linear-gradient(
+    180deg,
+    rgba(9, 16, 22, 0.9),
+    rgba(7, 14, 11, 0.82)
+  );
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+}
+
+.mimir-overview-title {
+  margin: 0 0 0.35rem;
+  color: var(--secondary);
+  font-family: var(--titleFont);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mimir-overview-copy {
+  margin: 0 0 0.9rem;
+  color: rgba(196, 220, 229, 0.78);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.mimir-overview nav {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.mimir-overview a {
+  display: block;
+  color: #e8f7ff;
+  border: 1px solid rgba(100, 183, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(100, 183, 255, 0.05);
+}
+
+.mimir-overview a:hover {
+  border-color: rgba(155, 216, 135, 0.36);
+  background: rgba(155, 216, 135, 0.1);
+}
+
+article strong {
+  color: #f5fbff;
+}
+
+article table {
+  border-color: rgba(100, 183, 255, 0.16);
+}
+
+article tr,
+article td,
+article th {
+  border-color: rgba(100, 183, 255, 0.12);
+}
+
+@media all and not ($desktop) {
+  .page > #quartz-body .center header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page > #quartz-body .center header > .search {
+    justify-self: stretch;
+    max-width: none;
+  }
+
+  .mimir-hero-canvas {
+    width: calc(100% + 2rem);
+    margin-inline: -1rem;
+  }
+
+  .mimir-titlebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mimir-titlebar-logo {
+    grid-row: auto;
+    width: 4.4rem;
+  }
+
+  .mimir-titlebar-nav {
+    grid-column: auto;
+  }
+}

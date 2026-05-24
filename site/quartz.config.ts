@@ -1,0 +1,184 @@
+import { QuartzConfig } from "./quartz/cfg";
+import * as Plugin from "./quartz/plugins";
+import { QuartzEmitterPlugin } from "./quartz/plugins/types";
+import { Fragment, h } from "preact";
+
+const MimirMeta: QuartzEmitterPlugin = () => ({
+  name: "MimirMeta",
+  async *emit() {},
+  async *partialEmit() {},
+  externalResources: () => ({
+    additionalHead: [
+      () =>
+        h(Fragment, {}, [
+          h("meta", {
+            property: "twitter:domain",
+            content: "mimir.gamecult.org",
+          }),
+          h("meta", {
+            property: "og:url",
+            content: "https://mimir.gamecult.org/",
+          }),
+          h("meta", {
+            property: "twitter:url",
+            content: "https://mimir.gamecult.org/",
+          }),
+        ]),
+    ],
+  }),
+});
+
+const config: QuartzConfig = {
+  configuration: {
+    pageTitle: "Mimir",
+    pageTitleSuffix: "",
+    enableSPA: true,
+    enablePopovers: true,
+    analytics: null,
+    locale: "en-GB",
+    baseUrl: "mimir.gamecult.org",
+    ignorePatterns: [
+      ".git",
+      ".github",
+      ".obsidian",
+      ".quartz-build",
+      ".voidbot",
+      "AGENTS.md",
+      "assets/branding",
+      "assets/branding/**",
+      "artifacts",
+      "artifacts/**",
+      "bin",
+      "bin/**",
+      "calibration",
+      "calibration/**",
+      "config",
+      "config/**",
+      "faust",
+      "faust/**",
+      "logs",
+      "logs/**",
+      "native/**/build",
+      "native/**/target",
+      "node_modules",
+      "node_modules/**",
+      "obj",
+      "obj/**",
+      "quartz-site",
+      "quartz-site/**",
+      "research/**/mirrors",
+      "research/**/mirrors/**",
+      "scripts",
+      "scripts/**",
+      "site",
+      "site/**",
+      "src",
+      "src/**",
+      "state",
+      "state/**",
+      "target",
+      "target/**",
+      "tools",
+      "tools/**",
+      "**/*.slnx",
+      "**/*.csproj",
+      "**/*.vcxproj",
+      "**/*.filters",
+      "**/*.tlog",
+      "**/*.obj",
+      "**/*.dll",
+      "**/*.exe",
+      "**/*.lib",
+      "**/*.exp",
+      "**/*.jsonl",
+      "**/*.yaml",
+      "**/*.yml",
+      "**/*.toml",
+      "**/*.lock",
+    ],
+    defaultDateType: "modified",
+    theme: {
+      fontOrigin: "googleFonts",
+      cdnCaching: true,
+      typography: {
+        header: {
+          name: "Montserrat",
+          weights: [100, 200, 300, 400, 600],
+        },
+        title: {
+          name: "Montserrat",
+          weights: [100, 200, 300],
+        },
+        body: {
+          name: "Ubuntu",
+          weights: [300, 400, 500, 700],
+          includeItalic: true,
+        },
+        code: "IBM Plex Mono",
+      },
+      colors: {
+        lightMode: {
+          light: "#05090d",
+          lightgray: "#111a20",
+          gray: "#6d8792",
+          darkgray: "#c4dce5",
+          dark: "#f3fbff",
+          secondary: "#64b7ff",
+          tertiary: "#9bd887",
+          highlight: "rgba(100, 183, 255, 0.14)",
+          textHighlight: "#9bd88755",
+        },
+        darkMode: {
+          light: "#05090d",
+          lightgray: "#111a20",
+          gray: "#6d8792",
+          darkgray: "#c4dce5",
+          dark: "#f3fbff",
+          secondary: "#64b7ff",
+          tertiary: "#9bd887",
+          highlight: "rgba(100, 183, 255, 0.14)",
+          textHighlight: "#9bd88755",
+        },
+      },
+    },
+  },
+  plugins: {
+    transformers: [
+      Plugin.FrontMatter(),
+      Plugin.CreatedModifiedDate({
+        priority: ["frontmatter", "git", "filesystem"],
+      }),
+      Plugin.SyntaxHighlighting({
+        theme: {
+          light: "github-dark",
+          dark: "github-dark",
+        },
+        keepBackground: false,
+      }),
+      Plugin.ObsidianFlavoredMarkdown({ enableInHtmlEmbed: false }),
+      Plugin.GitHubFlavoredMarkdown(),
+      Plugin.TableOfContents(),
+      Plugin.CrawlLinks({ markdownLinkResolution: "shortest" }),
+      Plugin.Description(),
+      Plugin.Latex({ renderEngine: "katex" }),
+    ],
+    filters: [Plugin.RemoveDrafts()],
+    emitters: [
+      Plugin.AliasRedirects(),
+      Plugin.ComponentResources(),
+      Plugin.ContentPage(),
+      Plugin.FolderPage(),
+      Plugin.ContentIndex({
+        enableSiteMap: false,
+        enableRSS: false,
+      }),
+      Plugin.Assets(),
+      Plugin.Static(),
+      MimirMeta(),
+      Plugin.NotFoundPage(),
+      Plugin.CustomOgImages(),
+    ],
+  },
+};
+
+export default config;

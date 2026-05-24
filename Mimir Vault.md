@@ -50,11 +50,3 @@ corpus.
 ## Persistence And Identity
 
 - [Mimir Face](docs/mimir-face.md)
-- [Scratch](state/scratch.md)
-- [AGENTS](AGENTS.md)
-
-## Branding
-
-- [Mimir Face Prompts](assets/branding/mimir-face-prompts.md)
-- [Mimir Icon Prompts](assets/branding/mimir-icon-prompts.md)
-

@@ -3,6 +3,8 @@ config/audio-field.json
 logs/
 *.log
 *.tmp
+.quartz-build/
+quartz-site/
 calibration/runs/
 artifacts/drivers/
 artifacts/asio/
