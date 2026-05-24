@@ -238,7 +238,11 @@ A naive recursive waveform phase-lock pass was also rejected: it improved one
 cardioid receipt but worsened the shotgun and locked a fresh cardioid run onto
 a later reflection lobe. Recursive refinement remains a good architecture only
 after the path model can distinguish direct arrival, phase/group delay, and room
-reflection energy.
+reflection energy. The follow-up sonar/DSP research note at
+`research/sonar-dsp-recursive-refinement-2026-05-25.md` maps that correction:
+use complex matched filters, phase-slope/group-delay fitting, acquisition versus
+tracking loop bandwidths, and sparse multipath residuals before attempting
+another recursive fitter.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

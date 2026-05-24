@@ -212,7 +212,11 @@ accepted_design:
     improve one cardioid receipt while worsening the shotgun and locking a fresh
     cardioid run onto a later reflection lobe. Recursion is only allowed back as
     a constrained direct-path/group-delay model, not as unconstrained waveform
-    resampling with prettier decimals.
+    resampling with prettier decimals. The sonar/DSP research note
+    `research/sonar-dsp-recursive-refinement-2026-05-25.md` points the next
+    decoder cut at complex contour matched filters, phase-slope/group-delay
+    fitting, acquisition/tracking loop bandwidths, and sparse multipath
+    residuals.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.
