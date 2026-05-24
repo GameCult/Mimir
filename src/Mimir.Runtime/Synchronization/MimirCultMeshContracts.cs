@@ -1,0 +1,200 @@
+using GameCult.Caching;
+using MessagePack;
+
+namespace Mimir.Runtime.Synchronization;
+
+[CultDocument("mimir.bioacoustic_codebook_state", "mimir.bioacoustic_codebook_state.v1")]
+[MessagePackObject]
+public sealed record MimirBioacousticCodebookState(
+    [property: Key(0)]
+    [property: CultName]
+    string CodebookId,
+    [property: Key(1)] string CreatedAtUtc,
+    [property: Key(2)] int WordCount,
+    [property: Key(3)] int SpeakerCount,
+    [property: Key(4)] double SegmentSeconds,
+    [property: Key(5)] string ScheduleId,
+    [property: Key(6)] MimirBioacousticMotifSnapshot[] Motifs);
+
+[MessagePackObject]
+public sealed record MimirBioacousticMotifSnapshot(
+    [property: Key(0)] int SymbolId,
+    [property: Key(1)] string Speaker,
+    [property: Key(2)] MimirBioacousticSyllableSnapshot[] Syllables);
+
+[MessagePackObject]
+public sealed record MimirBioacousticSyllableSnapshot(
+    [property: Key(0)] double StartSeconds,
+    [property: Key(1)] double DurationSeconds,
+    [property: Key(2)] double StartHz,
+    [property: Key(3)] double EndHz,
+    [property: Key(4)] double Weight);
+
+[CultDocument("mimir.bioacoustic_decoder_state", "mimir.bioacoustic_decoder_state.v1")]
+[MessagePackObject]
+public sealed record MimirBioacousticDecoderState(
+    [property: Key(0)]
+    [property: CultName]
+    string DecoderId,
+    [property: Key(1)] string CreatedAtUtc,
+    [property: Key(2)] string CodebookId,
+    [property: Key(3)] MimirBioacousticDecoderConfigurationSnapshot Configuration);
+
+[MessagePackObject]
+public sealed record MimirBioacousticDecoderConfigurationSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] string Description,
+    [property: Key(2)] int FftSize,
+    [property: Key(3)] int HopSize,
+    [property: Key(4)] int MelBins,
+    [property: Key(5)] int CepstralCoefficients,
+    [property: Key(6)] double MinFrequencyHz,
+    [property: Key(7)] double MaxFrequencyHz,
+    [property: Key(8)] int ProjectionTableCount,
+    [property: Key(9)] int ProjectionHashBits,
+    [property: Key(10)] int NearHashRadius,
+    [property: Key(11)] double DenseStepSeconds,
+    [property: Key(12)] double ProposalBudgetMultiplier,
+    [property: Key(13)] MimirCepstralDegradationSnapshot[] TemplateAugmentations);
+
+[MessagePackObject]
+public sealed record MimirCepstralDegradationSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] double WarpFrames,
+    [property: Key(2)] double WarpCoefficients,
+    [property: Key(3)] int BlurPasses);
+
+[CultDocument("mimir.acoustic_path_state", "mimir.acoustic_path_state.v1")]
+[MessagePackObject]
+public sealed record MimirAcousticPathState(
+    [property: Key(0)]
+    [property: CultName]
+    string PathId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string OutputSourceId,
+    [property: Key(3)] string MicSourceId,
+    [property: Key(4)] int SampleRate,
+    [property: Key(5)] double DelaySamples,
+    [property: Key(6)] double SamplingRateOffsetPpm,
+    [property: Key(7)] double Confidence,
+    [property: Key(8)] MimirBandResponseSnapshot[] BandResponses,
+    [property: Key(9)] string EvidenceKind);
+
+[MessagePackObject]
+public sealed record MimirBandResponseSnapshot(
+    [property: Key(0)] double CenterHz,
+    [property: Key(1)] double Energy);
+
+[CultDocument("mimir.actuator_state", "mimir.actuator_state.v1")]
+[MessagePackObject]
+public sealed record MimirActuatorStateDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string ActuatorId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string SourceId,
+    [property: Key(3)] string ProfileId,
+    [property: Key(4)] double TargetDelaySamples,
+    [property: Key(5)] double ResampleRatio,
+    [property: Key(6)] double Confidence,
+    [property: Key(7)] MimirFaustControlSnapshot[] FaustControls);
+
+[MessagePackObject]
+public sealed record MimirFaustControlSnapshot(
+    [property: Key(0)] string Path,
+    [property: Key(1)] float Value);
+
+public static class MimirCultMeshContractFactory
+{
+    public static MimirBioacousticCodebookState CreateCodebookState(
+        string codebookId,
+        string scheduleId,
+        MimirBioacousticTimeline timeline,
+        DateTimeOffset? createdAt = null) =>
+        new(
+            codebookId,
+            (createdAt ?? DateTimeOffset.UtcNow).ToString("O"),
+            MimirBioacousticTimeline.WordCount,
+            MimirBioacousticTimeline.SpeakerCount,
+            MimirBioacousticTimeline.SegmentSeconds,
+            scheduleId,
+            timeline.Codebook.Select(motif => new MimirBioacousticMotifSnapshot(
+                motif.SymbolId,
+                (motif.SymbolId & 1) == 0 ? "left" : "right",
+                motif.Syllables
+                    .Select(syllable => new MimirBioacousticSyllableSnapshot(
+                        syllable.StartSeconds,
+                        syllable.DurationSeconds,
+                        syllable.StartHz,
+                        syllable.EndHz,
+                        syllable.Weight))
+                    .ToArray()))
+                .ToArray());
+
+    public static MimirBioacousticDecoderState CreateDecoderState(
+        string decoderId,
+        string codebookId,
+        MimirBioacousticDecoderConfiguration configuration,
+        DateTimeOffset? createdAt = null) =>
+        new(
+            decoderId,
+            (createdAt ?? DateTimeOffset.UtcNow).ToString("O"),
+            codebookId,
+            Snapshot(configuration));
+
+    public static MimirAcousticPathState CreatePathState(MimirAudioSynchronizationState state, string outputSourceId, string evidenceKind) =>
+        new(
+            $"{outputSourceId}->{state.SourceId}",
+            DateTimeOffset.UtcNow.ToString("O"),
+            outputSourceId,
+            state.SourceId,
+            state.SampleRate,
+            state.SmoothedDelaySamples,
+            state.SamplingRateOffsetPpm,
+            state.Confidence,
+            state.BandResponses
+                .Select(response => new MimirBandResponseSnapshot(response.CenterHz, response.Energy))
+                .ToArray(),
+            evidenceKind);
+
+    public static MimirActuatorStateDocument CreateActuatorState(
+        string actuatorId,
+        string profileId,
+        MimirActuatorCommand command,
+        DateTimeOffset? updatedAt = null) =>
+        new(
+            actuatorId,
+            (updatedAt ?? DateTimeOffset.UtcNow).ToString("O"),
+            command.SourceId,
+            profileId,
+            command.TargetDelaySamples,
+            command.ResampleRatio,
+            command.Confidence,
+            command.FaustControls
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => new MimirFaustControlSnapshot(pair.Key, pair.Value))
+                .ToArray());
+
+    private static MimirBioacousticDecoderConfigurationSnapshot Snapshot(MimirBioacousticDecoderConfiguration configuration) =>
+        new(
+            configuration.Id,
+            configuration.Description,
+            configuration.FftSize,
+            configuration.HopSize,
+            configuration.MelBins,
+            configuration.CepstralCoefficients,
+            configuration.MinFrequencyHz,
+            configuration.MaxFrequencyHz,
+            configuration.ProjectionTableCount,
+            configuration.ProjectionHashBits,
+            configuration.NearHashRadius,
+            configuration.DenseStepSeconds,
+            configuration.ProposalBudgetMultiplier,
+            configuration.TemplateAugmentations
+                .Select(profile => new MimirCepstralDegradationSnapshot(
+                    profile.Id,
+                    profile.WarpFrames,
+                    profile.WarpCoefficients,
+                    profile.BlurPasses))
+                .ToArray());
+}

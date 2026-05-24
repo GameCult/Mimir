@@ -159,6 +159,17 @@ a named invariant that the native runtime cannot protect yet.
   and schedule state. `--bioacoustic-actuator-self-test` estimates a synthetic
   317.375-sample bioacoustic delay, applies the fractional correction, and
   remeasures the residual below printed microsecond precision.
+- `src/Mimir.Runtime/Synchronization` now contains the reusable Perfect Machine
+  module library distilled from the research pass: node profiles, decoder
+  profiles, language/emission profiles, path-learning sessions, benchmark
+  panels, audio actuator strategies, native capture profiles, camera ingest
+  strategies, reservoir strategies, audio/visual field profiles, compute
+  offload profiles, OBS publication profiles, CultMesh contracts, Fensalir
+  lowering, and assembly plans. Use
+  `Mimir.BufferSmoke --perfect-machine-profile-smoke` to prove the catalog
+  assembles, `--perfect-machine-contract-smoke` to write a CultCache contract
+  proof, and `--perfect-machine-manifest` to export the module manifest for
+  tooling/UI/remote witness use.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live

@@ -29,6 +29,8 @@ Read this with:
   for the Mimir/Fensalir ownership cut.
 - [[research/perfect-machine-study-2026-05-23/calibration-session-spec|Calibration Session Spec]]
   for the planned physical-path calibration command.
+- [[perfect-machine-module-library|Perfect Machine Module Library]] for the
+  reusable runtime configurations promoted from the research notes.
 - [[research/perfect-machine-study-2026-05-23/samples/README|Sample Implementation Sketches]]
   for sample implementation sketches.
 

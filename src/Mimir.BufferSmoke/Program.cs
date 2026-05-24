@@ -51,6 +51,25 @@ if (args.Any(arg => string.Equals(arg, "--bioacoustic-actuator-self-test", Strin
         ParseDoubleOption(args, "--delay-samples", 317.375));
 }
 
+if (args.Any(arg => string.Equals(arg, "--perfect-machine-profile-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunPerfectMachineProfileSmoke();
+}
+
+if (args.Any(arg => string.Equals(arg, "--perfect-machine-contract-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return await RunPerfectMachineContractSmokeAsync(
+        ParseStringOption(args, "--output", "artifacts/perfect-machine/contracts.cc"))
+        .ConfigureAwait(false);
+}
+
+if (args.Any(arg => string.Equals(arg, "--perfect-machine-manifest", StringComparison.OrdinalIgnoreCase)))
+{
+    return await WritePerfectMachineManifestAsync(
+        ParseStringOption(args, "--output", "artifacts/perfect-machine/manifest.json"))
+        .ConfigureAwait(false);
+}
+
 if (args.Any(arg => string.Equals(arg, "--standalone-chirp-bin-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunStandaloneChirpBinSelfTest(
@@ -456,13 +475,7 @@ static int RunBioacousticCepstralSmoke(int sampleRate, double seconds)
     }
 
     var source = samples.ToArray();
-    var settings = new[]
-    {
-        new CepstralDegradationSetting("clean-roundtrip", 0.0, 0.0, 0),
-        new CepstralDegradationSetting("blur-light", 0.0, 0.0, 1),
-        new CepstralDegradationSetting("warp-light", 0.75, 1.25, 0),
-        new CepstralDegradationSetting("warp-light-blur", 0.75, 1.25, 1),
-    };
+    var settings = CepstralSmokeDegradationSettings();
 
     var failures = 0;
     foreach (var setting in settings)
@@ -495,7 +508,7 @@ static int RunBioacousticCepstralSmoke(int sampleRate, double seconds)
 
     if (failures > 0)
     {
-        Console.Error.WriteLine($"bioacoustic cepstral smoke failed: {failures}/{settings.Length} degradation settings lost too much word identity");
+        Console.Error.WriteLine($"bioacoustic cepstral smoke failed: {failures}/{settings.Count} degradation settings lost too much word identity");
         return 1;
     }
 
@@ -524,14 +537,7 @@ static async Task<int> RunBioacousticTrainingAsync(int sampleRate, double second
     }
 
     var source = samples.ToArray();
-    var degradations = new[]
-    {
-        new CepstralDegradationSetting("clean-roundtrip", 0.0, 0.0, 0),
-        new CepstralDegradationSetting("blur-light", 0.0, 0.0, 1),
-        new CepstralDegradationSetting("warp-light", 0.75, 1.25, 0),
-        new CepstralDegradationSetting("warp-light-blur", 0.75, 1.25, 1),
-        new CepstralDegradationSetting("warp-heavy-blur", 1.25, 1.75, 1),
-    };
+    var degradations = CepstralTrainingDegradationSettings();
     var hypotheses = BioacousticTrainingHypotheses();
     var expectedEvents = timeline.EventsOverlapping(0.0, source.Length / (double)sampleRate)
         .Select(timelineEvent => timelineEvent.Index)
@@ -568,7 +574,7 @@ static async Task<int> RunBioacousticTrainingAsync(int sampleRate, double second
             var timingMae = MeanCepstralTimingError(observations, timeline, sampleRate);
             var clock = FitBioacousticClockHypothesis(observations, timeline, sampleRate);
             var globalTimingMae = clock?.MeanAbsoluteErrorSamples ?? double.PositiveInfinity;
-            var anchorCoverage = expectedEvents.Count == 0 || clock == null ? 0.0 : clock.AnchorCount / (double)expectedEvents.Count;
+            var anchorCoverage = clock?.AnchorCoverage ?? 0.0;
             var realtime = decodeMilliseconds <= 0.0 ? double.PositiveInfinity : seconds * 1000.0 / decodeMilliseconds;
             var identityScore = precision * 0.45 + recall * 0.45 + confidence * 0.10;
             var timingScore = clock?.Confidence ?? 0.0;
@@ -845,6 +851,151 @@ static int RunBioacousticActuatorSelfTest(int sampleRate, double delaySamples)
             : 1;
 }
 
+static int RunPerfectMachineProfileSmoke()
+{
+    var profiles = MimirPerfectMachineProfiles.All;
+    var calibrationPlans = MimirCalibrationSessionPlans.BuiltIn;
+    var audioFields = MimirAudioFieldConfigurations.BuiltIn;
+    var visualFields = MimirVisualFusionConfigurations.BuiltIn;
+    var computePlans = MimirComputeOffloadConfigurations.BuiltIn;
+    var assemblyPlans = MimirMachineAssemblyPlans.BuiltIn;
+    var captureProfiles = MimirNativeCaptureConfigurations.BuiltIn;
+    var publications = MimirObsPublicationConfigurations.BuiltIn;
+    var moduleCatalog = MimirModuleLibrary.Entries;
+    var languageProfiles = MimirBioacousticLanguageConfigurations.BuiltIn;
+    var pathLearningProfiles = MimirAcousticPathLearningConfigurations.BuiltIn;
+    var benchmarkPanels = MimirBenchmarkPanelConfigurations.BuiltIn;
+    var actuatorStrategies = MimirAudioActuatorConfigurations.BuiltIn;
+    var cameraIngestStrategies = MimirCameraIngestConfigurations.BuiltIn;
+    var reservoirStrategies = MimirReservoirConfigurations.BuiltIn;
+    var localizationProfiles = MimirAcousticLocalizationConfigurations.BuiltIn;
+    var distributedWitnesses = MimirDistributedWitnessConfigurations.BuiltIn;
+    var networkTransports = MimirNetworkTransportConfigurations.BuiltIn;
+    var authorityPolicies = MimirAuthorityPolicyConfigurations.BuiltIn;
+    var codebook = MimirCultMeshContractFactory.CreateCodebookState(
+        "mimir-bioacoustic-default",
+        "deterministic-segment-schedule-v1",
+        MimirBioacousticTimeline.Default);
+    var decoder = MimirCultMeshContractFactory.CreateDecoderState(
+        "baseline-mfcc-index",
+        codebook.CodebookId,
+        MimirBioacousticDecoderConfiguration.BaselineMfccIndex);
+    var controller = new MimirSroPllActuatorController();
+    var command = controller.Update(
+        "scarlett-host-mic",
+        0,
+        delaySamples: 317.375,
+        confidence: 0.82,
+        dtSeconds: 0.5);
+    var actuator = MimirCultMeshContractFactory.CreateActuatorState(
+        "scarlett-host-mic-actuator",
+        MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+        command);
+    var observations = new[]
+    {
+        new MimirBioacousticWordObservation(0, MimirBioacousticTimeline.Default.EventForIndex(0).StartSeconds * MimirBioacousticTimeline.SampleRate + 317.375, 0.95),
+        new MimirBioacousticWordObservation(1, MimirBioacousticTimeline.Default.EventForIndex(1).StartSeconds * MimirBioacousticTimeline.SampleRate + 317.375, 0.95),
+        new MimirBioacousticWordObservation(2, MimirBioacousticTimeline.Default.EventForIndex(2).StartSeconds * MimirBioacousticTimeline.SampleRate + 317.375, 0.95),
+        new MimirBioacousticWordObservation(3, MimirBioacousticTimeline.Default.EventForIndex(3).StartSeconds * MimirBioacousticTimeline.SampleRate + 317.375, 0.95),
+    };
+    var clock = new MimirBioacousticClockSolver().Fit(
+        observations,
+        MimirBioacousticTimeline.Default,
+        MimirBioacousticTimeline.SampleRate,
+        expectedEventCount: 4);
+    var videoBuffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor("kiyo-pro-rgb", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    videoBuffer.Append(new MimirStreamSample(
+        "kiyo-pro-rgb",
+        MimirStreamKind.Video,
+        MimirStreamOrigin.LocalDevice,
+        TimestampNs: 1_000_000_000L,
+        ArrivalNs: 1_000_000_010L,
+        Sequence: 1,
+        PayloadHandle: 0,
+        VideoFrame: new MimirVideoFrameDescriptor(
+            1920,
+            1080,
+            MimirVideoPixelFormat.Bgra8,
+            1920 * 4,
+            1_000_000_000L,
+            NativeHandle: 42,
+            NativeHandleKind: "shared-d3d12-texture")));
+    var lowerer = new MimirFensalirFieldLowering();
+    var gpuFrame = lowerer.BuildGpuSensorFrame([videoBuffer]);
+    var acousticFrame = lowerer.BuildAcousticFieldFrame([
+        new MimirAudioSynchronizationState(
+            "loopback-scarlett-speakers",
+            "scarlett-host-mic",
+            192_000,
+            61.25,
+            61.25,
+            0.319,
+            0.875,
+            0.94,
+            [],
+            1_000_000_000L,
+            10,
+            10)
+    ]);
+    var localizationGrid = MimirSrpPhatGridSolver.BuildGrid(
+        new Vector3(-0.5f, 0.0f, 1.0f),
+        new Vector3(0.5f, 0.0f, 1.0f),
+        spacingMeters: 0.5);
+    var localization = new MimirSrpPhatGridSolver().FindBestCandidate(
+        [
+            new MimirMicrophonePose("mic-left", new Vector3(-0.5f, 0.0f, 0.0f)),
+            new MimirMicrophonePose("mic-right", new Vector3(0.5f, 0.0f, 0.0f))
+        ],
+        localizationGrid,
+        [
+            new MimirPairDelayObservation("mic-left", "mic-right", 0.0, 0.95)
+        ]);
+
+    Console.WriteLine(
+        $"perfect-machine-profile-smoke profiles={profiles.Count} calibrationPlans={calibrationPlans.Count} audioFields={audioFields.Count} visualFields={visualFields.Count} computePlans={computePlans.Count} assemblyPlans={assemblyPlans.Count} captureProfiles={captureProfiles.Count} publications={publications.Count} languageProfiles={languageProfiles.Count} pathLearning={pathLearningProfiles.Count} localization={localizationProfiles.Count} benchmarkPanels={benchmarkPanels.Count} actuatorStrategies={actuatorStrategies.Count} cameraIngest={cameraIngestStrategies.Count} reservoirs={reservoirStrategies.Count} distributedWitnesses={distributedWitnesses.Count} networkTransports={networkTransports.Count} authorityPolicies={authorityPolicies.Count} modules={moduleCatalog.Count}");
+    Console.WriteLine(
+        $"perfect-machine-codebook id={codebook.CodebookId} motifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} augmentations={decoder.Configuration.TemplateAugmentations.Length}");
+    Console.WriteLine(
+        $"perfect-machine-actuator source={actuator.SourceId} delay={actuator.TargetDelaySamples:0.000} ratio={actuator.ResampleRatio:0.000000000} controls={actuator.FaustControls.Length}");
+    Console.WriteLine(
+        $"perfect-machine-clock anchors={clock?.AnchorCount ?? 0} coverage={clock?.AnchorCoverage ?? 0:0.000} offset={clock?.SourceOffsetSamples ?? double.NaN:0.000} confidence={clock?.Confidence ?? 0:0.000}");
+    Console.WriteLine(
+        $"perfect-machine-fensalir gpuCameras={gpuFrame.Cameras.Count} gpuTextures={gpuFrame.ExternalTextures.Count} acousticConstraints={acousticFrame.Constraints.Count} timingConfidence={acousticFrame.TimingConfidence:0.000}");
+    Console.WriteLine(
+        $"perfect-machine-localization candidates={localizationGrid.Count} best=({localization?.PositionMeters.X ?? float.NaN:0.000},{localization?.PositionMeters.Y ?? float.NaN:0.000},{localization?.PositionMeters.Z ?? float.NaN:0.000}) score={localization?.Score ?? 0.0:0.000}");
+
+    return profiles.Count >= 6 &&
+        calibrationPlans.Count >= 3 &&
+        audioFields.Count >= 4 &&
+        visualFields.Count >= 4 &&
+        computePlans.Count >= 3 &&
+        assemblyPlans.Count >= 4 &&
+        captureProfiles.Count >= 8 &&
+        publications.Count >= 3 &&
+        languageProfiles.Count >= 5 &&
+        pathLearningProfiles.Count >= 3 &&
+        localizationProfiles.Count >= 4 &&
+        benchmarkPanels.Count >= 2 &&
+        actuatorStrategies.Count >= 4 &&
+        cameraIngestStrategies.Count >= 4 &&
+        reservoirStrategies.Count >= 3 &&
+        distributedWitnesses.Count >= 4 &&
+        networkTransports.Count >= 4 &&
+        authorityPolicies.Count >= 1 &&
+        moduleCatalog.Count >= 17 &&
+        codebook.Motifs.Length == MimirBioacousticTimeline.SymbolCount &&
+        decoder.Configuration.TemplateAugmentations.Length > 0 &&
+        actuator.FaustControls.Length >= 2 &&
+        gpuFrame.HasInput &&
+        acousticFrame.HasInput &&
+        localization is { Score: > 0.90 } &&
+        clock is { AnchorCount: >= 4, Confidence: > 0.70 }
+            ? 0
+            : 1;
+}
+
 static MimirAudioSynchronizationReport? EstimateBioacousticDelay(float[] reference, float[] candidate, int sampleRate)
 {
     const string referenceSourceId = "actuator-reference";
@@ -937,6 +1088,105 @@ static int RenderChirpBinFloat32(
     return 0;
 }
 
+static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
+{
+    var timeline = MimirBioacousticTimeline.Default;
+    var createdAt = DateTimeOffset.UtcNow;
+    var codebook = MimirCultMeshContractFactory.CreateCodebookState(
+        "mimir-bioacoustic-default",
+        "mimir-bioacoustic-segmented-birdcall-v1",
+        timeline,
+        createdAt);
+    var decoder = MimirCultMeshContractFactory.CreateDecoderState(
+        "mimir-decoder-baseline-mfcc-index",
+        codebook.CodebookId,
+        MimirBioacousticDecoderConfiguration.BaselineMfccIndex,
+        createdAt);
+    var pathState = MimirCultMeshContractFactory.CreatePathState(
+        new MimirAudioSynchronizationState(
+            "loopback-scarlett-speakers",
+            "scarlett-host-mic",
+            192_000,
+            61.25,
+            61.25,
+            0.319,
+            0.875,
+            0.94,
+            [new MimirChirpletBandResponse(5_600.0, 0.92), new MimirChirpletBandResponse(8_400.0, 0.86), new MimirChirpletBandResponse(12_600.0, 0.71)],
+            1_000_000_000L,
+            10,
+            10),
+        "loopback-scarlett-speakers",
+        "bioacoustic-contract-smoke");
+    var controller = new MimirSroPllActuatorController();
+    var command = controller.Update(
+        "scarlett-host-mic",
+        0,
+        new MimirAudioSynchronizationState(
+            "loopback-scarlett-speakers",
+            "scarlett-host-mic",
+            192_000,
+            61.25,
+            61.25,
+            0.319,
+            0.875,
+            0.94,
+            [],
+            1_000_000_000L,
+            10,
+            10),
+        dtSeconds: 0.001);
+    var actuator = MimirCultMeshContractFactory.CreateActuatorState(
+        "scarlett-host-mic-alignment",
+        MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+        command,
+        createdAt);
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
+    using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
+    {
+        PullOnOpen = File.Exists(outputPath)
+    }).ConfigureAwait(false);
+    await cache.UpsertAsync(
+        codebook,
+        new CultRecordHandle<MimirBioacousticCodebookState>(new CultRecordKey($"mimir-codebook:{codebook.CodebookId}")))
+        .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        decoder,
+        new CultRecordHandle<MimirBioacousticDecoderState>(new CultRecordKey($"mimir-decoder:{decoder.DecoderId}")))
+        .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        pathState,
+        new CultRecordHandle<MimirAcousticPathState>(new CultRecordKey($"mimir-path:{pathState.PathId}")))
+        .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        actuator,
+        new CultRecordHandle<MimirActuatorStateDocument>(new CultRecordKey($"mimir-actuator:{actuator.ActuatorId}")))
+        .ConfigureAwait(false);
+    await cache.FlushAsync().ConfigureAwait(false);
+
+    Console.WriteLine(
+        $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length}");
+    return 0;
+}
+
+static async Task<int> WritePerfectMachineManifestAsync(string outputPath)
+{
+    var manifest = MimirPerfectMachineManifestFactory.Create();
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
+    await File.WriteAllTextAsync(
+        outputPath,
+        JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }))
+        .ConfigureAwait(false);
+    Console.WriteLine(
+        $"perfect-machine-manifest path={outputPath} schema={manifest.Schema} modules={manifest.Modules.Count} profiles={manifest.NodeProfiles.Count} captures={manifest.CaptureProfiles.Count} publications={manifest.Publications.Count}");
+    return manifest.Modules.Count >= 13 &&
+        manifest.CaptureProfiles.Count >= 8 &&
+        manifest.Publications.Count >= 3
+            ? 0
+            : 1;
+}
+
 static int RenderBioacousticFloat32(string outputPath, int sampleRate, double seconds)
 {
     var segmentCount = Math.Max(1, (int)Math.Ceiling(seconds / MimirBioacousticTimeline.SegmentSeconds));
@@ -971,73 +1221,27 @@ static int RenderBioacousticFloat32(string outputPath, int sampleRate, double se
 
 static IReadOnlyList<BioacousticTrainingHypothesis> BioacousticTrainingHypotheses()
 {
-    var clean = new CepstralDegradationSetting("template-clean", 0.0, 0.0, 0);
-    var blur = new CepstralDegradationSetting("template-blur", 0.0, 0.0, 1);
-    var warp = new CepstralDegradationSetting("template-warp-light", 0.75, 1.25, 0);
-    var warpBlur = new CepstralDegradationSetting("template-warp-blur", 0.75, 1.25, 1);
-    return
-    [
-        new(
-            "baseline-mfcc-index",
-            "Current smoke baseline: four projection tables, 14-bit hashes, light degradation augmentation.",
-            CepstralDecoderOptions.Default),
-        new(
-            "compact-fast-index",
-            "Smaller feature and table shape. It should run faster if identity survives; otherwise it dies with a receipt.",
-            new CepstralDecoderOptions(
-                FftSize: 1024,
-                HopSize: 256,
-                MelBins: 32,
-                CepstralCoefficients: 10,
-                MinFrequencyHz: 300,
-                MaxFrequencyHz: 14_500,
-                TableCount: 3,
-                HashBits: 12,
-                NearHashRadius: 3,
-                DenseStepSeconds: 0.040,
-                ProposalBudgetMultiplier: 6.0,
-                TemplateAugmentations: [clean, blur, warpBlur])),
-        new(
-            "robust-wide-index",
-            "More cepstra and a wider augmentation bank. It pays more CPU for warped-room survival.",
-            new CepstralDecoderOptions(
-                FftSize: 1024,
-                HopSize: 192,
-                MelBins: 48,
-                CepstralCoefficients: 18,
-                MinFrequencyHz: 180,
-                MaxFrequencyHz: 15_500,
-                TableCount: 5,
-                HashBits: 15,
-                NearHashRadius: 4,
-                DenseStepSeconds: 0.030,
-                ProposalBudgetMultiplier: 9.0,
-                TemplateAugmentations:
-                [
-                    clean,
-                    blur,
-                    warp,
-                    warpBlur,
-                    new("template-warp-heavy", 1.25, 1.75, 1)
-                ])),
-        new(
-            "highband-room-index",
-            "Bias toward the measured useful upper speech/birdcall band and away from low room junk.",
-            new CepstralDecoderOptions(
-                FftSize: 1024,
-                HopSize: 256,
-                MelBins: 40,
-                CepstralCoefficients: 14,
-                MinFrequencyHz: 1_200,
-                MaxFrequencyHz: 16_000,
-                TableCount: 4,
-                HashBits: 14,
-                NearHashRadius: 4,
-                DenseStepSeconds: 0.035,
-                ProposalBudgetMultiplier: 8.0,
-                TemplateAugmentations: [clean, blur, warp, warpBlur]))
-    ];
+    return MimirBioacousticDecoderConfiguration.BuiltInProfiles
+        .Select(profile => new BioacousticTrainingHypothesis(
+            profile.Id,
+            profile.Description,
+            CepstralDecoderOptions.FromRuntime(profile)))
+        .ToArray();
 }
+
+static IReadOnlyList<CepstralDegradationSetting> CepstralSmokeDegradationSettings() =>
+[
+    new("clean-roundtrip", CepstralDegradationProfiles.Clean.WarpFrames, CepstralDegradationProfiles.Clean.WarpCoefficients, CepstralDegradationProfiles.Clean.BlurPasses),
+    new("blur-light", CepstralDegradationProfiles.Blur.WarpFrames, CepstralDegradationProfiles.Blur.WarpCoefficients, CepstralDegradationProfiles.Blur.BlurPasses),
+    new("warp-light", CepstralDegradationProfiles.WarpLight.WarpFrames, CepstralDegradationProfiles.WarpLight.WarpCoefficients, CepstralDegradationProfiles.WarpLight.BlurPasses),
+    new("warp-light-blur", CepstralDegradationProfiles.WarpBlur.WarpFrames, CepstralDegradationProfiles.WarpBlur.WarpCoefficients, CepstralDegradationProfiles.WarpBlur.BlurPasses)
+];
+
+static IReadOnlyList<CepstralDegradationSetting> CepstralTrainingDegradationSettings() =>
+[
+    .. CepstralSmokeDegradationSettings(),
+    new("warp-heavy-blur", CepstralDegradationProfiles.WarpHeavy.WarpFrames, CepstralDegradationProfiles.WarpHeavy.WarpCoefficients, CepstralDegradationProfiles.WarpHeavy.BlurPasses)
+];
 
 static MimirChirpBinCalibrationModel? LoadOptionalCalibration(string[] args)
 {
@@ -1623,150 +1827,20 @@ static double MeanCepstralTimingError(
         Math.Abs(observation.SampleOffset - timeline.EventForIndex(observation.EventIndex).StartSeconds * sampleRate));
 }
 
-static BioacousticClockHypothesis? FitBioacousticClockHypothesis(
+static MimirBioacousticClockHypothesis? FitBioacousticClockHypothesis(
     IReadOnlyList<CepstralWordObservation> observations,
     MimirBioacousticTimeline timeline,
-    int sampleRate)
-{
-    var anchors = observations
-        .Select(observation => new BioacousticClockAnchor(
-            observation.EventIndex,
-            timeline.EventForIndex(observation.EventIndex).StartSeconds,
-            observation.SampleOffset,
-            Math.Clamp(observation.Confidence, 0.001, 1.0)))
-        .OrderByDescending(anchor => anchor.Confidence)
-        .Take(24)
-        .ToArray();
-    if (anchors.Length == 0)
-    {
-        return null;
-    }
-
-    var candidates = new List<BioacousticClockHypothesis>();
-    foreach (var anchor in anchors)
-    {
-        var offset = anchor.SampleOffset - anchor.TimelineSeconds * sampleRate;
-        AddClockCandidate(candidates, anchors, sampleRate, offset, sampleRate);
-    }
-
-    if (anchors.Length >= 3)
-    {
-        for (var first = 0; first < anchors.Length; first++)
-        {
-            for (var second = first + 1; second < anchors.Length; second++)
-            {
-                var dt = anchors[second].TimelineSeconds - anchors[first].TimelineSeconds;
-                if (Math.Abs(dt) < 0.08)
-                {
-                    continue;
-                }
-
-                var rate = (anchors[second].SampleOffset - anchors[first].SampleOffset) / dt;
-                if (!double.IsFinite(rate) || rate < sampleRate * 0.98 || rate > sampleRate * 1.02)
-                {
-                    continue;
-                }
-
-                var offset = anchors[first].SampleOffset - anchors[first].TimelineSeconds * rate;
-                AddClockCandidate(candidates, anchors, sampleRate, offset, rate);
-            }
-        }
-    }
-
-    return candidates
-        .OrderByDescending(candidate => candidate.Score)
-        .ThenBy(candidate => candidate.MeanAbsoluteErrorSamples)
-        .FirstOrDefault();
-}
-
-static void AddClockCandidate(
-    List<BioacousticClockHypothesis> candidates,
-    IReadOnlyList<BioacousticClockAnchor> anchors,
-    int nominalSampleRate,
-    double sourceOffsetSamples,
-    double effectiveSampleRate)
-{
-    var tolerance = Math.Max(36.0, nominalSampleRate * 0.012);
-    var inliers = anchors
-        .Where(anchor => Math.Abs(anchor.SampleOffset - (sourceOffsetSamples + anchor.TimelineSeconds * effectiveSampleRate)) <= tolerance)
-        .ToArray();
-    if (inliers.Length == 0)
-    {
-        return;
-    }
-
-    var refined = FitBioacousticClockToInliers(inliers, nominalSampleRate);
-    if (refined != null)
-    {
-        candidates.Add(refined);
-    }
-}
-
-static BioacousticClockHypothesis? FitBioacousticClockToInliers(
-    IReadOnlyList<BioacousticClockAnchor> anchors,
-    int nominalSampleRate)
-{
-    if (anchors.Count == 0)
-    {
-        return null;
-    }
-
-    if (anchors.Count == 1)
-    {
-        var anchor = anchors[0];
-        var offset = anchor.SampleOffset - anchor.TimelineSeconds * nominalSampleRate;
-        var singleAnchorConfidence = anchor.Confidence * 0.20;
-        return new BioacousticClockHypothesis(
-            offset,
-            nominalSampleRate,
-            1,
-            0.0,
-            singleAnchorConfidence,
-            singleAnchorConfidence,
-            anchors.ToArray());
-    }
-
-    var totalWeight = anchors.Sum(anchor => Math.Max(1.0e-6, anchor.Confidence));
-    var meanTimeline = anchors.Sum(anchor => anchor.TimelineSeconds * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
-    var meanSample = anchors.Sum(anchor => anchor.SampleOffset * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
-    var covariance = 0.0;
-    var variance = 0.0;
-    foreach (var anchor in anchors)
-    {
-        var weight = Math.Max(1.0e-6, anchor.Confidence);
-        var dt = anchor.TimelineSeconds - meanTimeline;
-        covariance += weight * dt * (anchor.SampleOffset - meanSample);
-        variance += weight * dt * dt;
-    }
-
-    var effectiveSampleRate = anchors.Count >= 3 && variance > 1.0e-12 ? covariance / variance : nominalSampleRate;
-    if (!double.IsFinite(effectiveSampleRate) ||
-        effectiveSampleRate < nominalSampleRate * 0.98 ||
-        effectiveSampleRate > nominalSampleRate * 1.02)
-    {
-        effectiveSampleRate = nominalSampleRate;
-    }
-
-    var sourceOffset = meanSample - effectiveSampleRate * meanTimeline;
-    var weightedResidual = anchors.Sum(anchor =>
-    {
-        var predicted = sourceOffset + anchor.TimelineSeconds * effectiveSampleRate;
-        return Math.Abs(anchor.SampleOffset - predicted) * Math.Max(1.0e-6, anchor.Confidence);
-    }) / totalWeight;
-    var residualConfidence = 1.0 / (1.0 + weightedResidual / Math.Max(1.0, nominalSampleRate * 0.001));
-    var countConfidence = Math.Clamp(anchors.Count / 5.0, 0.0, 1.0);
-    var anchorConfidence = Math.Clamp(anchors.Average(anchor => anchor.Confidence), 0.0, 1.0);
-    var confidence = residualConfidence * 0.35 + countConfidence * 0.45 + anchorConfidence * 0.20;
-    var score = confidence + Math.Min(anchors.Count, 8) * 0.15 - weightedResidual / Math.Max(1.0, nominalSampleRate * 0.010);
-    return new BioacousticClockHypothesis(
-        sourceOffset,
-        effectiveSampleRate,
-        anchors.Count,
-        weightedResidual,
-        confidence,
-        score,
-        anchors.ToArray());
-}
+    int sampleRate) =>
+    new MimirBioacousticClockSolver().Fit(
+        observations
+            .Select(observation => new MimirBioacousticWordObservation(
+                observation.EventIndex,
+                observation.SampleOffset,
+                observation.Confidence))
+            .ToArray(),
+        timeline,
+        sampleRate,
+        observations.Count);
 
 static double CepstralDistance(IReadOnlyList<double> first, IReadOnlyList<double> second)
 {
@@ -2348,7 +2422,11 @@ internal sealed record CepstralDegradationSetting(
     string Name,
     double WarpFrames,
     double WarpCoefficients,
-    int BlurPasses);
+    int BlurPasses)
+{
+    public static CepstralDegradationSetting FromRuntime(MimirCepstralDegradationProfile profile) =>
+        new(profile.Id, profile.WarpFrames, profile.WarpCoefficients, profile.BlurPasses);
+}
 
 internal sealed record CepstralDecoderOptions(
     int FftSize,
@@ -2364,25 +2442,25 @@ internal sealed record CepstralDecoderOptions(
     double ProposalBudgetMultiplier,
     IReadOnlyList<CepstralDegradationSetting> TemplateAugmentations)
 {
-    public static CepstralDecoderOptions Default { get; } = new(
-        FftSize: 1024,
-        HopSize: 256,
-        MelBins: 40,
-        CepstralCoefficients: 14,
-        MinFrequencyHz: 180.0,
-        MaxFrequencyHz: 15_000.0,
-        TableCount: 4,
-        HashBits: 14,
-        NearHashRadius: 4,
-        DenseStepSeconds: 0.040,
-        ProposalBudgetMultiplier: 8.0,
-        TemplateAugmentations:
-        [
-            new CepstralDegradationSetting("template-clean", 0.0, 0.0, 0),
-            new CepstralDegradationSetting("template-blur", 0.0, 0.0, 1),
-            new CepstralDegradationSetting("template-warp-light", 0.75, 1.25, 0),
-            new CepstralDegradationSetting("template-warp-blur", 0.75, 1.25, 1)
-        ]);
+    public static CepstralDecoderOptions Default { get; } =
+        FromRuntime(MimirBioacousticDecoderConfiguration.BaselineMfccIndex);
+
+    public static CepstralDecoderOptions FromRuntime(MimirBioacousticDecoderConfiguration configuration) =>
+        new(
+            configuration.FftSize,
+            configuration.HopSize,
+            configuration.MelBins,
+            configuration.CepstralCoefficients,
+            configuration.MinFrequencyHz,
+            configuration.MaxFrequencyHz,
+            configuration.ProjectionTableCount,
+            configuration.ProjectionHashBits,
+            configuration.NearHashRadius,
+            configuration.DenseStepSeconds,
+            configuration.ProposalBudgetMultiplier,
+            configuration.TemplateAugmentations
+                .Select(CepstralDegradationSetting.FromRuntime)
+                .ToArray());
 }
 
 internal sealed record BioacousticTrainingHypothesis(
@@ -2404,21 +2482,6 @@ internal sealed record CepstralWordObservation(
     ulong EventIndex,
     double SampleOffset,
     double Confidence);
-
-internal sealed record BioacousticClockAnchor(
-    ulong EventIndex,
-    double TimelineSeconds,
-    double SampleOffset,
-    double Confidence);
-
-internal sealed record BioacousticClockHypothesis(
-    double SourceOffsetSamples,
-    double EffectiveSampleRate,
-    int AnchorCount,
-    double MeanAbsoluteErrorSamples,
-    double Confidence,
-    double Score,
-    IReadOnlyList<BioacousticClockAnchor> Anchors);
 
 internal sealed record CepstralWordIndex(
     IReadOnlyList<CepstralWordTemplate> Templates,

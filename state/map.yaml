@@ -184,6 +184,14 @@ accepted_design:
     Fensalir/Faust integration.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
+  - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
+    library distilled from the research notes: node profiles, decoder/language
+    profiles, path learning, benchmark panels, actuator strategies, capture and
+    ingest strategies, reservoir strategies, field profiles, compute offload,
+    OBS publication, CultMesh contracts, Fensalir lowering, and exportable
+    manifest generation.
+  - `docs/perfect-machine-module-library.md` indexes those reusable runtime
+    modules and their smoke commands.
   - `docs/code-algorithm-map.md` is the source-level ownership and algorithm map
     for the current repo code surface.
   - `docs/perfect-machine-domain-index.md` indexes Mimir's full problem domain,
