@@ -184,6 +184,67 @@ The leaderboard is now split:
   nearly dead. A separate band/rhythm bit did not survive well enough to keep
   in the built-in contestant panel.
 
+### Log-Mel Flux / Log-Mel Leak Receipt
+
+The arena now includes two separate damage domains:
+
+- cepstral warp/blur: the older MFCC-shaped leaky pipeline.
+- log-mel warp/blur: a perceptual-surface leak that bends and blurs the
+  log-mel field before reconstruction through the original STFT phase.
+
+The decoder panel also tested two flux-proposal variants:
+
+- `packet-razor-flux-index`: same packet razor identity surface, but candidate
+  starts come from positive log-mel spectral-flux peaks.
+- `packet-sprint-flux-index`: a wider sprint variant with the same flux proposal
+  owner.
+
+Runs:
+
+```powershell
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-contestants --seconds 0.75 --song canary-packet-trill --decoder packet-razor-index --max-songs 1 --max-decoders 99 --max-degradations 9 --output artifacts/bioacoustic-contestants
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-contestants --seconds 0.75 --song canary-packet-trill --decoder packet-razor-flux-index --max-songs 1 --max-decoders 99 --max-degradations 9 --output artifacts/bioacoustic-contestants
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-contestants --seconds 0.75 --song canary-packet-trill --decoder packet-sprint-flux-index --max-songs 1 --max-decoders 99 --max-degradations 9 --output artifacts/bioacoustic-contestants
+```
+
+Receipts:
+
+- `artifacts/bioacoustic-contestants/contestants-20260524-212432/contestant-summary.json`
+- `artifacts/bioacoustic-contestants/contestants-20260524-212451/contestant-summary.json`
+- `artifacts/bioacoustic-contestants/contestants-20260524-212518/contestant-summary.json`
+
+Best result in this panel:
+
+```text
+song=canary-packet-trill
+decoder=packet-razor-index
+degradation=logmel-warp-light-blur
+language_score=92.522
+realtime=5.7x
+timing=1.000
+frequency=0.939
+payload_bitrate=17.4 bps
+payload_accuracy=0.913
+correct=5/6
+```
+
+Flux-proposal results:
+
+```text
+packet-razor-flux logmel-warp-light      score=43.577 realtime=2.7x payload_bitrate=17.4 bps timing=1.000 frequency=0.925 correct=5/6
+packet-razor-flux clean-roundtrip        score=33.466 realtime=2.2x payload_bitrate=19.0 bps timing=0.862 frequency=0.930 correct=6/6
+packet-sprint-flux logmel-warp-light-blur score=26.761 realtime=2.0x payload_bitrate=14.7 bps timing=1.000 frequency=0.926 correct=5/6
+```
+
+Read: spectral flux is a good biological witness and a plausible proposal
+owner, but the naive managed implementation does not yet win the arena. It
+spends too much time computing log-mel flux separately from the indexed
+fingerprint pass. The shape should not be discarded; it should be fused into
+the existing feature extraction so each STFT frame emits both log-mel/MFCC
+identity and positive-flux onset evidence. Current best transmission through
+the leaky pipeline remains `canary-packet-trill + packet-razor-index`, now at
+`92.522` on log-mel warp/light blur.
+
 ### Obsolete Schedule-Entangled Receipt
 
 The best current receipt is:

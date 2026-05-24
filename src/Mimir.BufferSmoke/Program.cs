@@ -650,7 +650,8 @@ static async Task<int> RunBioacousticTrainingAsync(int sampleRate, double second
                     hypothesis.Decoder.NearHashRadius,
                     hypothesis.Decoder.DenseStepSeconds,
                     hypothesis.Decoder.ProposalBudgetMultiplier,
-                    hypothesis.Decoder.TemplateAugmentations.Select(setting => setting.Name).ToArray()),
+                    hypothesis.Decoder.TemplateAugmentations.Select(setting => setting.Name).ToArray(),
+                    hypothesis.Decoder.ProposalMode.ToString()),
                 [
                     new BioacousticTrainingArtifact("pre-warp-audio", $"{artifactRoot}/pre-warp.wav", Sha256File(preWarpPath)),
                     new BioacousticTrainingArtifact("post-warp-audio", $"{artifactRoot}/post-warp.wav", Sha256File(postWarpPath)),
@@ -1505,26 +1506,54 @@ static int RenderBioacousticFloat32(string outputPath, int sampleRate, double se
 
 static IReadOnlyList<BioacousticTrainingHypothesis> BioacousticTrainingHypotheses()
 {
-    return MimirBioacousticDecoderConfiguration.BuiltInProfiles
+    var baseProfiles = MimirBioacousticDecoderConfiguration.BuiltInProfiles
         .Select(profile => new BioacousticTrainingHypothesis(
             profile.Id,
             profile.Description,
             CepstralDecoderOptions.FromRuntime(profile)))
-        .ToArray();
+        .ToList();
+
+    var razor = CepstralDecoderOptions.FromRuntime(MimirBioacousticDecoderConfiguration.PacketRazorIndex);
+    baseProfiles.Add(new BioacousticTrainingHypothesis(
+        "packet-razor-flux-index",
+        "Packet razor receiver with log-mel spectral-flux proposals so sharp call-shape changes own the candidate budget.",
+        razor with
+        {
+            ProposalMode = CepstralProposalMode.LogMelFlux,
+            ProposalBudgetMultiplier = 1.65,
+            DenseStepSeconds = 0.090
+        }));
+
+    var sprint = CepstralDecoderOptions.FromRuntime(MimirBioacousticDecoderConfiguration.PacketSprintIndex);
+    baseProfiles.Add(new BioacousticTrainingHypothesis(
+        "packet-sprint-flux-index",
+        "Packet sprint receiver with log-mel spectral-flux proposals and a slightly wider budget for damaged paths.",
+        sprint with
+        {
+            ProposalMode = CepstralProposalMode.LogMelFlux,
+            ProposalBudgetMultiplier = 2.30,
+            DenseStepSeconds = 0.080
+        }));
+
+    return baseProfiles.ToArray();
 }
 
 static IReadOnlyList<CepstralDegradationSetting> CepstralSmokeDegradationSettings() =>
 [
-    new("clean-roundtrip", CepstralDegradationProfiles.Clean.WarpFrames, CepstralDegradationProfiles.Clean.WarpCoefficients, CepstralDegradationProfiles.Clean.BlurPasses),
-    new("blur-light", CepstralDegradationProfiles.Blur.WarpFrames, CepstralDegradationProfiles.Blur.WarpCoefficients, CepstralDegradationProfiles.Blur.BlurPasses),
-    new("warp-light", CepstralDegradationProfiles.WarpLight.WarpFrames, CepstralDegradationProfiles.WarpLight.WarpCoefficients, CepstralDegradationProfiles.WarpLight.BlurPasses),
-    new("warp-light-blur", CepstralDegradationProfiles.WarpBlur.WarpFrames, CepstralDegradationProfiles.WarpBlur.WarpCoefficients, CepstralDegradationProfiles.WarpBlur.BlurPasses)
+    new("clean-roundtrip", CepstralDegradationProfiles.Clean.WarpFrames, CepstralDegradationProfiles.Clean.WarpCoefficients, CepstralDegradationProfiles.Clean.BlurPasses, CepstralDegradationDomain.Cepstrum),
+    new("blur-light", CepstralDegradationProfiles.Blur.WarpFrames, CepstralDegradationProfiles.Blur.WarpCoefficients, CepstralDegradationProfiles.Blur.BlurPasses, CepstralDegradationDomain.Cepstrum),
+    new("warp-light", CepstralDegradationProfiles.WarpLight.WarpFrames, CepstralDegradationProfiles.WarpLight.WarpCoefficients, CepstralDegradationProfiles.WarpLight.BlurPasses, CepstralDegradationDomain.Cepstrum),
+    new("warp-light-blur", CepstralDegradationProfiles.WarpBlur.WarpFrames, CepstralDegradationProfiles.WarpBlur.WarpCoefficients, CepstralDegradationProfiles.WarpBlur.BlurPasses, CepstralDegradationDomain.Cepstrum)
 ];
 
 static IReadOnlyList<CepstralDegradationSetting> CepstralTrainingDegradationSettings() =>
 [
     .. CepstralSmokeDegradationSettings(),
-    new("warp-heavy-blur", CepstralDegradationProfiles.WarpHeavy.WarpFrames, CepstralDegradationProfiles.WarpHeavy.WarpCoefficients, CepstralDegradationProfiles.WarpHeavy.BlurPasses)
+    new("warp-heavy-blur", CepstralDegradationProfiles.WarpHeavy.WarpFrames, CepstralDegradationProfiles.WarpHeavy.WarpCoefficients, CepstralDegradationProfiles.WarpHeavy.BlurPasses, CepstralDegradationDomain.Cepstrum),
+    new("logmel-blur-light", CepstralDegradationProfiles.Blur.WarpFrames, CepstralDegradationProfiles.Blur.WarpCoefficients, CepstralDegradationProfiles.Blur.BlurPasses, CepstralDegradationDomain.LogMel),
+    new("logmel-warp-light", CepstralDegradationProfiles.WarpLight.WarpFrames, CepstralDegradationProfiles.WarpLight.WarpCoefficients, CepstralDegradationProfiles.WarpLight.BlurPasses, CepstralDegradationDomain.LogMel),
+    new("logmel-warp-light-blur", CepstralDegradationProfiles.WarpBlur.WarpFrames, CepstralDegradationProfiles.WarpBlur.WarpCoefficients, CepstralDegradationProfiles.WarpBlur.BlurPasses, CepstralDegradationDomain.LogMel),
+    new("logmel-warp-heavy-blur", CepstralDegradationProfiles.WarpHeavy.WarpFrames, CepstralDegradationProfiles.WarpHeavy.WarpCoefficients, CepstralDegradationProfiles.WarpHeavy.BlurPasses, CepstralDegradationDomain.LogMel)
 ];
 
 static MimirChirpBinCalibrationModel? LoadOptionalCalibration(string[] args)
@@ -1790,6 +1819,7 @@ static float[] RoundTripThroughDegradedCepstrum(
         .Select(filter => Math.Max(1.0e-12, filter.Sum()))
         .ToArray();
     var spectra = new Complex[frameCount][];
+    var logMelFrames = new double[frameCount, melBins];
     var cepstra = new double[frameCount, cepstralCoefficients];
     for (var frame = 0; frame < frameCount; frame++)
     {
@@ -1805,6 +1835,11 @@ static float[] RoundTripThroughDegradedCepstrum(
         FastFourierTransform(spectrum, inverse: false);
         spectra[frame] = spectrum;
         var logMel = SpectrumToLogMel(spectrum, melFilters, melNormalizer);
+        for (var mel = 0; mel < melBins; mel++)
+        {
+            logMelFrames[frame, mel] = logMel[mel];
+        }
+
         var cepstrum = Dct(logMel, cepstralCoefficients);
         for (var coefficient = 0; coefficient < cepstralCoefficients; coefficient++)
         {
@@ -1812,7 +1847,9 @@ static float[] RoundTripThroughDegradedCepstrum(
         }
     }
 
-    var warped = WarpCepstrum(cepstra, setting);
+    var warped = setting.Domain == CepstralDegradationDomain.LogMel
+        ? WarpCepstrum(logMelFrames, setting)
+        : WarpCepstrum(cepstra, setting);
     for (var pass = 0; pass < setting.BlurPasses; pass++)
     {
         warped = BlurCepstrum5Tap(warped);
@@ -1822,7 +1859,9 @@ static float[] RoundTripThroughDegradedCepstrum(
     var outputWeight = new double[output.Length];
     for (var frame = 0; frame < frameCount; frame++)
     {
-        var logMel = InverseDct(Row(warped, frame), melBins);
+        var logMel = setting.Domain == CepstralDegradationDomain.LogMel
+            ? Row(warped, frame)
+            : InverseDct(Row(warped, frame), melBins);
         var magnitudes = LogMelToMagnitude(logMel, melFilters, fftSize);
         var spectrum = new Complex[fftSize];
         for (var bin = 0; bin <= fftSize / 2; bin++)
@@ -1941,15 +1980,23 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWordsCore(
 {
     var hopSamples = Math.Max(1, sampleRate / 1_000);
     var energyTrace = WindowEnergy(samples, motifSamples, hopSamples);
-    var threshold = energyTrace.Length == 0
-        ? double.PositiveInfinity
-        : energyTrace.Average(value => (double)value) + Math.Sqrt(energyTrace.Sum(value => Math.Pow(value - energyTrace.Average(), 2.0)) / energyTrace.Length) * 0.10;
-    var proposals = new List<int>();
-    for (var index = 1; index < energyTrace.Length - 1; index++)
+    var proposalTrace = options.ProposalMode == CepstralProposalMode.Energy
+        ? energyTrace
+        : LogMelSpectralFluxTrace(samples, sampleRate, options, hopSamples);
+    if (proposalTrace.Length == 0)
     {
-        if (energyTrace[index] >= threshold &&
-            energyTrace[index] >= energyTrace[index - 1] &&
-            energyTrace[index] >= energyTrace[index + 1])
+        proposalTrace = energyTrace;
+    }
+
+    var threshold = proposalTrace.Length == 0
+        ? double.PositiveInfinity
+        : proposalTrace.Average(value => (double)value) + Math.Sqrt(proposalTrace.Sum(value => Math.Pow(value - proposalTrace.Average(), 2.0)) / proposalTrace.Length) * 0.10;
+    var proposals = new List<int>();
+    for (var index = 1; index < proposalTrace.Length - 1; index++)
+    {
+        if (proposalTrace[index] >= threshold &&
+            proposalTrace[index] >= proposalTrace[index - 1] &&
+            proposalTrace[index] >= proposalTrace[index + 1])
         {
             proposals.Add(index * hopSamples);
         }
@@ -1964,7 +2011,7 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWordsCore(
     var proposalBudget = Math.Max((int)Math.Ceiling(expectedEventCount * options.ProposalBudgetMultiplier), 16);
     var observations = new List<CepstralWordObservation>();
     foreach (var offset in proposals
-                 .OrderByDescending(offset => energyTrace[Math.Clamp(offset / hopSamples, 0, energyTrace.Length - 1)])
+                 .OrderByDescending(offset => proposalTrace[Math.Clamp(offset / hopSamples, 0, proposalTrace.Length - 1)])
                  .Take(proposalBudget)
                  .Order())
     {
@@ -2520,6 +2567,57 @@ static float[] WindowEnergy(float[] samples, int windowSamples, int hopSamples)
     return output;
 }
 
+static float[] LogMelSpectralFluxTrace(
+    float[] samples,
+    int sampleRate,
+    CepstralDecoderOptions options,
+    int outputHopSamples)
+{
+    if (samples.Length < options.FftSize)
+    {
+        return [];
+    }
+
+    var analysisHop = Math.Max(1, Math.Min(options.HopSize, outputHopSamples));
+    var frameCount = 1 + Math.Max(0, (samples.Length - options.FftSize) / analysisHop);
+    var outputLength = 1 + Math.Max(0, (samples.Length - options.FftSize) / outputHopSamples);
+    var output = new float[outputLength];
+    var window = HannWindow(options.FftSize);
+    var melFilters = BuildMelFilterBank(options.MelBins, options.FftSize, sampleRate, options.MinFrequencyHz, options.MaxFrequencyHz);
+    var melNormalizer = melFilters.Select(filter => Math.Max(1.0e-12, filter.Sum())).ToArray();
+    double[]? previous = null;
+    for (var frame = 0; frame < frameCount; frame++)
+    {
+        var offset = frame * analysisHop;
+        var spectrum = new Complex[options.FftSize];
+        for (var index = 0; index < options.FftSize; index++)
+        {
+            var sampleIndex = offset + index;
+            var sample = sampleIndex < samples.Length ? samples[sampleIndex] : 0.0f;
+            spectrum[index] = new Complex(sample * window[index], 0.0);
+        }
+
+        FastFourierTransform(spectrum, inverse: false);
+        var logMel = SpectrumToLogMel(spectrum, melFilters, melNormalizer);
+        if (previous != null)
+        {
+            var sum = 0.0;
+            for (var mel = 0; mel < logMel.Length; mel++)
+            {
+                var delta = Math.Max(0.0, logMel[mel] - previous[mel]);
+                sum += delta * delta;
+            }
+
+            var outputFrame = Math.Clamp(offset / outputHopSamples, 0, output.Length - 1);
+            output[outputFrame] = Math.Max(output[outputFrame], (float)Math.Sqrt(sum / logMel.Length));
+        }
+
+        previous = logMel;
+    }
+
+    return output;
+}
+
 static double[] SpectrumToLogMel(Complex[] spectrum, double[][] melFilters, double[] melNormalizer)
 {
     var magnitudes = new double[spectrum.Length / 2 + 1];
@@ -3021,10 +3119,23 @@ internal sealed record CepstralDegradationSetting(
     string Name,
     double WarpFrames,
     double WarpCoefficients,
-    int BlurPasses)
+    int BlurPasses,
+    CepstralDegradationDomain Domain = CepstralDegradationDomain.Cepstrum)
 {
     public static CepstralDegradationSetting FromRuntime(MimirCepstralDegradationProfile profile) =>
-        new(profile.Id, profile.WarpFrames, profile.WarpCoefficients, profile.BlurPasses);
+        new(profile.Id, profile.WarpFrames, profile.WarpCoefficients, profile.BlurPasses, CepstralDegradationDomain.Cepstrum);
+}
+
+internal enum CepstralDegradationDomain
+{
+    Cepstrum,
+    LogMel
+}
+
+internal enum CepstralProposalMode
+{
+    Energy,
+    LogMelFlux
 }
 
 internal sealed record CepstralDecoderOptions(
@@ -3039,6 +3150,7 @@ internal sealed record CepstralDecoderOptions(
     int NearHashRadius,
     double DenseStepSeconds,
     double ProposalBudgetMultiplier,
+    CepstralProposalMode ProposalMode,
     IReadOnlyList<CepstralDegradationSetting> TemplateAugmentations)
 {
     public static CepstralDecoderOptions Default { get; } =
@@ -3057,6 +3169,7 @@ internal sealed record CepstralDecoderOptions(
             configuration.NearHashRadius,
             configuration.DenseStepSeconds,
             configuration.ProposalBudgetMultiplier,
+            CepstralProposalMode.Energy,
             configuration.TemplateAugmentations
                 .Select(CepstralDegradationSetting.FromRuntime)
                 .ToArray());
@@ -3146,7 +3259,8 @@ public sealed record BioacousticTrainingDecoderSnapshot(
     [property: Key(6)] int NearHashRadius,
     [property: Key(7)] double DenseStepSeconds,
     [property: Key(8)] double ProposalBudgetMultiplier,
-    [property: Key(9)] string[] TemplateAugmentations);
+    [property: Key(9)] string[] TemplateAugmentations,
+    [property: Key(10)] string ProposalMode);
 
 [MessagePackObject]
 public sealed record BioacousticTrainingArtifact(
