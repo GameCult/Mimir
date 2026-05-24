@@ -96,57 +96,47 @@ not become the synchronized program authority.
 ## Audio Field
 
 The six-microphone path is separate from the bridge. Scarlett speaker loopback
-is the current timing authority when calibration chirplets are playing, but
-Scarlett production capture belongs on ASIO rather than WASAPI shared mode.
-`MimirChirpletTimeline` owns the birdsong-like timeline fingerprint: an order-3
-de Bruijn sequence over 32 time/frequency constellation symbols. Start band,
-glide shape, duration, and following inter-chirp gap all carry code. Any three
-consecutive correctly detected symbols identify the event index inside the
-current operating horizon. Mimir continuously queues that timeline through
-Fensalir audio and decodes timing through the constrained chirplet-transform
-path.
+is the current timing authority when active calibration is playing, but Scarlett
+production capture belongs on ASIO rather than WASAPI shared mode.
+`MimirBioacousticTimeline` owns the active runtime watermark described in
+[[docs/bioacoustic-timeline-watermark|Bioacoustic Timeline Watermark]]: a
+low-gain birdsong-like phrase language with 16 log-spaced motif symbols, three
+formant-rich syllables per motif, rhythm variation, and an order-3 de Bruijn
+grammar. Any three consecutive correctly decoded motifs identify the event
+index inside the current operating horizon. Mimir continuously queues that
+timeline through Fensalir audio and decodes timing as `bioacoustic` evidence.
 `MimirAudioSynchronizationSettings.Mode` chooses whether active calibration is
-allowed: `chirp-only` emits the active chirp-bin witness, `passive` stays silent
+allowed: `chirp-only` emits the active bioacoustic witness, `passive` stays silent
 and uses program-audio phase correlation, and `hybrid` uses passive evidence by
 default while emitting active pilot chunks only when passive confidence is weak.
 Active decoding does not inherit the passive two-second analysis floor: passive
-still needs a longer program-audio window, while the chirp-bin witness can decode
-short pilot windows once at least a code-valid triplet is present. The chirp-bin
-detector now uses cheap bounded energy/onset proposals, dechirp plus fixed
-Goertzel bins, explicit time/frequency ambiguity candidates, and a constrained
-scheduled-waveform correlation for standalone source-offset refinement. Pairwise
-sync compares matched anchors first, then only accepts independent clock-fit
-offsets inside the live latency horizon so period aliases do not become absurd
-reports. Each classified chirp carries the full dechirped bin-energy surface,
-and decodes aggregate that into a `MimirChirpBinCalibrationModel` with measured
+still needs a longer program-audio window, while the bioacoustic witness can
+decode once at least a code-valid motif triplet is present. The bioacoustic
+detector now uses generous motif proposals, matched motif scoring, triplet
+grammar decoding, source clock fitting, and fractional waveform refinement.
+Pairwise sync compares matched anchors first, then only accepts independent
+clock-fit offsets inside the live latency horizon so period aliases do not
+become absurd reports. The old chirp-bin detector remains as a
+calibration/reference artifact: it carries the full dechirped bin-energy surface
+and aggregates decodes into a `MimirChirpBinCalibrationModel` with measured
 usable bands, expected-symbol versus observed-bin confusion observations,
 timing residuals, delay hypotheses, phase summaries, and an adaptive codebook
 plan. The analyzer keeps raw profiles even when no timing report is accepted,
-and the active decoder can consume a persisted model for learned response
-weighting, phase-coherence weighting, first-order group-delay correction, and
-joint global delay/bin-shift hypotheses. Runtime chirp-bin emission consumes the
-same model's emission plan, so
-the emitted timeline can use the measured reliable symbol set at a higher
-de Bruijn order instead of continuing to spend code on dead bins. Reports/states
+so physical mic failures can still guide bioacoustic motif weighting. Reports/states
 expose `delayUs` next to fractional sample delay.
-`Mimir.BufferSmoke
---chirp-only-sync-self-test --sample-rate 192000` and `--hybrid-sync-self-test
---sample-rate 192000` both recover a 1269.5-sample synthetic delay with printed
-0.000 us error. `--standalone-chirp-bin-self-test --sample-rate 192000
---delay-samples 96000` proves a receiver with only codebook/schedule state can
-recover a 500 ms delayed stream to below printed microsecond precision.
-Reports now carry fractional delay and per-band matched energy. The first
-`MimirChirpletSymbolCodebook` owns separable symbol definitions; every symbol
-has a unique chirp shape, with rhythm as additional evidence. `MimirChirpletStreamDecoder`
-is the constrained chirplet-transform receiver: it turns a bounded PCM window
-into transform frames with multiple phase-invariant symbol candidates and
-refined per-candidate sample offsets, code-valid triplet anchors selected
-through gap/clock coherence, and an affine source clock fit. The synthetic
-`Mimir.BufferSmoke --chirplet-self-test` path renders canonical timeline audio
-into memory and currently recovers events 0-12 with a 47999.999990 Hz clock fit
-and 0.000014 sample MAE. The analyzer only emits timing reports from
-matched canonical anchors. The hub also owns cached reports plus smoothed
-per-source sync state with delay-slope/SRO in ppm. `MimirRuntime` runs analysis
+`Mimir.BufferSmoke --bioacoustic-self-test` proves code-valid motif anchors.
+`--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`
+proves a receiver with only codebook/schedule state can recover delayed source
+time to below printed microsecond precision. `--chirp-only-sync-self-test
+--sample-rate 48000` recovers a 317.375-sample synthetic delay with printed
+0.000 us error using `evidence=bioacoustic`.
+Reports now carry fractional delay and per-band matched energy. The older
+`MimirChirpletSymbolCodebook` / `MimirChirpletStreamDecoder` path remains a
+diagnostic reference for constrained chirplet-transform work. The active
+receiver is the bioacoustic motif timeline; the analyzer only emits active
+timing reports from matched canonical anchors. The hub also owns cached reports
+plus smoothed per-source sync state with delay-slope/SRO in ppm.
+`MimirRuntime` runs analysis
 online as a bounded rotating service and can print live telemetry with
 `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are passive readers of cached
 sync state; they must not invoke the analyzer. Current app testing proves
@@ -170,9 +160,10 @@ evidence; Starfire still owns the heavy soundfield and sensor-fusion work.
 The ASIO probe can now play raw mono Float32 timeline audio through the
 Focusrite outputs while capturing every ASIO input as raw interleaved Float32.
 `Mimir.BufferSmoke --analyze-asio-f32` feeds those captured channels into the
-same runtime active analyzer. `--calibrate-chirp-bin-asio-f32` computes and
-persists the response/confusion/delay model per output/mic path, and
-`--analyze-asio-f32 --calibration ...` loads it into the active decoder.
+same runtime analyzer. `--calibrate-chirp-bin-asio-f32` computes and persists
+the response/confusion/delay model per output/mic path, and
+`--analyze-asio-f32 --calibration ...` loads it into the chirp-bin reference
+decoder.
 `native/asio_capture` and `MimirAsioStreamSource` are now the runtime Scarlett
 path: Focusrite ASIO callbacks feed sample-bearing 192 kHz Float32 blocks into
 `Mimir.Runtime` in process, without the diagnostic JSON/stdout bridge. The

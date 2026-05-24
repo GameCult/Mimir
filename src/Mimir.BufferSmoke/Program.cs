@@ -11,6 +11,18 @@ if (args.Any(arg => string.Equals(arg, "--chirp-bin-self-test", StringComparison
     return RunChirpBinSelfTest();
 }
 
+if (args.Any(arg => string.Equals(arg, "--bioacoustic-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunBioacousticSelfTest(ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate));
+}
+
+if (args.Any(arg => string.Equals(arg, "--standalone-bioacoustic-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunStandaloneBioacousticSelfTest(
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseDoubleOption(args, "--delay-samples", 1269.5));
+}
+
 if (args.Any(arg => string.Equals(arg, "--standalone-chirp-bin-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunStandaloneChirpBinSelfTest(
@@ -48,6 +60,14 @@ if (args.Any(arg => string.Equals(arg, "--render-chirp-bin-f32", StringCompariso
         ParseIntOption(args, "--sample-rate", MimirChirpBinTimeline.SampleRate),
         ParseDoubleOption(args, "--seconds", 3.0),
         LoadOptionalCalibration(args)?.EmissionPlan);
+}
+
+if (args.Any(arg => string.Equals(arg, "--render-bioacoustic-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return RenderBioacousticFloat32(
+        ParseStringOption(args, "--output", "artifacts/asio/bioacoustic-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseDoubleOption(args, "--seconds", 3.0));
 }
 
 if (args.Any(arg => string.Equals(arg, "--analyze-asio-f32", StringComparison.OrdinalIgnoreCase)))
@@ -316,6 +336,81 @@ static int RunStandaloneChirpBinSelfTest(int sampleRate, double delaySamples)
     return 0;
 }
 
+static int RunBioacousticSelfTest(int sampleRate)
+{
+    var timeline = MimirBioacousticTimeline.Default;
+    var samples = new List<float>();
+    for (ulong segment = 0; segment < 6; segment++)
+    {
+        samples.AddRange(timeline.RenderSegmentMonoFloat(segment, sampleRate));
+    }
+
+    var decode = timeline.DecodeStreamWindow(samples.ToArray(), sampleRate);
+    var meanAbsoluteError = decode.ClockFit?.MeanAbsoluteErrorSamples ?? double.PositiveInfinity;
+    Console.WriteLine(
+        $"bioacoustic-self-test frames={decode.Frames.Count} symbols={decode.Symbols.Count} anchors={decode.Anchors.Count} " +
+        $"clock={(decode.ClockFit is null ? "none" : decode.ClockFit.EffectiveSampleRate.ToString("0.000000"))} " +
+        $"confidence={(decode.ClockFit?.Confidence ?? 0.0):0.000} mae={meanAbsoluteError:0.000000}");
+    Console.WriteLine("bioacoustic-expected " + string.Join(",", Enumerable.Range(0, 12).Select(index => timeline.EventForIndex((ulong)index).SymbolId)));
+    Console.WriteLine("bioacoustic-symbols " + string.Join(",", decode.Symbols.Take(12).Select(symbol => $"{symbol.SymbolId}@{symbol.SampleOffset:0}:{symbol.Energy:0.000}")));
+
+    foreach (var anchor in decode.Anchors.Take(16))
+    {
+        var expected = timeline.EventForIndex(anchor.EventIndex).StartSeconds * sampleRate;
+        Console.WriteLine(
+            $"bioacoustic-anchor event={anchor.EventIndex} actual={anchor.SampleOffset:0.000} expected={expected:0.000} " +
+            $"error={anchor.SampleOffset - expected:0.000} confidence={anchor.Confidence:0.000}");
+    }
+
+    if (decode.ClockFit == null || decode.Anchors.Count < 12 || meanAbsoluteError > 12.0)
+    {
+        Console.Error.WriteLine("bioacoustic self-test failed: log-motif decoder did not recover stable timeline anchors");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int RunStandaloneBioacousticSelfTest(int sampleRate, double delaySamples)
+{
+    var timeline = MimirBioacousticTimeline.Default;
+    var samples = new List<float>();
+    for (ulong segment = 0; segment < 8; segment++)
+    {
+        samples.AddRange(timeline.RenderSegmentMonoFloat(segment, sampleRate));
+    }
+
+    var delayed = ApplyFractionalDelay(samples.ToArray(), delaySamples);
+    var decode = timeline.DecodeStreamWindow(delayed, sampleRate);
+    var expectedDelay = delaySamples;
+    var actualDelay = decode.ClockFit?.SourceOffsetSamples ?? double.NaN;
+    var error = Math.Abs(actualDelay - expectedDelay);
+    Console.WriteLine(
+        $"standalone-bioacoustic-self-test frames={decode.Frames.Count} anchors={decode.Anchors.Count} " +
+        $"clock={(decode.ClockFit is null ? "none" : decode.ClockFit.EffectiveSampleRate.ToString("0.000000"))} " +
+        $"sourceOffset={actualDelay:0.000000} expected={expectedDelay:0.000000} errorSamples={error:0.000000} " +
+        $"errorUs={error * 1_000_000.0 / sampleRate:0.000} confidence={(decode.ClockFit?.Confidence ?? 0.0):0.000}");
+
+    foreach (var anchor in decode.Anchors.Take(16))
+    {
+        var expected = timeline.EventForIndex(anchor.EventIndex).StartSeconds * sampleRate + expectedDelay;
+        Console.WriteLine(
+            $"standalone-bioacoustic-anchor event={anchor.EventIndex} actual={anchor.SampleOffset:0.000} expected={expected:0.000} " +
+            $"error={anchor.SampleOffset - expected:0.000} confidence={anchor.Confidence:0.000}");
+    }
+
+    if (decode.ClockFit == null ||
+        decode.Anchors.Count < 12 ||
+        decode.ClockFit.Confidence < 0.60 ||
+        error * 1_000_000.0 / sampleRate > 1.0)
+    {
+        Console.Error.WriteLine("standalone bioacoustic self-test failed: receiver did not recover canonical source time from delayed audio alone");
+        return 1;
+    }
+
+    return 0;
+}
+
 static int RunPassiveSyncSelfTest()
 {
     const int sampleRate = 48_000;
@@ -374,13 +469,18 @@ static int RunActiveSyncSelfTest(int sampleRate, MimirAudioSyncMode mode)
 {
     const string referenceSourceId = "loopback-test";
     const string candidateSourceId = "mic-test";
-    var delaySamples = 317.375 * sampleRate / (double)MimirChirpBinTimeline.SampleRate;
+    var delaySamples = 317.375 * sampleRate / (double)MimirBioacousticTimeline.SampleRate;
 
-    var firstSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(0, sampleRate);
-    var secondSegment = MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(1, sampleRate);
-    var reference = new float[firstSegment.Length + secondSegment.Length];
-    Array.Copy(firstSegment, 0, reference, 0, firstSegment.Length);
-    Array.Copy(secondSegment, 0, reference, firstSegment.Length, secondSegment.Length);
+    var segments = Enumerable.Range(0, 4)
+        .Select(segment => MimirBioacousticTimeline.Default.RenderSegmentMonoFloat((ulong)segment, sampleRate))
+        .ToArray();
+    var reference = new float[segments.Sum(segment => segment.Length)];
+    var writeOffset = 0;
+    foreach (var segment in segments)
+    {
+        Array.Copy(segment, 0, reference, writeOffset, segment.Length);
+        writeOffset += segment.Length;
+    }
     var candidate = ApplyFractionalDelay(reference, delaySamples);
 
     var referenceBuffer = new MimirRollingStreamBuffer(
@@ -404,14 +504,23 @@ static int RunActiveSyncSelfTest(int sampleRate, MimirAudioSyncMode mode)
 
     if (report == null)
     {
-        Console.Error.WriteLine($"{SyncModeLabel(mode)} sync self-test failed: analyzer did not report from a short chirp-bin window");
+        Console.Error.WriteLine($"{SyncModeLabel(mode)} sync self-test failed: analyzer did not report from a short bioacoustic window");
         return 1;
     }
 
     var error = Math.Abs(report.FractionalDelaySamples - delaySamples);
     Console.WriteLine(
         $"{SyncModeLabel(mode)}-sync-self-test evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} expected={delaySamples:0.000000} errorSamples={error:0.000000} errorUs={error * 1_000_000.0 / report.SampleRate:0.000} confidence={report.Confidence:0.000} events={report.TimelineMatchedEvents} compared={report.ComparedSamples}");
-    return string.Equals(report.EvidenceKind, "chirp-bin", StringComparison.Ordinal) &&
+    if (mode == MimirAudioSyncMode.Hybrid &&
+        string.Equals(report.EvidenceKind, "passive", StringComparison.Ordinal))
+    {
+        return report.Confidence > 0.50 &&
+            error * 1_000_000.0 / report.SampleRate < 5.0
+                ? 0
+                : 1;
+    }
+
+    return string.Equals(report.EvidenceKind, "bioacoustic", StringComparison.Ordinal) &&
         report.TimelineMatchedEvents >= 3 &&
         report.Confidence > 0.70 &&
         error * 1_000_000.0 / report.SampleRate < 1.0
@@ -489,6 +598,38 @@ static int RenderChirpBinFloat32(
 
     File.WriteAllBytes(outputPath, bytes);
     Console.WriteLine($"chirp-bin-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count} adaptiveSymbols={codebookPlan?.ReliableSymbolIds.Count ?? MimirChirpBinTimeline.SymbolCount} order={codebookPlan?.RecommendedOrder ?? MimirChirpBinTimeline.TimelineOrder}");
+    return 0;
+}
+
+static int RenderBioacousticFloat32(string outputPath, int sampleRate, double seconds)
+{
+    var segmentCount = Math.Max(1, (int)Math.Ceiling(seconds / MimirBioacousticTimeline.SegmentSeconds));
+    var samples = new List<float>(Math.Max(1, (int)Math.Ceiling(seconds * sampleRate)));
+    for (var segment = 0; segment < segmentCount; segment++)
+    {
+        samples.AddRange(MimirBioacousticTimeline.Default.RenderSegmentMonoFloat((ulong)segment, sampleRate));
+    }
+
+    var requestedSamples = Math.Max(1, (int)Math.Round(seconds * sampleRate));
+    if (samples.Count > requestedSamples)
+    {
+        samples.RemoveRange(requestedSamples, samples.Count - requestedSamples);
+    }
+
+    var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+    if (!string.IsNullOrEmpty(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+
+    var bytes = new byte[samples.Count * sizeof(float)];
+    for (var index = 0; index < samples.Count; index++)
+    {
+        BitConverter.TryWriteBytes(bytes.AsSpan(index * sizeof(float), sizeof(float)), samples[index]);
+    }
+
+    File.WriteAllBytes(outputPath, bytes);
+    Console.WriteLine($"bioacoustic-render-f32 path={outputPath} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Count} symbols={MimirBioacousticTimeline.SymbolCount} order={MimirBioacousticTimeline.TimelineOrder}");
     return 0;
 }
 

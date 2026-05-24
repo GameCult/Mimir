@@ -71,50 +71,38 @@ Get-Content .\state\evidence.jsonl -Tail 8
   640x480@60, and 81.10 fps when the PS3 Eye runs 320x240@187. The regular
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
 - Current active sync smoke uses Scarlett speaker loopback as timing
-  authority. `MimirChirpletTimeline` owns the structured birdsong-like timeline
-  fingerprint: an order-3 de Bruijn sequence over 32 time/frequency
-  constellation symbols. Start band, glide shape, duration, and following
-  inter-chirp gap all carry code, so any three consecutive correctly detected
-  symbols identify the event index inside the current operating horizon. The
-  timeline owns Fensalir PCM segment rendering, transform-frame decoding,
-  triplet anchor decoding, and per-band response hooks. Sync reports now include
+  authority. `MimirBioacousticTimeline` now owns the active runtime watermark:
+  low-gain birdsong-like motifs with log-spaced roots, formant-rich syllables,
+  rhythm variation, and an order-3 de Bruijn phrase grammar. Any three
+  consecutive correctly decoded motifs identify the event index inside the
+  current operating horizon. Runtime active sync reports
+  `evidence=bioacoustic`; [[docs/bioacoustic-timeline-watermark|Bioacoustic
+  Timeline Watermark]] is the current map. Sync reports now include
   fractional delay and per-band matched energy. `MimirAudioSynchronizationState`
-  now tracks smoothed delay and delay-slope/SRO ppm. `MimirChirpletSymbolCodebook`
-  owns separable symbol definitions, and `MimirChirpletStreamDecoder` is the
-  constrained chirplet-transform receiver: it emits transform frames with
-  multiple phase-invariant symbol candidates and refined per-candidate sample
-  offsets, selects code-valid triplet anchors through gap/clock coherence, and
-  fits a source clock from a bounded PCM window. The canonical synthetic check is
-  `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirplet-self-test`;
-  it currently detects all 15 emitted chirps and recovers 13 anchors for events
-  0-12 with a 47999.999990 Hz clock fit and 0.000014 sample MAE. `MimirRuntime` runs sync analysis as a bounded rotating
+  now tracks smoothed delay and delay-slope/SRO ppm. The older
+  `MimirChirpletSymbolCodebook` / `MimirChirpletStreamDecoder` path remains a
+  diagnostic reference for constrained chirplet-transform work; it is not the
+  active runtime witness. `MimirRuntime` runs sync analysis as a bounded rotating
   service and caches reports/states for UI and telemetry; readouts must stay
   passive. Audio sync mode is runtime-owned: `chirp-only` emits the active
-  chirp-bin witness continuously, `passive` disables emission and uses
+  bioacoustic witness continuously, `passive` disables emission and uses
   program-audio phase correlation, and `hybrid` emits active pilot chunks only
-  when passive confidence is weak. The active chirp-bin path now has its own
+  when passive confidence is weak. The active bioacoustic path has its own
   short-window analyzer floor instead of inheriting the passive two-second gate.
-  It uses cheap energy/onset proposals, dechirp plus fixed Goertzel bins,
-  explicit time/frequency ambiguity candidates, and constrained local waveform
+  It uses energy/onset proposals, dense fallback probes, bounded motif matching,
+  de Bruijn triplet anchoring, clock fit, and constrained local waveform
   correlation for final fractional delay. It also supports standalone source
   offset recovery from schedule/codebook state, which is the Raven/phone shape.
-  Each classified chirp carries the full dechirped bin-energy surface; sync
-  reports expose those bands, and `MimirChirpBinCalibrationModel` preserves
-  measured usable bands, response/confusion observations, timing residuals,
-  delay hypotheses, phase summaries, and adaptive codebook plans per
-  output/mic path. The active decoder can load the model for learned weighting,
-  phase-coherence weighting, first-order group-delay correction, and joint
-  global delay/bin-shift hypotheses. Runtime chirp-bin emission
-  loads the same model's emission plan, so a physical calibration can shrink the
-  emitted alphabet and raise sequence order instead of continuing to use dead
-  bins.
-  `Mimir.BufferSmoke
-  --chirp-only-sync-self-test --sample-rate 192000` and
-  `--hybrid-sync-self-test --sample-rate 192000` both recover a 1269.5-sample
-  synthetic delay with printed 0.000 us error. Reports and sync states expose
-  `delayUs`. `--standalone-chirp-bin-self-test --sample-rate 192000
-  --delay-samples 96000` recovers a 500 ms delayed stream below printed
-  microsecond precision without loopback.
+  Each classified motif carries per-band response evidence. The older
+  `MimirChirpBinCalibrationModel` remains the controlled chirp-bin
+  response/confusion/delay reference surface; use it to inform bioacoustic motif
+  weighting, not as the runtime sound.
+  `Mimir.BufferSmoke --bioacoustic-self-test` proves code-valid motif anchors.
+  `--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples
+  1269.5` recovers delayed canonical time below printed microsecond precision
+  without loopback. `--chirp-only-sync-self-test --sample-rate 48000` recovers a
+  317.375-sample synthetic delay with printed 0.000 us error using
+  `evidence=bioacoustic`. Reports and sync states expose `delayUs`.
   Actual
   Mimir.App testing proves Fensalir audio can wake Scarlett
   loopback, keep mic buffers live, and produce confident online passive sync

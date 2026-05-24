@@ -8,6 +8,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
     private const double MinPassiveWindowSeconds = 2.0;
     private const double MinChirpletWindowSeconds = 2.0;
     private const double MinChirpBinWindowSeconds = 0.40;
+    private const double MinBioacousticWindowSeconds = 0.50;
     private const double MaxPairClockFitDelaySeconds = 10.0;
     private const double PassiveReportConfidence = 0.08;
     private readonly List<MimirAudioSynchronizationDecodeTrace> lastDecodeTraces = [];
@@ -150,9 +151,9 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 }
             }
 
-            var useChirpBinTimeline = mode is MimirAudioSyncMode.ChirpOnly or MimirAudioSyncMode.Hybrid;
-            var activeMinSeconds = useChirpBinTimeline
-                ? MinChirpBinWindowSeconds
+            var useBioacousticTimeline = mode is MimirAudioSyncMode.ChirpOnly or MimirAudioSyncMode.Hybrid;
+            var activeMinSeconds = useBioacousticTimeline
+                ? MinBioacousticWindowSeconds
                 : MinChirpletWindowSeconds;
             var minActiveSamples = MinWindowSamples(activeReferenceBlock.SampleRate, activeMinSeconds);
             if (compared < minActiveSamples)
@@ -162,25 +163,23 @@ public sealed class MimirAudioSynchronizationAnalyzer
                     buffer.Descriptor.SourceId,
                     activeReferenceBlock.SampleRate,
                     compared,
-                    useChirpBinTimeline
-                        ? "chirp-bin-insufficient-window"
+                    useBioacousticTimeline
+                        ? "bioacoustic-insufficient-window"
                         : "chirplet-insufficient-window"));
                 continue;
             }
 
-            var comparedReferenceDecode = useChirpBinTimeline
-                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(
+            var comparedReferenceDecode = useBioacousticTimeline
+                ? MimirBioacousticTimeline.Default.DecodeStreamWindow(
                     referenceWindow,
-                    activeReferenceBlock.SampleRate,
-                    calibrationModel?.PathFor(reference.Descriptor.SourceId))
+                    activeReferenceBlock.SampleRate)
                 : MimirChirpletTimeline.Default.DecodeStreamWindow(referenceWindow, activeReferenceBlock.SampleRate);
-            var candidateDecode = useChirpBinTimeline
-                ? MimirChirpBinTimeline.Default.DecodeStreamWindow(
+            var candidateDecode = useBioacousticTimeline
+                ? MimirBioacousticTimeline.Default.DecodeStreamWindow(
                     candidateWindow,
-                    activeReferenceBlock.SampleRate,
-                    calibrationModel?.PathFor(buffer.Descriptor.SourceId))
+                    activeReferenceBlock.SampleRate)
                 : MimirChirpletTimeline.Default.DecodeStreamWindow(candidateWindow, activeReferenceBlock.SampleRate);
-            if (useChirpBinTimeline)
+            if (useBioacousticTimeline)
             {
                 StoreCalibrationProfile(reference.Descriptor.SourceId, activeReferenceBlock.SampleRate, comparedReferenceDecode);
                 StoreCalibrationProfile(buffer.Descriptor.SourceId, activeReferenceBlock.SampleRate, candidateDecode);
@@ -208,10 +207,10 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 continue;
             }
 
-            var decodedDelaySamples = useChirpBinTimeline
+            var decodedDelaySamples = useBioacousticTimeline
                 ? RefineDelayFromWaveform(referenceWindow, candidateWindow, deterministicFit.DelaySamples, activeReferenceBlock.SampleRate)
                 : deterministicFit.DelaySamples;
-            var bandResponses = useChirpBinTimeline
+            var bandResponses = useBioacousticTimeline
                 ? candidateDecode.BandResponses
                 : MimirChirpletTimeline.Default.EstimateBandResponse(candidateWindow, activeReferenceBlock.SampleRate);
             reports.Add(new MimirAudioSynchronizationReport(
@@ -229,7 +228,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 buffer.Latest?.Sequence ?? 0,
                 deterministicFit.MatchedEvents,
                 deterministicFit.Confidence,
-                useChirpBinTimeline ? "chirp-bin" : "chirplet"));
+                useBioacousticTimeline ? "bioacoustic" : "chirplet"));
         }
 
         return reports;
@@ -314,6 +313,16 @@ public sealed class MimirAudioSynchronizationAnalyzer
             var residualConfidence = 1.0 / (1.0 + error / 32.0);
             var countConfidence = Math.Clamp(matched.Count / 12.0, 0.0, 1.0);
             var energyConfidence = Math.Clamp(totalWeight / matched.Count, 0.0, 1.0);
+            if (reference.ClockFit.Confidence >= 0.75 && candidate.ClockFit.Confidence >= 0.75)
+            {
+                var matchedClockDelay = candidate.ClockFit.SourceOffsetSamples - reference.ClockFit.SourceOffsetSamples;
+                if (Math.Abs(matchedClockDelay - delay) <= reference.ClockFit.EffectiveSampleRate * 0.004)
+                {
+                    var clockConfidence = Math.Sqrt(reference.ClockFit.Confidence * candidate.ClockFit.Confidence);
+                    return (matchedClockDelay, residualConfidence * 0.35 + countConfidence * 0.20 + energyConfidence * 0.20 + clockConfidence * 0.25, matched.Count);
+                }
+            }
+
             return (delay, residualConfidence * 0.50 + countConfidence * 0.25 + energyConfidence * 0.25, matched.Count);
         }
 
@@ -374,21 +383,25 @@ public sealed class MimirAudioSynchronizationAnalyzer
             }
         }
 
-        if (bestLag <= firstLag || bestLag >= lastLag)
+        var bestFractionalLag = (double)bestLag;
+        var bestFractionalScore = bestScore;
+        for (var step = -8; step <= 8; step++)
         {
-            return bestLag;
+            var lag = bestLag + step / 8.0;
+            if (lag < firstLag || lag > lastLag)
+            {
+                continue;
+            }
+
+            var score = NormalizedFractionalLagScore(reference, candidate, lag);
+            if (score > bestFractionalScore)
+            {
+                bestFractionalScore = score;
+                bestFractionalLag = lag;
+            }
         }
 
-        var left = NormalizedLagScore(reference, candidate, bestLag - 1);
-        var middle = NormalizedLagScore(reference, candidate, bestLag);
-        var right = NormalizedLagScore(reference, candidate, bestLag + 1);
-        var denominator = left - 2.0 * middle + right;
-        if (Math.Abs(denominator) <= 1.0e-12)
-        {
-            return bestLag;
-        }
-
-        return bestLag + Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+        return bestFractionalLag;
     }
 
     private static double NormalizedLagScore(ReadOnlySpan<float> reference, ReadOnlySpan<float> candidate, int lag)
@@ -406,6 +419,34 @@ public sealed class MimirAudioSynchronizationAnalyzer
         {
             var referenceSample = reference[index];
             var candidateSample = candidate[index + lag];
+            dot += referenceSample * candidateSample;
+            referenceEnergy += referenceSample * referenceSample;
+            candidateEnergy += candidateSample * candidateSample;
+        }
+
+        return referenceEnergy <= 1.0e-12 || candidateEnergy <= 1.0e-12
+            ? double.NegativeInfinity
+            : dot / Math.Sqrt(referenceEnergy * candidateEnergy);
+    }
+
+    private static double NormalizedFractionalLagScore(ReadOnlySpan<float> reference, ReadOnlySpan<float> candidate, double lag)
+    {
+        var leftLag = (int)Math.Floor(lag);
+        var fraction = lag - leftLag;
+        var count = Math.Min(reference.Length, candidate.Length - leftLag - 1);
+        if (count <= 0)
+        {
+            return double.NegativeInfinity;
+        }
+
+        var dot = 0.0;
+        var referenceEnergy = 0.0;
+        var candidateEnergy = 0.0;
+        for (var index = 0; index < count; index++)
+        {
+            var referenceSample = reference[index];
+            var candidateSample = candidate[index + leftLag] +
+                (candidate[index + leftLag + 1] - candidate[index + leftLag]) * fraction;
             dot += referenceSample * candidateSample;
             referenceEnergy += referenceSample * referenceSample;
             candidateEnergy += candidateSample * candidateSample;

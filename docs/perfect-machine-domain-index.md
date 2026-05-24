@@ -209,7 +209,10 @@ Six optical sensors with high-rate Eyes and Leap IR mean:
   and report authority.
 - `src/Mimir.Runtime/Synchronization/MimirAudioSynchronizationAnalyzer.cs`:
   buffer-to-report analyzer.
-- `src/Mimir.Runtime/Synchronization/MimirChirpBinTimeline.cs`: active decoder.
+- `src/Mimir.Runtime/Synchronization/MimirBioacousticTimeline.cs`: active
+  bioacoustic watermark and motif decoder.
+- `src/Mimir.Runtime/Synchronization/MimirChirpBinTimeline.cs`: controlled
+  chirp-bin calibration/reference decoder.
 - `src/Mimir.Runtime/Synchronization/MimirChirpBinCalibrationModel.cs`:
   response/confusion/delay model.
 - `native/asio_capture/mimir_asio_capture.cpp`: runtime ASIO bridge.

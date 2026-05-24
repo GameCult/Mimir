@@ -44,11 +44,11 @@ a named invariant that the native runtime cannot protect yet.
   rolling buffers on one interface clock domain.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
-  empty declared sensor buffer should fail the run. Use `--chirplet-self-test`
-  to render the canonical timeline into memory and verify that the constrained
-  decoder recovers sub-frame anchors without hardware. Use
-  `--standalone-chirp-bin-self-test` to verify that a receiver with only the
-  codebook/schedule can recover canonical source offset from delayed audio.
+  empty declared sensor buffer should fail the run. Use `--bioacoustic-self-test`
+  to render the active motif timeline into memory and verify that the decoder
+  recovers code-valid anchors. Use `--standalone-bioacoustic-self-test` to
+  verify that a receiver with only the codebook/schedule can recover canonical
+  source offset from delayed audio.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
   block metadata and emits `audio-block` JSON events for the diagnostic runtime
   adapter. It can probe requested shared/exclusive formats so driver state is
@@ -63,13 +63,15 @@ a named invariant that the native runtime cannot protect yet.
   response per frequency so ultrasonic acoustic claims stay measured. The probe
   can also play raw mono Float32 timeline audio with `--play-f32-mono` and
   capture raw interleaved Float32 ASIO input with `--record-f32-interleaved`.
-- `MimirChirpletTimeline` owns the structured birdsong-like calibration stream,
+- `MimirBioacousticTimeline` owns the active runtime watermark described in
+  [[bioacoustic-timeline-watermark|Bioacoustic Timeline Watermark]]. It renders
+  a low-gain birdsong-like phrase language: 16 log-spaced motif symbols, three
+  formant-rich syllables per motif, rhythm variation, and an order-3 de Bruijn
+  grammar so any three correctly decoded consecutive motifs identify canonical
+  timeline position. Runtime active sync now reports `evidence=bioacoustic`.
+- `MimirChirpletTimeline` owns the older structured chirplet calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
-  The default timeline is an order-3 de Bruijn symbol sequence over 32
-  time/frequency constellation symbols, so any three consecutive correctly
-  detected symbols identify a timeline event inside the current operating
-  horizon. Symbol identity is carried by start band, glide shape, duration, and
-  following inter-chirp gap.
+  It remains a reference/diagnostic path.
 - `MimirChirpletSymbolCodebook` owns the 32 symbol definitions. Each symbol has
   a unique chirp shape, with inter-chirp rhythm as additional code evidence.
 - `MimirChirpletStreamDecoder` is the first constrained chirplet-transform
@@ -90,7 +92,7 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis.
-- `MimirRuntime` queues chirplet timeline PCM through Fensalir audio when the
+- `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
   emission, chirp-only emits the active witness continuously, and hybrid emits
@@ -99,10 +101,10 @@ a named invariant that the native runtime cannot protect yet.
   path. It estimates loopback-to-mic delay with PHAT-weighted cross-spectrum
   correlation so music can act as the default timing witness before any audible
   watermark is needed.
-- `MimirChirpBinTimeline` is the active calibration path for both `chirp-only`
-  and `hybrid`. It renders a fixed-slope chirp-bin codebook and decodes symbols
-  with cheap event-energy proposals, dechirp plus fixed Goertzel bins, and the
-  same de Bruijn triplet timeline-anchor machine. The detector keeps
+- `MimirChirpBinTimeline` is the old chirp-bin calibration path. It renders a
+  fixed-slope chirp-bin codebook and decodes symbols with cheap event-energy
+  proposals, dechirp plus fixed Goertzel bins, and the same de Bruijn triplet
+  timeline-anchor machine. The detector keeps
   time/frequency ambiguity as candidate symbol/offset pairs so code constraints
   can choose the coherent path. The analyzer refines the final fractional delay
   with constrained local waveform correlation around the decoded active delay.
@@ -111,26 +113,28 @@ a named invariant that the native runtime cannot protect yet.
   response normalization. `MimirChirpBinCalibrationModel` now preserves usable
   bands, expected-symbol versus observed-bin confusion observations, timing
   residuals, delay hypotheses, phase summaries, and an adaptive codebook plan.
-  The active decoder can consume that model as learned response weighting,
+  The reference decoder can consume that model as learned response weighting,
   phase-coherence weighting, first-order group-delay correction, and joint
   global delay/bin-shift hypotheses. The
   runtime emitter also consumes the model's emission plan, rendering the smaller
   reliable symbol alphabet at the higher recommended de Bruijn order when the
   physical path cannot support all 32 bins.
   Reports/states expose delay in microseconds as well as fractional samples.
-  Hybrid emits this as low-gain half-second bursts every two seconds only while
-  passive confidence is weak.
-  Use `--chirp-bin-self-test` to prove the codebook/decoder and
-  `--hybrid-sync-self-test` to prove that the analyzer can recover a fractional
-  delay from a one-second rolling-buffer chirp-bin window. The current synthetic
-  microsecond proof recovers a 317.375-sample delay with 0.369 us error.
+  Hybrid now emits the bioacoustic watermark as low-gain half-second bursts only
+  while passive confidence is weak; chirp-bin remains available for ASIO
+  calibration/replay commands.
+  Use `--bioacoustic-self-test` and `--standalone-bioacoustic-self-test` to
+  prove the active motif decoder. Use `--chirp-only-sync-self-test` to prove
+  that the analyzer can recover fractional delay from the bioacoustic runtime
+  watermark. The current synthetic active proof recovers a 317.375-sample delay
+  with printed 0.000 us error.
 - `Mimir.BufferSmoke --render-chirp-bin-f32` and `--analyze-asio-f32` provide
-  the current active Scarlett artifact proof. A 192 kHz chirp-bin run decoded
+  the retained Scarlett calibration artifact proof. A 192 kHz chirp-bin run decoded
   Focusrite `Loopback 1 -> Loopback 2` at `0.000 us` with 12 matched anchors and
   0.999 confidence. `--calibrate-chirp-bin-asio-f32` can render/capture/analyze
   a calibration session and persist the response/confusion/delay model under
   `calibration/chirp-bin/`. `--analyze-asio-f32 --calibration ...` loads that
-  model into the active decoder. Physical input 1 still failed pairwise timing
+  model into the chirp-bin reference decoder. Physical input 1 still failed pairwise timing
   in the stored artifact, but it produced a useful response/confusion model
   with two reliable symbols. Acoustic robustness remains separate from the clean
   loopback timing proof, but failed timing windows now leave usable response
@@ -144,9 +148,9 @@ a named invariant that the native runtime cannot protect yet.
   transport. BufferSmoke does not
   emit speaker calibration audio, so that proof is ingest-only rather than a
   sync report.
-  A standalone 192 kHz synthetic receiver test recovers a 500 ms delayed audio
-  stream to below printed microsecond precision using only the chirp-bin
-  codebook and schedule state.
+  The active bioacoustic standalone receiver test recovers a delayed audio
+  stream to below printed microsecond precision using only the motif codebook
+  and schedule state.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -178,16 +182,16 @@ a named invariant that the native runtime cannot protect yet.
    other cameras.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Use chirp-bin calibration profiles from real microphones to tune acoustic
-   bands, gain, and code spacing without weakening the standalone
-   codebook/schedule receiver invariant.
+3. Use bioacoustic motif response profiles from real microphones to tune
+   contour, formant, band, gain, and rhythm weighting without weakening the
+   standalone codebook/schedule receiver invariant. Keep chirp-bin calibration
+   artifacts as reference data, not the runtime target.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
-   `MimirAudioSynchronizationState`. First, prove the constrained chirplet
-   decoder through real loopback and microphone paths so every correctly heard
-   triplet becomes a deterministic timeline anchor before the actuator moves
-   samples.
-5. Prove the chirp-bin hybrid fallback through real loopback and microphones
+   `MimirAudioSynchronizationState`. First, prove the bioacoustic motif decoder
+   through real loopback and microphone paths so every correctly heard triplet
+   becomes a deterministic timeline anchor before the actuator moves samples.
+5. Prove the bioacoustic hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
 6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.

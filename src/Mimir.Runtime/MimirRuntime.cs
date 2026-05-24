@@ -181,7 +181,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             calibrationSegmentIndex = currentSegmentIndex;
         }
 
-        var nextSegmentSeconds = CalibrationStartSeconds + calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
+        var nextSegmentSeconds = CalibrationStartSeconds + calibrationSegmentIndex * MimirBioacousticTimeline.SegmentSeconds;
         if (runtimeSeconds < nextSegmentSeconds)
         {
             return;
@@ -192,16 +192,14 @@ public sealed class MimirRuntime : IAquariumRuntime
         var batch = RenderCalibrationBatchPcm16Base64(
             calibrationSegmentIndex,
             segmentCount,
-            UseChirpBinTimeline(audioSyncSettings.Mode),
-            synchronization.ChirpBinEmissionPlan,
             out var peak);
         audio.EnqueuePcm16Base64(
             batch,
-            MimirChirpletTimeline.SampleRate,
+            MimirBioacousticTimeline.SampleRate,
             channels: 1,
             gain: outputGain);
         Console.WriteLine(
-            $"mimir-chirplet-batch mode={DescribeAudioSyncMode()} firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirChirpletTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={outputGain:0.###} base64Bytes={batch.Length}");
+            $"mimir-bioacoustic-batch mode={DescribeAudioSyncMode()} firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirBioacousticTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={outputGain:0.###} base64Bytes={batch.Length}");
         if (audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid)
         {
             lastHybridWatermarkSegment = (long)calibrationSegmentIndex;
@@ -219,7 +217,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             return 0UL;
         }
 
-        return (ulong)Math.Floor((runtimeSeconds - CalibrationStartSeconds) / MimirChirpletTimeline.SegmentSeconds);
+        return (ulong)Math.Floor((runtimeSeconds - CalibrationStartSeconds) / MimirBioacousticTimeline.SegmentSeconds);
     }
 
     private string DescribeChirpletReference()
@@ -229,26 +227,24 @@ public sealed class MimirRuntime : IAquariumRuntime
             return $"{audioSyncSettings.ReferenceSourceId} passive mode; calibration emission disabled";
         }
 
-        var emittedUntilSeconds = calibrationSegmentIndex * MimirChirpletTimeline.SegmentSeconds;
-        return $"{audioSyncSettings.ReferenceSourceId} {DescribeAudioSyncMode()} timeline {MimirChirpletTimeline.SegmentSeconds:0.00}s segments emitted to {emittedUntilSeconds:0.00}s passiveConfidence={lastPassiveSynchronizationConfidence:0.000}";
+        var emittedUntilSeconds = calibrationSegmentIndex * MimirBioacousticTimeline.SegmentSeconds;
+        return $"{audioSyncSettings.ReferenceSourceId} {DescribeAudioSyncMode()} bioacoustic timeline {MimirBioacousticTimeline.SegmentSeconds:0.00}s segments emitted to {emittedUntilSeconds:0.00}s passiveConfidence={lastPassiveSynchronizationConfidence:0.000}";
     }
 
     private static string RenderCalibrationBatchPcm16Base64(
         ulong firstSegment,
         int segmentCount,
-        bool useChirpBinTimeline,
-        MimirChirpBinCodebookPlan? chirpBinCodebookPlan,
         out float peak)
     {
-        var samplesPerSegment = (int)Math.Round(MimirChirpletTimeline.SegmentSeconds * MimirChirpletTimeline.SampleRate);
+        var samplesPerSegment = (int)Math.Round(MimirBioacousticTimeline.SegmentSeconds * MimirBioacousticTimeline.SampleRate);
         var bytes = new byte[samplesPerSegment * Math.Max(1, segmentCount) * sizeof(short)];
         var byteIndex = 0;
         peak = 0.0f;
         for (var segment = 0; segment < segmentCount; segment++)
         {
-            var samples = useChirpBinTimeline
-                ? MimirChirpBinTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment, MimirChirpBinTimeline.SampleRate, chirpBinCodebookPlan)
-                : MimirChirpletTimeline.Default.RenderSegmentMonoFloat(firstSegment + (ulong)segment);
+            var samples = MimirBioacousticTimeline.Default.RenderSegmentMonoFloat(
+                firstSegment + (ulong)segment,
+                MimirBioacousticTimeline.SampleRate);
             for (var index = 0; index < samples.Length; index++)
             {
                 peak = Math.Max(peak, Math.Abs(samples[index]));
@@ -259,11 +255,6 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         return Convert.ToBase64String(bytes);
-    }
-
-    private static bool UseChirpBinTimeline(MimirAudioSyncMode mode)
-    {
-        return mode is MimirAudioSyncMode.ChirpOnly or MimirAudioSyncMode.Hybrid;
     }
 
     private string DescribeBuffers()

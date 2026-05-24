@@ -31,13 +31,13 @@ buffers, resamples candidates to the reference rate, and chooses evidence by
 mode:
 
 - `passive`: PHAT-weighted cross-spectrum correlation on program audio.
-- `chirp-only`: active chirp-bin timeline decode.
-- `hybrid`: passive first, chirp-bin watermark when passive confidence is weak.
+- `chirp-only`: active bioacoustic motif timeline decode.
+- `hybrid`: passive first, bioacoustic watermark when passive confidence is weak.
 
-Active chirp-bin decode uses known codebook/schedule state. It proposes event
-times from local energy, classifies symbols by dechirp plus fixed Goertzel/bin
-scoring, constrains candidates through de Bruijn code-valid triplets, fits a
-clock, and records band/confusion/delay/phase evidence for calibration.
+Active bioacoustic decode uses known codebook/schedule state. It proposes motif
+times from local energy, classifies log-frequency/formant symbols by bounded
+matched motif scoring, constrains candidates through de Bruijn code-valid
+triplets, fits a clock, and records band response evidence for calibration.
 
 ## Invariants
 
@@ -67,10 +67,11 @@ flowchart TD
     Sources["IMimirStreamSource implementations"] --> Hub
     Hub --> Buffers["MimirStreamBufferSet"]
     Buffers --> Rolling["MimirRollingStreamBuffer per stream"]
-    Runtime --> AudioEmit["chirp-bin/chirplet witness emission"]
+    Runtime --> AudioEmit["bioacoustic witness emission"]
     Runtime --> Analyzer["MimirAudioSynchronizationAnalyzer"]
     Analyzer --> Passive["MimirPassiveAudioSynchronizationEstimator"]
-    Analyzer --> ChirpBin["MimirChirpBinTimeline"]
+    Analyzer --> Bioacoustic["MimirBioacousticTimeline"]
+    Analyzer --> ChirpBin["MimirChirpBinTimeline reference path"]
     ChirpBin --> Calibration["MimirChirpBinCalibrationModel"]
     Analyzer --> State["MimirAudioSynchronizationStateTracker"]
     NativeAsio["native/asio_capture"] --> AsioSource["MimirAsioStreamSource"]
@@ -240,7 +241,8 @@ Blocks:
 - `DescribeChirpletReference`: explains current active/passive emission state.
 - `RenderCalibrationBatchPcm16Base64`: renders chirp-bin or legacy chirplet
   timeline segments as mono PCM16 and base64-encodes them for Fensalir audio.
-- `UseChirpBinTimeline`: routes chirp-only and hybrid to the chirp-bin machine.
+- Active witness routing: chirp-only and hybrid emission now use the
+  bioacoustic motif timeline.
 - `UpdateAudioSynchronization`: runs one bounded analyzer step on cadence and
   stores cached reports.
 - `EmitTelemetry`: prints buffer, report, state, and decode-trace lines when
@@ -769,7 +771,7 @@ Blocks:
 - Constants: active/passive window floors, maximum clock-fit delay horizon,
   passive confidence floor.
 - `Analyze`: finds reference/candidate audio buffers, extracts mono windows,
-  aligns common edge, resamples to reference rate, chooses passive/chirp-bin/
+  aligns common edge, resamples to reference rate, chooses passive/bioacoustic/
   legacy chirplet mode, stores calibration profiles, estimates delay from
   decoded anchors or passive correlation, refines active delay with local
   waveform correlation, and returns accepted reports.
@@ -798,13 +800,51 @@ Invariant:
 - A source without enough accepted evidence does not get a fake delay. Failed
   timing can still leave useful calibration evidence.
 
-## Stage 8: Chirp-Bin Active Timeline
+## Stage 8: Bioacoustic Active Timeline
+
+### `MimirBioacousticTimeline.cs`
+
+Owns:
+
+- The active runtime watermark and receiver.
+
+Core state:
+
+- Sixteen log-spaced motif symbols.
+- Three short formant-rich syllables per motif.
+- A de Bruijn order-three schedule, so any valid motif triplet identifies one
+  canonical timeline location.
+- Cached kernels by sample rate.
+
+Blocks:
+
+- Motif/syllable records: `MimirBioacousticMotifDefinition` and
+  `MimirBioacousticSyllable`.
+- `RenderSegmentMonoFloat`: renders one low-gain timeline segment.
+- `DecodeStreamWindow`: detects motif frames, decodes code-valid triplet
+  anchors, fits source clock, refines standalone source offset, and emits the
+  shared `MimirChirpletStreamDecode` shape.
+- `EventForIndex` / `EventsOverlapping`: expose canonical schedule metadata.
+- `DetectFrames`: proposes energy/onset windows, adds dense fallback probes, and
+  suppresses nearby duplicate motif hits.
+- `ClassifyAt`: scores a local candidate against the motif bank.
+- `ScoreMotif`: matched motif scoring with per-band response evidence.
+- `DecodeAnchors`: maps detected motif triplets back to canonical event indexes.
+- `FitClock` and `RefineSourceOffset`: recover source timeline position and
+  sub-frame offset from known codebook/schedule state.
+
+Invariant:
+
+- A receiver with only the codebook, schedule, and its local audio buffer can
+  recover canonical time once it hears a code-valid motif triplet.
+
+## Stage 9: Chirp-Bin Reference Timeline
 
 ### `MimirChirpBinTimeline.cs`
 
 Owns:
 
-- The current active timing/calibration codebook and receiver.
+- The controlled chirp-bin calibration/reference codebook and receiver.
 
 Core state:
 
@@ -938,7 +978,7 @@ Blocks:
 
 Status:
 
-- Diagnostic/reference. The chirp-bin path is the hot active receiver.
+- Diagnostic/reference. The bioacoustic motif path is the hot active receiver.
 
 ### `MimirChirpletTimeline.cs`
 
@@ -1030,12 +1070,18 @@ Function blocks:
 - `RunChirpBinSelfTest`: chirp-bin codebook/schedule synthetic proof.
 - `RunStandaloneChirpBinSelfTest`: delayed receiver proof with only codebook
   and schedule state.
+- `RunBioacousticSelfTest`: bioacoustic motif codebook/schedule synthetic
+  proof.
+- `RunStandaloneBioacousticSelfTest`: delayed receiver proof for the active
+  bioacoustic witness.
 - `RunPassiveSyncSelfTest`: PHAT passive proof.
 - `RunHybridSyncSelfTest`: hybrid mode proof.
 - `RunActiveSyncSelfTest`: chirp-only/hybrid rolling-buffer analyzer proof.
 - `SyncModeLabel`: CLI label helper.
 - `RenderChirpletFloat32`: writes legacy timeline Float32 samples.
 - `RenderChirpBinFloat32`: writes chirp-bin timeline Float32 samples.
+- `RenderBioacousticFloat32`: writes active bioacoustic timeline Float32
+  samples.
 - `LoadOptionalCalibration`: loads model from CLI path.
 - `AnalyzeAsioFloat32`: reads interleaved ASIO artifact and feeds runtime
   analyzer.
@@ -1432,9 +1478,9 @@ Linked notes:
 
 Hypotheses:
 
-- Treat chirp-bin active sync like a controlled acoustic CSS modem: dechirp to
-  collapse a chirp into a narrow spectral decision, then let code constraints
-  and clock-fit consistency carry identity.
+- Treat bioacoustic active sync like a compact acoustic language: log-frequency
+  motif identity, formant structure, rhythm, code constraints, and clock-fit
+  consistency carry timeline identity together.
 - Keep passive sync as a separate evidence source. GCC-PHAT-like correlation is
   useful for program audio and drift hints, but it should not mint codebook
   anchors.

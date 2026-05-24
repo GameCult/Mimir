@@ -64,9 +64,15 @@ accepted_design:
     JSON-line video frame and audio block metadata from native probes into
     runtime rolling buffers; it does not carry pixels/audio payloads or own the
     final local-device hot path.
+  - `MimirBioacousticTimeline` is the active runtime watermark. It renders a
+    low-gain birdsong-like phrase language with 16 log-spaced motif symbols,
+    three formant-rich syllables per motif, rhythm variation, and an order-3
+    de Bruijn grammar. `MimirAudioSynchronizationAnalyzer` now reports active
+    timing as `evidence=bioacoustic`; the old chirp-bin path remains a
+    calibration/reference artifact with ASIO tooling.
   - The diagnostic audio path can optionally carry base64 float sample payloads
-    for sync smoke tests. `MimirChirpletTimeline` owns the structured
-    birdsong-like timeline fingerprint: an order-3 de Bruijn sequence over 32
+    for sync smoke tests. `MimirChirpletTimeline` owns the older structured
+    chirplet reference fingerprint: an order-3 de Bruijn sequence over 32
     time/frequency constellation symbols, plus PCM segment rendering, matched
     timing atoms, symbol/event decoding, and per-band response kernels. Symbol
     identity is carried by start band, glide shape, duration, and following
@@ -78,7 +84,7 @@ accepted_design:
     transform frames with multiple phase-invariant symbol candidates and refined
     per-candidate sample offsets, decodes code-valid triplet anchors through
     gap/clock coherence, and fits a per-source sample clock from those anchors.
-    The canonical synthetic smoke path is `dotnet run --project
+    Its synthetic smoke path is `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirplet-self-test`.
     It currently decodes all 15 emitted chirps in a two-second window into 13
     anchors for events 0-12 with a 47999.999990 Hz clock fit and 0.000014 sample
@@ -102,38 +108,31 @@ accepted_design:
     windows before any watermark is needed. Negative passive lags are
     contradictory evidence and carry zero confidence; single-window passive
     confidence is capped below certainty until repeated state earns it.
-    `MimirChirpBinTimeline` is the active calibration path for both chirp-only
-    and hybrid: one fixed chirp slope/window, 32 widened symbol frequency bins,
-    cheap bounded energy/onset proposals, dechirp plus fixed Goertzel bin
-    classification, explicit time/frequency ambiguity candidates, then the
-    existing de Bruijn triplet anchor and clock-fit machine. The analyzer refines
-    final active delay with constrained local waveform correlation around the
-    decoded anchor delay. Each classified chirp carries the full dechirped
-    bin-energy surface, and decodes aggregate that into per-band response
-    evidence for frequency-response normalization. `MimirChirpBinCalibrationModel`
-    now preserves measured usable bands, expected-symbol versus observed-bin
-    confusion observations, timing residuals, delay hypotheses, phase summaries,
-    and an adaptive codebook plan per output/mic path. The active decoder can
-    consume a persisted model for learned response weighting, phase-coherence
-    weighting, first-order group-delay correction, and joint global
-    delay/bin-shift hypotheses. Runtime chirp-bin emission consumes the
-    same model's emission plan, so Mimir can render the measured reliable symbol
-    alphabet at a higher de Bruijn order instead of spending code on dead bins.
-    The analyzer keeps calibration profiles
-    even when a source fails pairwise timing, so physical mic failures can still
-    guide acoustic codebook and response-weighting work. Reports and sync states expose
-    delay in microseconds as well as fractional samples. Hybrid emits it as low-gain half-second
-    bursts every two seconds while passive confidence is weak, never as catch-up
-    backlog. The analyzer no longer applies the passive two-second window floor
-    to active fallback; `dotnet run --project
-    .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-only-sync-self-test --sample-rate 192000`
-    and `--hybrid-sync-self-test --sample-rate 192000` both recover a
-    1269.5-sample synthetic delay with printed 0.000 us error. The synthetic
-    standalone receiver proof `--standalone-chirp-bin-self-test --sample-rate
-    192000 --delay-samples 96000` recovers a 500 ms delayed stream below printed
+    `MimirBioacousticTimeline` is now the active calibration witness for both
+    chirp-only and hybrid: 16 log-spaced motif symbols, three formant-rich
+    syllables per motif, rhythm variation, and an order-3 de Bruijn grammar so
+    any correctly decoded consecutive triplet identifies one canonical timeline
+    location. The analyzer refines final active delay with constrained local
+    waveform correlation around the decoded anchor delay. Each detected motif
+    carries per-band response evidence, and the next calibration cut should use
+    those profiles to tune contours, formants, usable bands, gain, and rhythm
+    weighting. `MimirChirpBinTimeline` remains the controlled chirp-bin
+    calibration/reference artifact with ASIO tooling and
+    `MimirChirpBinCalibrationModel`; keep those captures as response evidence,
+    not the active runtime sound. Reports and sync states expose delay in
+    microseconds as well as fractional samples. Hybrid emits the bioacoustic
+    witness as low-gain half-second bursts while passive confidence is weak,
+    never as catch-up backlog. The analyzer no longer applies the passive
+    two-second window floor to active fallback; `dotnet run --project
+    .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-only-sync-self-test --sample-rate 48000`
+    recovers a 317.375-sample synthetic delay with printed 0.000 us error using
+    `evidence=bioacoustic`, while `--hybrid-sync-self-test --sample-rate 48000`
+    correctly accepts strong passive evidence at 2.772 us error. The synthetic
+    standalone receiver proof `--standalone-bioacoustic-self-test --sample-rate
+    48000 --delay-samples 1269.5` recovers delayed source time below printed
     microsecond precision using only the codebook/schedule. The synthetic
-    codebook proof remains `dotnet run --project
-    .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`.
+    codebook proof is `dotnet run --project
+    .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`.
     `Mimir.BufferSmoke --render-chirp-bin-f32` plus
     `native/probes/asio_audio_cadence --play-f32-mono --record-f32-interleaved`
     now provides a real Scarlett ASIO artifact proof for active mode. At 192 kHz,
@@ -141,7 +140,7 @@ accepted_design:
     confidence. `Mimir.BufferSmoke --calibrate-chirp-bin-asio-f32` now renders
     or ingests a calibration capture and persists the response/confusion/delay
     model under `calibration/chirp-bin/`; `--analyze-asio-f32 --calibration`
-    loads it back into the active decoder. Physical inputs still fail accepted
+    loads it back into the chirp-bin reference decoder. Physical inputs still fail accepted
     pairwise timing against loopback in the stored artifact, but decoded mic
     channels now leave calibration models; physical input 1 produced two reliable
     symbols and a different strongest measured band set.
@@ -270,23 +269,23 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Use the new study index to cut the next implementation in this order:
-    streaming calibration-weighted chirp-bin decoder state, calibration-session
-    command/replay proof, fractional-delay/SRO actuator, then native camera
-    payload handles and Fensalir lowering. Use chirp-bin calibration models from
-    real microphones to tune the active codebook/bands/weighting, then add the
-    synchronization actuator.
+    Use the new bioacoustic timeline watermark as the active acoustic sync
+    direction. Cut the next implementation in this order: streaming log-mel
+    motif decoder state, calibration-session command/replay proof that learns
+    per-output/mic motif/formant response, fractional-delay/SRO actuator, then
+    native camera payload handles and Fensalir lowering. Keep chirp-bin
+    calibration captures as reference evidence, not the runtime target.
     Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
-    a bounded rotating service without UI/telemetry re-entry, and the continuous
-    chirplet timeline can produce confident sync states in the app. The next
-    invariant is code-valid triplets producing stable canonical anchors and clock
-    fits, so the actuator can use decoded time instead of filtered lag guesses.
-    Replace
-    the remaining diagnostic JSON-line process bridges with direct native capture drivers that push buffer handles into
-    Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports
+    a bounded rotating service without UI/telemetry re-entry, and the bioacoustic
+    motif timeline produces deterministic synthetic active sync. The next
+    invariant is code-valid motif triplets producing stable canonical anchors and
+    clock fits through real loopback and microphones, so the actuator can use
+    decoded time instead of filtered lag guesses. Replace the remaining
+    diagnostic JSON-line process bridges with direct native capture drivers that
+    push buffer handles into Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports
     for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
-    calibration chirplets are playing. Treat PS3 Eye audio as
+    calibration witnesses are playing. Treat PS3 Eye audio as
     enumeration/runtime-fragile, not unavailable. Keep the Focusrite away from
     the Leap USB neighborhood. The Scarlett Solo 4th Gen is now attached to
     Starfire, and `native/probes/asio_audio_cadence` proves local Focusrite USB

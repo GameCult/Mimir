@@ -68,34 +68,41 @@ certainty; full confidence belongs to repeated coherent state over time, not
 one attractive correlation peak.
 
 The active calibration path is deliberately receiver-cheap in both `chirp-only`
-and `hybrid`. `MimirChirpBinTimeline` uses a common chirp duration, chirp slope,
-and window for every symbol. Acquisition is a cheap bounded energy/onset pass;
-classification is dechirp plus a fixed Goertzel bin bank; timeline placement is
-the de Bruijn triplet trellis. A constrained local waveform correlation around
-the decoded anchor delay provides the final fractional offset. The decoder keeps
-the full bin-energy surface for each classified chirp and aggregates it into
-per-band response evidence, so the same stream can calibrate timing and the
-speaker/room/mic transfer function. `MimirChirpBinCalibrationModel` is the live
-surface for that evidence. It stores measured usable bands per source,
-expected-symbol versus observed-bin confusion observations, timing residuals,
-delay hypotheses, phase summaries, and an adaptive codebook plan per
-output/mic path. The raw profile is kept even when a timing report is rejected,
-because a failed sync window can still teach us which bands survived the
-speaker/room/mic path. The decoder can consume the persisted model to weight
-reliable symbols, downweight dead bands, apply phase-coherence weighting,
-apply first-order group-delay correction, and search joint global delay/bin-shift
-hypotheses before selecting the coherent anchor path. The model also owns the
-active emission plan: if the measured path only leaves a smaller alphabet, Mimir
-emits that reliable symbol set and raises the de Bruijn order so the timeline
-remains unique without pretending the dead bins still carry code.
+and `hybrid`. `MimirBioacousticTimeline` is the live runtime witness: it emits
+low-gain log-frequency motifs made from short formant-rich syllables, rhythm
+offsets, and a de Bruijn triplet grammar. Acquisition is an energy proposal pass
+plus bounded motif matching; timeline placement is the same code-valid triplet
+trellis, and a constrained local waveform correlation around the decoded delay
+provides the final fractional offset. The decoder keeps per-band response
+evidence for each detected motif so the same stream can calibrate timing and the
+speaker/room/mic transfer function.
+
+`MimirChirpBinTimeline` remains as the older controlled calibration/reference
+artifact. Its full bin-energy surface and `MimirChirpBinCalibrationModel` still
+matter for measured usable bands, expected-symbol versus observed-bin confusion,
+timing residuals, delay hypotheses, phase summaries, and adaptive codebook
+plans. That evidence is allowed to shape the bioacoustic receiver next; it is
+not the active runtime sound.
+
+The raw profile is kept even when a timing report is rejected, because a failed
+sync window can still teach us which bands survived the speaker/room/mic path.
+The receiver must consume persisted models to weight reliable symbols,
+downweight dead bands, apply phase-coherence weighting, apply first-order
+group-delay correction, and search joint global delay/frequency-shift hypotheses
+before selecting the coherent anchor path. If the measured path only leaves a
+smaller alphabet, Mimir should use that reliable symbol set and raise the
+sequence order so the timeline remains unique without pretending dead bands
+still carry code.
 The synthetic invariant is
-`dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-bin-self-test`;
-it renders the chirp-bin timeline, decodes by dechirp plus Goertzel bins, and
-requires code-valid triplet anchors plus a stable source clock. `chirp-only`
-emits this witness continuously; `hybrid` emits one low-gain half-second coded
-burst every two seconds only while passive confidence is weak. Default hybrid
-watermark gain is intentionally low (`watermarkGain`, or `MIMIR_WATERMARK_GAIN`)
-and separate from the louder chirp-only lab gain.
+`dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`;
+it renders the bioacoustic timeline, decodes motif anchors, and requires
+code-valid triplets plus a stable source clock. The standalone invariant is
+`--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`;
+it proves that a delayed receiver can recover canonical source time from the
+known codebook and schedule alone. `chirp-only` emits this witness continuously;
+`hybrid` still prefers passive program-audio evidence, then emits the low-gain
+bioacoustic witness only when passive confidence is weak. Default hybrid
+watermark gain is intentionally low (`watermarkGain`, or `MIMIR_WATERMARK_GAIN`).
 
 Research notes:
 
@@ -148,35 +155,34 @@ current studio-monitor-to-Scarlett-mic acoustic path was already weak by
 14-16 kHz and very weak above 20 kHz. Treat ultrasonic acoustic sync as
 unproven until a measured transducer/mic path earns it.
 
-The synthetic chirp-bin timing proof now runs at arbitrary sample rates with
-`--hybrid-sync-self-test --sample-rate N`. On the same physical delay, measured
-in memory, the active chirp-bin path recovered about 0.369 us error at 48 kHz,
-0.168 us at 96 kHz, and below printed microsecond precision at 192 kHz. That
-proves the timing kernel benefits from the Scarlett ASIO rate. The live ingest
+The active bioacoustic timing proof now runs in memory through the same runtime
+analyzer path. `--bioacoustic-self-test` proves code-valid motif anchors,
+`--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`
+proves a receiver can recover canonical source time from delayed audio alone,
+and `--chirp-only-sync-self-test --sample-rate 48000` recovers a 317.375-sample
+delay with printed 0.000 us error using `evidence=bioacoustic`. The live ingest
 proof now feeds ASIO callbacks into `Mimir.Runtime` without a process/stdout
 bridge: a two-second BufferSmoke run at 192 kHz ingested more than 12,000
 sample-bearing blocks and retained 2,048 blocks per channel across `asio-ch0`
 through `asio-ch3`.
 
 The full probe runtime config now enables sample-bearing blocks for every local
-audio source. `MimirChirpletTimeline` owns the emitted calibration stream and
-the matched-filter shape used to analyze it. The default timeline is a
-deterministic order-3 de Bruijn symbol sequence over 32 chirp symbols. Any three
-consecutive correctly detected symbols identify the event index inside the
-current operating horizon, so a receiver can place its audio window on the
+audio source. `MimirBioacousticTimeline` owns the emitted calibration stream and
+the motif-matching shape used to analyze it. The default timeline is a
+deterministic order-3 de Bruijn symbol sequence over 16 log-frequency motifs.
+Any three consecutive correctly detected motifs identify the event index inside
+the current operating horizon, so a receiver can place its audio window on the
 canonical timeline without being handed Mimir's runtime clock. Mimir queues
-half-second PCM segments ahead of the audio cursor. Each symbol is a small
-time/frequency constellation: start band, glide direction/range, duration, and
-the following inter-chirp gap all carry code. The point is not ornament. The
-timing code is carried by both frequency and rhythm, so it behaves more like a
-quiet birdsong texture than a repeated sweep.
+half-second PCM segments ahead of the audio cursor. Each motif is a short phrase
+of formant-rich syllables with log-frequency contour and rhythm offsets, so the
+code is carried by both spectral shape and timing.
 
-The intended decoder is a constrained chirplet transform, not a generic
+The intended decoder is a compact constrained motif transform, not a generic
 time-frequency explorer and not an outlier filter around bad guesses. Mimir owns
-the emitter, so the receiver projects each mic stream against the known chirplet
+the emitter, so the receiver projects each mic stream against the known motif
 dictionary, produces transform frames with multiple symbol candidates, and
 scores candidate triplets through the de Bruijn map. A triplet only becomes a
-canonical timeline anchor when its symbol likelihoods, measured inter-chirp
+canonical timeline anchor when its symbol likelihoods, measured inter-motif
 gaps, and neighboring anchors agree on one local sample clock. A decoded anchor
 means observed sample offset `S` corresponds to emitted event time `T`. A stream
 of anchors fits the source clock directly:
@@ -192,16 +198,13 @@ produce at least three matched canonical anchors, it has not decoded timing for
 that window. Reports carry rounded integer delay, fractional delay, and the
 count/confidence of timeline-symbol anchors used to derive the report.
 
-The same timeline also starts the frequency-response path. Each active chirp-bin
-decode can emit a persisted calibration model for the source set, whether or
-not each source earns a timing report. That model is not a finished room/mic
-normalizer yet, but it is the live surface that will become response-curve
-estimation: loopback carries what was emitted, each mic carries what survived
-speaker, air, room, and capsule, and the ratio over the continuous timeline
-becomes gain/phase correction evidence. Use
-`Mimir.BufferSmoke --calibrate-chirp-bin-asio-f32` to render the calibration
+The same timeline starts the frequency-response path. Each active bioacoustic
+decode carries per-band response evidence for the source set, whether or not
+each source earns a timing report. The older chirp-bin calibration model remains
+the controlled ASIO reference surface for response/confusion/delay captures:
+use `Mimir.BufferSmoke --calibrate-chirp-bin-asio-f32` to render that reference
 timeline, optionally capture it through the ASIO worker with `--capture-asio`,
-compute the response/confusion/delay model, and persist it for runtime decode.
+compute the response/confusion/delay model, and persist it for decoder tuning.
 
 `MimirAudioSynchronizationStateTracker` turns continuous observations into
 state. It confidence-gates reports, smooths fractional delay per source, and
@@ -211,13 +214,12 @@ not a license to run blind: loopback must keep receiving the emitted timeline or
 fresh reports will stop.
 
 The actual Mimir app path now runs this online: `MimirRuntime.Update` keeps the
-chirplet timeline queued, polls sources, and updates sync analysis on a fixed cadence.
+bioacoustic timeline queued, polls sources, and updates sync analysis on a fixed cadence.
 `MIMIR_SYNC_TELEMETRY_SECONDS` enables console telemetry for live tests. Current
 runtime testing proves Fensalir output wakes the Scarlett loopback and the mic
-buffers stay live. The decoder now uses quadrature chirplet atoms so symbol
-classification is phase-invariant at the transform layer. The next failure is
-physical capture proof: the same canonical anchors need to stay stable through
-loopback, room mics, device clocks, and codec/network paths.
+buffers stay live. The next failure is physical capture proof: the same
+canonical motif anchors need to stay stable through loopback, room mics, device
+clocks, and codec/network paths.
 
 ## Chirplet Calibration Model
 
