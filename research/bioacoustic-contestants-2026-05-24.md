@@ -109,6 +109,22 @@ overvalue sparse perfection.
 
 ## Packet Contest Receipts
 
+## Spectral Receipts
+
+The current canary packet has rendered spectral witnesses under
+`artifacts/spectra/canary-packet-192847/`:
+
+- `source-spectrogram-linear.png`: linear-frequency view.
+- `source-spectrogram-log.png`: log-frequency view, closer to the perceptual
+  shape we keep talking about.
+- `source-spectral-peaks.csv`: per-frame peak bins for quick inspection.
+
+The log spectrogram shows the actual packet anatomy: hard vertical onset gaps,
+two lower timing chips, then payload-colored formant ladders. The early peak CSV
+shows the first anchor band climbing around `2.67-3.12 kHz` between `0.040s`
+and `0.070s`, which is exactly the kind of explicit spectral witness the harness
+should have been producing from the beginning.
+
 ### Current Honest Payload Receipt
 
 Run:
