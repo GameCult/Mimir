@@ -6,7 +6,7 @@ This pass moves the harness from "one current song, many decoder knobs" toward
 actual contestants: different generated birdcall word shapes fight against the
 same indexed cepstral decoder family and the same cepstral warp/blur damage.
 
-The score is intentionally brutal:
+The original score was intentionally brutal:
 
 ```text
 performance = sqrt(clamp(realtime / 50x, 0..1) * convergence)
@@ -29,6 +29,42 @@ score       = performance * anchor
 - `thrush-ladder`: repeated interval ladder with a shifted reply.
 - `thornbill-zigzag`: high-band fast zig-zag syllables.
 - `nightingale-cascade`: dense pretty cascade; not yet in the fast receipt.
+- `aquasynth-formant-weaver`: AquaSynth-shaped formant/FM word with payload
+  ornaments.
+- `canary-packet-trill`: six-syllable packet call with hard timing chips and
+  payload-colored formant notes.
+- `finch-burst-packet`: shorter five-syllable boundary candidate. Useful as a
+  speed/blur failure witness, not the current recommendation.
+
+## Language Score Update
+
+The harness now reports the score the project actually cares about:
+
+```text
+language_score = realtime_multiplier
+               * timing_accuracy
+               * frequency_accuracy
+               * payload_bitrate_bps
+```
+
+This is raw enough to hurt. It rewards a receiver that is fast, places anchors
+accurately in time, preserves frequency/shape identity, and recovers
+data-bearing words. `payload_bitrate_bps` is currently computed from the
+profile's payload bits per event, event spacing, and payload accuracy. The
+payload stream is deterministic test data, not yet an arbitrary encrypted
+external message, but it does force the call shape and decoder to carry more
+than clock identity.
+
+The score also stopped using word precision as a fake frequency score. Each
+decoded observation now carries a cepstral shape accuracy from the winning
+template distance. That is still a compact proxy, but it is pointed at the
+frequency/formant surface instead of identity bookkeeping.
+
+Clock fitting now uses a global propagation-delay hypothesis. Candidate anchors
+vote for one delay, and only anchors coherent with that delay are allowed to own
+the clock fit. Observations outside the expected fully captured window remain
+diagnostics; they no longer poison the timing kernel. This fixed a real harness
+bug where truncated end-of-window calls were being counted as expected anchors.
 
 The first fast panel intentionally tested only the first four contestants,
 two decoders, and clean/blur degradations so the loop could produce receipts
@@ -68,6 +104,78 @@ anchors. This may be correct for clock acquisition, but the next pass should
 separate "lock fast" from "lock beautifully once found" so the harness cannot
 overvalue sparse perfection.
 
+## Packet Contest Receipts
+
+The best current receipt is:
+
+```powershell
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-contestants --seconds 0.75 --song canary-packet-trill --decoder packet-razor-index --max-songs 1 --max-decoders 1 --max-degradations 5 --output artifacts/bioacoustic-contestants
+```
+
+Receipt:
+
+`artifacts/bioacoustic-contestants/contestants-20260524-185328/contestant-summary.json`
+
+Best result:
+
+```text
+song=canary-packet-trill
+decoder=packet-razor-index
+degradation=warp-light-blur
+language_score=396.683
+realtime=6.7x
+timing=1.000
+frequency=0.922
+payload_bitrate=64.0 bps
+payload_accuracy=1.000
+correct=5/5
+```
+
+Worst result in that five-degradation panel:
+
+```text
+degradation=warp-light
+language_score=199.244
+realtime=5.1x
+timing=1.000
+frequency=0.724
+payload_bitrate=54.1 bps
+correct=5/5
+```
+
+The `packet-razor-index` profile is the current speed ceiling: 512-point FFT,
+16 mel bins, 6 cepstral coefficients, one projection table, 8-bit hashes, and a
+tight proposal budget. It only became viable after adding the missing
+warp-light template augmentation; without that, plain warp-light collapsed to
+`0.720`.
+
+Boundary tests:
+
+- `packet-sprint-index` is steadier than razor but slower. Best canary result:
+  `255.908`, realtime `4.5x`, timing `1.000`, frequency `0.976`.
+- `packet-needle-index` buys more speed and loses some frequency fidelity. Best
+  canary result: `258.298`, realtime `5.2x`, frequency `0.845`.
+- `finch-burst-packet` proves the current lower bound is too short: its best
+  razor result was `280.146`, but blur-light collapsed to `4.358`; with sprint
+  it recovered blur but topped out at `218.368`.
+
+Broad panel sanity check:
+
+```powershell
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-contestants --seconds 0.75 --max-songs 8 --max-decoders 5 --max-degradations 2 --output artifacts/bioacoustic-contestants
+```
+
+Receipt:
+
+`artifacts/bioacoustic-contestants/contestants-20260524-185708/contestant-summary.json`
+
+This clean/blur-only panel still picked `canary-packet-trill +
+packet-razor-index` as best, with `language_score=264.923`, `realtime=6.0x`,
+`timing=1.000`, `frequency=0.944`, and `payload_bitrate=46.7 bps` on clean
+roundtrip. The score is lower than the targeted five-degradation best because
+the broad panel did not include the warp-blur cases where canary/razor hit
+`396.683`.
+
 ## Lessons
 
 - The old decoder recognized words but emitted coarse proposal offsets. Timing
@@ -82,6 +190,16 @@ overvalue sparse perfection.
   inside the motif instead of at the canonical motif start.
 - The next scoring improvement should expose per-formant/frequency residuals
   directly instead of using word identity as a proxy.
+- The 96 ms six-syllable canary packet is the best current tradeoff. Pushing the
+  motif down near 78 ms increases nominal bitrate but loses too much
+  degradation resistance.
+- The global delay hypothesis is not optional. A single smeared anchor can move
+  a least-squares fit by hundreds of samples if it is allowed to claim clock
+  authority directly.
+- AquaSynth's useful pressure is the separation of authoring intent from
+  realtime DSP: these packet songs should become precompiled/formally described
+  emission surfaces, with runtime controls exposed as stable parameters rather
+  than regenerated inside the audio callback.
 
 ## Real Bird References
 

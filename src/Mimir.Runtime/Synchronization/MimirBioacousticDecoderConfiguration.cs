@@ -65,6 +65,69 @@ public sealed record MimirBioacousticDecoderConfiguration(
             CepstralDegradationProfiles.WarpBlur
         ]);
 
+    public static MimirBioacousticDecoderConfiguration PacketSprintIndex { get; } = new(
+        "packet-sprint-index",
+        "Smallest packet-song receiver profile: fewer mel bins, fewer projections, and a tighter proposal budget for language-score throughput pressure.",
+        FftSize: 1024,
+        HopSize: 256,
+        MelBins: 24,
+        CepstralCoefficients: 8,
+        MinFrequencyHz: 600.0,
+        MaxFrequencyHz: 14_500.0,
+        ProjectionTableCount: 2,
+        ProjectionHashBits: 10,
+        NearHashRadius: 2,
+        DenseStepSeconds: 0.050,
+        ProposalBudgetMultiplier: 4.0,
+        TemplateAugmentations:
+        [
+            CepstralDegradationProfiles.Clean,
+            CepstralDegradationProfiles.Blur,
+            CepstralDegradationProfiles.WarpBlur
+        ]);
+
+    public static MimirBioacousticDecoderConfiguration PacketNeedleIndex { get; } = new(
+        "packet-needle-index",
+        "Tiny fast receiver for short packet-song words; tests whether smaller FFT/features beat the loss in frequency identity.",
+        FftSize: 512,
+        HopSize: 128,
+        MelBins: 20,
+        CepstralCoefficients: 7,
+        MinFrequencyHz: 700.0,
+        MaxFrequencyHz: 14_500.0,
+        ProjectionTableCount: 2,
+        ProjectionHashBits: 9,
+        NearHashRadius: 2,
+        DenseStepSeconds: 0.060,
+        ProposalBudgetMultiplier: 3.0,
+        TemplateAugmentations:
+        [
+            CepstralDegradationProfiles.Clean,
+            CepstralDegradationProfiles.Blur,
+            CepstralDegradationProfiles.WarpBlur
+        ]);
+
+    public static MimirBioacousticDecoderConfiguration PacketRazorIndex { get; } = new(
+        "packet-razor-index",
+        "Aggressive speed floor for packet-song decoding; intentionally risks identity for realtime multiplier evidence.",
+        FftSize: 512,
+        HopSize: 128,
+        MelBins: 16,
+        CepstralCoefficients: 6,
+        MinFrequencyHz: 850.0,
+        MaxFrequencyHz: 14_000.0,
+        ProjectionTableCount: 1,
+        ProjectionHashBits: 8,
+        NearHashRadius: 1,
+        DenseStepSeconds: 0.075,
+        ProposalBudgetMultiplier: 2.25,
+        TemplateAugmentations:
+        [
+            CepstralDegradationProfiles.Clean,
+            CepstralDegradationProfiles.WarpLight,
+            CepstralDegradationProfiles.WarpBlur
+        ]);
+
     public static MimirBioacousticDecoderConfiguration RobustWideIndex { get; } = new(
         "robust-wide-index",
         "Wider cepstral and augmentation surface for path-damaged acoustic evidence.",
@@ -114,6 +177,9 @@ public sealed record MimirBioacousticDecoderConfiguration(
     [
         BaselineMfccIndex,
         CompactFastIndex,
+        PacketSprintIndex,
+        PacketNeedleIndex,
+        PacketRazorIndex,
         RobustWideIndex,
         HighbandRoomIndex
     ];

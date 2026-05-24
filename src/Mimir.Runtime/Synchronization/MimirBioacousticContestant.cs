@@ -7,7 +7,10 @@ public enum MimirBioacousticContestantKind
     RobinWarble,
     ThrushLadder,
     ThornbillZigZag,
-    NightingaleCascade
+    NightingaleCascade,
+    AquaSynthFormantWeaver,
+    CanaryPacketTrill,
+    FinchBurstPacket
 }
 
 public sealed record MimirBioacousticContestantProfile(
@@ -20,6 +23,7 @@ public sealed record MimirBioacousticContestantProfile(
     double LowestRootHz,
     double HighestRootHz,
     double Gain,
+    int PayloadBitsPerEvent,
     string BeautyNotes);
 
 public static class MimirBioacousticContestants
@@ -39,6 +43,7 @@ public static class MimirBioacousticContestants
         LowestRootHz: 2_600.0,
         HighestRootHz: 9_600.0,
         Gain: 0.030,
+        PayloadBitsPerEvent: 4,
         "Musical enough, but still sounds like a lab bird with a clipboard.");
 
     public static MimirBioacousticContestantProfile RedpollTrill { get; } = new(
@@ -51,6 +56,7 @@ public static class MimirBioacousticContestants
         LowestRootHz: 3_200.0,
         HighestRootHz: 10_800.0,
         Gain: 0.025,
+        PayloadBitsPerEvent: 5,
         "Pretty, bright, and temporally sharp; risks weak identity if the trills blur together.");
 
     public static MimirBioacousticContestantProfile RobinWarble { get; } = new(
@@ -63,6 +69,7 @@ public static class MimirBioacousticContestants
         LowestRootHz: 2_200.0,
         HighestRootHz: 8_600.0,
         Gain: 0.024,
+        PayloadBitsPerEvent: 6,
         "Most plausible room sound; slower lock and softer onsets are the price.");
 
     public static MimirBioacousticContestantProfile ThrushLadder { get; } = new(
@@ -75,6 +82,7 @@ public static class MimirBioacousticContestants
         LowestRootHz: 2_400.0,
         HighestRootHz: 9_200.0,
         Gain: 0.027,
+        PayloadBitsPerEvent: 6,
         "Good identity geometry: repetition plus interval ratios. Less subtle.");
 
     public static MimirBioacousticContestantProfile ThornbillZigZag { get; } = new(
@@ -87,6 +95,7 @@ public static class MimirBioacousticContestants
         LowestRootHz: 4_200.0,
         HighestRootHz: 13_200.0,
         Gain: 0.021,
+        PayloadBitsPerEvent: 7,
         "Excellent frequency fingerprint if the path keeps high band alive; fragile on dull mics.");
 
     public static MimirBioacousticContestantProfile NightingaleCascade { get; } = new(
@@ -99,7 +108,47 @@ public static class MimirBioacousticContestants
         LowestRootHz: 1_800.0,
         HighestRootHz: 11_200.0,
         Gain: 0.023,
+        PayloadBitsPerEvent: 8,
         "The prettiest contestant; expensive and easiest to confuse under heavy smearing.");
+
+    public static MimirBioacousticContestantProfile AquaSynthFormantWeaver { get; } = new(
+        "aquasynth-formant-weaver",
+        "AquaSynth-inspired formant/FM word: two timing syllables, payload ornaments, and a final parity flourish.",
+        MimirBioacousticContestantKind.AquaSynthFormantWeaver,
+        SyllableCount: 7,
+        MotifDurationSeconds: 0.136,
+        EventSpacingSeconds: 0.168,
+        LowestRootHz: 2_050.0,
+        HighestRootHz: 9_800.0,
+        Gain: 0.026,
+        PayloadBitsPerEvent: 8,
+        "Less literal bird imitation, more compact singing modem: readable envelopes, formants, FM motion, and bit-bearing ornaments.");
+
+    public static MimirBioacousticContestantProfile CanaryPacketTrill { get; } = new(
+        "canary-packet-trill",
+        "Short bright packet song: two hard timing chips plus four payload-colored formant notes.",
+        MimirBioacousticContestantKind.CanaryPacketTrill,
+        SyllableCount: 6,
+        MotifDurationSeconds: 0.096,
+        EventSpacingSeconds: 0.125,
+        LowestRootHz: 2_800.0,
+        HighestRootHz: 10_600.0,
+        Gain: 0.024,
+        PayloadBitsPerEvent: 8,
+        "A higher-throughput singing modem candidate: compact, bright, and less apologetic about being a packet.");
+
+    public static MimirBioacousticContestantProfile FinchBurstPacket { get; } = new(
+        "finch-burst-packet",
+        "Very short five-syllable burst packet with hard onset chips and payload-bent middle notes.",
+        MimirBioacousticContestantKind.FinchBurstPacket,
+        SyllableCount: 5,
+        MotifDurationSeconds: 0.078,
+        EventSpacingSeconds: 0.105,
+        LowestRootHz: 3_050.0,
+        HighestRootHz: 11_400.0,
+        Gain: 0.023,
+        PayloadBitsPerEvent: 8,
+        "Throughput brute made musical enough to tolerate: fewer syllables, sharper anchors, and more packets per second.");
 
     public static IReadOnlyList<MimirBioacousticContestantProfile> BuiltIn { get; } =
     [
@@ -108,7 +157,10 @@ public static class MimirBioacousticContestants
         RobinWarble,
         ThrushLadder,
         ThornbillZigZag,
-        NightingaleCascade
+        NightingaleCascade,
+        AquaSynthFormantWeaver,
+        CanaryPacketTrill,
+        FinchBurstPacket
     ];
 }
 
@@ -139,19 +191,26 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
     }
 
     public int ExpectedEventCount(double seconds) =>
-        Math.Max(0, (int)Math.Floor((seconds - MimirBioacousticContestants.FirstEventSeconds) / Profile.EventSpacingSeconds) + 1);
+        Math.Max(0, (int)Math.Floor((seconds - MimirBioacousticContestants.FirstEventSeconds - Profile.MotifDurationSeconds) / Profile.EventSpacingSeconds) + 1);
 
     public IReadOnlySet<ulong> ExpectedEvents(double seconds) =>
         Enumerable.Range(0, ExpectedEventCount(seconds)).Select(index => (ulong)index).ToHashSet();
 
+    public int PayloadSymbolForEvent(ulong eventIndex)
+    {
+        var mask = (1 << Math.Clamp(Profile.PayloadBitsPerEvent, 0, 15)) - 1;
+        return mask == 0 ? 0 : (int)(Mix((int)(eventIndex & 0x7fff), (uint)Profile.Kind + 0xC0DEu) & (uint)mask);
+    }
+
     private void AddEvent(float[] output, int sampleRate, ulong eventIndex, double eventStartSeconds, double bufferStartSeconds)
     {
         var symbolId = SymbolForEvent(eventIndex);
+        var payload = PayloadSymbolForEvent(eventIndex);
         var root = RootForSymbol(symbolId);
-        var rng = Mix(symbolId, (uint)Profile.Kind);
+        var rng = Mix(symbolId ^ (payload << 9), (uint)Profile.Kind);
         for (var syllable = 0; syllable < Profile.SyllableCount; syllable++)
         {
-            var contour = SyllableContour(symbolId, syllable, root, rng);
+            var contour = SyllableContour(symbolId, payload, syllable, root, rng);
             var start = eventStartSeconds - bufferStartSeconds + contour.StartSeconds;
             AddSyllable(output, sampleRate, start, contour.DurationSeconds, contour.StartHz, contour.EndHz, Profile.Gain * contour.Weight);
         }
@@ -159,12 +218,15 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
 
     private (double StartSeconds, double DurationSeconds, double StartHz, double EndHz, double Weight) SyllableContour(
         int symbolId,
+        int payload,
         int syllable,
         double root,
         uint rng)
     {
         var jitter = (((rng >> (syllable % 12)) & 7) - 3) * 0.0013;
         var phase = ((symbolId * 17 + syllable * 31) & 255) / 255.0;
+        var payloadPhase = ((payload * 29 + syllable * 47) & 255) / 255.0;
+        var payloadStep = ((payload >> (syllable % Math.Max(1, Profile.PayloadBitsPerEvent))) & 7) - 3;
         return Profile.Kind switch
         {
             MimirBioacousticContestantKind.RedpollTrill => (
@@ -197,6 +259,27 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
                 StartHz: root * Ratio(0.62 + 0.09 * ((symbolId + syllable) % 8)),
                 EndHz: root * Ratio(1.20 - 0.07 * ((symbolId / 3 + syllable) % 7)),
                 Weight: syllable is 2 or 5 or 8 ? 0.95 : 0.58),
+            MimirBioacousticContestantKind.AquaSynthFormantWeaver => (
+                StartSeconds: syllable * Profile.MotifDurationSeconds / (Profile.SyllableCount + 0.45) +
+                    0.0022 * Math.Sin((payloadPhase + syllable * 0.11) * Math.Tau),
+                DurationSeconds: Profile.MotifDurationSeconds * (0.088 + 0.018 * ((payload + syllable) & 3)),
+                StartHz: root * Ratio(-2.5 + 0.72 * syllable + payloadStep * 0.21 + 0.36 * Math.Sin(payloadPhase * Math.Tau)),
+                EndHz: root * Ratio(-1.4 + 0.58 * ((syllable + 2) % Profile.SyllableCount) - payloadStep * 0.18 + 0.42 * Math.Cos(payloadPhase * Math.Tau)),
+                Weight: syllable is 0 or 3 or 6 ? 0.94 : 0.56 + 0.22 * Math.Sin(payloadPhase * Math.Tau) * Math.Sin(payloadPhase * Math.Tau)),
+            MimirBioacousticContestantKind.CanaryPacketTrill => (
+                StartSeconds: syllable * Profile.MotifDurationSeconds / (Profile.SyllableCount + 0.75) +
+                    (syllable < 2 ? 0.0 : 0.0014 * Math.Sin(payloadPhase * Math.Tau)),
+                DurationSeconds: Profile.MotifDurationSeconds * (syllable < 2 ? 0.070 : 0.086 + 0.010 * ((payload >> syllable) & 1)),
+                StartHz: root * Ratio((syllable < 2 ? -1.0 + syllable * 1.85 : -0.55 + syllable * 0.52) + payloadStep * 0.24),
+                EndHz: root * Ratio((syllable < 2 ? 1.25 + syllable * 1.35 : 0.10 + ((payload + syllable) & 7) * 0.19) - payloadStep * 0.16),
+                Weight: syllable < 2 ? 1.0 : 0.66 + 0.18 * (((payload >> syllable) & 1) == 0 ? 0.0 : 1.0)),
+            MimirBioacousticContestantKind.FinchBurstPacket => (
+                StartSeconds: syllable * Profile.MotifDurationSeconds / (Profile.SyllableCount + 0.65) +
+                    (syllable is 0 or 1 ? 0.0 : 0.0011 * Math.Sin((payloadPhase + 0.17) * Math.Tau)),
+                DurationSeconds: Profile.MotifDurationSeconds * (syllable is 0 or 1 ? 0.064 : 0.078 + 0.008 * ((payload >> syllable) & 1)),
+                StartHz: root * Ratio(-0.70 + syllable * 0.92 + payloadStep * 0.20 + 0.18 * Math.Sin(payloadPhase * Math.Tau)),
+                EndHz: root * Ratio(0.95 + syllable * 0.44 - payloadStep * 0.14 + 0.22 * Math.Cos(payloadPhase * Math.Tau)),
+                Weight: syllable is 0 or 1 ? 1.0 : 0.70 + 0.16 * (((payload >> (syllable + 2)) & 1) == 0 ? 0.0 : 1.0)),
             _ => (
                 StartSeconds: syllable * Profile.MotifDurationSeconds / (Profile.SyllableCount + 0.6) + jitter,
                 DurationSeconds: Profile.MotifDurationSeconds * 0.11,

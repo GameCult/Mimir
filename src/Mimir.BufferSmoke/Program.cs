@@ -52,7 +52,9 @@ if (args.Any(arg => string.Equals(arg, "--bioacoustic-contestants", StringCompar
         ParseStringOption(args, "--output", "artifacts/bioacoustic-contestants"),
         ParseIntOption(args, "--max-songs", MimirBioacousticContestants.BuiltIn.Count),
         ParseIntOption(args, "--max-decoders", MimirBioacousticDecoderConfiguration.BuiltInProfiles.Count),
-        ParseIntOption(args, "--max-degradations", CepstralTrainingDegradationSettings().Count)).ConfigureAwait(false);
+        ParseIntOption(args, "--max-degradations", CepstralTrainingDegradationSettings().Count),
+        ParseStringOption(args, "--song", ""),
+        ParseStringOption(args, "--decoder", "")).ConfigureAwait(false);
 }
 
 if (args.Any(arg => string.Equals(arg, "--bioacoustic-actuator-self-test", StringComparison.OrdinalIgnoreCase)))
@@ -716,17 +718,24 @@ static async Task<int> RunBioacousticContestantsAsync(
     string outputRoot,
     int maxSongs,
     int maxDecoders,
-    int maxDegradations)
+    int maxDegradations,
+    string songFilter,
+    string decoderFilter)
 {
     var started = DateTimeOffset.UtcNow;
     var runId = $"contestants-{started:yyyyMMdd-HHmmss}";
     var runDirectory = Path.GetFullPath(Path.Combine(outputRoot, runId));
     Directory.CreateDirectory(runDirectory);
     var degradations = CepstralTrainingDegradationSettings().Take(Math.Max(1, maxDegradations)).ToArray();
-    var decoders = BioacousticTrainingHypotheses().Take(Math.Max(1, maxDecoders)).ToArray();
+    var decoders = BioacousticTrainingHypotheses()
+        .Where(hypothesis => string.IsNullOrWhiteSpace(decoderFilter) || string.Equals(hypothesis.Id, decoderFilter, StringComparison.OrdinalIgnoreCase))
+        .Take(Math.Max(1, maxDecoders))
+        .ToArray();
     var results = new List<BioacousticContestantResult>();
 
-    foreach (var profile in MimirBioacousticContestants.BuiltIn.Take(Math.Max(1, maxSongs)))
+    foreach (var profile in MimirBioacousticContestants.BuiltIn
+                 .Where(profile => string.IsNullOrWhiteSpace(songFilter) || string.Equals(profile.Id, songFilter, StringComparison.OrdinalIgnoreCase))
+                 .Take(Math.Max(1, maxSongs)))
     {
         var renderer = new MimirBioacousticContestantRenderer(profile);
         var source = renderer.RenderSequenceMonoFloat(seconds, sampleRate);
@@ -750,15 +759,25 @@ static async Task<int> RunBioacousticContestantsAsync(
                     index,
                     renderer);
                 var decodeMs = Stopwatch.GetElapsedTime(stamp).TotalMilliseconds;
-                var correct = observations.Count(observation => expectedEvents.Contains(observation.EventIndex));
+                var expectedObservations = observations
+                    .Where(observation => expectedEvents.Contains(observation.EventIndex))
+                    .ToArray();
+                var correct = expectedObservations.Length;
+                var payloadCorrect = expectedObservations.Count(observation =>
+                    observation.PayloadSymbol == renderer.PayloadSymbolForEvent(observation.EventIndex));
                 var precision = observations.Count == 0 ? 0.0 : correct / (double)observations.Count;
                 var recall = expectedEvents.Count == 0 ? 0.0 : correct / (double)expectedEvents.Count;
+                var payloadAccuracy = observations.Count == 0 || expectedEvents.Count == 0
+                    ? 0.0
+                    : Math.Sqrt(payloadCorrect / (double)observations.Count * payloadCorrect / (double)expectedEvents.Count);
                 var confidence = observations.Count == 0 ? 0.0 : observations.Average(observation => observation.Confidence);
-                var clock = FitContestantClockHypothesis(observations, renderer, sampleRate, expectedEvents.Count);
+                var clock = FitContestantClockHypothesis(expectedObservations, renderer, sampleRate, expectedEvents.Count);
                 var timingAccuracy = clock == null
                     ? 0.0
                     : 1.0 / (1.0 + clock.MeanAbsoluteErrorSamples / Math.Max(1.0, sampleRate * 0.00025));
-                var frequencyAccuracy = precision;
+                var frequencyAccuracy = expectedObservations.Length == 0
+                    ? 0.0
+                    : expectedObservations.Average(observation => observation.ShapeAccuracy);
                 var convergence = clock == null
                     ? 0.0
                     : Math.Clamp(clock.AnchorCoverage, 0.0, 1.0) * Math.Clamp(clock.Confidence, 0.0, 1.0);
@@ -766,6 +785,10 @@ static async Task<int> RunBioacousticContestantsAsync(
                 var performance = Math.Sqrt(Math.Clamp(realtime / 50.0, 0.0, 1.0) * Math.Max(0.0, convergence));
                 var anchorAccuracy = Math.Sqrt(Math.Max(0.0, timingAccuracy) * Math.Max(0.0, frequencyAccuracy));
                 var contestScore = performance * anchorAccuracy;
+                var payloadBitrate = profile.EventSpacingSeconds <= 0.0
+                    ? 0.0
+                    : profile.PayloadBitsPerEvent * payloadAccuracy / profile.EventSpacingSeconds;
+                var languageScore = realtime * timingAccuracy * frequencyAccuracy * payloadBitrate;
                 var result = new BioacousticContestantResult(
                     $"{runId}:{profile.Id}:{decoder.Id}:{degradation.Name}",
                     runId,
@@ -783,8 +806,11 @@ static async Task<int> RunBioacousticContestantsAsync(
                     confidence,
                     timingAccuracy,
                     frequencyAccuracy,
+                    payloadAccuracy,
                     convergence,
                     realtime,
+                    payloadBitrate,
+                    languageScore,
                     contestScore,
                     decodeMs,
                     analysis.MelBins,
@@ -799,10 +825,16 @@ static async Task<int> RunBioacousticContestantsAsync(
                             clock.Confidence,
                             clock.Score,
                             clock.AnchorCoverage),
+                    observations.Select(observation => new BioacousticContestantObservation(
+                        observation.EventIndex,
+                        observation.PayloadSymbol,
+                        observation.SampleOffset,
+                        observation.Confidence,
+                        observation.ShapeAccuracy)).ToArray(),
                     profile.BeautyNotes);
                 results.Add(result);
                 Console.WriteLine(
-                    $"bioacoustic-contestant song={profile.Id} decoder={decoder.Id} degradation={degradation.Name} score={contestScore:0.000} perf={performance:0.000} anchor={anchorAccuracy:0.000} timing={timingAccuracy:0.000} freq={frequencyAccuracy:0.000} convergence={convergence:0.000} realtime={realtime:0.0}x correct={correct}/{expectedEvents.Count} observations={observations.Count} confidence={confidence:0.000}");
+                    $"bioacoustic-contestant song={profile.Id} decoder={decoder.Id} degradation={degradation.Name} languageScore={languageScore:0.000} bitrate={payloadBitrate:0.0}bps payload={payloadAccuracy:0.000} score={contestScore:0.000} perf={performance:0.000} anchor={anchorAccuracy:0.000} timing={timingAccuracy:0.000} freq={frequencyAccuracy:0.000} convergence={convergence:0.000} realtime={realtime:0.0}x correct={correct}/{expectedEvents.Count} observations={observations.Count} confidence={confidence:0.000}");
             }
         }
     }
@@ -816,22 +848,22 @@ static async Task<int> RunBioacousticContestantsAsync(
             startedAtUtc = started.ToString("O"),
             sampleRate,
             seconds,
-            best = results.OrderByDescending(result => result.ContestScore).FirstOrDefault(),
+            best = results.OrderByDescending(result => result.LanguageScore).FirstOrDefault(),
             bySong = results
                 .GroupBy(result => result.SongId)
                 .Select(group => new
                 {
                     song = group.Key,
-                    average = group.Average(result => result.ContestScore),
-                    best = group.Max(result => result.ContestScore),
-                    worst = group.Min(result => result.ContestScore)
+                    average = group.Average(result => result.LanguageScore),
+                    best = group.Max(result => result.LanguageScore),
+                    worst = group.Min(result => result.LanguageScore)
                 })
                 .OrderByDescending(row => row.average)
                 .ToArray(),
             results
         }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-    Console.WriteLine($"bioacoustic-contestants-run path={runDirectory} results={results.Count} best={results.OrderByDescending(result => result.ContestScore).First().SongId} score={results.Max(result => result.ContestScore):0.000}");
-    return results.Count > 0 && results.Max(result => result.ContestScore) > 0.0 ? 0 : 1;
+    Console.WriteLine($"bioacoustic-contestants-run path={runDirectory} results={results.Count} best={results.OrderByDescending(result => result.LanguageScore).First().SongId} languageScore={results.Max(result => result.LanguageScore):0.000}");
+    return results.Count > 0 && results.Max(result => result.LanguageScore) > 0.0 ? 0 : 1;
 }
 
 static int RunPassiveSyncSelfTest()
@@ -1969,7 +2001,7 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWordsCore(
             {
                 var template = templateIndex.Templates[index];
                 var distance = CepstralDistance(feature, template.Feature);
-                var timePenalty = Math.Abs((long)template.EventIndex - (long)predictedEvent) * 0.20;
+                var timePenalty = Math.Abs((long)template.EventIndex - (long)predictedEvent) * 3.0;
                 return (Template: template, Distance: distance + timePenalty);
             })
             .OrderBy(pair => pair.Distance)
@@ -1985,7 +2017,10 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWordsCore(
         var refinedOffset = refineOffset == null
             ? offset
             : refineOffset(offset, best.Template.EventIndex, motifSamples);
-        observations.Add(new CepstralWordObservation(best.Template.EventIndex, refinedOffset, confidence));
+        var shapeAccuracy = double.IsFinite(best.Distance)
+            ? 1.0 / (1.0 + best.Distance / 4.0)
+            : 0.0;
+        observations.Add(new CepstralWordObservation(best.Template.EventIndex, refinedOffset, confidence, best.Template.PayloadSymbol, shapeAccuracy));
     }
 
     return observations
@@ -2093,7 +2128,7 @@ static CepstralWordIndex BuildCepstralWordIndex(int sampleRate, CepstralDecoderO
             var templateSamples = setting.BlurPasses == 0 && setting.WarpFrames == 0.0 && setting.WarpCoefficients == 0.0
                 ? samples
                 : RoundTripThroughDegradedCepstrum(samples, sampleRate, setting, out _);
-            templates.Add(new CepstralWordTemplate(eventIndex, CepstralFingerprintWithOptions(templateSamples, sampleRate, options)));
+            templates.Add(new CepstralWordTemplate(eventIndex, 0, CepstralFingerprintWithOptions(templateSamples, sampleRate, options)));
         }
     }
 
@@ -2114,7 +2149,7 @@ static CepstralWordIndex BuildCepstralContestantWordIndex(
             var templateSamples = setting.BlurPasses == 0 && setting.WarpFrames == 0.0 && setting.WarpCoefficients == 0.0
                 ? samples
                 : RoundTripThroughDegradedCepstrum(samples, sampleRate, setting, out _);
-            templates.Add(new CepstralWordTemplate(eventIndex, CepstralFingerprintWithOptions(templateSamples, sampleRate, options)));
+            templates.Add(new CepstralWordTemplate(eventIndex, contestant.PayloadSymbolForEvent(eventIndex), CepstralFingerprintWithOptions(templateSamples, sampleRate, options)));
         }
     }
 
@@ -2260,6 +2295,28 @@ static MimirBioacousticClockHypothesis? FitContestantClockHypothesis(
         return null;
     }
 
+    if (anchors.Length >= 3)
+    {
+        var delayHypothesis = WeightedMedian(anchors
+            .Select(anchor => (
+                Value: anchor.SampleOffset - anchor.TimelineSeconds * sampleRate,
+                Weight: Math.Clamp(anchor.Confidence, 0.001, 1.0)))
+            .ToArray());
+        var residuals = anchors
+            .Select(anchor => Math.Abs(anchor.SampleOffset - (delayHypothesis + anchor.TimelineSeconds * sampleRate)))
+            .Order()
+            .ToArray();
+        var medianResidual = residuals[residuals.Length / 2];
+        var inlierRadius = Math.Max(sampleRate * 0.003, medianResidual * 3.0 + sampleRate * 0.00025);
+        var inliers = anchors
+            .Where(anchor => Math.Abs(anchor.SampleOffset - (delayHypothesis + anchor.TimelineSeconds * sampleRate)) <= inlierRadius)
+            .ToArray();
+        if (inliers.Length >= 2)
+        {
+            anchors = inliers;
+        }
+    }
+
     var totalWeight = anchors.Sum(anchor => Math.Max(1.0e-6, anchor.Confidence));
     var meanTimeline = anchors.Sum(anchor => anchor.TimelineSeconds * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
     var meanSample = anchors.Sum(anchor => anchor.SampleOffset * Math.Max(1.0e-6, anchor.Confidence)) / totalWeight;
@@ -2300,6 +2357,30 @@ static MimirBioacousticClockHypothesis? FitContestantClockHypothesis(
         confidence,
         score,
         anchors);
+}
+
+static double WeightedMedian(IReadOnlyList<(double Value, double Weight)> values)
+{
+    if (values.Count == 0)
+    {
+        return 0.0;
+    }
+
+    var ordered = values
+        .OrderBy(value => value.Value)
+        .ToArray();
+    var half = ordered.Sum(value => Math.Max(0.0, value.Weight)) * 0.5;
+    var cumulative = 0.0;
+    foreach (var value in ordered)
+    {
+        cumulative += Math.Max(0.0, value.Weight);
+        if (cumulative >= half)
+        {
+            return value.Value;
+        }
+    }
+
+    return ordered[^1].Value;
 }
 
 static double CepstralDistance(IReadOnlyList<double> first, IReadOnlyList<double> second)
@@ -2936,12 +3017,15 @@ internal sealed record CepstralRoundTripAnalysis(
 
 internal sealed record CepstralWordTemplate(
     ulong EventIndex,
+    int PayloadSymbol,
     IReadOnlyList<double> Feature);
 
 internal sealed record CepstralWordObservation(
     ulong EventIndex,
     double SampleOffset,
-    double Confidence);
+    double Confidence,
+    int PayloadSymbol,
+    double ShapeAccuracy);
 
 internal sealed record CepstralWordIndex(
     IReadOnlyList<CepstralWordTemplate> Templates,
@@ -3035,11 +3119,22 @@ public sealed record BioacousticContestantResult(
     double Confidence,
     double TimingAccuracy,
     double FrequencyAccuracy,
+    double PayloadAccuracy,
     double Convergence,
     double RealtimeFactor,
+    double PayloadBitrate,
+    double LanguageScore,
     double ContestScore,
     double DecodeMilliseconds,
     int RoundTripMelBins,
     int RoundTripCepstralCoefficients,
     BioacousticClockHypothesisSnapshot ClockHypothesis,
+    BioacousticContestantObservation[] Observations,
     string BeautyNotes);
+
+public sealed record BioacousticContestantObservation(
+    ulong EventIndex,
+    int PayloadSymbol,
+    double SampleOffset,
+    double Confidence,
+    double ShapeAccuracy);
