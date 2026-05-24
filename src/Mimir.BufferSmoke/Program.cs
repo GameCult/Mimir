@@ -2153,17 +2153,15 @@ static IReadOnlyDictionary<ulong, int> ClassifyContestantPayloads(
             continue;
         }
 
-        var feature = CepstralFingerprintWithOptions(samples.AsSpan(offset, motifSamples), sampleRate, options);
         var bestPayload = 0;
-        var bestDistance = double.PositiveInfinity;
+        var bestScore = double.NegativeInfinity;
         for (var payload = 0; payload < payloadCount; payload++)
         {
             var template = contestant.RenderEventMonoFloat(observation.EventIndex, sampleRate, payload);
-            var templateFeature = CepstralFingerprintWithOptions(template, sampleRate, options);
-            var distance = CepstralDistance(feature, templateFeature);
-            if (distance < bestDistance)
+            var score = ScoreContestantOffset(samples, template, offset, motifSamples);
+            if (score > bestScore)
             {
-                bestDistance = distance;
+                bestScore = score;
                 bestPayload = payload;
             }
         }
