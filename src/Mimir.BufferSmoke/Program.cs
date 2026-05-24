@@ -767,7 +767,8 @@ static async Task<int> RunBioacousticContestantsAsync(
                     sampleRate,
                     decoder.Decoder,
                     renderer,
-                    expectedObservations);
+                    expectedObservations,
+                    decoder.Decoder.ProposalMode == CepstralProposalMode.StreamingPacketRazor);
                 var decodeMs = Stopwatch.GetElapsedTime(stamp).TotalMilliseconds;
                 var correct = expectedObservations.Length;
                 var payloadCorrect = expectedObservations.Count(observation =>
@@ -1535,6 +1536,16 @@ static IReadOnlyList<BioacousticTrainingHypothesis> BioacousticTrainingHypothese
             DenseStepSeconds = 0.080
         }));
 
+    baseProfiles.Add(new BioacousticTrainingHypothesis(
+        "packet-razor-streaming-faust",
+        "Streaming packet receiver: schedule-owned packet windows, Faust-shaped band/flux front-end, and four local payload hypotheses instead of a wide MFCC index.",
+        razor with
+        {
+            ProposalMode = CepstralProposalMode.StreamingPacketRazor,
+            ProposalBudgetMultiplier = 1.0,
+            DenseStepSeconds = 0.0
+        }));
+
     return baseProfiles.ToArray();
 }
 
@@ -1953,6 +1964,11 @@ static IReadOnlyList<CepstralWordObservation> DecodeCepstralIndexedWordsWithCont
 {
     var motifSamples = contestant?.RenderEventMonoFloat(0, sampleRate).Length
         ?? MimirBioacousticTimeline.Default.RenderEventMonoFloat(0, sampleRate).Length;
+    if (contestant != null && options.ProposalMode == CepstralProposalMode.StreamingPacketRazor)
+    {
+        return DecodeStreamingPacketRazorWords(samples, sampleRate, expectedEventCount, contestant, motifSamples);
+    }
+
     return DecodeCepstralIndexedWordsCore(
         samples,
         sampleRate,
@@ -2148,6 +2164,91 @@ static double RefineContestantOffset(
     return bestOffset;
 }
 
+static IReadOnlyList<CepstralWordObservation> DecodeStreamingPacketRazorWords(
+    float[] samples,
+    int sampleRate,
+    int expectedEventCount,
+    MimirBioacousticContestantRenderer contestant,
+    int motifSamples)
+{
+    if (expectedEventCount <= 0 || samples.Length < motifSamples)
+    {
+        return [];
+    }
+
+    var payloadCount = 1 << Math.Clamp(contestant.Profile.PayloadBitsPerEvent, 0, 4);
+    var searchRadius = Math.Max(2, (int)Math.Round(sampleRate * 0.00020));
+    var observations = new List<CepstralWordObservation>(expectedEventCount);
+    for (var eventIndex = 0; eventIndex < expectedEventCount; eventIndex++)
+    {
+        var center = (int)Math.Round(contestant.EventStartSeconds((ulong)eventIndex) * sampleRate);
+        var start = Math.Max(0, center - searchRadius);
+        var end = Math.Min(samples.Length - motifSamples, center + searchRadius);
+        if (start > end)
+        {
+            continue;
+        }
+
+        var bestScore = double.NegativeInfinity;
+        var bestPayload = 0;
+        var bestOffset = center;
+        for (var payload = 0; payload < payloadCount; payload++)
+        {
+            var template = contestant.RenderEventMonoFloat((ulong)eventIndex, sampleRate, payload);
+            for (var offset = start; offset <= end; offset += 2)
+            {
+                var score = ScoreContestantOffset(samples, template, offset, motifSamples);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestPayload = payload;
+                    bestOffset = offset;
+                }
+            }
+        }
+
+        if (bestScore < 0.08)
+        {
+            continue;
+        }
+
+        var refinedOffset = RefineStreamingOffset(samples, contestant, sampleRate, motifSamples, (ulong)eventIndex, bestPayload, bestOffset);
+        var confidence = Math.Clamp((bestScore + 1.0) * 0.5, 0.0, 1.0);
+        observations.Add(new CepstralWordObservation(
+            (ulong)eventIndex,
+            refinedOffset,
+            confidence,
+            bestPayload,
+            confidence));
+    }
+
+    return observations;
+}
+
+static double RefineStreamingOffset(
+    float[] samples,
+    MimirBioacousticContestantRenderer contestant,
+    int sampleRate,
+    int motifSamples,
+    ulong eventIndex,
+    int payload,
+    int bestOffset)
+{
+    if (bestOffset <= 0 || bestOffset >= samples.Length - motifSamples - 1)
+    {
+        return bestOffset;
+    }
+
+    var template = contestant.RenderEventMonoFloat(eventIndex, sampleRate, payload);
+    var left = ScoreContestantOffset(samples, template, bestOffset - 1, motifSamples);
+    var center = ScoreContestantOffset(samples, template, bestOffset, motifSamples);
+    var right = ScoreContestantOffset(samples, template, bestOffset + 1, motifSamples);
+    var denominator = left - 2.0 * center + right;
+    return Math.Abs(denominator) <= 1.0e-12
+        ? bestOffset
+        : bestOffset + Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+}
+
 static double ScoreContestantOffset(float[] samples, float[] template, int offset, int motifSamples)
 {
     if (offset < 0 || offset + motifSamples > samples.Length)
@@ -2177,7 +2278,8 @@ static IReadOnlyDictionary<ulong, int> ClassifyContestantPayloads(
     int sampleRate,
     CepstralDecoderOptions options,
     MimirBioacousticContestantRenderer contestant,
-    IReadOnlyList<CepstralWordObservation> observations)
+    IReadOnlyList<CepstralWordObservation> observations,
+    bool trustObservationPayload = false)
 {
     if (observations.Count == 0)
     {
@@ -2188,6 +2290,13 @@ static IReadOnlyDictionary<ulong, int> ClassifyContestantPayloads(
     if (payloadCount <= 1)
     {
         return observations.ToDictionary(observation => observation.EventIndex, _ => 0);
+    }
+
+    if (trustObservationPayload)
+    {
+        return observations.ToDictionary(
+            observation => observation.EventIndex,
+            observation => Math.Clamp(observation.PayloadSymbol, 0, payloadCount - 1));
     }
 
     var motifSamples = contestant.RenderEventMonoFloat(0, sampleRate).Length;
@@ -3135,7 +3244,8 @@ internal enum CepstralDegradationDomain
 internal enum CepstralProposalMode
 {
     Energy,
-    LogMelFlux
+    LogMelFlux,
+    StreamingPacketRazor
 }
 
 internal sealed record CepstralDecoderOptions(

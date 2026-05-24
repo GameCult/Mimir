@@ -245,6 +245,69 @@ identity and positive-flux onset evidence. Current best transmission through
 the leaky pipeline remains `canary-packet-trill + packet-razor-index`, now at
 `92.522` on log-mel warp/light blur.
 
+### Streaming Packet Razor Receipt
+
+The next cut stopped treating the packet receiver like an offline search
+problem. `packet-razor-streaming-faust` is schedule-owned and packet-local:
+
+- no dense MFCC/LSH proposal sweep;
+- no second FFT pass for flux;
+- no wide identity table lookup;
+- only scheduled packet windows are inspected;
+- each window tests the four local payload hypotheses;
+- timing is refined with a tiny parabolic local correction;
+- the Faust lowering target is `faust/mimir_packet_razor_frontend.dsp`, a
+  log-spaced resonant band-energy/positive-flux front end for the native audio
+  callback path.
+
+Run:
+
+```powershell
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-contestants --seconds 0.75 --song canary-packet-trill --decoder packet-razor-streaming-faust --max-songs 1 --max-decoders 99 --max-degradations 9 --output artifacts/bioacoustic-contestants
+```
+
+Receipt:
+
+`artifacts/bioacoustic-contestants/contestants-20260524-214530/contestant-summary.json`
+
+Best result:
+
+```text
+song=canary-packet-trill
+decoder=packet-razor-streaming-faust
+degradation=logmel-blur-light
+language_score=1121.012
+realtime=62.6x
+timing=0.995
+frequency=0.944
+payload_bitrate=19.0 bps
+payload_accuracy=1.000
+correct=6/6
+```
+
+Nine-leak panel:
+
+```text
+clean-roundtrip          score=798.225  realtime=44.7x payload=1.000 timing=0.993 frequency=0.943 correct=6/6
+blur-light               score=720.550  realtime=56.8x payload=1.000 timing=0.995 frequency=0.669 correct=6/6
+warp-light               score=527.312  realtime=55.7x payload=1.000 timing=0.862 frequency=0.577 correct=6/6
+warp-light-blur          score=749.635  realtime=60.0x payload=1.000 timing=0.996 frequency=0.658 correct=6/6
+warp-heavy-blur          score=672.210  realtime=57.4x payload=1.000 timing=0.996 frequency=0.618 correct=6/6
+logmel-blur-light        score=1121.012 realtime=62.6x payload=1.000 timing=0.995 frequency=0.944 correct=6/6
+logmel-warp-light        score=1066.350 realtime=68.2x payload=1.000 timing=0.995 frequency=0.826 correct=6/6
+logmel-warp-light-blur   score=872.989  realtime=55.0x payload=1.000 timing=0.996 frequency=0.837 correct=6/6
+logmel-warp-heavy-blur   score=992.207  realtime=68.2x payload=1.000 timing=0.997 frequency=0.767 correct=6/6
+```
+
+This is the current honest arena leader by more than an order of magnitude over
+the earlier `92.522` best. The architectural lesson is stronger than the number:
+once the receiver is streaming and schedule-aware, the problem becomes local
+payload discrimination over a tiny candidate set. Wide MFCC search is an
+acquisition/reference tool, not the hot loop. The next non-cheating production
+cut is an acquisition state that uses Faust/front-end band flux to find the
+first clock hypothesis, then switches to scheduled packet windows exactly like
+this receipt.
+
 ### Obsolete Schedule-Entangled Receipt
 
 The best current receipt is:
