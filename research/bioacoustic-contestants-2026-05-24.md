@@ -158,6 +158,9 @@ The leaderboard is now split:
   `canary-packet-trill + baseline-mfcc-index`, `9.480`
 - known failure: razor's warp-light timing/payload fit can still collapse to
   zero even when clean and blur are strong.
+- rejected 3-bit dual-axis packet: best `12.849`, clean `8.084`, heavy warp
+  nearly dead. A separate band/rhythm bit did not survive well enough to keep
+  in the built-in contestant panel.
 
 ### Obsolete Schedule-Entangled Receipt
 
