@@ -72,9 +72,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Kiyo and second PS3 Eye were absent, so six-camera viability is not proven.
 - Current active sync smoke uses Scarlett speaker loopback as timing
   authority. `MimirBioacousticTimeline` now owns the active runtime watermark:
-  low-gain birdsong-like motifs with log-spaced roots, formant-rich syllables,
-  rhythm variation, and an order-3 de Bruijn phrase grammar. Any three
-  consecutive correctly decoded motifs identify the event index inside the
+  low-gain birdsong-like words with log-spaced roots, left/right speaker
+  variants, four formant-rich syllables, rhythm variation, and direct word
+  identity. Any correctly decoded word identifies the event index inside the
   current operating horizon. Runtime active sync reports
   `evidence=bioacoustic`; [[docs/bioacoustic-timeline-watermark|Bioacoustic
   Timeline Watermark]] is the current map. Sync reports now include
@@ -90,14 +90,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
   when passive confidence is weak. The active bioacoustic path has its own
   short-window analyzer floor instead of inheriting the passive two-second gate.
   It uses energy/onset proposals, dense fallback probes, bounded motif matching,
-  de Bruijn triplet anchoring, clock fit, and constrained local waveform
+  direct word anchoring, clock fit, and constrained local waveform
   correlation for final fractional delay. It also supports standalone source
   offset recovery from schedule/codebook state, which is the Raven/phone shape.
   Each classified motif carries per-band response evidence. The older
   `MimirChirpBinCalibrationModel` remains the controlled chirp-bin
   response/confusion/delay reference surface; use it to inform bioacoustic motif
   weighting, not as the runtime sound.
-  `Mimir.BufferSmoke --bioacoustic-self-test` proves code-valid motif anchors.
+  `Mimir.BufferSmoke --bioacoustic-self-test` proves direct word anchors.
   `--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples
   1269.5` recovers delayed canonical time below printed microsecond precision
   without loopback. `--chirp-only-sync-self-test --sample-rate 48000` recovers a

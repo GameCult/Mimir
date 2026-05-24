@@ -46,7 +46,7 @@ a named invariant that the native runtime cannot protect yet.
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
   empty declared sensor buffer should fail the run. Use `--bioacoustic-self-test`
   to render the active motif timeline into memory and verify that the decoder
-  recovers code-valid anchors. Use `--standalone-bioacoustic-self-test` to
+  recovers direct word anchors. Use `--standalone-bioacoustic-self-test` to
   verify that a receiver with only the codebook/schedule can recover canonical
   source offset from delayed audio.
 - `native/probes/wasapi_audio_cadence` captures WASAPI mic or render-loopback
@@ -65,10 +65,11 @@ a named invariant that the native runtime cannot protect yet.
   capture raw interleaved Float32 ASIO input with `--record-f32-interleaved`.
 - `MimirBioacousticTimeline` owns the active runtime watermark described in
   [[bioacoustic-timeline-watermark|Bioacoustic Timeline Watermark]]. It renders
-  a low-gain birdsong-like phrase language: 16 log-spaced motif symbols, three
-  formant-rich syllables per motif, rhythm variation, and an order-3 de Bruijn
-  grammar so any three correctly decoded consecutive motifs identify canonical
-  timeline position. Runtime active sync now reports `evidence=bioacoustic`.
+  a low-gain birdsong-like word language: 128 self-identifying word positions,
+  left-speaker and right-speaker variants, four formant-rich syllables per word,
+  rhythm variation, and direct word identity so a correctly decoded word
+  identifies canonical timeline position. Runtime active sync now reports
+  `evidence=bioacoustic`.
 - `MimirChirpletTimeline` owns the older structured chirplet calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
   It remains a reference/diagnostic path.
@@ -81,8 +82,8 @@ a named invariant that the native runtime cannot protect yet.
   and clock coherence, and fits a per-source sample clock from those anchors.
 - `MimirAudioSynchronizationAnalyzer` ports the first live sync measurement:
   sample-bearing audio blocks are resampled into the Scarlett loopback timeline.
-  The analyzer derives delay only from matched decoded triplet timeline anchors.
-  A source without at least three matched anchors has no timing report for that
+  The analyzer derives delay only from matched decoded timeline anchors.
+  A source without at least one matched anchor has no timing report for that
   window. It accepts Float32, Int16, Int24, and Int32 PCM windows so ASIO/native
   capture can feed true interface formats without a pre-conversion shim.
 - `MimirAudioSynchronizationStateTracker` owns the first smoothed per-source
@@ -183,13 +184,14 @@ a named invariant that the native runtime cannot protect yet.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
 3. Use bioacoustic motif response profiles from real microphones to tune
-   contour, formant, band, gain, and rhythm weighting without weakening the
-   standalone codebook/schedule receiver invariant. Keep chirp-bin calibration
-   artifacts as reference data, not the runtime target.
+   contour, formant, band, gain, rhythm weighting, and left/right speaker
+   separation without weakening the standalone word-identity receiver invariant.
+   Keep chirp-bin calibration artifacts as reference data, not the runtime
+   target.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the bioacoustic motif decoder
-   through real loopback and microphone paths so every correctly heard triplet
+   through real loopback and microphone paths so every correctly heard word
    becomes a deterministic timeline anchor before the actuator moves samples.
 5. Prove the bioacoustic hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.

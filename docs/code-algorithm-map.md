@@ -36,8 +36,8 @@ mode:
 
 Active bioacoustic decode uses known codebook/schedule state. It proposes motif
 times from local energy, classifies log-frequency/formant symbols by bounded
-matched motif scoring, constrains candidates through de Bruijn code-valid
-triplets, fits a clock, and records band response evidence for calibration.
+matched motif scoring, maps self-identifying words directly to canonical events,
+fits a clock, and records band response evidence for calibration.
 
 ## Invariants
 
@@ -810,10 +810,11 @@ Owns:
 
 Core state:
 
-- Sixteen log-spaced motif symbols.
-- Three short formant-rich syllables per motif.
-- A de Bruijn order-three schedule, so any valid motif triplet identifies one
-  canonical timeline location.
+- 128 self-identifying word positions.
+- Left-speaker and right-speaker variants for each word.
+- Four short formant-rich syllables per word.
+- Direct word identity, so a valid word identifies one canonical timeline
+  location in the current operating horizon.
 - Cached kernels by sample rate.
 
 Blocks:
@@ -821,7 +822,7 @@ Blocks:
 - Motif/syllable records: `MimirBioacousticMotifDefinition` and
   `MimirBioacousticSyllable`.
 - `RenderSegmentMonoFloat`: renders one low-gain timeline segment.
-- `DecodeStreamWindow`: detects motif frames, decodes code-valid triplet
+- `DecodeStreamWindow`: detects motif frames, decodes direct word
   anchors, fits source clock, refines standalone source offset, and emits the
   shared `MimirChirpletStreamDecode` shape.
 - `EventForIndex` / `EventsOverlapping`: expose canonical schedule metadata.
@@ -829,14 +830,14 @@ Blocks:
   suppresses nearby duplicate motif hits.
 - `ClassifyAt`: scores a local candidate against the motif bank.
 - `ScoreMotif`: matched motif scoring with per-band response evidence.
-- `DecodeAnchors`: maps detected motif triplets back to canonical event indexes.
+- `DecodeAnchors`: maps detected words back to canonical event indexes.
 - `FitClock` and `RefineSourceOffset`: recover source timeline position and
   sub-frame offset from known codebook/schedule state.
 
 Invariant:
 
 - A receiver with only the codebook, schedule, and its local audio buffer can
-  recover canonical time once it hears a code-valid motif triplet.
+  recover canonical time once it hears a valid motif word.
 
 ## Stage 9: Chirp-Bin Reference Timeline
 

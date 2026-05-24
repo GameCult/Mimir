@@ -21,33 +21,32 @@ internal sealed record BioacousticKernel(
 internal sealed record BioacousticKernelSet(
     BioacousticKernel[] Symbols);
 
-internal sealed record BioacousticTimelinePlan(
-    int[] Symbols,
-    int Order,
-    int[] TimelineSymbols,
-    Dictionary<string, int> CodeToIndex);
+public enum MimirBioacousticSpeaker
+{
+    Left = 0,
+    Right = 1,
+}
 
 public sealed class MimirBioacousticTimeline
 {
     public const int SampleRate = 48_000;
     public const double SegmentSeconds = 0.5;
-    public const int SymbolCount = 16;
-    public const int TimelineOrder = 3;
+    public const int WordCount = 128;
+    public const int SpeakerCount = 2;
+    public const int SymbolCount = WordCount * SpeakerCount;
+    public const int TimelineOrder = 1;
 
     private const double FirstEventSeconds = 0.08;
     private const double EventSpacingSeconds = 0.16;
     private const double MotifDurationSeconds = 0.118;
-    private const double SyllableSeconds = 0.034;
-    private const double LowestRootHz = 3_200.0;
-    private const double HighestRootHz = 8_800.0;
-    private const double Gain = 0.038;
+    private const double LowestRootHz = 2_600.0;
+    private const double HighestRootHz = 9_600.0;
+    private const double Gain = 0.030;
     private const int MaxSymbolCandidatesPerFrame = 3;
-    private const double ProposalBudgetMultiplier = 7.0;
+    private const double ProposalBudgetMultiplier = 4.0;
 
-    private static readonly int[] TimelineSymbols = RotateToDistinctOpening(BuildDeBruijn(SymbolCount, TimelineOrder));
     private static readonly MimirBioacousticMotifDefinition[] Motifs = BuildMotifs();
     private static readonly ConcurrentDictionary<int, BioacousticKernelSet> KernelSets = new();
-    private static readonly ConcurrentDictionary<string, BioacousticTimelinePlan> TimelinePlans = new();
 
     public static MimirBioacousticTimeline Default { get; } = new();
 
@@ -61,6 +60,19 @@ public sealed class MimirBioacousticTimeline
         var segmentStartSeconds = segmentIndex * SegmentSeconds;
         var samples = new float[(int)Math.Round(SegmentSeconds * sampleRate)];
         foreach (var timelineEvent in EventsOverlapping(segmentStartSeconds, SegmentSeconds))
+        {
+            AddMotif(samples, sampleRate, timelineEvent, segmentStartSeconds, Gain);
+        }
+
+        return samples;
+    }
+
+    public float[] RenderSegmentMonoFloat(ulong segmentIndex, int sampleRate, MimirBioacousticSpeaker speaker)
+    {
+        var segmentStartSeconds = segmentIndex * SegmentSeconds;
+        var samples = new float[(int)Math.Round(SegmentSeconds * sampleRate)];
+        foreach (var timelineEvent in EventsOverlapping(segmentStartSeconds, SegmentSeconds)
+                     .Where(timelineEvent => SpeakerForSymbol(timelineEvent.SymbolId) == speaker))
         {
             AddMotif(samples, sampleRate, timelineEvent, segmentStartSeconds, Gain);
         }
@@ -315,89 +327,35 @@ public sealed class MimirBioacousticTimeline
         IReadOnlyList<MimirChirpletTransformFrame> frames,
         int sampleRate)
     {
-        var plan = GetTimelinePlan();
-        if (frames.Count < plan.Order)
+        if (frames.Count == 0)
         {
             return [];
         }
 
         var candidates = new List<MimirChirpletTimelineAnchor>();
-        for (var index = 0; index <= frames.Count - plan.Order; index++)
+        foreach (var frame in frames)
         {
-            var window = frames.Skip(index).Take(plan.Order).ToArray();
-            var consecutive = true;
-            for (var gap = 0; gap < window.Length - 1; gap++)
+            foreach (var candidate in frame.Candidates)
             {
-                if (!IsConsecutive(window[gap], window[gap + 1], sampleRate))
-                {
-                    consecutive = false;
-                    break;
-                }
-            }
-
-            if (!consecutive)
-            {
-                continue;
-            }
-
-            foreach (var candidatePath in CandidateSymbolPaths(window))
-            {
-                var code = CodeKey(candidatePath.Select(candidate => candidate.SymbolId));
-                if (!plan.CodeToIndex.TryGetValue(code, out var eventIndex))
-                {
-                    continue;
-                }
-
-                var firstEvent = Default.EventForIndex((ulong)eventIndex);
-                var gapError = 0.0;
-                for (var gap = 0; gap < candidatePath.Count - 1; gap++)
-                {
-                    var measuredGap = (candidatePath[gap + 1].SampleOffset - candidatePath[gap].SampleOffset) / sampleRate;
-                    gapError += Math.Abs(measuredGap - EventSpacingSeconds);
-                }
-
-                var gapConfidence = 1.0 / (1.0 + gapError / 0.006);
-                var energyConfidence = Math.Clamp(candidatePath.Average(candidate => candidate.Energy), 0.0, 1.0);
+                var eventIndex = EventIndexForSymbol(candidate.SymbolId);
+                var expectedEvent = Default.EventForIndex((ulong)eventIndex);
+                var speakerConfidence = SpeakerForSymbol(candidate.SymbolId) == SpeakerForEvent((ulong)eventIndex)
+                    ? 1.0
+                    : 0.25;
+                var energyConfidence = Math.Clamp(candidate.Energy, 0.0, 1.0);
                 candidates.Add(new MimirChirpletTimelineAnchor(
                     (ulong)eventIndex,
-                    firstEvent.StartSeconds,
-                    candidatePath[0].SampleOffset,
-                    gapConfidence * 0.35 + energyConfidence * 0.65,
-                    candidatePath
-                        .Select(candidate => new MimirChirpletSymbolObservation(
-                            candidate.SymbolId,
-                            candidate.SampleOffset,
-                            candidate.Energy))
-                        .ToArray()));
+                    expectedEvent.StartSeconds,
+                    candidate.SampleOffset,
+                    energyConfidence * speakerConfidence,
+                    [new MimirChirpletSymbolObservation(
+                        candidate.SymbolId,
+                        candidate.SampleOffset,
+                        candidate.Energy)]));
             }
         }
 
         return SelectCoherentAnchorPath(candidates, sampleRate);
-    }
-
-    private static IEnumerable<IReadOnlyList<MimirChirpletSymbolCandidate>> CandidateSymbolPaths(
-        IReadOnlyList<MimirChirpletTransformFrame> frames)
-    {
-        var path = new MimirChirpletSymbolCandidate[frames.Count];
-        IEnumerable<IReadOnlyList<MimirChirpletSymbolCandidate>> Recurse(int index)
-        {
-            if (index == frames.Count)
-            {
-                yield return path.ToArray();
-                yield break;
-            }
-
-            foreach (var candidate in frames[index].Candidates)
-            {
-                path[index] = candidate;
-                foreach (var result in Recurse(index + 1))
-                {
-                    yield return result;
-                }
-            }
-        }
-
-        return Recurse(0);
     }
 
     private static IReadOnlyList<MimirChirpletTimelineAnchor> SelectCoherentAnchorPath(
@@ -628,15 +586,6 @@ public sealed class MimirBioacousticTimeline
         return kept.OrderBy(frame => frame.SampleOffset).ToArray();
     }
 
-    private static bool IsConsecutive(
-        MimirChirpletTransformFrame first,
-        MimirChirpletTransformFrame second,
-        int sampleRate)
-    {
-        var seconds = (second.SampleOffset - first.SampleOffset) / sampleRate;
-        return seconds >= EventSpacingSeconds * 0.62 && seconds <= EventSpacingSeconds * 1.38;
-    }
-
     private static void AddMotif(
         float[] samples,
         int sampleRate,
@@ -720,37 +669,55 @@ public sealed class MimirBioacousticTimeline
     {
         var contourBank = new[]
         {
-            new[] { 1.00, 1.24, 1.10, 1.42, 1.16, 1.04 },
-            new[] { 1.00, 0.86, 1.18, 1.08, 0.94, 1.30 },
-            new[] { 1.00, 1.36, 1.58, 1.28, 1.08, 1.22 },
-            new[] { 1.00, 1.10, 0.82, 1.02, 1.34, 1.56 },
+            new[] { 1.00, 1.22, 1.09, 1.48, 1.18, 1.03, 1.34, 1.18 },
+            new[] { 1.00, 0.84, 1.20, 1.07, 0.93, 1.32, 1.12, 0.98 },
+            new[] { 1.00, 1.38, 1.60, 1.26, 1.07, 1.24, 1.45, 1.16 },
+            new[] { 1.00, 1.11, 0.81, 1.02, 1.36, 1.57, 1.20, 1.42 },
+            new[] { 1.00, 0.92, 1.42, 1.18, 1.53, 1.10, 0.96, 1.28 },
+            new[] { 1.00, 1.30, 0.88, 1.16, 1.05, 1.51, 1.39, 1.08 },
+            new[] { 1.00, 1.56, 1.24, 0.91, 1.15, 1.37, 0.98, 1.22 },
+            new[] { 1.00, 0.78, 0.96, 1.44, 1.62, 1.25, 1.08, 1.33 },
         };
         var rhythmOffsets = new[]
         {
-            new[] { 0.000, 0.039, 0.079 },
-            new[] { 0.000, 0.032, 0.083 },
-            new[] { 0.000, 0.046, 0.073 },
-            new[] { 0.000, 0.035, 0.069 },
+            new[] { 0.000, 0.024, 0.057, 0.091 },
+            new[] { 0.000, 0.031, 0.049, 0.087 },
+            new[] { 0.000, 0.019, 0.061, 0.082 },
+            new[] { 0.000, 0.036, 0.064, 0.096 },
+            new[] { 0.000, 0.027, 0.071, 0.094 },
+            new[] { 0.000, 0.041, 0.059, 0.089 },
+            new[] { 0.000, 0.022, 0.052, 0.103 },
+            new[] { 0.000, 0.034, 0.076, 0.098 },
         };
         var motifs = new MimirBioacousticMotifDefinition[SymbolCount];
         var logLowest = Math.Log(LowestRootHz);
-        var logStep = Math.Log(HighestRootHz / LowestRootHz) / (SymbolCount - 1);
+        var logStep = Math.Log(HighestRootHz / LowestRootHz) / (WordCount - 1);
         for (var symbol = 0; symbol < motifs.Length; symbol++)
         {
-            var root = Math.Exp(logLowest + symbol * logStep);
-            var contour = contourBank[symbol % contourBank.Length];
-            var rhythm = rhythmOffsets[(symbol / contourBank.Length) % rhythmOffsets.Length];
-            var syllables = new MimirBioacousticSyllable[3];
+            var word = EventIndexForSymbol(symbol);
+            var speaker = SpeakerForSymbol(symbol);
+            var speakerShift = speaker == MimirBioacousticSpeaker.Left ? 0.94 : 1.08;
+            var root = Math.Exp(logLowest + word * logStep) * speakerShift;
+            var contour = contourBank[HashToRange(word, speaker, 0, contourBank.Length)];
+            var rhythm = rhythmOffsets[HashToRange(word, speaker, 1, rhythmOffsets.Length)];
+            var syllables = new MimirBioacousticSyllable[4];
             for (var syllable = 0; syllable < syllables.Length; syllable++)
             {
                 var start = root * contour[syllable * 2];
                 var end = root * contour[syllable * 2 + 1];
+                var duration = 0.020 + 0.004 * HashToRange(word, speaker, 10 + syllable, 4);
+                var weight = 1.0 - syllable * 0.08;
+                if (speaker == MimirBioacousticSpeaker.Right)
+                {
+                    weight *= syllable % 2 == 0 ? 0.90 : 1.08;
+                }
+
                 syllables[syllable] = new MimirBioacousticSyllable(
                     rhythm[syllable],
-                    SyllableSeconds,
-                    Math.Clamp(start, 2_700.0, 13_500.0),
-                    Math.Clamp(end, 2_700.0, 13_500.0),
-                    1.0 - syllable * 0.10);
+                    duration,
+                    Math.Clamp(start, 2_300.0, 14_600.0),
+                    Math.Clamp(end, 2_300.0, 14_600.0),
+                    weight);
             }
 
             motifs[symbol] = new MimirBioacousticMotifDefinition(symbol, syllables);
@@ -761,84 +728,30 @@ public sealed class MimirBioacousticTimeline
 
     private static int SymbolForEvent(ulong eventIndex)
     {
-        var plan = GetTimelinePlan();
-        return plan.TimelineSymbols[(int)(eventIndex % (ulong)plan.TimelineSymbols.Length)];
+        var word = (int)(eventIndex % WordCount);
+        return word * SpeakerCount + (int)SpeakerForEvent(eventIndex);
     }
+
+    private static int EventIndexForSymbol(int symbolId) =>
+        Math.Clamp(symbolId / SpeakerCount, 0, WordCount - 1);
+
+    private static MimirBioacousticSpeaker SpeakerForEvent(ulong eventIndex) =>
+        (eventIndex & 1UL) == 0UL ? MimirBioacousticSpeaker.Left : MimirBioacousticSpeaker.Right;
+
+    private static MimirBioacousticSpeaker SpeakerForSymbol(int symbolId) =>
+        (symbolId & 1) == 0 ? MimirBioacousticSpeaker.Left : MimirBioacousticSpeaker.Right;
 
     private static double EventStartSeconds(ulong eventIndex) =>
         FirstEventSeconds + eventIndex * EventSpacingSeconds;
 
-    private static BioacousticTimelinePlan GetTimelinePlan() =>
-        TimelinePlans.GetOrAdd("default", _ => new BioacousticTimelinePlan(
-            Enumerable.Range(0, SymbolCount).ToArray(),
-            TimelineOrder,
-            TimelineSymbols,
-            BuildCodeIndex(TimelineSymbols, TimelineOrder)));
-
-    private static int[] BuildDeBruijn(int alphabetSize, int order)
+    private static int HashToRange(int word, MimirBioacousticSpeaker speaker, int salt, int range)
     {
-        var a = new int[alphabetSize * order];
-        var sequence = new List<int>((int)Math.Pow(alphabetSize, order));
-
-        void Db(int t, int p)
-        {
-            if (t > order)
-            {
-                if (order % p == 0)
-                {
-                    for (var index = 1; index <= p; index++)
-                    {
-                        sequence.Add(a[index]);
-                    }
-                }
-
-                return;
-            }
-
-            a[t] = a[t - p];
-            Db(t + 1, p);
-            for (var j = a[t - p] + 1; j < alphabetSize; j++)
-            {
-                a[t] = j;
-                Db(t + 1, t);
-            }
-        }
-
-        Db(1, 1);
-        return sequence.ToArray();
+        var value = (uint)(word * 0x45d9f3b + ((int)speaker + 1) * 0x119de1f3 + salt * 0x27d4eb2d);
+        value ^= value >> 16;
+        value *= 0x7feb352d;
+        value ^= value >> 15;
+        value *= 0x846ca68b;
+        value ^= value >> 16;
+        return (int)(value % (uint)Math.Max(1, range));
     }
-
-    private static int[] RotateToDistinctOpening(int[] sequence)
-    {
-        for (var index = 0; index < sequence.Length; index++)
-        {
-            var first = sequence[index];
-            var second = sequence[(index + 1) % sequence.Length];
-            var third = sequence[(index + 2) % sequence.Length];
-            if (first != second && first != third && second != third)
-            {
-                return sequence.Skip(index).Concat(sequence.Take(index)).ToArray();
-            }
-        }
-
-        return sequence;
-    }
-
-    private static Dictionary<string, int> BuildCodeIndex(IReadOnlyList<int> symbols, int order)
-    {
-        var map = new Dictionary<string, int>(symbols.Count, StringComparer.Ordinal);
-        for (var index = 0; index < symbols.Count; index++)
-        {
-            var code = CodeKey(Enumerable.Range(0, order).Select(offset => symbols[(index + offset) % symbols.Count]));
-            if (!map.ContainsKey(code))
-            {
-                map[code] = index;
-            }
-        }
-
-        return map;
-    }
-
-    private static string CodeKey(IEnumerable<int> symbols) =>
-        string.Join(",", symbols);
 }

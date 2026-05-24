@@ -100,20 +100,21 @@ is the current timing authority when active calibration is playing, but Scarlett
 production capture belongs on ASIO rather than WASAPI shared mode.
 `MimirBioacousticTimeline` owns the active runtime watermark described in
 [[docs/bioacoustic-timeline-watermark|Bioacoustic Timeline Watermark]]: a
-low-gain birdsong-like phrase language with 16 log-spaced motif symbols, three
-formant-rich syllables per motif, rhythm variation, and an order-3 de Bruijn
-grammar. Any three consecutive correctly decoded motifs identify the event
-index inside the current operating horizon. Mimir continuously queues that
-timeline through Fensalir audio and decodes timing as `bioacoustic` evidence.
+low-gain birdsong-like word language with 128 self-identifying word positions,
+left-speaker and right-speaker variants, four formant-rich syllables per word,
+rhythm variation, and direct word identity. Any correctly decoded word identifies
+the event index inside the current operating horizon. Mimir queues the left
+vocabulary to the left speaker and the right vocabulary to the right speaker
+through Fensalir audio, then decodes timing as `bioacoustic` evidence.
 `MimirAudioSynchronizationSettings.Mode` chooses whether active calibration is
 allowed: `chirp-only` emits the active bioacoustic witness, `passive` stays silent
 and uses program-audio phase correlation, and `hybrid` uses passive evidence by
 default while emitting active pilot chunks only when passive confidence is weak.
 Active decoding does not inherit the passive two-second analysis floor: passive
 still needs a longer program-audio window, while the bioacoustic witness can
-decode once at least a code-valid motif triplet is present. The bioacoustic
-detector now uses generous motif proposals, matched motif scoring, triplet
-grammar decoding, source clock fitting, and fractional waveform refinement.
+decode once at least one self-identifying word is present. The bioacoustic
+detector now uses bounded motif proposals, matched motif scoring, direct word
+anchors, source clock fitting, and fractional waveform refinement.
 Pairwise sync compares matched anchors first, then only accepts independent
 clock-fit offsets inside the live latency horizon so period aliases do not
 become absurd reports. The old chirp-bin detector remains as a
@@ -124,7 +125,7 @@ timing residuals, delay hypotheses, phase summaries, and an adaptive codebook
 plan. The analyzer keeps raw profiles even when no timing report is accepted,
 so physical mic failures can still guide bioacoustic motif weighting. Reports/states
 expose `delayUs` next to fractional sample delay.
-`Mimir.BufferSmoke --bioacoustic-self-test` proves code-valid motif anchors.
+`Mimir.BufferSmoke --bioacoustic-self-test` proves direct word anchors.
 `--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`
 proves a receiver with only codebook/schedule state can recover delayed source
 time to below printed microsecond precision. `--chirp-only-sync-self-test

@@ -69,10 +69,10 @@ one attractive correlation peak.
 
 The active calibration path is deliberately receiver-cheap in both `chirp-only`
 and `hybrid`. `MimirBioacousticTimeline` is the live runtime witness: it emits
-low-gain log-frequency motifs made from short formant-rich syllables, rhythm
-offsets, and a de Bruijn triplet grammar. Acquisition is an energy proposal pass
-plus bounded motif matching; timeline placement is the same code-valid triplet
-trellis, and a constrained local waveform correlation around the decoded delay
+low-gain log-frequency words made from short formant-rich syllables, rhythm
+offsets, and speaker-specific variants. Acquisition is an energy proposal pass
+plus bounded motif matching; timeline placement comes from direct word identity,
+and a constrained local waveform correlation around the decoded delay
 provides the final fractional offset. The decoder keeps per-band response
 evidence for each detected motif so the same stream can calibrate timing and the
 speaker/room/mic transfer function.
@@ -95,8 +95,8 @@ sequence order so the timeline remains unique without pretending dead bands
 still carry code.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`;
-it renders the bioacoustic timeline, decodes motif anchors, and requires
-code-valid triplets plus a stable source clock. The standalone invariant is
+it renders the bioacoustic timeline, decodes direct word anchors, and requires a
+stable source clock. The standalone invariant is
 `--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`;
 it proves that a delayed receiver can recover canonical source time from the
 known codebook and schedule alone. `chirp-only` emits this witness continuously;
@@ -156,7 +156,7 @@ current studio-monitor-to-Scarlett-mic acoustic path was already weak by
 unproven until a measured transducer/mic path earns it.
 
 The active bioacoustic timing proof now runs in memory through the same runtime
-analyzer path. `--bioacoustic-self-test` proves code-valid motif anchors,
+analyzer path. `--bioacoustic-self-test` proves direct word anchors,
 `--standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5`
 proves a receiver can recover canonical source time from delayed audio alone,
 and `--chirp-only-sync-self-test --sample-rate 48000` recovers a 317.375-sample
@@ -169,10 +169,10 @@ through `asio-ch3`.
 The full probe runtime config now enables sample-bearing blocks for every local
 audio source. `MimirBioacousticTimeline` owns the emitted calibration stream and
 the motif-matching shape used to analyze it. The default timeline is a
-deterministic order-3 de Bruijn symbol sequence over 16 log-frequency motifs.
-Any three consecutive correctly detected motifs identify the event index inside
-the current operating horizon, so a receiver can place its audio window on the
-canonical timeline without being handed Mimir's runtime clock. Mimir queues
+deterministic set of self-identifying log-frequency words with separate left and
+right speaker variants. Any correctly detected word identifies the event index
+inside the current operating horizon, so a receiver can place its audio window
+on the canonical timeline without being handed Mimir's runtime clock. Mimir queues
 half-second PCM segments ahead of the audio cursor. Each motif is a short phrase
 of formant-rich syllables with log-frequency contour and rhythm offsets, so the
 code is carried by both spectral shape and timing.
@@ -180,10 +180,10 @@ code is carried by both spectral shape and timing.
 The intended decoder is a compact constrained motif transform, not a generic
 time-frequency explorer and not an outlier filter around bad guesses. Mimir owns
 the emitter, so the receiver projects each mic stream against the known motif
-dictionary, produces transform frames with multiple symbol candidates, and
-scores candidate triplets through the de Bruijn map. A triplet only becomes a
-canonical timeline anchor when its symbol likelihoods, measured inter-motif
-gaps, and neighboring anchors agree on one local sample clock. A decoded anchor
+dictionary, produces transform frames with multiple word candidates, and maps
+the best coherent word identities directly to canonical events. A word becomes a
+canonical timeline anchor when its motif likelihood and neighboring anchors
+agree on one local sample clock. A decoded anchor
 means observed sample offset `S` corresponds to emitted event time `T`. A stream
 of anchors fits the source clock directly:
 
@@ -193,8 +193,8 @@ observed_sample = source_offset + canonical_seconds * effective_sample_rate
 
 Delay and sampling-rate offset are derived by comparing the loopback clock fit
 to each mic clock fit over common canonical time. The state tracker is not
-allowed to launder invalid codewords into plausible timing. If a stream cannot
-produce at least three matched canonical anchors, it has not decoded timing for
+allowed to launder invalid words into plausible timing. If a stream cannot
+produce at least one matched canonical anchor, it has not decoded timing for
 that window. Reports carry rounded integer delay, fractional delay, and the
 count/confidence of timeline-symbol anchors used to derive the report.
 
@@ -233,7 +233,7 @@ flowchart TD
     E --> G["matched chirplet traces"]
     F --> G
     G --> H["symbol likelihood events"]
-    H --> L["triplet timeline anchors"]
+    H --> L["timeline anchors"]
     L --> M["per-source clock fit"]
     M --> N["delay + SRO"]
     G --> I["per-source calibration profile"]

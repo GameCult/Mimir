@@ -189,17 +189,31 @@ public sealed class MimirRuntime : IAquariumRuntime
 
         var segmentCount = audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid ? 1 : CalibrationBatchSegments;
         var outputGain = audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid ? watermarkGain : calibrationGain;
-        var batch = RenderCalibrationBatchPcm16Base64(
+        var leftBatch = RenderCalibrationBatchPcm16Base64(
             calibrationSegmentIndex,
             segmentCount,
+            MimirBioacousticSpeaker.Left,
             out var peak);
+        var rightBatch = RenderCalibrationBatchPcm16Base64(
+            calibrationSegmentIndex,
+            segmentCount,
+            MimirBioacousticSpeaker.Right,
+            out var rightPeak);
+        peak = Math.Max(peak, rightPeak);
         audio.EnqueuePcm16Base64(
-            batch,
+            leftBatch,
             MimirBioacousticTimeline.SampleRate,
             channels: 1,
-            gain: outputGain);
+            gain: outputGain,
+            pan: -1.0f);
+        audio.EnqueuePcm16Base64(
+            rightBatch,
+            MimirBioacousticTimeline.SampleRate,
+            channels: 1,
+            gain: outputGain,
+            pan: 1.0f);
         Console.WriteLine(
-            $"mimir-bioacoustic-batch mode={DescribeAudioSyncMode()} firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirBioacousticTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={outputGain:0.###} base64Bytes={batch.Length}");
+            $"mimir-bioacoustic-batch mode={DescribeAudioSyncMode()} firstSegment={calibrationSegmentIndex} segments={segmentCount} seconds={segmentCount * MimirBioacousticTimeline.SegmentSeconds:0.00} peak={peak:0.000000} gain={outputGain:0.###} leftBase64Bytes={leftBatch.Length} rightBase64Bytes={rightBatch.Length}");
         if (audioSyncSettings.Mode == MimirAudioSyncMode.Hybrid)
         {
             lastHybridWatermarkSegment = (long)calibrationSegmentIndex;
@@ -234,6 +248,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private static string RenderCalibrationBatchPcm16Base64(
         ulong firstSegment,
         int segmentCount,
+        MimirBioacousticSpeaker speaker,
         out float peak)
     {
         var samplesPerSegment = (int)Math.Round(MimirBioacousticTimeline.SegmentSeconds * MimirBioacousticTimeline.SampleRate);
@@ -244,7 +259,8 @@ public sealed class MimirRuntime : IAquariumRuntime
         {
             var samples = MimirBioacousticTimeline.Default.RenderSegmentMonoFloat(
                 firstSegment + (ulong)segment,
-                MimirBioacousticTimeline.SampleRate);
+                MimirBioacousticTimeline.SampleRate,
+                speaker);
             for (var index = 0; index < samples.Length; index++)
             {
                 peak = Math.Max(peak, Math.Abs(samples[index]));

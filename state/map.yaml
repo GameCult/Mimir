@@ -65,10 +65,12 @@ accepted_design:
     runtime rolling buffers; it does not carry pixels/audio payloads or own the
     final local-device hot path.
   - `MimirBioacousticTimeline` is the active runtime watermark. It renders a
-    low-gain birdsong-like phrase language with 16 log-spaced motif symbols,
-    three formant-rich syllables per motif, rhythm variation, and an order-3
-    de Bruijn grammar. `MimirAudioSynchronizationAnalyzer` now reports active
-    timing as `evidence=bioacoustic`; the old chirp-bin path remains a
+    low-gain birdsong-like word language with 128 self-identifying word
+    positions, left-speaker and right-speaker variants, four formant-rich
+    syllables per word, rhythm variation, and direct word identity instead of a
+    de Bruijn grammar. `MimirRuntime` emits separate panned vocabularies per
+    speaker. `MimirAudioSynchronizationAnalyzer` reports active timing as
+    `evidence=bioacoustic`; the old chirp-bin path remains a
     calibration/reference artifact with ASIO tooling.
   - The diagnostic audio path can optionally carry base64 float sample payloads
     for sync smoke tests. `MimirChirpletTimeline` owns the older structured
@@ -109,10 +111,10 @@ accepted_design:
     contradictory evidence and carry zero confidence; single-window passive
     confidence is capped below certainty until repeated state earns it.
     `MimirBioacousticTimeline` is now the active calibration witness for both
-    chirp-only and hybrid: 16 log-spaced motif symbols, three formant-rich
-    syllables per motif, rhythm variation, and an order-3 de Bruijn grammar so
-    any correctly decoded consecutive triplet identifies one canonical timeline
-    location. The analyzer refines final active delay with constrained local
+    chirp-only and hybrid: 128 self-identifying word positions, left/right
+    speaker variants, four formant-rich syllables per word, rhythm variation,
+    and direct word identity so any correctly decoded word identifies one
+    canonical timeline location. The analyzer refines final active delay with constrained local
     waveform correlation around the decoded anchor delay. Each detected motif
     carries per-band response evidence, and the next calibration cut should use
     those profiles to tune contours, formants, usable bands, gain, and rhythm
@@ -279,8 +281,8 @@ current_status:
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the bioacoustic
     motif timeline produces deterministic synthetic active sync. The next
-    invariant is code-valid motif triplets producing stable canonical anchors and
-    clock fits through real loopback and microphones, so the actuator can use
+    invariant is self-identifying motif words producing stable canonical anchors
+    and clock fits through real loopback and microphones, so the actuator can use
     decoded time instead of filtered lag guesses. Replace the remaining
     diagnostic JSON-line process bridges with direct native capture drivers that
     push buffer handles into Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports

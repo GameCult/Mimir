@@ -7,13 +7,14 @@ That shape proved the math, but it is the wrong animal for a room.
 
 Mimir now treats active acoustic sync as a low-gain bioacoustic language: short
 birdsong-like motifs whose identity survives through contour, log-frequency
-position, spectral envelope, rhythm, and phrase order. The receiver should not
+position, spectral envelope, rhythm, and speaker-specific timbre. The receiver should not
 ask only "which bin fired?" It should ask:
 
 ```text
 which motif contour did I hear?
-where does this motif phrase sit in the canonical grammar?
-what delay and clock fit make the whole phrase coherent?
+which self-identifying word did that contour encode?
+which speaker vocabulary emitted it?
+what delay and clock fit make the heard words coherent?
 what did this room/mic path do to the spectrum?
 ```
 
@@ -21,14 +22,18 @@ what did this room/mic path do to the spectrum?
 
 `MimirBioacousticTimeline` is the current active runtime watermark.
 
-- 16 log-spaced motif symbols.
-- Each motif contains three short syllables.
+- 128 self-identifying word positions, each with a left-speaker and
+  right-speaker variant.
+- Each word contains four short syllables.
 - Each syllable carries a log-frequency glide plus formant-like partials.
-- Motif rhythm varies by symbol group.
-- The timeline is an order-3 de Bruijn grammar, so any three correctly decoded
-  consecutive motifs identify canonical event position.
-- The decoder emits motif candidates, code-valid triplet anchors, a source
-  clock fit, and per-band response evidence.
+- Motif rhythm, contour, syllable duration, root, and speaker tint vary by word.
+- No de Bruijn grammar is used in the active bioacoustic path. A word identifies
+  its canonical event directly inside the current operating horizon.
+- The decoder emits motif candidates, direct word anchors, a source clock fit,
+  and per-band response evidence.
+- Runtime emission sends the left vocabulary to the left speaker and the right
+  vocabulary to the right speaker, so microphones can learn each side of the
+  room separately.
 - The runtime active sync evidence kind is `bioacoustic`.
 
 The old `MimirChirpBinTimeline` remains as a calibration/reference artifact
@@ -44,7 +49,7 @@ watermark target.
 - deterministic phrase schedule;
 - PCM rendering for active emission;
 - streaming motif scoring;
-- de Bruijn triplet anchor decoding;
+- direct word anchor decoding;
 - source clock fitting;
 - response-band evidence.
 
@@ -65,8 +70,9 @@ Birdsong survives ugly channels because the information is redundant:
 - contour survives when absolute pitch shifts;
 - rhythm survives when frequency response is bad;
 - formant envelope survives when one band dies;
-- phrase grammar survives when individual syllables are weak;
-- repeated local structure gives the receiver more than one way to recover time.
+- speaker-specific variants expose room asymmetry;
+- repeated local structure gives the receiver more than one way to recover time
+  and response.
 
 That is the physical path Mimir needs. A phone mic, camera mic, Scarlett input,
 or network receiver should be able to recognize canonical time from a damaged
@@ -84,8 +90,8 @@ dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp
 
 Expected state:
 
-- `--bioacoustic-self-test` recovers code-valid motif anchors across the
-  canonical phrase.
+- `--bioacoustic-self-test` recovers direct word anchors across the canonical
+  phrase.
 - `--standalone-bioacoustic-self-test` recovers delayed canonical source time
   from codebook/schedule state alone.
 - `--chirp-only-sync-self-test` reports `evidence=bioacoustic` and recovers
@@ -106,7 +112,7 @@ cut is a true streaming log-mel receiver:
 audio window
 -> log-mel / constant-Q evidence surface
 -> motif/formant/contour candidates
--> phrase grammar decode
+-> direct word identity decode
 -> global delay and clock hypothesis
 -> path response model
 ```

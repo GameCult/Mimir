@@ -201,8 +201,8 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 BestFrameEnergy(candidateDecode),
                 deterministicFit.MatchedEvents,
                 deterministicFit.Confidence,
-                deterministicFit.MatchedEvents >= 3 ? "report" : "insufficient-anchors"));
-            if (deterministicFit.MatchedEvents < 3)
+                deterministicFit.MatchedEvents >= 1 ? "report" : "insufficient-anchors"));
+            if (deterministicFit.MatchedEvents < 1)
             {
                 continue;
             }
@@ -305,7 +305,7 @@ public sealed class MimirAudioSynchronizationAnalyzer
                 Math.Sqrt(referenceAnchor.Confidence * candidateAnchor.Confidence)));
         }
 
-        if (matched.Count >= 3)
+        if (matched.Count >= 1)
         {
             var totalWeight = matched.Sum(pair => Math.Max(1.0e-6, pair.Weight));
             var delay = matched.Sum(pair => pair.Delay * Math.Max(1.0e-6, pair.Weight)) / totalWeight;
