@@ -2333,7 +2333,7 @@ static IReadOnlyList<CepstralWordObservation> DecodeStreamingPacketRazorWords(
             var template = contestant.RenderEventMonoFloat((ulong)eventIndex, sampleRate, payload);
             for (var offset = start; offset <= end; offset += 2)
             {
-                var score = ScoreContestantOffset(samples, template, offset, motifSamples);
+                var score = ScoreStreamingPacketOffset(samples, template, offset, motifSamples);
                 if (score > bestScore)
                 {
                     bestScore = score;
@@ -2376,13 +2376,19 @@ static double RefineStreamingOffset(
     }
 
     var template = contestant.RenderEventMonoFloat(eventIndex, sampleRate, payload);
-    var left = ScoreContestantOffset(samples, template, bestOffset - 1, motifSamples);
-    var center = ScoreContestantOffset(samples, template, bestOffset, motifSamples);
-    var right = ScoreContestantOffset(samples, template, bestOffset + 1, motifSamples);
+    var left = ScoreStreamingPacketOffset(samples, template, bestOffset - 1, motifSamples);
+    var center = ScoreStreamingPacketOffset(samples, template, bestOffset, motifSamples);
+    var right = ScoreStreamingPacketOffset(samples, template, bestOffset + 1, motifSamples);
     var denominator = left - 2.0 * center + right;
     return Math.Abs(denominator) <= 1.0e-12
         ? bestOffset
         : bestOffset + Math.Clamp(0.5 * (left - right) / denominator, -0.5, 0.5);
+}
+
+static double ScoreStreamingPacketOffset(float[] samples, float[] template, int offset, int motifSamples)
+{
+    var score = ScoreContestantOffset(samples, template, offset, motifSamples);
+    return double.IsFinite(score) ? Math.Abs(score) : score;
 }
 
 static double ScoreContestantOffset(float[] samples, float[] template, int offset, int motifSamples)

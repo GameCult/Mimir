@@ -344,6 +344,56 @@ packet-local decoding takes over. The important architectural result still
 stands: acquisition and tracking are separate states. Once the clock offset is
 known, the streaming packet hot loop is tiny and exact.
 
+### Second Physical ASIO Packet Receipt
+
+After placing both microphones, the same 192 kHz packet run was repeated:
+
+```powershell
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --render-contestant-f32 --song canary-packet-trill --output artifacts/asio/canary-packet-192k-f32.raw --sample-rate 192000 --seconds 4
+.\native\probes\asio_audio_cadence\build\Release\asio_audio_cadence.exe --set-sample-rate 192000 --play-f32-mono artifacts\asio\canary-packet-192k-f32.raw --record-f32-interleaved artifacts\asio\scarlett-canary-packet-192k-rerun-f32.raw --play-gain 1.0
+```
+
+Capture:
+
+```text
+sampleRate=192000 frames=765952 channels=4
+input[0]="Input 1" input[1]="Input 2" input[2]="Loopback 1" input[3]="Loopback 2"
+source rms=0.00694 peak=0.02913
+ch0 rms=0.02612 peak=0.32488
+ch1 rms=0.01530 peak=0.21927
+ch2/ch3 rms=0.00692 peak=0.02913
+correlation lags: ch0=2519, ch1=2122, ch2=1623, ch3=1623 samples
+```
+
+With the loopback acquisition offset (`1623` samples), loopback remained
+perfect and the two mic channels showed partial lock:
+
+```text
+ch0 events=14/37 payload=0.162 timing=0.745 delayUs=8500.880
+ch1 events=23/37 payload=0.135 timing=0.706 delayUs=8445.016
+ch2 events=37/37 payload=1.000 timing=1.000 delayUs=8453.125
+ch3 events=37/37 payload=1.000 timing=1.000 delayUs=8453.125
+```
+
+With per-channel acquisition offsets, the co-streamer shotgun mic on channel 1
+locked:
+
+```text
+ch1 offset=2122 events=37/37 payload=1.000 timing=0.828 delayUs=11166.397 maeSamples=9.952719
+```
+
+The cardioid/near mic on channel 0 improved but remained unreliable:
+
+```text
+ch0 offset=2519 events=26/37 payload=0.595 timing=0.726 delayUs=13075.222 maeSamples=18.120421
+```
+
+The channel correlations were negative for both mic inputs, so the streaming
+packet scorer now treats polarity as a nuisance variable in the packet-local
+path. That is a real-world acoustic invariant, not a broad decoder patch: mic,
+preamp, wiring, and room reflections can flip the sign of a narrow waveform
+template without changing the packet identity.
+
 ### Obsolete Schedule-Entangled Receipt
 
 The best current receipt is:
