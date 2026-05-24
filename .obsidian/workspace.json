@@ -1,0 +1,117 @@
+{
+  "main": {
+    "id": "mimir-main",
+    "type": "split",
+    "children": [
+      {
+        "id": "mimir-main-tabs",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "mimir-home",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Mimir Vault.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "mimir-left",
+    "type": "split",
+    "children": [
+      {
+        "id": "mimir-left-tabs",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "mimir-file-explorer",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {}
+            }
+          },
+          {
+            "id": "mimir-search",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "mimir-right",
+    "type": "split",
+    "children": [
+      {
+        "id": "mimir-right-tabs",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "mimir-backlinks",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Mimir Vault.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "mimir-outline",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Mimir Vault.md"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": false
+  },
+  "active": "mimir-home",
+  "lastOpenFiles": [
+    "Mimir Vault.md",
+    "README.md",
+    "docs/perfect-machine-domain-index.md",
+    "docs/code-algorithm-map.md",
+    "research/perfect-machine-study-2026-05-23/reading-guide.md",
+    "research/perfect-machine-study-2026-05-23/index.md",
+    "notes/current-system-map.md",
+    "notes/fresh-workspace-handoff.md"
+  ]
+}

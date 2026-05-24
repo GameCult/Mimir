@@ -1,0 +1,10 @@
+{
+  "attachmentFolderPath": "assets/obsidian",
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "current",
+  "promptDelete": false,
+  "showLineNumber": true,
+  "spellcheck": false,
+  "strictLineBreaks": false,
+  "useMarkdownLinks": true
+}
