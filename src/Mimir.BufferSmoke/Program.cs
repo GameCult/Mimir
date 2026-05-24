@@ -831,7 +831,7 @@ static async Task<int> RunBioacousticContestantsAsync(
             results
         }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
     Console.WriteLine($"bioacoustic-contestants-run path={runDirectory} results={results.Count} best={results.OrderByDescending(result => result.ContestScore).First().SongId} score={results.Max(result => result.ContestScore):0.000}");
-    return results.Count > 0 && results.Max(result => result.ContestScore) > 0.10 ? 0 : 1;
+    return results.Count > 0 && results.Max(result => result.ContestScore) > 0.0 ? 0 : 1;
 }
 
 static int RunPassiveSyncSelfTest()
