@@ -308,6 +308,42 @@ cut is an acquisition state that uses Faust/front-end band flux to find the
 first clock hypothesis, then switches to scheduled packet windows exactly like
 this receipt.
 
+### First Physical ASIO Packet Receipt
+
+The first physical run used the current Focusrite ASIO path:
+
+```powershell
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --render-contestant-f32 --song canary-packet-trill --output artifacts/asio/canary-packet-192k-f32.raw --sample-rate 192000 --seconds 4
+.\native\probes\asio_audio_cadence\build\Release\asio_audio_cadence.exe --set-sample-rate 192000 --play-f32-mono artifacts\asio\canary-packet-192k-f32.raw --record-f32-interleaved artifacts\asio\scarlett-canary-packet-192k-f32.raw --play-gain 1.0
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --analyze-contestant-asio-f32 --input artifacts\asio\scarlett-canary-packet-192k-f32.raw --sample-rate 192000 --channels 4 --seconds 4 --song canary-packet-trill --schedule-offset-samples 1623
+```
+
+The first ASIO attempt accidentally ran at the driver's existing `44100` Hz
+state despite the requested sample rate. The corrected run used
+`--set-sample-rate 192000`, captured `765,952` frames at 192 kHz across four
+inputs, and found the loopback packet by correlation at about `+1623` samples
+(`8.453 ms`). With that acquisition offset supplied, the streaming packet
+receiver decoded the loopback channels perfectly:
+
+```text
+channel=2 events=37/37 payload=1.000 timing=1.000 confidence=1.000 delaySamples=1623.000000 delayUs=8453.125 maeSamples=0.000000
+channel=3 events=37/37 payload=1.000 timing=1.000 confidence=1.000 delaySamples=1623.000000 delayUs=8453.125 maeSamples=0.000000
+```
+
+The acoustic inputs did not yet prove the room path:
+
+```text
+channel=0 events=0/37 payload=0.000 timing=0.000 confidence=0.000
+channel=1 events=1/37 payload=0.000 timing=1.000 confidence=0.545 delaySamples=1587.500000 delayUs=8268.229
+```
+
+Interpretation: the packet machine survives the real Focusrite digital loopback
+path at 192 kHz. The room/mic path needs either more acoustic level, better mic
+channel state, or a front-end acquisition pass that can lock before scheduled
+packet-local decoding takes over. The important architectural result still
+stands: acquisition and tracking are separate states. Once the clock offset is
+known, the streaming packet hot loop is tiny and exact.
+
 ### Obsolete Schedule-Entangled Receipt
 
 The best current receipt is:

@@ -136,6 +136,15 @@ if (args.Any(arg => string.Equals(arg, "--render-bioacoustic-f32", StringCompari
         ParseDoubleOption(args, "--seconds", 3.0));
 }
 
+if (args.Any(arg => string.Equals(arg, "--render-contestant-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return RenderContestantFloat32(
+        ParseStringOption(args, "--output", "artifacts/asio/canary-packet-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseDoubleOption(args, "--seconds", 3.0),
+        ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id));
+}
+
 if (args.Any(arg => string.Equals(arg, "--analyze-asio-f32", StringComparison.OrdinalIgnoreCase)))
 {
     return AnalyzeAsioFloat32(
@@ -145,6 +154,18 @@ if (args.Any(arg => string.Equals(arg, "--analyze-asio-f32", StringComparison.Or
         ParseIntOption(args, "--reference-channel", 2),
         ParseIntOption(args, "--candidate-channel", -1),
         ParseStringOption(args, "--calibration", ""));
+}
+
+if (args.Any(arg => string.Equals(arg, "--analyze-contestant-asio-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return AnalyzeContestantAsioFloat32(
+        ParseStringOption(args, "--input", "artifacts/asio/scarlett-canary-packet-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--candidate-channel", -1),
+        ParseDoubleOption(args, "--seconds", 3.0),
+        ParseDoubleOption(args, "--schedule-offset-samples", 0.0),
+        ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id));
 }
 
 if (args.Any(arg => string.Equals(arg, "--calibrate-chirp-bin-asio-f32", StringComparison.OrdinalIgnoreCase)))
@@ -1505,6 +1526,120 @@ static int RenderBioacousticFloat32(string outputPath, int sampleRate, double se
     return 0;
 }
 
+static int RenderContestantFloat32(string outputPath, int sampleRate, double seconds, string songId)
+{
+    var profile = MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
+        string.Equals(profile.Id, songId, StringComparison.OrdinalIgnoreCase));
+    if (profile == null)
+    {
+        Console.Error.WriteLine($"contestant render failed: unknown song '{songId}'");
+        return 1;
+    }
+
+    var renderer = new MimirBioacousticContestantRenderer(profile);
+    var samples = renderer.RenderSequenceMonoFloat(seconds, sampleRate);
+    var outputDirectory = Path.GetDirectoryName(outputPath);
+    if (!string.IsNullOrWhiteSpace(outputDirectory))
+    {
+        Directory.CreateDirectory(outputDirectory);
+    }
+
+    var bytes = new byte[samples.Length * sizeof(float)];
+    Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
+    File.WriteAllBytes(outputPath, bytes);
+    Console.WriteLine($"contestant-render-f32 path={outputPath} song={profile.Id} sampleRate={sampleRate} seconds={seconds:0.000} samples={samples.Length} expectedEvents={renderer.ExpectedEventCount(seconds)}");
+    return 0;
+}
+
+static int AnalyzeContestantAsioFloat32(
+    string inputPath,
+    int sampleRate,
+    int channels,
+    int candidateChannel,
+    double seconds,
+    double scheduleOffsetSamples,
+    string songId)
+{
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"contestant-asio analysis failed: input not found: {inputPath}");
+        return 1;
+    }
+
+    var profile = MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
+        string.Equals(profile.Id, songId, StringComparison.OrdinalIgnoreCase));
+    if (profile == null)
+    {
+        Console.Error.WriteLine($"contestant-asio analysis failed: unknown song '{songId}'");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
+    if (frameCount == 0)
+    {
+        Console.Error.WriteLine("contestant-asio analysis failed: capture file contains no complete frames");
+        return 1;
+    }
+
+    var renderer = new MimirBioacousticContestantRenderer(profile);
+    var expectedEvents = renderer.ExpectedEvents(seconds > 0.0 ? seconds : frameCount / (double)sampleRate);
+    var options = CepstralDecoderOptions.FromRuntime(MimirBioacousticDecoderConfiguration.PacketRazorIndex) with
+    {
+        ProposalMode = CepstralProposalMode.StreamingPacketRazor,
+        ProposalBudgetMultiplier = 1.0,
+        DenseStepSeconds = 0.0
+    };
+
+    var firstChannel = candidateChannel < 0 ? 0 : candidateChannel;
+    var lastChannel = candidateChannel < 0 ? channels - 1 : candidateChannel;
+    var failures = 0;
+    for (var channel = firstChannel; channel <= lastChannel; channel++)
+    {
+        if (channel < 0 || channel >= channels)
+        {
+            Console.Error.WriteLine($"contestant-asio channel {channel} outside capture channel count {channels}");
+            failures++;
+            continue;
+        }
+
+        var observations = DecodeStreamingPacketRazorWords(
+            channelSamples[channel],
+            sampleRate,
+            expectedEvents.Count,
+            renderer,
+            renderer.RenderEventMonoFloat(0, sampleRate).Length,
+            scheduleOffsetSamples);
+        var expectedObservations = observations
+            .Where(observation => expectedEvents.Contains(observation.EventIndex))
+            .ToArray();
+        var payloads = ClassifyContestantPayloads(
+            channelSamples[channel],
+            sampleRate,
+            options,
+            renderer,
+            expectedObservations,
+            trustObservationPayload: true);
+        var payloadCorrect = expectedObservations.Count(observation =>
+            payloads.TryGetValue(observation.EventIndex, out var payload) &&
+            payload == renderer.PayloadSymbolForEvent(observation.EventIndex));
+        var clock = FitContestantClockHypothesis(expectedObservations, renderer, sampleRate, expectedEvents.Count);
+        var payloadAccuracy = expectedEvents.Count == 0
+            ? 0.0
+            : payloadCorrect / (double)expectedEvents.Count;
+        var timingAccuracy = clock == null
+            ? 0.0
+            : 1.0 / (1.0 + clock.MeanAbsoluteErrorSamples / Math.Max(1.0, sampleRate * 0.00025));
+        var confidence = expectedObservations.Length == 0
+            ? 0.0
+            : expectedObservations.Average(observation => observation.Confidence);
+        Console.WriteLine(
+            $"contestant-asio-f32 channel={channel} song={profile.Id} decoder=packet-razor-streaming-faust events={expectedObservations.Length}/{expectedEvents.Count} payload={payloadAccuracy:0.000} timing={timingAccuracy:0.000} confidence={confidence:0.000} " +
+            $"delaySamples={(clock?.SourceOffsetSamples ?? 0.0):0.000000} delayUs={(clock?.SourceOffsetSamples ?? 0.0) * 1_000_000.0 / sampleRate:0.000} maeSamples={(clock?.MeanAbsoluteErrorSamples ?? 0.0):0.000000}");
+    }
+
+    return failures == 0 ? 0 : 1;
+}
+
 static IReadOnlyList<BioacousticTrainingHypothesis> BioacousticTrainingHypotheses()
 {
     var baseProfiles = MimirBioacousticDecoderConfiguration.BuiltInProfiles
@@ -2169,7 +2304,8 @@ static IReadOnlyList<CepstralWordObservation> DecodeStreamingPacketRazorWords(
     int sampleRate,
     int expectedEventCount,
     MimirBioacousticContestantRenderer contestant,
-    int motifSamples)
+    int motifSamples,
+    double scheduleOffsetSamples = 0.0)
 {
     if (expectedEventCount <= 0 || samples.Length < motifSamples)
     {
@@ -2181,7 +2317,7 @@ static IReadOnlyList<CepstralWordObservation> DecodeStreamingPacketRazorWords(
     var observations = new List<CepstralWordObservation>(expectedEventCount);
     for (var eventIndex = 0; eventIndex < expectedEventCount; eventIndex++)
     {
-        var center = (int)Math.Round(contestant.EventStartSeconds((ulong)eventIndex) * sampleRate);
+        var center = (int)Math.Round(contestant.EventStartSeconds((ulong)eventIndex) * sampleRate + scheduleOffsetSamples);
         var start = Math.Max(0, center - searchRadius);
         var end = Math.Min(samples.Length - motifSamples, center + searchRadius);
         if (start > end)
