@@ -6,6 +6,11 @@ Build one synchronized spatial stream machine from six cameras, six microphones,
 program loopback, speakers, Leap timing, Fensalir GPU rendering, Faust DSP, and
 OBS output.
 
+For the larger public-facing field article that includes direct and networked
+cameras, tracked smartphones, glowing motion-capture markers, chirplet room
+mapping, and the shared spatiotemporal reservoir, read
+[`perfect-machine-full-field.md`](perfect-machine-full-field.md).
+
 The product is not a pile of bridge scripts. The product is a coherent live
 volumetric field with explicit owners: visual evidence becomes Fensalir sensor
 fusion, audio evidence becomes a synchronized sound field, and OBS receives

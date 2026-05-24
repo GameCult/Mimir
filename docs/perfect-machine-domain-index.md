@@ -10,6 +10,9 @@ Read this with:
 
 - `docs/code-algorithm-map.md` for source-level ownership.
 - `docs/audio-field.md` for current audio sync narrative.
+- `docs/perfect-machine-full-field.md` for the article-form full-field vision:
+  direct/network cameras, microphones, tracked phones, glowing markers,
+  chirplet room mapping, motion capture, and the spatiotemporal reservoir.
 - `docs/native-capture-cadence.md` for measured camera/USB evidence.
 - `research/perfect-machine-study-2026-05-23/architecture-rumination.md` for
   the long-form design argument.
