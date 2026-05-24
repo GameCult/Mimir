@@ -70,7 +70,10 @@ a named invariant that the native runtime cannot protect yet.
   a low-gain birdsong-like word language: 128 self-identifying word positions,
   left-speaker and right-speaker variants, four formant-rich syllables per word,
   rhythm variation, and direct word identity so a correctly decoded word
-  identifies canonical timeline position. Runtime active sync now reports
+  identifies canonical timeline position. The active receiver is no longer a
+  sequence decoder: each song contour should expose multiple time/frequency
+  anchors through syllable timing, bends, formants, payload ornaments, rhythm,
+  speaker tint, and log-mel shape. Runtime active sync now reports
   `evidence=bioacoustic`.
 - `MimirChirpletTimeline` owns the older structured chirplet calibration stream,
   PCM segment rendering, matched timing trace, and per-band response kernels.
@@ -215,13 +218,12 @@ a named invariant that the native runtime cannot protect yet.
    other cameras.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Use bioacoustic motif response profiles from real microphones to tune
-   contour, formant, band, gain, rhythm weighting, and left/right speaker
-   separation without weakening the standalone word-identity receiver invariant.
-   Keep chirp-bin calibration artifacts as reference data, not the runtime
-   target. Promote the `--bioacoustic-train` receipt shape into a real
-   calibration loop: detected words should feed a global delay/clock/path
-   hypothesis and learned per-output/mic response, not per-case threshold rules.
+3. Promote the packet-song physical calibration receipt into the runtime
+   receiver. The live decoder should keep its ear open for self-identifying
+   song contours, extract intra-call time/frequency anchors from log-mel parts,
+   apply learned per-output/mic path weighting, and feed a global
+   delay/clock/path hypothesis. Keep chirp-bin calibration artifacts as
+   reference data, not the runtime target.
 4. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the bioacoustic motif decoder

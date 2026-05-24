@@ -12,9 +12,10 @@ ask only "which bin fired?" It should ask:
 
 ```text
 which motif contour did I hear?
-which self-identifying word did that contour encode?
+which self-identifying song word did that contour encode?
 which speaker vocabulary emitted it?
-what delay and clock fit make the heard words coherent?
+which time and frequency anchors did that one call expose?
+what delay and clock fit make the heard anchors coherent?
 what did this room/mic path do to the spectrum?
 ```
 
@@ -27,10 +28,15 @@ what did this room/mic path do to the spectrum?
 - Each word contains four short syllables.
 - Each syllable carries a log-frequency glide plus formant-like partials.
 - Motif rhythm, contour, syllable duration, root, and speaker tint vary by word.
-- No de Bruijn grammar is used in the active bioacoustic path. A word identifies
-  its canonical event directly inside the current operating horizon.
-- The decoder emits motif candidates, direct word anchors, a source clock fit,
-  and per-band response evidence.
+- No de Bruijn grammar is used in the active bioacoustic path. One heard song
+  word identifies its canonical event directly inside the current operating
+  horizon.
+- The decoder emits motif candidates, direct song-word anchors, a source clock
+  fit, and per-band response evidence.
+- A song word is not one scalar chirp. It is a contour packet: multiple
+  syllable onsets, bends, formants, rhythm offsets, payload ornaments, and
+  speaker-colored spectral features all become anchors in log-mel space. One
+  successful call can pin a cluster of time/frequency constraints at once.
 - Runtime emission sends the left vocabulary to the left speaker and the right
   vocabulary to the right speaker, so microphones can learn each side of the
   room separately.
@@ -45,11 +51,11 @@ watermark target.
 
 `MimirBioacousticTimeline` owns:
 
-- motif codebook shape;
+- song-word codebook shape;
 - deterministic phrase schedule;
 - PCM rendering for active emission;
 - streaming motif scoring;
-- direct word anchor decoding;
+- direct contour-anchor decoding;
 - source clock fitting;
 - response-band evidence.
 
@@ -72,7 +78,7 @@ Birdsong survives ugly channels because the information is redundant:
 - formant envelope survives when one band dies;
 - speaker-specific variants expose room asymmetry;
 - repeated local structure gives the receiver more than one way to recover time
-  and response.
+  response, and local payload identity.
 
 That is the physical path Mimir needs. A phone mic, camera mic, Scarlett input,
 or network receiver should be able to recognize canonical time from a damaged
@@ -112,34 +118,34 @@ dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --rende
 
 ## Next Cut
 
-The current runtime decoder still uses a motif matched-filter proof. The smoke
-harness now carries the next receiver shape: indexed MFCC/log-mel word
-fingerprints with path-degradation augmentation. The next coherent cut is to
-promote that shape into a true streaming log-mel receiver:
+The current physical receipt path uses the canary packet song as the first
+serious contour-anchor witness. The next coherent cut is to promote that shape
+into the live streaming log-mel receiver:
 
 ```text
 audio window
 -> log-mel / constant-Q evidence surface
--> motif/formant/contour candidates
--> projection-hash / ANN candidate retrieval
--> direct word identity decode over a tiny candidate set
--> global delay and clock hypothesis
+-> contour packet proposals
+-> direct song-word identity over a tiny candidate set
+-> intra-call time/frequency anchor extraction
+-> global delay, clock, and path hypothesis
 -> path response model
 ```
 
 Do not add a pile of threshold rules to make one room capture look good. The
-right extension is learned path weighting over motif parts: which contours,
-partials, and time gaps survive each output/mic path.
+right extension is learned path weighting over contour parts: which syllable
+onsets, bends, formants, payload ornaments, partials, and time gaps survive each
+output/mic path.
 
 The latest training receipt says identity can survive the current
 mel-cepstral degradation panel, but timing collapses under warped domains. That
 points the next cut at a global delay/clock/path hypothesis over detected words,
 not a larger brute-force dictionary.
 
-That cut has started in the harness. `--bioacoustic-train` now persists a
-global clock hypothesis per result and scores timing through its confidence
-rather than raw absolute word offset. The latest corrected receipt is
-`artifacts/bioacoustic-training/bioacoustic-20260524-150729/`; it shows compact
-indexing still wins clean throughput, baseline indexing remains steadier under
-degradation, highband indexing has real warped-path value, and anchor density
-must become its own benchmark metric.
+That cut has started in the harness. `--bioacoustic-train` persists a global
+clock hypothesis per result, and `--calibrate-contestant-asio-f32` now persists
+the first physical packet-song response model. The current Scarlett canary
+receipt clears 10x realtime and proves that a single song word can own local
+identity; the remaining work is to make each syllable/formant contour emit
+enough stable anchors that physical mic residuals collapse from tens of
+microseconds toward the one-microsecond target.

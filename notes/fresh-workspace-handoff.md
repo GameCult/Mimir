@@ -89,7 +89,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   program-audio phase correlation, and `hybrid` emits active pilot chunks only
   when passive confidence is weak. The active bioacoustic path has its own
   short-window analyzer floor instead of inheriting the passive two-second gate.
-  It uses energy/onset proposals, dense fallback probes, bounded motif matching,
+  The active receiver is now a song-contour anchor machine, not a de Bruijn
+  sequence receiver: one heard call should carry enough syllable timing,
+  formant, payload, rhythm, speaker tint, and log-mel contour evidence to
+  identify canonical time and pin multiple time/frequency anchors at once. It
+  uses energy/onset proposals, dense fallback probes, bounded motif matching,
   direct word anchoring, clock fit, and constrained local waveform
   correlation for final fractional delay. It also supports standalone source
   offset recovery from schedule/codebook state, which is the Raven/phone shape.
@@ -141,10 +145,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 The corrected two-hour study pass ran from
 `2026-05-23T23:54:42.9041588+01:00` to at least
-`2026-05-24T01:54:56.9747630+01:00`. Use its map first, then implement:
-streaming calibration-weighted chirp-bin decoder state, calibration-session
-command/replay proof, fractional-delay/SRO actuator, then native camera payload
-handles and Fensalir contract lowering. Keep loopback as timing authority and
-keep Scarlett capture on the in-process ASIO source. Do not call synchronization
-analysis from UI/telemetry readouts. Do not restore deleted script
-infrastructure because a stale doc once missed it.
+`2026-05-24T01:54:56.9747630+01:00`. Use its map first, then implement the
+active song-contour receiver: promote packet-song physical calibration from the
+BufferSmoke receipt into runtime state, extract intra-call time/frequency
+anchors from log-mel contour parts, apply learned path weighting, drive the
+fractional-delay/SRO actuator, then continue native camera payload handles and
+Fensalir contract lowering. Keep loopback as timing authority and keep Scarlett
+capture on the in-process ASIO source. Do not call synchronization analysis
+from UI/telemetry readouts. Do not restore deleted script infrastructure
+because a stale doc once missed it.

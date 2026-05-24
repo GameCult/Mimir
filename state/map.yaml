@@ -15,9 +15,10 @@ objective:
     microphones, two speakers, Leap timing, Fensalir GPU rendering, Faust DSP,
     and OBS output.
   current: >
-    Implement direct camera/audio capture into Mimir.Runtime buffers, starting
-    with Leap stereo IR as the timing-camera candidate, then expose runtime
-    health/settings/output controls through Fensalir UI.
+    Promote the active bioacoustic packet-song receiver into runtime state:
+    self-identifying song contours should pin multiple time/frequency anchors
+    per heard call, learn per-path response, and drive the audio actuator while
+    direct camera/audio capture continues feeding Mimir.Runtime buffers.
 
 constraints:
   - Sender is Windows.
@@ -72,8 +73,11 @@ accepted_design:
     low-gain birdsong-like word language with 128 self-identifying word
     positions, left-speaker and right-speaker variants, four formant-rich
     syllables per word, rhythm variation, and direct word identity instead of a
-    de Bruijn grammar. `MimirRuntime` emits separate panned vocabularies per
-    speaker. `MimirAudioSynchronizationAnalyzer` reports active timing as
+    de Bruijn grammar. The active receiver is a song-contour anchor machine:
+    one heard call should expose syllable timing, contour bends, formants,
+    payload ornaments, speaker tint, and log-mel evidence as a cluster of
+    time/frequency anchors. `MimirRuntime` emits separate panned vocabularies
+    per speaker. `MimirAudioSynchronizationAnalyzer` reports active timing as
     `evidence=bioacoustic`; the old chirp-bin path remains a
     calibration/reference artifact with ASIO tooling.
   - The diagnostic audio path can optionally carry base64 float sample payloads
@@ -320,9 +324,10 @@ current_status:
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the bioacoustic
     motif timeline produces deterministic synthetic active sync. The next
-    invariant is self-identifying motif words producing stable canonical anchors
-    and clock fits through real loopback and microphones, so the actuator can use
-    decoded time instead of filtered lag guesses. Replace the remaining
+    invariant is self-identifying song contours producing stable intra-call
+    time/frequency anchors and clock fits through real loopback and microphones,
+    so the actuator can use decoded time instead of filtered lag guesses.
+    Replace the remaining
     diagnostic JSON-line process bridges with direct native capture drivers that
     push buffer handles into Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports
     for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when

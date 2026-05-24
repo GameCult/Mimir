@@ -184,13 +184,13 @@ half-second PCM segments ahead of the audio cursor. Each motif is a short phrase
 of formant-rich syllables with log-frequency contour and rhythm offsets, so the
 code is carried by both spectral shape and timing.
 
-The intended decoder is a compact constrained motif transform, not a generic
-time-frequency explorer and not an outlier filter around bad guesses. Mimir owns
-the emitter, so the receiver projects each mic stream against the known motif
-dictionary, produces transform frames with multiple word candidates, and maps
-the best coherent word identities directly to canonical events. A word becomes a
-canonical timeline anchor when its motif likelihood and neighboring anchors
-agree on one local sample clock. A decoded anchor
+The intended decoder is a compact constrained song-contour transform, not a
+generic time-frequency explorer and not an outlier filter around bad guesses.
+Mimir owns the emitter, so the receiver keeps its ear open for known song words
+and maps each successful call directly to canonical time. A word is not a
+single scalar event: syllable onsets, bends, formants, rhythm offsets, payload
+ornaments, speaker tint, and log-mel contour all expose local time/frequency
+constraints. One call can pin a cluster of anchors at once. A decoded anchor
 means observed sample offset `S` corresponds to emitted event time `T`. A stream
 of anchors fits the source clock directly:
 
@@ -201,14 +201,15 @@ observed_sample = source_offset + canonical_seconds * effective_sample_rate
 Delay and sampling-rate offset are derived by comparing the loopback clock fit
 to each mic clock fit over common canonical time. The state tracker is not
 allowed to launder invalid words into plausible timing. If a stream cannot
-produce at least one matched canonical anchor, it has not decoded timing for
+produce at least one matched canonical song word, it has not decoded timing for
 that window. Reports carry rounded integer delay, fractional delay, and the
-count/confidence of timeline-symbol anchors used to derive the report.
+count/confidence of contour anchors used to derive the report.
 
-The same timeline starts the frequency-response path. Each active bioacoustic
-decode carries per-band response evidence for the source set, whether or not
-each source earns a timing report. The older chirp-bin calibration model remains
-the controlled ASIO reference surface for response/confusion/delay captures:
+The same song starts the frequency-response path. Each active bioacoustic decode
+carries per-band and per-contour response evidence for the source set, whether
+or not each source earns a timing report. The older chirp-bin calibration model
+remains the controlled ASIO reference surface for response/confusion/delay
+captures:
 use `Mimir.BufferSmoke --calibrate-chirp-bin-asio-f32` to render that reference
 timeline, optionally capture it through the ASIO worker with `--capture-asio`,
 compute the response/confusion/delay model, and persist it for decoder tuning.
@@ -225,10 +226,10 @@ bioacoustic timeline queued, polls sources, and updates sync analysis on a fixed
 `MIMIR_SYNC_TELEMETRY_SECONDS` enables console telemetry for live tests. Current
 runtime testing proves Fensalir output wakes the Scarlett loopback and the mic
 buffers stay live. The next failure is physical capture proof: the same
-canonical motif anchors need to stay stable through loopback, room mics, device
+canonical song-contour anchors need to stay stable through loopback, room mics, device
 clocks, and codec/network paths.
 
-## Chirplet Calibration Model
+## Retained Reference Calibration
 
 ```mermaid
 flowchart TD
@@ -237,7 +238,7 @@ flowchart TD
     B --> D["room + speakers + mics"]
     C --> E["loopback rolling buffer"]
     D --> F["mic rolling buffers"]
-    E --> G["matched chirplet traces"]
+    E --> G["matched reference traces"]
     F --> G
     G --> H["symbol likelihood events"]
     H --> L["timeline anchors"]
@@ -248,7 +249,7 @@ flowchart TD
     I --> K["frequency response normalization"]
 ```
 
-The chirplet timeline owns three facts:
+The retained chirplet/chirp-bin timelines own three reference facts:
 
 - **Emission**: the PCM that Fensalir sends to the speakers.
 - **Timing witness**: the matched-filter atom bank used to find the stream in
@@ -256,7 +257,7 @@ The chirplet timeline owns three facts:
 - **Response witness**: the per-band atoms used to measure how strongly each
   mic hears each emitted band.
 
-Continuous chirplet evidence gives both the current delay and the drift/SRO by
+Continuous active song evidence should give both the current delay and the drift/SRO by
 watching delay change over time. Per-band energy over the same stream gives the
 normalization curve. The important constraint is that all three measurements
 must be tied to the same emitted timeline, not three separately invented probes.
@@ -267,21 +268,12 @@ band set but still fails pairwise timing because no canonical events overlap
 the loopback path. That is not a blank failure anymore; it is calibration data
 for the next codebook/weighting cut.
 
-The symbol layer is intentionally redundant. It does not rely on one fixed
-frequency shelf: timing gaps, chirp duration, start band, and glide shape all
-contribute so poor mic frequency response does not erase the whole code.
-`MimirChirpletSymbolCodebook` owns the symbol definitions so timeline ordering
-does not smuggle acoustic shape decisions into bit arithmetic. Every symbol has
-a unique chirp shape; rhythm remains additional evidence, not a substitute for
-symbol separability. The transform uses sine/cosine chirplet kernels for each
-symbol, so timing does not depend on the receiver preserving the emitter's
-absolute phase. Run `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirplet-self-test`
-to render two seconds of canonical timeline audio and decode it back to
-timeline anchors. Current synthetic proof detects all 15 emitted chirps, keeps
-13 possible triplet anchors for events 0 through 12, fits the clock at
-47999.999990 Hz, and holds mean absolute anchor error to 0.000014 samples. Real
-device runs still depend on loopback capture staying live; the local Scarlett
-loopback has intermittently stopped advancing during short headless sniffs.
+The active symbol layer is now the song contour. It does not rely on one fixed
+frequency shelf or a coded sequence: syllable timing, contour bends, formants,
+payload ornaments, speaker tint, and local spectral flux all contribute so poor
+mic response does not erase the whole code. The old chirplet self-test remains
+available as historical proof of sub-frame math, but it must not retake
+authority over the active runtime path.
 
 The older `MimirChirpletTimeline` matcher is a diagnostic/reference artifact,
 not the active runtime path. `BuildChirpletEnergyTrace` still behaves like a

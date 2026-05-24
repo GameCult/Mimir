@@ -116,9 +116,13 @@ and uses program-audio phase correlation, and `hybrid` uses passive evidence by
 default while emitting active pilot chunks only when passive confidence is weak.
 Active decoding does not inherit the passive two-second analysis floor: passive
 still needs a longer program-audio window, while the bioacoustic witness can
-decode once at least one self-identifying word is present. The bioacoustic
-detector now uses bounded motif proposals, matched motif scoring, direct word
-anchors, source clock fitting, and fractional waveform refinement.
+decode once at least one self-identifying song word is present. The active
+decoder is a song-contour anchor machine, not a de Bruijn sequence receiver:
+one call carries enough contour, syllable timing, formant, payload, rhythm, and
+speaker-tint evidence to identify canonical time inside the operating horizon
+and pin multiple time/frequency anchors at once. The bioacoustic detector now
+uses bounded motif proposals, matched motif scoring, direct word anchors,
+source clock fitting, and fractional waveform refinement.
 Pairwise sync compares matched anchors first, then only accepts independent
 clock-fit offsets inside the live latency horizon so period aliases do not
 become absurd reports. The old chirp-bin detector remains as a

@@ -837,7 +837,10 @@ Blocks:
 Invariant:
 
 - A receiver with only the codebook, schedule, and its local audio buffer can
-  recover canonical time once it hears a valid motif word.
+  recover canonical time once it hears a valid song word.
+- The active path is not sequence-coded. A song word's log-mel contour,
+  syllable timing, formants, payload ornaments, speaker tint, and spectral flux
+  are the local anchor field.
 
 ## Stage 9: Chirp-Bin Reference Timeline
 
@@ -846,6 +849,8 @@ Invariant:
 Owns:
 
 - The controlled chirp-bin calibration/reference codebook and receiver.
+- Historical sequence-coded reference machinery only. This is not the active
+  packet-song receiver.
 
 Core state:
 

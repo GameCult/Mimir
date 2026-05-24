@@ -34,7 +34,6 @@ public sealed class MimirBioacousticTimeline
     public const int WordCount = 128;
     public const int SpeakerCount = 2;
     public const int SymbolCount = WordCount * SpeakerCount;
-    public const int TimelineOrder = 1;
 
     private const double FirstEventSeconds = 0.08;
     private const double EventSpacingSeconds = 0.16;
