@@ -18,7 +18,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const int CalibrationBatchSegments = 4;
     private const int HybridWatermarkIntervalSegments = 4;
     private const float DefaultSpectrumUpdateIntervalSeconds = 0.2f;
-    private const int SpectrumHistoryWindowCount = 72;
+    private const int SpectrumHistoryWindowCount = 40;
     private const float SpectrumChannelSeparation = 1.75f;
     private const float SpectrumWindowDepthSeparation = 0.18f;
     private const float SpectrumWidth = 12.0f;
@@ -604,7 +604,11 @@ public sealed class MimirRuntime : IAquariumRuntime
                 }
 
                 var points = BuildSpectrumWindowSpline(spectrum, channelCenter - channelIndex * SpectrumChannelSeparation, z, alpha);
-                splines.Add(new AquariumSpline3D($"spectrum-{spectrum.SourceId}-{windowIndex}", points, 1.0f));
+                splines.Add(new AquariumSpline3D(
+                    $"spectrum-{spectrum.SourceId}-{windowIndex}",
+                    points,
+                    new AquariumSplineStyle(0.018f, 1.35f, 1.0f, 0.78f, 0.22f),
+                    CatmullRomSubdivisions: 3));
             }
         }
 
@@ -655,7 +659,9 @@ public sealed class MimirRuntime : IAquariumRuntime
                     new AquariumSplineVertex(new Vector3(SpectrumWidth * 0.5f, y, farZ), color),
                     new AquariumSplineVertex(new Vector3(-SpectrumWidth * 0.5f, y, farZ), color),
                     new AquariumSplineVertex(new Vector3(-SpectrumWidth * 0.5f, y, nearZ), color),
-                ]));
+                ],
+                new AquariumSplineStyle(0.006f, 0.8f, 0.7f, 0.72f, 0.28f),
+                CatmullRomSubdivisions: 1));
 
             for (var line = 0; line <= 4; line++)
             {
@@ -665,7 +671,9 @@ public sealed class MimirRuntime : IAquariumRuntime
                     [
                         new AquariumSplineVertex(new Vector3(x, y, nearZ), color),
                         new AquariumSplineVertex(new Vector3(x, y, farZ), color),
-                    ]));
+                    ],
+                    new AquariumSplineStyle(0.005f, 0.8f, 0.7f, 0.72f, 0.28f),
+                    CatmullRomSubdivisions: 1));
             }
         }
     }
