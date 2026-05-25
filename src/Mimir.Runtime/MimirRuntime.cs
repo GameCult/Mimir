@@ -20,6 +20,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float DefaultSpectrumUpdateIntervalSeconds = 0.2f;
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
+    private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
     private readonly AquariumUiDocument ui;
     private readonly AquariumAudioDocument audio = new();
     private readonly MimirAudioSynchronizationSettings audioSyncSettings;
@@ -49,12 +50,12 @@ public sealed class MimirRuntime : IAquariumRuntime
     }
 
     public MimirRuntime(AquariumRuntimeOptions options, MimirRuntimeConfiguration configuration)
-        : this(options, configuration.Settings, configuration.Sources)
+        : this(options, configuration.Settings, configuration.SourceFactories)
     {
     }
 
     public MimirRuntime(AquariumRuntimeOptions options, MimirSynchronizationSettings settings)
-        : this(options, settings, [])
+        : this(options, settings, Array.Empty<IMimirStreamSource>())
     {
     }
 
@@ -62,10 +63,23 @@ public sealed class MimirRuntime : IAquariumRuntime
         AquariumRuntimeOptions options,
         MimirSynchronizationSettings settings,
         IEnumerable<IMimirStreamSource> streamSources)
+        : this(options, settings, Array.Empty<MimirStreamSourceFactory>())
+    {
+        foreach (var source in streamSources)
+        {
+            synchronization.AddSource(source);
+        }
+    }
+
+    private MimirRuntime(
+        AquariumRuntimeOptions options,
+        MimirSynchronizationSettings settings,
+        IEnumerable<MimirStreamSourceFactory> sourceFactories)
     {
         Options = options;
         synchronization = new MimirSynchronizationHub(settings);
         spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize());
+        this.sourceFactories = sourceFactories.ToArray();
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
@@ -80,11 +94,6 @@ public sealed class MimirRuntime : IAquariumRuntime
             : null;
         nextAudioSyncSeconds = audioSyncUpdateIntervalSeconds;
         nextTelemetrySeconds = telemetryIntervalSeconds;
-        foreach (var source in streamSources)
-        {
-            synchronization.AddSource(source);
-        }
-
         ui = CreateUi();
     }
 
@@ -124,15 +133,16 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     public void Update(float deltaSeconds, InputState input)
     {
-        runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
-        lastPollCount = synchronization.PollSources();
-        if (sceneReady)
+        if (!sceneReady)
         {
-            QueueCalibrationTimeline();
-            UpdateAudioSpectra();
-            UpdateAudioSynchronization();
+            return;
         }
 
+        runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
+        lastPollCount = synchronization.PollSources();
+        QueueCalibrationTimeline();
+        UpdateAudioSpectra();
+        UpdateAudioSynchronization();
         EmitTelemetry();
     }
 
@@ -144,6 +154,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         sceneReady = true;
+        StartConfiguredSources();
         nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
         nextSpectrumSeconds = runtimeSeconds;
         Console.WriteLine($"Mimir Fensalir scene ready at {runtimeSeconds:0.000}s; runtime audio tests and spectra enabled.");
@@ -363,6 +374,18 @@ public sealed class MimirRuntime : IAquariumRuntime
         stopwatch.Stop();
         lastSpectrumAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         nextSpectrumSeconds = runtimeSeconds + spectrumUpdateIntervalSeconds;
+    }
+
+    private void StartConfiguredSources()
+    {
+        foreach (var factory in sourceFactories)
+        {
+            var source = factory.Create();
+            if (source != null)
+            {
+                synchronization.AddSource(source);
+            }
+        }
     }
 
     private void EmitTelemetry()

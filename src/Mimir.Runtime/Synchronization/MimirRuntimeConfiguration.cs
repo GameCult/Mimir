@@ -6,7 +6,16 @@ public sealed class MimirRuntimeConfiguration
 {
     public MimirSynchronizationSettings Settings { get; init; } = new();
 
-    public IReadOnlyList<IMimirStreamSource> Sources { get; init; } = [];
+    public IReadOnlyList<MimirStreamSourceFactory> SourceFactories { get; init; } = [];
+
+    public IReadOnlyList<IMimirStreamSource> CreateSources()
+    {
+        return SourceFactories
+            .Select(factory => factory.Create())
+            .Where(source => source != null)
+            .Cast<IMimirStreamSource>()
+            .ToArray();
+    }
 
     public static MimirRuntimeConfiguration Load()
     {
@@ -39,10 +48,10 @@ public sealed class MimirRuntimeConfiguration
         var streams = sourceModels
             .SelectMany(ToDescriptors)
             .ToArray();
-        var sources = sourceModels
-            .Select(stream => TryCreateSource(stream, configDirectory))
-            .Where(source => source != null)
-            .Cast<IMimirStreamSource>()
+        var sourceFactories = sourceModels
+            .Select(stream => TryCreateSourceFactory(stream, configDirectory))
+            .Where(factory => factory != null)
+            .Cast<MimirStreamSourceFactory>()
             .ToArray();
 
         return new MimirRuntimeConfiguration
@@ -53,7 +62,7 @@ public sealed class MimirRuntimeConfiguration
                 Audio = audio,
                 Streams = streams,
             },
-            Sources = sources,
+            SourceFactories = sourceFactories,
         };
     }
 
@@ -113,11 +122,12 @@ public sealed class MimirRuntimeConfiguration
         }
     }
 
-    private static IMimirStreamSource? TryCreateSource(MimirStreamConfig stream, string? configDirectory)
+    private static MimirStreamSourceFactory? TryCreateSourceFactory(MimirStreamConfig stream, string? configDirectory)
     {
+        var descriptor = ToDescriptor(stream);
         if (string.Equals(stream.Adapter, "native", StringComparison.OrdinalIgnoreCase))
         {
-            return new MimirNativeIngestStreamSource(ToDescriptor(stream));
+            return new MimirStreamSourceFactory(descriptor, () => new MimirNativeIngestStreamSource(descriptor));
         }
 
         if (string.Equals(stream.Adapter, "asio", StringComparison.OrdinalIgnoreCase))
@@ -128,13 +138,13 @@ public sealed class MimirRuntimeConfiguration
             }
 
 #pragma warning disable CA1416
-            return new MimirAsioStreamSource(
-                ToDescriptor(stream),
+            return new MimirStreamSourceFactory(descriptor, () => new MimirAsioStreamSource(
+                descriptor,
                 new MimirAsioStreamSourceOptions(
                     ResolveCommand(stream.Command, configDirectory),
                     stream.DriverClsid,
                     stream.SampleRate,
-                    stream.AcceptSourceIds));
+                    stream.AcceptSourceIds)));
 #pragma warning restore CA1416
         }
 
@@ -146,14 +156,14 @@ public sealed class MimirRuntimeConfiguration
                 return null;
             }
 
-            return new MimirFrameEventProcessStreamSource(
-                ToDescriptor(stream),
+            return new MimirStreamSourceFactory(descriptor, () => new MimirFrameEventProcessStreamSource(
+                descriptor,
                 new MimirFrameEventProcessStreamSourceOptions(
                     ResolveCommand(stream.Command, configDirectory),
                     stream.Arguments,
                     stream.AcceptSourceIds.Length > 0
                         ? new HashSet<string>(stream.AcceptSourceIds, StringComparer.Ordinal)
-                        : null));
+                        : null)));
         }
 
         if (!string.Equals(stream.Adapter, "process", StringComparison.OrdinalIgnoreCase))
@@ -166,12 +176,12 @@ public sealed class MimirRuntimeConfiguration
             return null;
         }
 
-        return new MimirProcessStreamSource(
-            ToDescriptor(stream),
+        return new MimirStreamSourceFactory(descriptor, () => new MimirProcessStreamSource(
+            descriptor,
             new MimirProcessStreamSourceOptions(
                 ResolveCommand(stream.Command, configDirectory),
                 stream.Arguments,
-                Math.Max(1024, stream.ChunkBytes)));
+                Math.Max(1024, stream.ChunkBytes))));
     }
 
     private static string ResolveCommand(string command, string? configDirectory)
@@ -200,6 +210,10 @@ public sealed class MimirRuntimeConfiguration
             : throw new InvalidOperationException($"Unknown Mimir stream origin: {value}");
     }
 }
+
+public sealed record MimirStreamSourceFactory(
+    MimirStreamDescriptor Descriptor,
+    Func<IMimirStreamSource?> Create);
 
 public sealed class MimirRuntimeConfigFile
 {

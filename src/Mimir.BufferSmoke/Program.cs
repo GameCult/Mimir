@@ -254,7 +254,7 @@ using var configuration = new DisposableConfiguration(MimirRuntimeConfiguration.
 using var hub = new MimirSynchronizationHub(configuration.Value.Settings);
 var syncMode = configuration.Value.Settings.Audio.Mode;
 
-foreach (var source in configuration.Value.Sources)
+foreach (var source in configuration.Sources.ToArray())
 {
     configuration.Detach(source);
     hub.AddSource(source);
@@ -4997,10 +4997,12 @@ internal sealed class DisposableConfiguration : IDisposable
     public DisposableConfiguration(MimirRuntimeConfiguration value)
     {
         Value = value;
-        ownedSources = value.Sources.ToList();
+        ownedSources = value.CreateSources().ToList();
     }
 
     public MimirRuntimeConfiguration Value { get; }
+
+    public IReadOnlyList<IMimirStreamSource> Sources => ownedSources;
 
     public void Detach(IMimirStreamSource source)
     {
