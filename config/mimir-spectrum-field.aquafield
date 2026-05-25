@@ -7,6 +7,7 @@ surface id=curvature op=d2Fdx2 inputs=amplitude value=0,0,0,0
 surface id=emission op=mix inputs=amplitude,derivative,curvature value=1.0,0.72,0.22,1.0
 surface id=coverage op=sdf.tube inputs=amplitude,derivative,curvature value=0.74,0.20,0.0,0.0
 
-splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=160 columnStride=1 rollingModulo=160 subdivisions=4 maxProbes=131072 density=1.0 minimumContribution=0.004 origin=-0.82,0.40,-0.18 axisStep=0.016,0.0,0.0 columnStep=0.0,-0.0055,0.0060 amplitudeScale=0.34 radius=0.052 alpha=0.94 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,1.0 seed=2971668797
+splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=160 columnStride=1 rollingModulo=160 subdivisions=4 maxProbes=131072 density=1.0 minimumContribution=0.004 origin=-0.82,0.40,-0.18 axisStep=0.016,0.0,0.0 columnStep=0.0,-0.0055,0.0060 amplitudeScale=0.34 radius=0.064 alpha=0.98 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,4.0 seed=2971668797
 
 reservoir splats=131072 updates=131072 candidates=2 seed=270943260
+direct
