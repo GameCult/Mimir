@@ -221,6 +221,12 @@ public sealed class MimirAudioSyncConfig
 
     public string CalibrationModelPath { get; set; } = "";
 
+    public string ComplexContourChannelModelPath { get; set; } = "";
+
+    public string BioacousticWitnessProfileId { get; set; } = "";
+
+    public bool EnableComplexContourRuntime { get; set; }
+
     public MimirAudioSynchronizationSettings ToSettings(MimirAudioSynchronizationSettings fallback)
     {
         return new MimirAudioSynchronizationSettings
@@ -238,6 +244,13 @@ public sealed class MimirAudioSyncConfig
             CalibrationModelPath = string.IsNullOrWhiteSpace(CalibrationModelPath)
                 ? fallback.CalibrationModelPath
                 : CalibrationModelPath.Trim(),
+            ComplexContourChannelModelPath = string.IsNullOrWhiteSpace(ComplexContourChannelModelPath)
+                ? fallback.ComplexContourChannelModelPath
+                : ComplexContourChannelModelPath.Trim(),
+            BioacousticWitnessProfileId = string.IsNullOrWhiteSpace(BioacousticWitnessProfileId)
+                ? fallback.BioacousticWitnessProfileId
+                : BioacousticWitnessProfileId.Trim(),
+            EnableComplexContourRuntime = EnableComplexContourRuntime || fallback.EnableComplexContourRuntime,
         };
     }
 }

@@ -197,3 +197,13 @@ stored cardioid path still worsens from about `15.817 us` to `17.476 us`.
 That means the learned phase/group-delay surface is real evidence, while the
 Perfect Machine still needs more captures and a stronger direct-path
 hypothesis before calibration can be applied automatically.
+
+The contour machine is no longer artifact-only. `MimirSynchronizationHub` can
+now run a live complex-contour lane over rolling Float32 audio buffers when
+`enableComplexContourRuntime` is true. In that mode Mimir emits the configured
+`bioacousticWitnessProfileId` through the same canary-packet renderer used by
+the contour tracker, loads `complexContourChannelModelPath`, reads ASIO-style
+rolling buffers directly, and publishes `complex-contour` reports alongside the
+existing audio sync reports. `--complex-contour-runtime-self-test` proves the
+surface synthetically at 192 kHz: a `693.5` sample delay is recovered at about
+`0.219 us` error from runtime-shaped rolling buffers.

@@ -72,6 +72,13 @@ if (args.Any(arg => string.Equals(arg, "--complex-contour-tracker-self-test", St
         ParseDoubleOption(args, "--reflection-delay-samples", 29.0));
 }
 
+if (args.Any(arg => string.Equals(arg, "--complex-contour-runtime-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunComplexContourRuntimeSelfTest(
+        ParseIntOption(args, "--sample-rate", 192_000),
+        ParseDoubleOption(args, "--delay-samples", 693.5));
+}
+
 if (args.Any(arg => string.Equals(arg, "--perfect-machine-profile-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunPerfectMachineProfileSmoke();
@@ -1152,6 +1159,58 @@ static int RunComplexContourTrackerSelfTest(int sampleRate, double delaySamples,
     return errorSamples < 3.0 && estimate.DirectHitCount >= 8
         ? 0
         : 1;
+}
+
+static int RunComplexContourRuntimeSelfTest(int sampleRate, double delaySamples)
+{
+    var renderer = new MimirBioacousticContestantRenderer(MimirBioacousticContestants.CanaryPacketTrill);
+    const double runtimeSeconds = 1.75;
+    var reference = renderer.RenderSequenceMonoFloat(runtimeSeconds - 0.5, sampleRate);
+    var candidate = ApplyFractionalDelay(reference, delaySamples);
+    var referenceBuffer = BuildSyntheticAudioBuffer("asio-ch2", sampleRate, reference);
+    var candidateBuffer = BuildSyntheticAudioBuffer("asio-ch1", sampleRate, candidate);
+    var analyzer = new MimirComplexContourRuntimeAnalyzer(
+        new MimirComplexContourRuntimeOptions(
+            ProfileId: MimirBioacousticContestants.CanaryPacketTrill.Id,
+            ScheduleStartSeconds: 0.5,
+            SearchRadiusSeconds: 0.020,
+            ReferenceSearchRadiusSeconds: 0.020));
+    var report = analyzer.Analyze([referenceBuffer, candidateBuffer], "asio-ch2", runtimeSeconds).FirstOrDefault();
+    if (report == null)
+    {
+        Console.WriteLine("complex-contour-runtime-self-test status=no-report");
+        return 1;
+    }
+
+    var errorUs = Math.Abs(report.FractionalDelaySamples - delaySamples) * 1_000_000.0 / sampleRate;
+    Console.WriteLine(
+        $"complex-contour-runtime-self-test delaySamples={report.FractionalDelaySamples:0.000000} expected={delaySamples:0.000000} errorUs={errorUs:0.000} confidence={report.Confidence:0.000} directHits={report.TimelineMatchedEvents}");
+    return errorUs < 20.0 && report.TimelineMatchedEvents >= 8 ? 0 : 1;
+}
+
+static MimirRollingStreamBuffer BuildSyntheticAudioBuffer(string sourceId, int sampleRate, float[] samples)
+{
+    var descriptor = new MimirStreamDescriptor(sourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice);
+    var buffer = new MimirRollingStreamBuffer(descriptor, TimeSpan.FromSeconds(5));
+    var bytes = new byte[samples.Length * sizeof(float)];
+    Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
+    buffer.Append(new MimirStreamSample(
+        sourceId,
+        MimirStreamKind.Audio,
+        MimirStreamOrigin.LocalDevice,
+        TimestampNs: (long)Math.Round(samples.Length * 1_000_000_000.0 / sampleRate),
+        ArrivalNs: (long)Math.Round(samples.Length * 1_000_000_000.0 / sampleRate),
+        Sequence: 1,
+        PayloadHandle: 0,
+        ByteLength: bytes.Length,
+        Data: bytes,
+        AudioBlock: new MimirAudioBlockDescriptor(
+            sampleRate,
+            1,
+            MimirAudioSampleFormat.Float32,
+            samples.Length,
+            0)));
+    return buffer;
 }
 
 static int RunPerfectMachineProfileSmoke()

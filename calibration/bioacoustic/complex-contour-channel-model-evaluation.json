@@ -1,6 +1,6 @@
 {
   "Schema": "mimir.bioacoustic.complex-contour-channel-model-evaluation.v1",
-  "CreatedUtc": "2026-05-25T00:38:21.3837184+00:00",
+  "CreatedUtc": "2026-05-25T05:27:12.8192113+00:00",
   "ReplayReceiptPath": "calibration\\bioacoustic\\complex-contour-replay-panel.json",
   "ChannelModelPath": "calibration\\bioacoustic\\complex-contour-channel-model.json",
   "CasesEvaluated": 4,

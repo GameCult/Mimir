@@ -882,6 +882,48 @@ Invariant:
   `MimirDirectPathChannelModel` is applied only when the caller supplies the
   path model; otherwise the tracker stays measurement-only.
 
+### `MimirComplexContourRuntimeAnalyzer.cs`
+
+Owns:
+
+- The live runtime bridge from rolling ASIO-style audio buffers into the complex
+  contour/direct-path tracker.
+
+Blocks:
+
+- `MimirComplexContourRuntimeOptions`: selected witness profile, calibration
+  schedule start, and reference/candidate search radii.
+- `MimirComplexContourRuntimeAnalyzer`: extracts Float32 mono windows from
+  `MimirRollingStreamBuffer`, maps the current runtime clock into the
+  configured bioacoustic witness timeline, runs `MimirComplexContourMatchedFilterBank`
+  on reference and candidate windows, applies any loaded path channel model, and
+  emits `MimirAudioSynchronizationReport` records with `evidence=complex-contour`.
+
+Invariant:
+
+- The live contour lane only runs when explicitly enabled. When enabled, the
+  runtime emitter and contour analyzer share the same contestant profile instead
+  of learning one song and playing another.
+
+### `MimirComplexContourChannelModelDocument.cs`
+
+Owns:
+
+- Runtime loading and source-path lookup for the persisted complex contour
+  channel model.
+
+Blocks:
+
+- `MimirComplexContourChannelModelDocument`: schema, provenance, and path list.
+- `MimirComplexContourPathChannelModel`: ASIO reference/candidate channel pair,
+  usable band corrections, reflection taps, reliability, and conversion to
+  `MimirDirectPathChannelModel`.
+
+Invariant:
+
+- Persisted calibration is path-scoped. A model learned for
+  `asio-ch2->asio-ch1@192000` cannot silently correct another source pair.
+
 ## Stage 9: Chirp-Bin Reference Timeline
 
 ### `MimirChirpBinTimeline.cs`

@@ -239,6 +239,13 @@ accepted_design:
     direct-cluster MAE; the fresh cardioid case reaches about 0.202 us from
     seed, while the stored cardioid case still worsens to about 17.476 us. The
     model is explicit calibration evidence, not default runtime authority.
+    The complex contour receiver is now wired into runtime as an explicit live
+    lane: when `enableComplexContourRuntime` is true, Mimir emits the configured
+    `bioacousticWitnessProfileId` through `MimirBioacousticContestantRenderer`,
+    loads `complexContourChannelModelPath`, extracts Float32 windows from the
+    rolling buffers, and publishes `evidence=complex-contour` reports. The
+    synthetic runtime-shaped proof `--complex-contour-runtime-self-test` at
+    192 kHz recovers a 693.5-sample delay with about 0.219 us error.
     `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
     current four-case replay receipt.
     Acoustic robustness remains open.

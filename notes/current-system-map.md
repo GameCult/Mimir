@@ -271,6 +271,17 @@ the fresh cardioid reaching about 0.202 us from the seed, but the stored
 cardioid still worsens to about 17.476 us. Treat the model as explicit
 calibration evidence, not default runtime authority, until more captures prove
 the path surface stable.
+The complex contour receiver now has a live runtime lane instead of living only
+inside BufferSmoke artifact replay. When `enableComplexContourRuntime` is true,
+`MimirRuntime` emits the configured `bioacousticWitnessProfileId` through
+`MimirBioacousticContestantRenderer`, `MimirSynchronizationHub` loads
+`complexContourChannelModelPath`, and `MimirComplexContourRuntimeAnalyzer`
+extracts Float32 windows from rolling audio buffers to publish
+`evidence=complex-contour` reports. The synthetic runtime-shaped proof
+`--complex-contour-runtime-self-test` at 192 kHz recovers a 693.5-sample delay
+with about 0.219 us error from rolling buffers. The next real-world proof is to
+run that lane through live Scarlett loopback and mics, not only stored ASIO
+artifacts.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

@@ -68,6 +68,12 @@ public sealed class MimirAudioSynchronizationSettings
 
     public string CalibrationModelPath { get; init; } = "";
 
+    public string ComplexContourChannelModelPath { get; init; } = "";
+
+    public string BioacousticWitnessProfileId { get; init; } = MimirBioacousticContestants.CurrentBirdcall.Id;
+
+    public bool EnableComplexContourRuntime { get; init; }
+
     public static MimirAudioSynchronizationSettings FromEnvironment()
     {
         return new MimirAudioSynchronizationSettings().WithEnvironmentOverrides();
@@ -82,6 +88,9 @@ public sealed class MimirAudioSynchronizationSettings
             CalibrationGain = ReadCalibrationGain(CalibrationGain),
             WatermarkGain = ReadWatermarkGain(WatermarkGain),
             CalibrationModelPath = ReadCalibrationModelPath(CalibrationModelPath),
+            ComplexContourChannelModelPath = ReadComplexContourChannelModelPath(ComplexContourChannelModelPath),
+            BioacousticWitnessProfileId = ReadBioacousticWitnessProfileId(BioacousticWitnessProfileId),
+            EnableComplexContourRuntime = ReadEnableComplexContourRuntime(EnableComplexContourRuntime),
         };
     }
 
@@ -127,6 +136,26 @@ public sealed class MimirAudioSynchronizationSettings
     {
         var path = Environment.GetEnvironmentVariable("MIMIR_CHIRP_BIN_CALIBRATION");
         return string.IsNullOrWhiteSpace(path) ? fallback : path.Trim();
+    }
+
+    private static string ReadComplexContourChannelModelPath(string fallback)
+    {
+        var path = Environment.GetEnvironmentVariable("MIMIR_COMPLEX_CONTOUR_CHANNEL_MODEL");
+        return string.IsNullOrWhiteSpace(path) ? fallback : path.Trim();
+    }
+
+    private static string ReadBioacousticWitnessProfileId(string fallback)
+    {
+        var profile = Environment.GetEnvironmentVariable("MIMIR_BIOACOUSTIC_PROFILE");
+        return string.IsNullOrWhiteSpace(profile) ? fallback : profile.Trim();
+    }
+
+    private static bool ReadEnableComplexContourRuntime(bool fallback)
+    {
+        var raw = Environment.GetEnvironmentVariable("MIMIR_COMPLEX_CONTOUR_RUNTIME");
+        return string.IsNullOrWhiteSpace(raw)
+            ? fallback
+            : raw is "1" or "true" or "TRUE" or "yes" or "YES";
     }
 }
 

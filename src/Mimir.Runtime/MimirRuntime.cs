@@ -24,6 +24,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private readonly float audioSyncUpdateIntervalSeconds;
     private readonly float calibrationGain;
     private readonly float watermarkGain;
+    private readonly MimirBioacousticContestantRenderer? complexContourWitness;
     private int lastPollCount;
     private float runtimeSeconds;
     private float nextAudioSyncSeconds;
@@ -61,6 +62,12 @@ public sealed class MimirRuntime : IAquariumRuntime
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
+        complexContourWitness = settings.Audio.EnableComplexContourRuntime
+            ? new MimirBioacousticContestantRenderer(
+                MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
+                    string.Equals(profile.Id, settings.Audio.BioacousticWitnessProfileId, StringComparison.OrdinalIgnoreCase))
+                ?? MimirBioacousticContestants.CanaryPacketTrill)
+            : null;
         nextAudioSyncSeconds = audioSyncUpdateIntervalSeconds;
         nextTelemetrySeconds = telemetryIntervalSeconds;
         foreach (var source in streamSources)
@@ -245,7 +252,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         return $"{audioSyncSettings.ReferenceSourceId} {DescribeAudioSyncMode()} bioacoustic timeline {MimirBioacousticTimeline.SegmentSeconds:0.00}s segments emitted to {emittedUntilSeconds:0.00}s passiveConfidence={lastPassiveSynchronizationConfidence:0.000}";
     }
 
-    private static string RenderCalibrationBatchPcm16Base64(
+    private string RenderCalibrationBatchPcm16Base64(
         ulong firstSegment,
         int segmentCount,
         MimirBioacousticSpeaker speaker,
@@ -257,10 +264,16 @@ public sealed class MimirRuntime : IAquariumRuntime
         peak = 0.0f;
         for (var segment = 0; segment < segmentCount; segment++)
         {
-            var samples = MimirBioacousticTimeline.Default.RenderSegmentMonoFloat(
-                firstSegment + (ulong)segment,
-                MimirBioacousticTimeline.SampleRate,
-                speaker);
+            var samples = complexContourWitness == null
+                ? MimirBioacousticTimeline.Default.RenderSegmentMonoFloat(
+                    firstSegment + (ulong)segment,
+                    MimirBioacousticTimeline.SampleRate,
+                    speaker)
+                : complexContourWitness.RenderSegmentMonoFloat(
+                    firstSegment + (ulong)segment,
+                    MimirBioacousticTimeline.SegmentSeconds,
+                    MimirBioacousticTimeline.SampleRate,
+                    speaker);
             for (var index = 0; index < samples.Length; index++)
             {
                 peak = Math.Max(peak, Math.Abs(samples[index]));
@@ -287,6 +300,10 @@ public sealed class MimirRuntime : IAquariumRuntime
 
         var stopwatch = Stopwatch.StartNew();
         synchronization.AnalyzeAudioSynchronizationStep(audioSyncSettings.ReferenceSourceId, audioSyncSettings.Mode);
+        if (synchronization.ComplexContourRuntimeEnabled)
+        {
+            synchronization.AnalyzeComplexContourSynchronizationStep(audioSyncSettings.ReferenceSourceId, runtimeSeconds);
+        }
         stopwatch.Stop();
         lastAudioSyncAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         lastAudioSynchronizationReports = synchronization.AudioSynchronizationReports;
@@ -311,6 +328,12 @@ public sealed class MimirRuntime : IAquariumRuntime
         {
             Console.WriteLine(
                 $"mimir-sync-report {report.ReferenceSourceId}->{report.SourceId} evidence={report.EvidenceKind} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} delayMs={report.DelayMilliseconds:0.000} confidence={report.Confidence:0.000} timelineEvents={report.TimelineMatchedEvents} timelineConfidence={report.TimelineConfidence:0.000}");
+        }
+
+        foreach (var report in synchronization.ComplexContourSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
+        {
+            Console.WriteLine(
+                $"mimir-complex-contour-report {report.ReferenceSourceId}->{report.SourceId} delaySamples={report.FractionalDelaySamples:0.000000} delayUs={report.DelayMicroseconds:0.000} confidence={report.Confidence:0.000} directHits={report.TimelineMatchedEvents}");
         }
 
         foreach (var state in states)

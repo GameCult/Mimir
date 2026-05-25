@@ -266,6 +266,32 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
         return samples;
     }
 
+    public float[] RenderSegmentMonoFloat(ulong segmentIndex, double segmentSeconds, int sampleRate, MimirBioacousticSpeaker? speaker = null)
+    {
+        var segmentStartSeconds = segmentIndex * segmentSeconds;
+        var samples = new float[Math.Max(1, (int)Math.Round(segmentSeconds * sampleRate))];
+        var firstEvent = Math.Max(0, (long)Math.Floor((segmentStartSeconds - MimirBioacousticContestants.FirstEventSeconds - Profile.MotifDurationSeconds) / Profile.EventSpacingSeconds) - 2);
+        var lastEvent = Math.Max(firstEvent, (long)Math.Ceiling((segmentStartSeconds + segmentSeconds - MimirBioacousticContestants.FirstEventSeconds) / Profile.EventSpacingSeconds) + 2);
+        for (var eventIndex = firstEvent; eventIndex <= lastEvent; eventIndex++)
+        {
+            var eventStart = EventStartSeconds((ulong)eventIndex);
+            if (eventStart >= segmentStartSeconds + segmentSeconds ||
+                eventStart + Profile.MotifDurationSeconds <= segmentStartSeconds)
+            {
+                continue;
+            }
+
+            if (speaker != null && SpeakerForEvent((ulong)eventIndex) != speaker.Value)
+            {
+                continue;
+            }
+
+            AddEvent(samples, sampleRate, (ulong)eventIndex, PayloadSymbolForEvent((ulong)eventIndex), eventStart, segmentStartSeconds);
+        }
+
+        return samples;
+    }
+
     public int ExpectedEventCount(double seconds) =>
         Math.Max(0, (int)Math.Floor((seconds - MimirBioacousticContestants.FirstEventSeconds - Profile.MotifDurationSeconds) / Profile.EventSpacingSeconds) + 1);
 
@@ -370,6 +396,9 @@ public sealed class MimirBioacousticContestantRenderer(MimirBioacousticContestan
 
     private static int SymbolForEvent(ulong eventIndex) =>
         (int)((eventIndex * 73UL + eventIndex / 5UL * 19UL) % MimirBioacousticContestants.SymbolCount);
+
+    private static MimirBioacousticSpeaker SpeakerForEvent(ulong eventIndex) =>
+        (eventIndex & 1UL) == 0UL ? MimirBioacousticSpeaker.Left : MimirBioacousticSpeaker.Right;
 
     private double RootForSymbol(int symbolId)
     {

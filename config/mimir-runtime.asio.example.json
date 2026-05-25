@@ -5,7 +5,10 @@
     "referenceSourceId": "asio-ch2",
     "calibrationGain": 2.0,
     "watermarkGain": 0.035,
-    "calibrationModelPath": "../calibration/chirp-bin/scarlett-artifact.json"
+    "calibrationModelPath": "../calibration/chirp-bin/scarlett-artifact.json",
+    "complexContourChannelModelPath": "../calibration/bioacoustic/complex-contour-channel-model.json",
+    "bioacousticWitnessProfileId": "canary-packet-trill",
+    "enableComplexContourRuntime": true
   },
   "streams": [
     {
