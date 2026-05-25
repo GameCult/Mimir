@@ -25,7 +25,9 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumWidth = 12.0f;
     private const float SpectrumAmplitudeHeight = 1.1f;
     private const float SpectrumCameraDefaultDistanceMultiplier = 10.0f;
-    private const float SpectrumCameraDefaultAngleDegrees = -45.0f;
+    private const float SpectrumCameraDefaultAngleDegrees = 25.0f;
+    private const float SpectrumCameraMinimumAngleDegrees = 0.0f;
+    private const float SpectrumCameraMaximumAngleDegrees = 45.0f;
     private const float SpectrumCameraFitPadding = 1.12f;
     private const float SpectrumFrustumMinimumNear = 0.01f;
     private const float SpectrumSplineTubePadding = 0.18f;
@@ -184,8 +186,11 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
         var oldDistance = math.sqrt(2.0f) * math.max(1.0f, spectrumCount) * SpectrumChannelSeparation;
         var aabbDepth = math.max(1.0f, windowCount) * SpectrumWindowDepthSeparation;
         var distance = math.max(oldDistance * math.clamp(distanceMultiplier, 1.0f, 80.0f), aabbDepth + 0.1f);
-        var angleRadians = math.radians(math.clamp(angleDegrees, -85.0f, 85.0f));
-        var viewBack = math.normalize(new float3(0.0f, math.cos(angleRadians), math.sin(angleRadians)));
+        var angleRadians = math.radians(math.clamp(
+            angleDegrees,
+            SpectrumCameraMinimumAngleDegrees,
+            SpectrumCameraMaximumAngleDegrees));
+        var viewBack = math.normalize(new float3(0.0f, math.sin(angleRadians), -math.cos(angleRadians)));
         return ToVector3(ToFloat3(target) + viewBack * distance);
     }
 
@@ -390,11 +395,14 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
                 panel.Slider(
                     "Angle",
                     () => spectrumCameraAngleDegrees,
-                    value => spectrumCameraAngleDegrees = Math.Clamp(value, -85.0f, 85.0f),
-                    -85.0f,
-                    85.0f,
+                    value => spectrumCameraAngleDegrees = Math.Clamp(
+                        value,
+                        SpectrumCameraMinimumAngleDegrees,
+                        SpectrumCameraMaximumAngleDegrees),
+                    SpectrumCameraMinimumAngleDegrees,
+                    SpectrumCameraMaximumAngleDegrees,
                     "0.0 deg",
-                    "Polar camera angle in the YZ plane around the spectrum trail AABB.");
+                    "Polar camera pitch from -Z toward +Y around the spectrum trail AABB.");
                 panel.Readout("Frustum", DescribeSpectrumFrustum);
                 panel.TextBox(
                     "Spectra",
