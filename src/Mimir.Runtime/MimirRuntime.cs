@@ -32,9 +32,8 @@ surface id=derivative op=dFdx inputs=amplitude value=0,0,0,0
 surface id=curvature op=d2Fdx2 inputs=amplitude value=0,0,0,0
 surface id=emission op=mix inputs=amplitude,derivative,curvature value=1.0,0.72,0.22,1.0
 surface id=coverage op=sdf.tube inputs=amplitude,derivative,curvature value=0.74,0.20,0.0,0.0
-splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=160 columnStride=1 rollingModulo=160 subdivisions=4 maxProbes=131072 density=1.0 minimumContribution=0.004 origin=-0.82,0.40,-0.18 axisStep=0.016,0.0,0.0 columnStep=0.0,-0.0055,0.0060 amplitudeScale=0.34 radius=0.064 alpha=0.98 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,4.0 seed=2971668797
-reservoir splats=131072 updates=131072 candidates=2 seed=270943260
-direct
+splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=160 columnStride=1 rollingModulo=160 subdivisions=4 density=1.0 minimumContribution=0.004 origin=-0.82,0.40,-0.18 axisStep=0.016,0.0,0.0 columnStep=0.0,-0.0055,0.0060 amplitudeScale=0.34 radius=0.064 alpha=0.98 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,4.0 seed=2971668797
+lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBias=1.0
 """;
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
@@ -47,6 +46,7 @@ direct
     private readonly float spectrumUpdateIntervalSeconds;
     private readonly float calibrationGain;
     private readonly float watermarkGain;
+    private readonly bool syntheticSpectrumPreview;
     private readonly MimirBioacousticContestantRenderer? complexContourWitness;
     private int lastPollCount;
     private float runtimeSeconds;
@@ -105,6 +105,7 @@ direct
         spectrumUpdateIntervalSeconds = ParseSpectrumUpdateIntervalSeconds();
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
+        syntheticSpectrumPreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW"));
         complexContourWitness = settings.Audio.EnableComplexContourRuntime
             ? new MimirBioacousticContestantRenderer(
                 MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
@@ -412,6 +413,11 @@ direct
 
         var stopwatch = Stopwatch.StartNew();
         lastAudioSpectra = spectrumAnalyzer.Analyze(synchronization.Buffers.Buffers, audioSyncSettings.ReferenceSourceId);
+        if (lastAudioSpectra.Count == 0 && syntheticSpectrumPreview)
+        {
+            lastAudioSpectra = GenerateSyntheticSpectrumPreview(runtimeSeconds);
+        }
+
         if (lastAudioSpectra.Count > 0)
         {
             spectrumHistory.Enqueue(lastAudioSpectra
@@ -511,6 +517,48 @@ direct
         return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_FFT_SIZE"), out var value)
             ? Math.Clamp(value, 1024, 32768)
             : 8192;
+    }
+
+    private static bool IsTruthy(string? value) =>
+        string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<MimirAudioSpectrumSnapshot> GenerateSyntheticSpectrumPreview(float timeSeconds)
+    {
+        const int bandCount = 48;
+        var snapshots = new MimirAudioSpectrumSnapshot[4];
+        for (var channel = 0; channel < snapshots.Length; channel++)
+        {
+            var bands = new double[bandCount];
+            for (var band = 0; band < bandCount; band++)
+            {
+                var x = band / (double)Math.Max(1, bandCount - 1);
+                var drift = timeSeconds * (0.18 + channel * 0.035);
+                var formantA = Math.Exp(-Math.Pow((x - (0.18 + 0.05 * Math.Sin(drift + channel))) / 0.055, 2.0));
+                var formantB = Math.Exp(-Math.Pow((x - (0.48 + 0.08 * Math.Sin(drift * 1.7 + channel * 0.4))) / 0.075, 2.0));
+                var formantC = Math.Exp(-Math.Pow((x - (0.78 + 0.03 * Math.Cos(drift * 2.1 + channel))) / 0.045, 2.0));
+                var ripple = 0.5 + 0.5 * Math.Sin((band * 0.73) + drift * 9.0 + channel);
+                var energy = Math.Clamp(formantA * 0.8 + formantB * 0.95 + formantC * 0.7 + ripple * 0.10, 0.0, 1.0);
+                bands[band] = -78.0 + energy * 58.0;
+            }
+
+            snapshots[channel] = new MimirAudioSpectrumSnapshot(
+                $"preview-ch{channel + 1}",
+                $"Synthetic Preview {channel + 1}",
+                192000,
+                8192,
+                8192,
+                0.16 + channel * 0.02,
+                0.42 + channel * 0.03,
+                -78.0,
+                [],
+                bands,
+                (long)(timeSeconds * 1_000_000_000.0));
+        }
+
+        return snapshots;
     }
 
     private bool ShouldEmitCalibrationTimeline()
