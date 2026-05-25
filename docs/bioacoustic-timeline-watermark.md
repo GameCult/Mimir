@@ -168,7 +168,15 @@ improves loopback but not the physical mics, which means anchor observability is
 now present and anchor survivability is the next design problem. The complex
 contour tracker now runs against stored Scarlett ASIO captures with seeded path
 hypotheses: stored/fresh shotgun estimates land within about `5.860 us` and
-`7.247 us` of the existing path fit, while stored/fresh cardioid estimates land
-within about `15.817 us` and `8.963 us`. Confidence remains low because the
+  `7.247 us` of the existing path fit, while stored/fresh cardioid estimates land
+  within about `15.817 us` and `8.963 us`. Confidence remains low because the
 current matched-filter bank exposes reflection taps but does not yet fit a full
 phase/group-delay channel surface.
+The tracker now emits per-band delay and phase residual observations plus a
+`MimirDirectPathChannelModel` correction surface. That model is deliberately not
+treated as live truth from one window; it exists so calibration/tracking can
+learn stable path corrections across time instead of overfitting the current
+reflection field.
+`--complex-contour-replay-panel` persists this measurement surface to
+`calibration/bioacoustic/complex-contour-replay-panel.json` for regression and
+path-learning work.

@@ -252,7 +252,12 @@ clusters as reflection taps. Synthetic 192 kHz reflection smoke currently lands
 about 5.249 us from the expected delay; stored Scarlett shotgun runs land within
 about 5.860 us and 7.247 us of the seeded path fits, while cardioid runs land
 within about 15.817 us and 8.963 us. This is the correct receiver shape, but
-not yet the final phase/group-delay channel model.
+not yet the final phase/group-delay channel model. The tracker now emits
+per-band delay/phase residual observations and has a
+`MimirDirectPathChannelModel` correction surface for later multi-window
+calibration; one-window self-correction is not allowed to become authority.
+`calibration/bioacoustic/complex-contour-replay-panel.json` is the current
+persisted receipt for this surface across stored/fresh shotgun/cardioid cases.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

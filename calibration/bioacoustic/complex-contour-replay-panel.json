@@ -1,0 +1,434 @@
+{
+  "Schema": "mimir.bioacoustic.complex-contour-replay.v1",
+  "CreatedUtc": "2026-05-25T00:23:48.2689725+00:00",
+  "Cases": [
+    {
+      "CaseId": "stored-shotgun",
+      "InputPath": "artifacts/asio/scarlett-canary-packet-anchor-rich-192k-f32.raw",
+      "SampleRate": 192000,
+      "ReferenceChannel": 2,
+      "CandidateChannel": 1,
+      "PredictedDelaySamples": 534.343605,
+      "DelaySamples": 533.2185601809787,
+      "DelayMicroseconds": 2777.180000942597,
+      "PredictionErrorSamples": -1.1250448190213547,
+      "PredictionErrorMicroseconds": -5.859608432402889,
+      "Confidence": 0.00823816403932344,
+      "DirectHits": 25,
+      "MeanAbsoluteErrorSamples": 2.7136531554923558,
+      "MeanAbsolutePhaseErrorRadians": 0.6165969596331552,
+      "ReferenceHits": 1480,
+      "CandidateHits": 1480,
+      "ReflectionTaps": [
+        {
+          "DelaySamples": 539.6441868064883,
+          "RelativeDelaySamples": 6.425626625509608,
+          "Weight": 2.7636509916792984,
+          "HitCount": 13
+        },
+        {
+          "DelaySamples": 547.6549327409579,
+          "RelativeDelaySamples": 14.43637255997919,
+          "Weight": 2.488522688357785,
+          "HitCount": 15
+        },
+        {
+          "DelaySamples": 553.2648429511569,
+          "RelativeDelaySamples": 20.04628277017821,
+          "Weight": 3.593918351092196,
+          "HitCount": 21
+        },
+        {
+          "DelaySamples": 559.148192957002,
+          "RelativeDelaySamples": 25.929632776023368,
+          "Weight": 3.240498636869736,
+          "HitCount": 18
+        },
+        {
+          "DelaySamples": 566.4000454288094,
+          "RelativeDelaySamples": 33.18148524783078,
+          "Weight": 2.516945258865417,
+          "HitCount": 14
+        },
+        {
+          "DelaySamples": 573.4958297069426,
+          "RelativeDelaySamples": 40.2772695259639,
+          "Weight": 4.4279350790902425,
+          "HitCount": 20
+        }
+      ],
+      "FirstReflectionSamples": 6.425626625509608,
+      "StrongestBands": [
+        {
+          "CenterHz": 6750,
+          "Weight": 1.2699300283963697,
+          "DelayResidualSamples": 2.5673189716570537,
+          "PhaseResidualRadians": 0.5658813934187334
+        },
+        {
+          "CenterHz": 8750,
+          "Weight": 1.2568192590391993,
+          "DelayResidualSamples": -0.4597260852506658,
+          "PhaseResidualRadians": -0.12999969607089684
+        },
+        {
+          "CenterHz": 9500,
+          "Weight": 1.027566709608703,
+          "DelayResidualSamples": 1.2838263536332217,
+          "PhaseResidualRadians": 0.3950579393566654
+        },
+        {
+          "CenterHz": 3250,
+          "Weight": 0.7947593597178807,
+          "DelayResidualSamples": -3.765228895337047,
+          "PhaseResidualRadians": -0.3894062673999493
+        },
+        {
+          "CenterHz": 3500,
+          "Weight": 0.7529168073230323,
+          "DelayResidualSamples": -4.625383934838002,
+          "PhaseResidualRadians": -0.5149730771327364
+        },
+        {
+          "CenterHz": 13250,
+          "Weight": 0.6737108279691784,
+          "DelayResidualSamples": -2.4168494062876826,
+          "PhaseResidualRadians": -1.0485938214652033
+        },
+        {
+          "CenterHz": 8500,
+          "Weight": 0.6015228093118099,
+          "DelayResidualSamples": 1.1707146663913026,
+          "PhaseResidualRadians": 0.33160115736680457
+        },
+        {
+          "CenterHz": 6500,
+          "Weight": 0.47037755462147757,
+          "DelayResidualSamples": 0.8667391978571636,
+          "PhaseResidualRadians": 0.18091929609672733
+        }
+      ]
+    },
+    {
+      "CaseId": "stored-cardioid",
+      "InputPath": "artifacts/asio/scarlett-canary-packet-anchor-rich-192k-f32.raw",
+      "SampleRate": 192000,
+      "ReferenceChannel": 2,
+      "CandidateChannel": 0,
+      "PredictedDelaySamples": 839.071083,
+      "DelaySamples": 836.0342888517965,
+      "DelayMicroseconds": 4354.34525443644,
+      "PredictionErrorSamples": -3.036794148203512,
+      "PredictionErrorMicroseconds": -15.81663618855996,
+      "Confidence": 0.003921422554117446,
+      "DirectHits": 16,
+      "MeanAbsoluteErrorSamples": 2.846774242629788,
+      "MeanAbsolutePhaseErrorRadians": 0.6868608276516036,
+      "ReferenceHits": 1480,
+      "CandidateHits": 1480,
+      "ReflectionTaps": [
+        {
+          "DelaySamples": 844.1618851672207,
+          "RelativeDelaySamples": 8.12759631542417,
+          "Weight": 4.8250702717489125,
+          "HitCount": 21
+        },
+        {
+          "DelaySamples": 850.7317822184913,
+          "RelativeDelaySamples": 14.697493366694744,
+          "Weight": 4.5217613643705,
+          "HitCount": 19
+        },
+        {
+          "DelaySamples": 857.5061119358373,
+          "RelativeDelaySamples": 21.471823084040807,
+          "Weight": 2.8858348388973427,
+          "HitCount": 15
+        },
+        {
+          "DelaySamples": 864.1015151892855,
+          "RelativeDelaySamples": 28.067226337488933,
+          "Weight": 3.6214891746490743,
+          "HitCount": 18
+        },
+        {
+          "DelaySamples": 869.2271197231086,
+          "RelativeDelaySamples": 33.192830871312026,
+          "Weight": 4.676505258451089,
+          "HitCount": 25
+        },
+        {
+          "DelaySamples": 875.7564494391394,
+          "RelativeDelaySamples": 39.72216058734284,
+          "Weight": 2.7978942549958385,
+          "HitCount": 17
+        }
+      ],
+      "FirstReflectionSamples": 8.12759631542417,
+      "StrongestBands": [
+        {
+          "CenterHz": 3500,
+          "Weight": 1.4678635457303353,
+          "DelayResidualSamples": 0.10319879643340892,
+          "PhaseResidualRadians": 0.013162251967709516
+        },
+        {
+          "CenterHz": 6250,
+          "Weight": 0.595616635929512,
+          "DelayResidualSamples": 0.6124036977257589,
+          "PhaseResidualRadians": 0.1271354391988944
+        },
+        {
+          "CenterHz": 13000,
+          "Weight": 0.5567561239589848,
+          "DelayResidualSamples": 2.6753802477024133,
+          "PhaseResidualRadians": 1.1449354974851138
+        },
+        {
+          "CenterHz": 7250,
+          "Weight": 0.44458926425684897,
+          "DelayResidualSamples": -0.4646425397950185,
+          "PhaseResidualRadians": -0.11029550531251985
+        },
+        {
+          "CenterHz": 9500,
+          "Weight": 0.4068961583884891,
+          "DelayResidualSamples": -1.4174391923665974,
+          "PhaseResidualRadians": -0.43593239097651637
+        },
+        {
+          "CenterHz": 6750,
+          "Weight": 0.3710780968347314,
+          "DelayResidualSamples": -2.182853898329963,
+          "PhaseResidualRadians": -0.477976049907922
+        },
+        {
+          "CenterHz": 9250,
+          "Weight": 0.23665017208058042,
+          "DelayResidualSamples": 2.823144216376767,
+          "PhaseResidualRadians": 0.8534581210981982
+        },
+        {
+          "CenterHz": 6000,
+          "Weight": 0.20029070346773176,
+          "DelayResidualSamples": 5.932327618452064,
+          "PhaseResidualRadians": 1.1557056318509606
+        }
+      ]
+    },
+    {
+      "CaseId": "fresh-shotgun",
+      "InputPath": "artifacts/asio/scarlett-canary-packet-anchor-rich-latest-192k-f32.raw",
+      "SampleRate": 192000,
+      "ReferenceChannel": 2,
+      "CandidateChannel": 1,
+      "PredictedDelaySamples": 544.244999,
+      "DelaySamples": 545.6364528449783,
+      "DelayMicroseconds": 2841.8565252342623,
+      "PredictionErrorSamples": 1.3914538449782867,
+      "PredictionErrorMicroseconds": 7.247155442595243,
+      "Confidence": 0.0032861669060763625,
+      "DirectHits": 15,
+      "MeanAbsoluteErrorSamples": 3.516897994416609,
+      "MeanAbsolutePhaseErrorRadians": 0.8524654297414582,
+      "ReferenceHits": 1480,
+      "CandidateHits": 1480,
+      "ReflectionTaps": [
+        {
+          "DelaySamples": 551.8370237902838,
+          "RelativeDelaySamples": 6.200570945305458,
+          "Weight": 5.9283970106484825,
+          "HitCount": 33
+        },
+        {
+          "DelaySamples": 557.5941765661034,
+          "RelativeDelaySamples": 11.957723721125149,
+          "Weight": 3.654548186749682,
+          "HitCount": 22
+        },
+        {
+          "DelaySamples": 565.124217891999,
+          "RelativeDelaySamples": 19.48776504702073,
+          "Weight": 2.487991917049385,
+          "HitCount": 15
+        },
+        {
+          "DelaySamples": 571.9794148942395,
+          "RelativeDelaySamples": 26.342962049261246,
+          "Weight": 2.8929050468185804,
+          "HitCount": 14
+        },
+        {
+          "DelaySamples": 577.9526421867643,
+          "RelativeDelaySamples": 32.31618934178596,
+          "Weight": 2.9495509101610176,
+          "HitCount": 14
+        },
+        {
+          "DelaySamples": 583.8368447411017,
+          "RelativeDelaySamples": 38.20039189612339,
+          "Weight": 4.653054173083655,
+          "HitCount": 19
+        }
+      ],
+      "FirstReflectionSamples": 6.200570945305458,
+      "StrongestBands": [
+        {
+          "CenterHz": 6750,
+          "Weight": 2.1446167112529992,
+          "DelayResidualSamples": 3.3535761936586694,
+          "PhaseResidualRadians": 0.7403126376512428
+        },
+        {
+          "CenterHz": 7000,
+          "Weight": 0.9863738950334722,
+          "DelayResidualSamples": -4.3123794157954585,
+          "PhaseResidualRadians": -0.9788777422159413
+        },
+        {
+          "CenterHz": 6500,
+          "Weight": 0.7859796833175395,
+          "DelayResidualSamples": 4.54702053502405,
+          "PhaseResidualRadians": 0.9622868397785674
+        },
+        {
+          "CenterHz": 9250,
+          "Weight": 0.7529325316166473,
+          "DelayResidualSamples": 1.467213791062176,
+          "PhaseResidualRadians": 0.440377835686411
+        },
+        {
+          "CenterHz": 7500,
+          "Weight": 0.36006454004405286,
+          "DelayResidualSamples": -2.2281848131519837,
+          "PhaseResidualRadians": -0.5389168818164407
+        },
+        {
+          "CenterHz": 9750,
+          "Weight": 0.35135027105121286,
+          "DelayResidualSamples": 0.5850716901119313,
+          "PhaseResidualRadians": 0.18792002661100599
+        },
+        {
+          "CenterHz": 13750,
+          "Weight": 0.3341554524774217,
+          "DelayResidualSamples": -1.965213816233927,
+          "PhaseResidualRadians": -0.885265020371404
+        },
+        {
+          "CenterHz": 20250,
+          "Weight": 0.31148893481945145,
+          "DelayResidualSamples": -1.9652138109995578,
+          "PhaseResidualRadians": -1.29593222952682
+        }
+      ]
+    },
+    {
+      "CaseId": "fresh-cardioid",
+      "InputPath": "artifacts/asio/scarlett-canary-packet-anchor-rich-latest-192k-f32.raw",
+      "SampleRate": 192000,
+      "ReferenceChannel": 2,
+      "CandidateChannel": 0,
+      "PredictedDelaySamples": 781.490952,
+      "DelaySamples": 783.2119218444809,
+      "DelayMicroseconds": 4079.2287596066712,
+      "PredictionErrorSamples": 1.7209698444809192,
+      "PredictionErrorMicroseconds": 8.963384606671454,
+      "Confidence": 0.004817015390839313,
+      "DirectHits": 16,
+      "MeanAbsoluteErrorSamples": 2.9884960846911293,
+      "MeanAbsolutePhaseErrorRadians": 0.6570230350323284,
+      "ReferenceHits": 1480,
+      "CandidateHits": 1480,
+      "ReflectionTaps": [
+        {
+          "DelaySamples": 795.340641996421,
+          "RelativeDelaySamples": 12.128720151940115,
+          "Weight": 2.308476624587432,
+          "HitCount": 10
+        },
+        {
+          "DelaySamples": 803.5962134433519,
+          "RelativeDelaySamples": 20.38429159887096,
+          "Weight": 1.8612449619047005,
+          "HitCount": 10
+        },
+        {
+          "DelaySamples": 806.5030392153459,
+          "RelativeDelaySamples": 23.29111737086498,
+          "Weight": 0.989184398715797,
+          "HitCount": 7
+        },
+        {
+          "DelaySamples": 814.4379172478136,
+          "RelativeDelaySamples": 31.225995403332718,
+          "Weight": 3.0550451681607846,
+          "HitCount": 16
+        },
+        {
+          "DelaySamples": 819.9983616929446,
+          "RelativeDelaySamples": 36.786439848463715,
+          "Weight": 2.9347024356629237,
+          "HitCount": 12
+        },
+        {
+          "DelaySamples": 827.1903867395396,
+          "RelativeDelaySamples": 43.978464895058664,
+          "Weight": 2.132993184563086,
+          "HitCount": 15
+        }
+      ],
+      "FirstReflectionSamples": 12.128720151940115,
+      "StrongestBands": [
+        {
+          "CenterHz": 3500,
+          "Weight": 1.0292158248138983,
+          "DelayResidualSamples": -1.8683833694250642,
+          "PhaseResidualRadians": -0.2160553650846187
+        },
+        {
+          "CenterHz": 3250,
+          "Weight": 0.9689156979351102,
+          "DelayResidualSamples": 2.367757432999856,
+          "PhaseResidualRadians": 0.2591088800405311
+        },
+        {
+          "CenterHz": 3750,
+          "Weight": 0.8257896687014397,
+          "DelayResidualSamples": 0.7737901147281051,
+          "PhaseResidualRadians": 0.09485471658946629
+        },
+        {
+          "CenterHz": 3000,
+          "Weight": 0.7114835803280036,
+          "DelayResidualSamples": -3.860572966754169,
+          "PhaseResidualRadians": -0.3840924303579634
+        },
+        {
+          "CenterHz": 2750,
+          "Weight": 0.6891263688332048,
+          "DelayResidualSamples": -2.0878846225489225,
+          "PhaseResidualRadians": -0.1926987492556257
+        },
+        {
+          "CenterHz": 13500,
+          "Weight": 0.4537545008959113,
+          "DelayResidualSamples": 4.8576686994292855,
+          "PhaseResidualRadians": 2.1472990646038803
+        },
+        {
+          "CenterHz": 9000,
+          "Weight": 0.3377853536497608,
+          "DelayResidualSamples": 2.4170798183239413,
+          "PhaseResidualRadians": 0.7163738239152257
+        },
+        {
+          "CenterHz": 14500,
+          "Weight": 0.2755942546185756,
+          "DelayResidualSamples": 4.517622003996394,
+          "PhaseResidualRadians": 2.1315131125108575
+        }
+      ]
+    }
+  ]
+}

@@ -190,6 +190,12 @@ if (args.Any(arg => string.Equals(arg, "--complex-contour-asio-f32", StringCompa
         ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id));
 }
 
+if (args.Any(arg => string.Equals(arg, "--complex-contour-replay-panel", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunComplexContourReplayPanel(
+        ParseStringOption(args, "--output", "calibration/bioacoustic/complex-contour-replay-panel.json"));
+}
+
 if (args.Any(arg => string.Equals(arg, "--calibrate-contestant-asio-f32", StringComparison.OrdinalIgnoreCase)))
 {
     return CalibrateContestantAsioFloat32(
@@ -1728,10 +1734,48 @@ static int AnalyzeComplexContourAsioFloat32(
     double predictedDelaySamples,
     string songId)
 {
+    var result = EstimateComplexContourAsioFloat32(
+        inputPath,
+        sampleRate,
+        channels,
+        referenceChannel,
+        candidateChannel,
+        seconds,
+        scheduleOffsetSamples,
+        predictedDelaySamples,
+        songId);
+    if (result == null)
+    {
+        return 1;
+    }
+
+    var bands = string.Join(",", result.StrongestBands.Select(group =>
+        $"{group.CenterHz:0}Hz:{group.DelayResidualSamples:+0.00;-0.00;0.00}samp/{group.PhaseResidualRadians:+0.00;-0.00;0.00}rad"));
+    Console.WriteLine(
+        $"complex-contour-asio-f32 input={result.InputPath} reference=asio-ch{result.ReferenceChannel} candidate=asio-ch{result.CandidateChannel} " +
+        $"delaySamples={result.DelaySamples:0.000000} delayUs={result.DelayMicroseconds:0.000} " +
+        $"predictedDelaySamples={result.PredictedDelaySamples:0.000000} predictionErrorSamples={result.PredictionErrorSamples:0.000000} predictionErrorUs={result.PredictionErrorMicroseconds:0.000} " +
+        $"confidence={result.Confidence:0.000} directHits={result.DirectHits} maeSamples={result.MeanAbsoluteErrorSamples:0.000000} phaseMaeRad={result.MeanAbsolutePhaseErrorRadians:0.000} " +
+        $"referenceHits={result.ReferenceHits} candidateHits={result.CandidateHits} reflectionTaps={result.ReflectionTaps.Length} " +
+        $"firstReflectionSamples={result.FirstReflectionSamples:0.000} bands={bands}");
+    return 0;
+}
+
+static ComplexContourReplayResult? EstimateComplexContourAsioFloat32(
+    string inputPath,
+    int sampleRate,
+    int channels,
+    int referenceChannel,
+    int candidateChannel,
+    double seconds,
+    double scheduleOffsetSamples,
+    double predictedDelaySamples,
+    string songId)
+{
     if (!File.Exists(inputPath))
     {
         Console.Error.WriteLine($"complex-contour ASIO analysis failed: input not found: {inputPath}");
-        return 1;
+        return null;
     }
 
     var profile = MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
@@ -1739,14 +1783,14 @@ static int AnalyzeComplexContourAsioFloat32(
     if (profile == null)
     {
         Console.Error.WriteLine($"complex-contour ASIO analysis failed: unknown song '{songId}'");
-        return 1;
+        return null;
     }
 
     if (referenceChannel < 0 || referenceChannel >= channels ||
         candidateChannel < 0 || candidateChannel >= channels)
     {
         Console.Error.WriteLine("complex-contour ASIO analysis failed: channel index outside capture channel count");
-        return 1;
+        return null;
     }
 
     var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
@@ -1766,26 +1810,122 @@ static int AnalyzeComplexContourAsioFloat32(
         eventIndices,
         scheduleOffsetSamples + predictedDelaySamples,
         Math.Max(48, sampleRate / 900));
-    var tracker = new MimirDirectPathTracker(sampleRate);
-    var estimate = tracker.Update(referenceHits, candidateHits, predictedDelaySamples);
+    var estimate = new MimirDirectPathTracker(sampleRate).Update(referenceHits, candidateHits, predictedDelaySamples);
     if (estimate == null)
     {
         Console.WriteLine(
             $"complex-contour-asio-f32 status=no-lock input={inputPath} reference=asio-ch{referenceChannel} candidate=asio-ch{candidateChannel} " +
             $"referenceHits={referenceHits.Count} candidateHits={candidateHits.Count} predictedDelaySamples={predictedDelaySamples:0.000}");
-        return 1;
+        return null;
     }
 
+    var strongestBands = estimate.BandObservations
+        .GroupBy(observation => Math.Round(observation.CenterHz / 250.0) * 250.0)
+        .Select(group =>
+        {
+            var totalWeight = Math.Max(1.0e-9, group.Sum(observation => Math.Max(observation.Weight, 1.0e-9)));
+            return new ComplexContourBandResidual(
+                group.Key,
+                totalWeight,
+                group.Sum(observation => observation.DelayResidualSamples * Math.Max(observation.Weight, 1.0e-9)) / totalWeight,
+                group.Sum(observation => observation.PhaseResidualRadians * Math.Max(observation.Weight, 1.0e-9)) / totalWeight);
+        })
+        .OrderByDescending(group => group.Weight)
+        .Take(8)
+        .ToArray();
     var predictionError = estimate.DelaySamples - predictedDelaySamples;
-    var firstReflection = estimate.ReflectionTaps.FirstOrDefault();
-    Console.WriteLine(
-        $"complex-contour-asio-f32 input={inputPath} reference=asio-ch{referenceChannel} candidate=asio-ch{candidateChannel} " +
-        $"delaySamples={estimate.DelaySamples:0.000000} delayUs={estimate.DelayMicroseconds:0.000} " +
-        $"predictedDelaySamples={predictedDelaySamples:0.000000} predictionErrorSamples={predictionError:0.000000} predictionErrorUs={predictionError * 1_000_000.0 / sampleRate:0.000} " +
-        $"confidence={estimate.Confidence:0.000} directHits={estimate.DirectHitCount} maeSamples={estimate.MeanAbsoluteErrorSamples:0.000000} " +
-        $"referenceHits={referenceHits.Count} candidateHits={candidateHits.Count} reflectionTaps={estimate.ReflectionTaps.Count} " +
-        $"firstReflectionSamples={(firstReflection?.RelativeDelaySamples ?? double.NaN):0.000}");
-    return 0;
+    return new ComplexContourReplayResult(
+        "",
+        inputPath,
+        sampleRate,
+        referenceChannel,
+        candidateChannel,
+        predictedDelaySamples,
+        estimate.DelaySamples,
+        estimate.DelayMicroseconds,
+        predictionError,
+        predictionError * 1_000_000.0 / sampleRate,
+        estimate.Confidence,
+        estimate.DirectHitCount,
+        estimate.MeanAbsoluteErrorSamples,
+        estimate.MeanAbsolutePhaseErrorRadians,
+        referenceHits.Count,
+        candidateHits.Count,
+        estimate.ReflectionTaps.ToArray(),
+        estimate.ReflectionTaps.FirstOrDefault()?.RelativeDelaySamples ?? double.NaN,
+        strongestBands);
+}
+
+static int RunComplexContourReplayPanel(string outputPath)
+{
+    var cases = new[]
+    {
+        new ComplexContourReplayCase(
+            "stored-shotgun",
+            "artifacts/asio/scarlett-canary-packet-anchor-rich-192k-f32.raw",
+            CandidateChannel: 1,
+            PredictedDelaySamples: 534.343605),
+        new ComplexContourReplayCase(
+            "stored-cardioid",
+            "artifacts/asio/scarlett-canary-packet-anchor-rich-192k-f32.raw",
+            CandidateChannel: 0,
+            PredictedDelaySamples: 839.071083),
+        new ComplexContourReplayCase(
+            "fresh-shotgun",
+            "artifacts/asio/scarlett-canary-packet-anchor-rich-latest-192k-f32.raw",
+            CandidateChannel: 1,
+            PredictedDelaySamples: 544.244999),
+        new ComplexContourReplayCase(
+            "fresh-cardioid",
+            "artifacts/asio/scarlett-canary-packet-anchor-rich-latest-192k-f32.raw",
+            CandidateChannel: 0,
+            PredictedDelaySamples: 781.490952)
+    };
+
+    var failures = 0;
+    var results = new List<ComplexContourReplayResult>(cases.Length);
+    foreach (var replayCase in cases)
+    {
+        Console.WriteLine($"complex-contour-panel case={replayCase.Id}");
+        var result = EstimateComplexContourAsioFloat32(
+            replayCase.InputPath,
+            sampleRate: 192_000,
+            channels: 4,
+            referenceChannel: 2,
+            replayCase.CandidateChannel,
+            seconds: 4.0,
+            scheduleOffsetSamples: 1623.0,
+            replayCase.PredictedDelaySamples,
+            MimirBioacousticContestants.CanaryPacketTrill.Id);
+        if (result == null)
+        {
+            failures++;
+            continue;
+        }
+
+        results.Add(result with { CaseId = replayCase.Id });
+        var bands = string.Join(",", result.StrongestBands.Take(4).Select(group =>
+            $"{group.CenterHz:0}Hz:{group.DelayResidualSamples:+0.00;-0.00;0.00}samp/{group.PhaseResidualRadians:+0.00;-0.00;0.00}rad"));
+        Console.WriteLine(
+            $"complex-contour-asio-f32 input={result.InputPath} reference=asio-ch{result.ReferenceChannel} candidate=asio-ch{result.CandidateChannel} " +
+            $"delaySamples={result.DelaySamples:0.000000} delayUs={result.DelayMicroseconds:0.000} " +
+            $"predictedDelaySamples={result.PredictedDelaySamples:0.000000} predictionErrorSamples={result.PredictionErrorSamples:0.000000} predictionErrorUs={result.PredictionErrorMicroseconds:0.000} " +
+            $"confidence={result.Confidence:0.000} directHits={result.DirectHits} maeSamples={result.MeanAbsoluteErrorSamples:0.000000} phaseMaeRad={result.MeanAbsolutePhaseErrorRadians:0.000} " +
+            $"referenceHits={result.ReferenceHits} candidateHits={result.CandidateHits} reflectionTaps={result.ReflectionTaps.Length} " +
+            $"firstReflectionSamples={result.FirstReflectionSamples:0.000} bands={bands}");
+    }
+
+    Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
+    File.WriteAllText(
+        outputPath,
+        JsonSerializer.Serialize(
+            new ComplexContourReplayPanelReceipt(
+                "mimir.bioacoustic.complex-contour-replay.v1",
+                DateTimeOffset.UtcNow,
+                results.ToArray()),
+            new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine($"complex-contour-panel-receipt path={outputPath} cases={results.Count}");
+    return failures == 0 ? 0 : 1;
 }
 
 static int CalibrateContestantAsioFloat32(
@@ -4810,3 +4950,41 @@ public sealed record BioacousticPhysicalBandCalibration(
     double ExpectedEnergy,
     double Gain,
     bool Usable);
+
+public sealed record ComplexContourReplayCase(
+    string Id,
+    string InputPath,
+    int CandidateChannel,
+    double PredictedDelaySamples);
+
+public sealed record ComplexContourReplayPanelReceipt(
+    string Schema,
+    DateTimeOffset CreatedUtc,
+    ComplexContourReplayResult[] Cases);
+
+public sealed record ComplexContourReplayResult(
+    string CaseId,
+    string InputPath,
+    int SampleRate,
+    int ReferenceChannel,
+    int CandidateChannel,
+    double PredictedDelaySamples,
+    double DelaySamples,
+    double DelayMicroseconds,
+    double PredictionErrorSamples,
+    double PredictionErrorMicroseconds,
+    double Confidence,
+    int DirectHits,
+    double MeanAbsoluteErrorSamples,
+    double MeanAbsolutePhaseErrorRadians,
+    int ReferenceHits,
+    int CandidateHits,
+    MimirAcousticReflectionTap[] ReflectionTaps,
+    double FirstReflectionSamples,
+    ComplexContourBandResidual[] StrongestBands);
+
+public sealed record ComplexContourBandResidual(
+    double CenterHz,
+    double Weight,
+    double DelayResidualSamples,
+    double PhaseResidualRadians);

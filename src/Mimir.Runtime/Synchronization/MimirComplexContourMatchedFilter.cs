@@ -27,13 +27,69 @@ public sealed record MimirAcousticReflectionTap(
     double Weight,
     int HitCount);
 
+public sealed record MimirDirectPathBandObservation(
+    double CenterHz,
+    double Weight,
+    double DelayResidualSamples,
+    double PhaseResidualRadians);
+
+public sealed record MimirDirectPathBandCorrection(
+    double CenterHz,
+    double DelayCorrectionSamples,
+    double PhaseCorrectionRadians,
+    double Weight);
+
 public sealed record MimirDirectPathEstimate(
     double DelaySamples,
     double DelayMicroseconds,
     double Confidence,
     double MeanAbsoluteErrorSamples,
+    double MeanAbsolutePhaseErrorRadians,
     int DirectHitCount,
+    IReadOnlyList<MimirDirectPathBandObservation> BandObservations,
     IReadOnlyList<MimirAcousticReflectionTap> ReflectionTaps);
+
+public sealed class MimirDirectPathChannelModel(IReadOnlyList<MimirDirectPathBandCorrection> corrections)
+{
+    public IReadOnlyList<MimirDirectPathBandCorrection> Corrections { get; } = corrections;
+
+    public static MimirDirectPathChannelModel Empty { get; } = new([]);
+
+    public static MimirDirectPathChannelModel Learn(MimirDirectPathEstimate estimate, double binHz = 250.0)
+    {
+        var corrections = estimate.BandObservations
+            .GroupBy(observation => Math.Round(observation.CenterHz / binHz) * binHz)
+            .Select(group =>
+            {
+                var totalWeight = Math.Max(1.0e-9, group.Sum(observation => Math.Max(observation.Weight, 1.0e-9)));
+                return new MimirDirectPathBandCorrection(
+                    group.Key,
+                    group.Sum(observation => observation.DelayResidualSamples * Math.Max(observation.Weight, 1.0e-9)) / totalWeight,
+                    group.Sum(observation => observation.PhaseResidualRadians * Math.Max(observation.Weight, 1.0e-9)) / totalWeight,
+                    totalWeight);
+            })
+            .Where(correction => correction.Weight > 0.0)
+            .OrderBy(correction => correction.CenterHz)
+            .ToArray();
+        return new MimirDirectPathChannelModel(corrections);
+    }
+
+    public double DelayCorrectionFor(double centerHz, double maxDistanceHz = 375.0)
+    {
+        if (Corrections.Count == 0)
+        {
+            return 0.0;
+        }
+
+        var nearest = Corrections
+            .Select(correction => (Correction: correction, Distance: Math.Abs(correction.CenterHz - centerHz)))
+            .OrderBy(pair => pair.Distance)
+            .First();
+        return nearest.Distance > maxDistanceHz
+            ? 0.0
+            : nearest.Correction.DelayCorrectionSamples;
+    }
+}
 
 public sealed class MimirComplexContourMatchedFilterBank(
     MimirBioacousticContestantRenderer renderer,
@@ -241,6 +297,7 @@ public sealed record MimirDirectPathTrackerOptions(
     double TrackingLoopBandwidth = 0.20,
     double MaximumTrackingCorrectionSamples = 12.0,
     double PredictionGateSamples = 10.0,
+    MimirDirectPathChannelModel? ChannelModel = null,
     int MinimumDirectHits = 8);
 
 public sealed class MimirDirectPathTracker(
@@ -260,7 +317,7 @@ public sealed class MimirDirectPathTracker(
             .Where(hit => hit.Rank == 0)
             .GroupBy(hit => (hit.EventIndex, hit.Kind, hit.SyllableIndex))
             .ToDictionary(group => group.Key, group => group.OrderByDescending(hit => hit.Score).First());
-        var deltas = new List<(double Delay, double Weight)>();
+        var observations = new List<MimirDirectPathObservation>();
         foreach (var candidate in candidateHits)
         {
             if (!referenceByAnchor.TryGetValue((candidate.EventIndex, candidate.Kind, candidate.SyllableIndex), out var reference))
@@ -275,15 +332,21 @@ public sealed class MimirDirectPathTracker(
                 ? 0.0
                 : phaseDelta * sampleRate / (Math.Tau * candidate.CenterHz);
             var maxPhaseCorrection = sampleRate / Math.Max(1.0, candidate.CenterHz) * 0.5;
-            deltas.Add((sampleDelay + Math.Clamp(phaseDelay, -maxPhaseCorrection, maxPhaseCorrection), weight));
+            var channelCorrection = (options.ChannelModel ?? MimirDirectPathChannelModel.Empty).DelayCorrectionFor(candidate.CenterHz);
+            observations.Add(new MimirDirectPathObservation(
+                sampleDelay + Math.Clamp(phaseDelay, -maxPhaseCorrection, maxPhaseCorrection) - channelCorrection,
+                sampleDelay,
+                phaseDelta,
+                candidate.CenterHz,
+                weight));
         }
 
-        if (deltas.Count < options.MinimumDirectHits)
+        if (observations.Count < options.MinimumDirectHits)
         {
             return null;
         }
 
-        var clusters = ClusterDelays(deltas);
+        var clusters = ClusterDelays(observations);
         if (clusters.Length == 0)
         {
             return null;
@@ -320,15 +383,33 @@ public sealed class MimirDirectPathTracker(
 
         delaySamples = updatedDelay;
         hasLock = true;
-        var directResiduals = deltas
-            .Where(delta => Math.Abs(delta.Delay - direct.Delay) <= options.DirectClusterRadiusSamples)
+        var directResiduals = observations
+            .Where(observation => Math.Abs(observation.Delay - direct.Delay) <= options.DirectClusterRadiusSamples)
             .ToArray();
-        var totalWeight = Math.Max(1.0e-9, directResiduals.Sum(delta => Math.Max(delta.Weight, 1.0e-9)));
-        var mae = directResiduals.Sum(delta => Math.Abs(delta.Delay - direct.Delay) * Math.Max(delta.Weight, 1.0e-9)) / totalWeight;
+        var totalWeight = Math.Max(1.0e-9, directResiduals.Sum(observation => Math.Max(observation.Weight, 1.0e-9)));
+        var mae = directResiduals.Sum(observation => Math.Abs(observation.Delay - direct.Delay) * Math.Max(observation.Weight, 1.0e-9)) / totalWeight;
+        var bandObservations = directResiduals
+            .Select(observation =>
+            {
+                var delayResidual = observation.Delay - direct.Delay;
+                var phaseResidual = WrapRadians(observation.PhaseDeltaRadians -
+                    Math.Tau * observation.CenterHz * (direct.Delay - observation.SampleDelay) / sampleRate);
+                return new MimirDirectPathBandObservation(
+                    observation.CenterHz,
+                    observation.Weight,
+                    delayResidual,
+                    phaseResidual);
+            })
+            .ToArray();
+        var meanAbsolutePhaseError = bandObservations.Length == 0
+            ? 0.0
+            : bandObservations.Sum(observation => Math.Abs(observation.PhaseResidualRadians) * Math.Max(observation.Weight, 1.0e-9)) /
+                Math.Max(1.0e-9, bandObservations.Sum(observation => Math.Max(observation.Weight, 1.0e-9)));
         var confidence = Math.Clamp(
             direct.Weight / Math.Max(1.0e-9, clusters.Sum(cluster => cluster.Weight)) *
             Math.Clamp(direct.Count / 16.0, 0.0, 1.0) *
-            (1.0 / (1.0 + mae / Math.Max(1.0, sampleRate * 0.00005))),
+            (1.0 / (1.0 + mae / Math.Max(1.0, sampleRate * 0.00005))) *
+            (1.0 / (1.0 + meanAbsolutePhaseError / 0.75)),
             0.0,
             1.0);
         var reflectionTaps = clusters
@@ -346,18 +427,20 @@ public sealed class MimirDirectPathTracker(
             updatedDelay * 1_000_000.0 / sampleRate,
             confidence,
             mae,
+            meanAbsolutePhaseError,
             direct.Count,
+            bandObservations,
             reflectionTaps);
     }
 
-    private MimirDelayCluster[] ClusterDelays(IReadOnlyList<(double Delay, double Weight)> deltas)
+    private MimirDelayCluster[] ClusterDelays(IReadOnlyList<MimirDirectPathObservation> observations)
     {
-        var sorted = deltas.OrderBy(delta => delta.Delay).ToArray();
+        var sorted = observations.OrderBy(observation => observation.Delay).ToArray();
         var clusters = new List<MimirDelayCluster>();
         var index = 0;
         while (index < sorted.Length)
         {
-            var members = new List<(double Delay, double Weight)> { sorted[index] };
+            var members = new List<MimirDirectPathObservation> { sorted[index] };
             var end = index + 1;
             while (end < sorted.Length &&
                    sorted[end].Delay - members[0].Delay <= options.DirectClusterRadiusSamples)
@@ -378,6 +461,13 @@ public sealed class MimirDirectPathTracker(
     }
 
     private sealed record MimirDelayCluster(double Delay, double Weight, int Count);
+
+    private sealed record MimirDirectPathObservation(
+        double Delay,
+        double SampleDelay,
+        double PhaseDeltaRadians,
+        double CenterHz,
+        double Weight);
 
     private static double WrapRadians(double radians)
     {

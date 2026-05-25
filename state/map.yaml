@@ -225,7 +225,12 @@ accepted_design:
     reflection smoke currently lands about 5.249 us from expected delay; stored
     Scarlett shotgun receipts land within about 5.860 us and 7.247 us of seeded
     path fits, while cardioid receipts land within about 15.817 us and 8.963 us.
-    Low confidence is expected until phase/group-delay surfaces are learned.
+    Low confidence is expected until phase/group-delay surfaces are learned. The
+    tracker now exposes per-band delay/phase residual observations and a
+    `MimirDirectPathChannelModel` correction surface for multi-window
+    calibration; one-window self-correction is not live authority.
+    `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
+    current four-case replay receipt.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.
