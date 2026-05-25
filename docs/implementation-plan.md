@@ -101,6 +101,12 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis.
+- `MimirRuntime` publishes live ASIO spectrum history to Fensalir in two layers:
+  `AquariumBufferFieldFrame` carries the real buffer-field intent for spectrum
+  windows as spline-domain tube fields with tangent/curvature/normal/derivative
+  appearance and probe policy, while `AquariumSplineFrame` is the temporary
+  Catmull-Rom tube preview so the buffer contents remain visible before GPU
+  reservoir lowering owns the draw.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -233,9 +239,14 @@ a named invariant that the native runtime cannot protect yet.
    with probe durations long enough to keep loopback and mic windows live.
 6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-7. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+7. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:
+   sample buffer-domain paths stochastically by visual contribution, emit SDF
+   splat probes, write them into the spatiotemporal splat reservoir, and sample
+   that reservoir in the temporally antialiased scene pass. The direct spline
+   preview must stay a witness until this path owns rendering.
+8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
-8. Move mic alignment, room suppression, voice separation, spatialization, and
+9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-9. Keep the OBS bridge witness ledger as evidence before expanding receiver
+10. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

@@ -119,6 +119,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
         var cameraZ = channelCount * SpectrumChannelSeparation;
+        var spectrumSplineFrame = BuildSpectrumSplineFrame();
         return new AquariumFrame(
             new ViewFrame(Vector2.Zero, 24.0f),
             new Vector3(0.0f, 0.0f, cameraZ),
@@ -129,7 +130,8 @@ public sealed class MimirRuntime : IAquariumRuntime
             {
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
-                SplineFrame = BuildSpectrumSplineFrame(),
+                BufferFieldFrame = BuildSpectrumBufferFieldFrame(spectrumSplineFrame),
+                SplineFrame = spectrumSplineFrame,
             });
     }
 
@@ -613,6 +615,64 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         return new AquariumSplineFrame { Splines = splines };
+    }
+
+    private static AquariumBufferFieldFrame BuildSpectrumBufferFieldFrame(AquariumSplineFrame previewFrame)
+    {
+        if (!previewFrame.HasInput)
+        {
+            return AquariumBufferFieldFrame.Empty;
+        }
+
+        return AquariumBufferFieldFrame.Compose(fields =>
+        {
+            foreach (var spline in previewFrame.Splines)
+            {
+                if (!spline.Id.StartsWith("spectrum-", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                fields.SplineTube(
+                    $"mimir.audio.field.{spline.Id}",
+                    "mimir.audio.spectrum-history",
+                    spline,
+                    AquariumFieldDomainBinding.Identity(
+                        "spline.frequency-window",
+                        "mimir.audio.spectrum-lane",
+                        "mimir.audio.spectrum-stack"),
+                    new AquariumSplineTubeAppearance(
+                        new Vector4(1.0f, 0.72f, 0.22f, 1.0f),
+                        spline.Style.Radius,
+                        spline.Style.Alpha,
+                        spline.Style.ZeroThreshold,
+                        spline.Style.Feather,
+                        TangentWeight: 1.0f,
+                        CurvatureWeight: 0.55f,
+                        NormalWeight: 0.35f,
+                        DerivativeWeight: 0.70f),
+                    new AquariumSplineTubeProbePolicy(
+                        MaxProbeCount: Math.Clamp(spline.Vertices.Count * Math.Max(1, spline.CatmullRomSubdivisions), 16, 512),
+                        BaseDensity: 1.0f,
+                        MinimumVisualContribution: 0.008f,
+                        Seed: StableSeed(spline.Id)));
+            }
+        });
+    }
+
+    private static uint StableSeed(string text)
+    {
+        unchecked
+        {
+            var hash = 2166136261u;
+            foreach (var ch in text)
+            {
+                hash ^= ch;
+                hash *= 16777619u;
+            }
+
+            return hash == 0u ? 0xB11FF13Du : hash;
+        }
     }
 
     private static IReadOnlyList<AquariumSplineVertex> BuildSpectrumWindowSpline(
