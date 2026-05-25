@@ -67,6 +67,27 @@ public sealed class MimirAudioSpectrumAnalyzer
         return snapshots;
     }
 
+    public MimirAudioSpectrumSnapshot? AnalyzeSamples(
+        string sourceId,
+        ReadOnlySpan<float> samples,
+        int sampleRate)
+    {
+        if (samples.Length < MinimumFftSize / 2 || sampleRate <= 0)
+        {
+            return null;
+        }
+
+        Array.Clear(spectrum);
+        var written = Math.Min(samples.Length, fftSize);
+        var window = samples[^written..];
+        for (var index = 0; index < written; index++)
+        {
+            spectrum[index] = new Complex(window[index], 0.0);
+        }
+
+        return AnalyzePreparedSpectrum(sourceId, sampleRate, written, edgeNs: 0);
+    }
+
     private MimirAudioSpectrumSnapshot? AnalyzeBuffer(MimirRollingStreamBuffer buffer)
     {
         var latestBlock = buffer.Latest?.AudioBlock;
@@ -82,6 +103,15 @@ public sealed class MimirAudioSpectrumAnalyzer
             return null;
         }
 
+        return AnalyzePreparedSpectrum(buffer.Descriptor.SourceId, latestBlock.SampleRate, written, buffer.EdgeNs);
+    }
+
+    private MimirAudioSpectrumSnapshot AnalyzePreparedSpectrum(
+        string sourceId,
+        int sampleRate,
+        int written,
+        long edgeNs)
+    {
         var rms = 0.0;
         var peak = 0.0;
         for (var index = 0; index < written; index++)
@@ -101,12 +131,12 @@ public sealed class MimirAudioSpectrumAnalyzer
             magnitudes[index] = spectrum[index].Magnitude / Math.Max(1, written);
         }
 
-        var bands = BuildLogBands(magnitudes, latestBlock.SampleRate);
-        var peaks = FindPeaks(magnitudes, latestBlock.SampleRate, count: 6);
+        var bands = BuildLogBands(magnitudes, sampleRate);
+        var peaks = FindPeaks(magnitudes, sampleRate, count: 6);
         var floor = bands.Count == 0 ? -120.0 : bands.OrderBy(value => value).ElementAt(Math.Clamp(bands.Count / 4, 0, bands.Count - 1));
         return new MimirAudioSpectrumSnapshot(
-            buffer.Descriptor.SourceId,
-            latestBlock.SampleRate,
+            sourceId,
+            sampleRate,
             fftSize,
             written,
             rms,
@@ -114,7 +144,7 @@ public sealed class MimirAudioSpectrumAnalyzer
             floor,
             peaks,
             bands,
-            buffer.EdgeNs);
+            edgeNs);
     }
 
     private int FillLatestMonoWindow(

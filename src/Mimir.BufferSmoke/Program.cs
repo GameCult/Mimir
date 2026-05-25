@@ -171,6 +171,14 @@ if (args.Any(arg => string.Equals(arg, "--analyze-asio-f32", StringComparison.Or
         ParseStringOption(args, "--calibration", ""));
 }
 
+if (args.Any(arg => string.Equals(arg, "--inspect-asio-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return InspectAsioFloat32(
+        ParseStringOption(args, "--input", "artifacts/asio/scarlett-channel-id-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseIntOption(args, "--channels", 4));
+}
+
 if (args.Any(arg => string.Equals(arg, "--analyze-contestant-asio-f32", StringComparison.OrdinalIgnoreCase)))
 {
     return AnalyzeContestantAsioFloat32(
@@ -1798,6 +1806,39 @@ static int AnalyzeContestantAsioFloat32(
     return failures == 0 ? 0 : 1;
 }
 
+static int InspectAsioFloat32(string inputPath, int sampleRate, int channels)
+{
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"asio-f32 inspect failed: input not found: {inputPath}");
+        return 1;
+    }
+
+    if (channels <= 0 || sampleRate <= 0)
+    {
+        Console.Error.WriteLine("asio-f32 inspect failed: sample rate and channel count must be positive");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
+    var analyzer = new MimirAudioSpectrumAnalyzer(8192, 48);
+    Console.WriteLine($"asio-f32-inspect input={inputPath} sampleRate={sampleRate} channels={channels} frames={frameCount} seconds={frameCount / (double)sampleRate:0.000}");
+    for (var channel = 0; channel < channels; channel++)
+    {
+        var samples = channelSamples[channel];
+        var full = SignalStats(samples);
+        var speech = BandLimitedStats(samples, sampleRate, 80.0, 8000.0);
+        var ultrasonic = BandLimitedStats(samples, sampleRate, 16000.0, 48000.0);
+        var spectrum = analyzer.AnalyzeSamples($"asio-ch{channel}", samples, sampleRate);
+        Console.WriteLine(
+            $"asio-f32-channel ch={channel} rms={full.Rms:0.000000} peak={full.Peak:0.000000} dc={full.Mean:0.000000} " +
+            $"speechRms={speech.Rms:0.000000} speechPeak={speech.Peak:0.000000} ultrasonicRms={ultrasonic.Rms:0.000000} " +
+            $"peaks={DescribeSpectrumPeaks(spectrum)}");
+    }
+
+    return 0;
+}
+
 static int AnalyzeComplexContourAsioFloat32(
     string inputPath,
     int sampleRate,
@@ -2706,6 +2747,80 @@ static float[][] ReadInterleavedFloat32(string inputPath, int channels, out int 
     }
 
     return channelSamples;
+}
+
+static ChannelSignalStats SignalStats(ReadOnlySpan<float> samples)
+{
+    if (samples.Length == 0)
+    {
+        return new ChannelSignalStats(0.0, 0.0, 0.0);
+    }
+
+    var sum = 0.0;
+    var sumSquares = 0.0;
+    var peak = 0.0;
+    foreach (var sample in samples)
+    {
+        sum += sample;
+        sumSquares += sample * sample;
+        peak = Math.Max(peak, Math.Abs(sample));
+    }
+
+    return new ChannelSignalStats(
+        Math.Sqrt(sumSquares / samples.Length),
+        peak,
+        sum / samples.Length);
+}
+
+static ChannelSignalStats BandLimitedStats(ReadOnlySpan<float> samples, int sampleRate, double lowHz, double highHz)
+{
+    if (samples.Length == 0 || sampleRate <= 0 || highHz <= lowHz)
+    {
+        return new ChannelSignalStats(0.0, 0.0, 0.0);
+    }
+
+    var highPassed = new float[samples.Length];
+    var lowCut = Math.Clamp(lowHz, 1.0, sampleRate * 0.45);
+    var highCut = Math.Clamp(highHz, lowCut + 1.0, sampleRate * 0.49);
+    var dt = 1.0 / sampleRate;
+    var hpRc = 1.0 / (2.0 * Math.PI * lowCut);
+    var hpAlpha = hpRc / (hpRc + dt);
+    var previousInput = (double)samples[0];
+    var previousOutput = 0.0;
+    for (var index = 0; index < samples.Length; index++)
+    {
+        var input = samples[index];
+        var output = hpAlpha * (previousOutput + input - previousInput);
+        highPassed[index] = (float)output;
+        previousInput = input;
+        previousOutput = output;
+    }
+
+    var lpRc = 1.0 / (2.0 * Math.PI * highCut);
+    var lpAlpha = dt / (lpRc + dt);
+    var lowPassed = 0.0;
+    var sum = 0.0;
+    var sumSquares = 0.0;
+    var peak = 0.0;
+    foreach (var sample in highPassed)
+    {
+        lowPassed += lpAlpha * (sample - lowPassed);
+        sum += lowPassed;
+        sumSquares += lowPassed * lowPassed;
+        peak = Math.Max(peak, Math.Abs(lowPassed));
+    }
+
+    return new ChannelSignalStats(
+        Math.Sqrt(sumSquares / samples.Length),
+        peak,
+        sum / samples.Length);
+}
+
+static string DescribeSpectrumPeaks(MimirAudioSpectrumSnapshot? spectrum)
+{
+    return spectrum == null || spectrum.Peaks.Count == 0
+        ? "none"
+        : string.Join(",", spectrum.Peaks.Select(peak => $"{peak.FrequencyHz / 1000.0:0.00}kHz/{peak.Decibels:0.0}dB"));
 }
 
 static float[] RoundTripThroughDegradedCepstrum(
@@ -5017,6 +5132,8 @@ internal sealed class DisposableConfiguration : IDisposable
         }
     }
 }
+
+internal readonly record struct ChannelSignalStats(double Rms, double Peak, double Mean);
 
 internal sealed record CepstralDegradationSetting(
     string Name,
