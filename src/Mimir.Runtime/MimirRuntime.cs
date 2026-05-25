@@ -3,6 +3,7 @@ using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
+using CultMath;
 using Mimir.Runtime.Synchronization;
 using System.Diagnostics;
 using System.Numerics;
@@ -23,6 +24,11 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumWindowDepthSeparation = 0.18f;
     private const float SpectrumWidth = 12.0f;
     private const float SpectrumAmplitudeHeight = 1.1f;
+    private const float SpectrumCameraDefaultDistanceMultiplier = 10.0f;
+    private const float SpectrumCameraDefaultAngleDegrees = -45.0f;
+    private const float SpectrumCameraFitPadding = 1.12f;
+    private const float SpectrumFrustumMinimumNear = 0.01f;
+    private const float SpectrumSplineTubePadding = 0.18f;
     private const string SpectrumFieldScriptPath = "config/mimir-spectrum-field.aquafield";
     private const string DefaultSpectrumFieldScript = """
 # Fensalir field DSL fallback for deployed Mimir layouts.
@@ -59,6 +65,12 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
     private double lastAudioSyncAnalysisMilliseconds;
     private double lastSpectrumAnalysisMilliseconds;
     private double lastPassiveSynchronizationConfidence;
+    private float spectrumCameraDistanceMultiplier = SpectrumCameraDefaultDistanceMultiplier;
+    private float spectrumCameraAngleDegrees = SpectrumCameraDefaultAngleDegrees;
+    private AquariumCameraFrustum lastSpectrumFrustum = AquariumCameraFrustum.Default;
+    private Vector3 lastSpectrumCameraPosition;
+    private Vector3 lastSpectrumCameraTarget;
+    private (Vector3 Min, Vector3 Max) lastSpectrumAabb = (Vector3.Zero, Vector3.One);
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private readonly Queue<IReadOnlyList<MimirAudioSpectrumSnapshot>> spectrumHistory = new();
@@ -133,10 +145,22 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
         var bufferFieldFrame = BuildSpectrumBufferFieldFrame();
-        var cameraPosition = SpectrumCameraPosition(channelCount);
-        var cameraTarget = SpectrumSplineAabbCenter(channelCount, spectrumHistory.Count);
+        var windowCount = Math.Max(1, spectrumHistory.Count);
+        var (splineMin, splineMax) = SpectrumSplineAabb(channelCount, windowCount);
+        var cameraTarget = (splineMin + splineMax) * 0.5f;
+        var cameraPosition = SpectrumCameraPosition(
+            channelCount,
+            windowCount,
+            cameraTarget,
+            spectrumCameraDistanceMultiplier,
+            spectrumCameraAngleDegrees);
+        var cameraFrustum = FitSpectrumCameraFrustum(splineMin, splineMax, cameraPosition, cameraTarget);
+        lastSpectrumFrustum = cameraFrustum;
+        lastSpectrumCameraPosition = cameraPosition;
+        lastSpectrumCameraTarget = cameraTarget;
+        lastSpectrumAabb = (splineMin, splineMax);
         return new AquariumFrame(
-            new ViewFrame(Vector2.Zero, 24.0f),
+            new ViewFrame(Vector2.Zero, 24.0f) { Frustum = cameraFrustum },
             cameraPosition,
             cameraTarget,
             runtimeSeconds,
@@ -150,18 +174,133 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
             });
     }
 
-    private static Vector3 SpectrumCameraPosition(int spectrumCount)
+    private static Vector3 SpectrumCameraPosition(
+        int spectrumCount,
+        int windowCount,
+        Vector3 target,
+        float distanceMultiplier,
+        float angleDegrees)
     {
-        var distance = Math.Max(1, spectrumCount) * SpectrumChannelSeparation;
-        return new Vector3(0.0f, distance, -distance);
+        var oldDistance = math.sqrt(2.0f) * math.max(1.0f, spectrumCount) * SpectrumChannelSeparation;
+        var aabbDepth = math.max(1.0f, windowCount) * SpectrumWindowDepthSeparation;
+        var distance = math.max(oldDistance * math.clamp(distanceMultiplier, 1.0f, 80.0f), aabbDepth + 0.1f);
+        var angleRadians = math.radians(math.clamp(angleDegrees, -85.0f, 85.0f));
+        var viewBack = math.normalize(new float3(0.0f, math.cos(angleRadians), math.sin(angleRadians)));
+        return ToVector3(ToFloat3(target) + viewBack * distance);
     }
 
-    private static Vector3 SpectrumSplineAabbCenter(int spectrumCount, int windowCount)
+    private static (Vector3 Min, Vector3 Max) SpectrumSplineAabb(int spectrumCount, int windowCount)
     {
-        var x = 0.0f;
-        var y = (Math.Max(1, spectrumCount) - 1) * SpectrumChannelSeparation * 0.5f + SpectrumAmplitudeHeight * 0.5f;
-        var z = Math.Max(0, windowCount - 1) * SpectrumWindowDepthSeparation * 0.5f;
-        return new Vector3(x, y, z);
+        var halfWidth = SpectrumWidth * 0.5f;
+        var maxY = Math.Max(0, spectrumCount - 1) * SpectrumChannelSeparation + SpectrumAmplitudeHeight;
+        var maxZ = Math.Max(0, windowCount - 1) * SpectrumWindowDepthSeparation;
+        var padding = new Vector3(SpectrumSplineTubePadding, SpectrumSplineTubePadding, SpectrumSplineTubePadding);
+        return (
+            new Vector3(-halfWidth, 0.0f, 0.0f) - padding,
+            new Vector3(halfWidth, maxY, maxZ) + padding);
+    }
+
+    private static AquariumCameraFrustum FitSpectrumCameraFrustum(
+        Vector3 aabbMin,
+        Vector3 aabbMax,
+        Vector3 cameraPosition,
+        Vector3 cameraTarget)
+    {
+        var camera = ToFloat3(cameraPosition);
+        var target = ToFloat3(cameraTarget);
+        SpectrumCameraBasis(camera, target, out var forward, out var right, out var up);
+        var maxSlopeX = 0.001f;
+        var maxSlopeY = 0.001f;
+        var minZ = float.PositiveInfinity;
+        var maxZ = float.NegativeInfinity;
+        var corners = SpectrumAabbCorners(aabbMin, aabbMax).ToArray();
+
+        foreach (var corner in corners)
+        {
+            var delta = ToFloat3(corner) - camera;
+            var z = math.max(math.dot(delta, forward), SpectrumFrustumMinimumNear);
+            minZ = math.min(minZ, z);
+            maxZ = math.max(maxZ, z);
+            maxSlopeX = math.max(maxSlopeX, math.abs(math.dot(delta, right) / z));
+            maxSlopeY = math.max(maxSlopeY, math.abs(math.dot(delta, up) / z));
+        }
+
+        var depthPadding = math.max((maxZ - minZ) * 0.08f, SpectrumSplineTubePadding);
+        var near = math.max(SpectrumFrustumMinimumNear, minZ - depthPadding);
+        var far = math.max(near + 0.001f, maxZ + depthPadding);
+        var halfWidth = maxSlopeX * near * SpectrumCameraFitPadding;
+        var halfHeight = maxSlopeY * near * SpectrumCameraFitPadding;
+
+        return new AquariumCameraFrustum(
+            -halfWidth,
+            halfWidth,
+            -halfHeight,
+            halfHeight,
+            near,
+            far).Normalized();
+    }
+
+    private static void SpectrumCameraBasis(
+        float3 cameraPosition,
+        float3 cameraTarget,
+        out float3 forward,
+        out float3 right,
+        out float3 up)
+    {
+        forward = math.normalize(cameraTarget - cameraPosition);
+        var worldUp = math.abs(forward.y) > 0.96f ? new float3(0.0f, 0.0f, 1.0f) : new float3(0.0f, 1.0f, 0.0f);
+        right = math.normalize(math.cross(worldUp, forward));
+        up = math.normalize(math.cross(forward, right));
+    }
+
+    private static float4 ProjectSpectrumPoint(
+        Vector3 worldPosition,
+        Vector3 cameraPosition,
+        Vector3 cameraTarget,
+        AquariumCameraFrustum frustum)
+    {
+        var camera = ToFloat3(cameraPosition);
+        SpectrumCameraBasis(camera, ToFloat3(cameraTarget), out var forward, out var right, out var up);
+        var view = ToCameraSpace(ToFloat3(worldPosition), camera, forward, right, up);
+        return ProjectCameraSpace(view, frustum);
+    }
+
+    private static float3 ToCameraSpace(float3 world, float3 camera, float3 forward, float3 right, float3 up)
+    {
+        var delta = world - camera;
+        return new float3(math.dot(delta, right), math.dot(delta, up), math.dot(delta, forward));
+    }
+
+    private static float4 ProjectCameraSpace(float3 view, AquariumCameraFrustum frustum)
+    {
+        var normalized = frustum.Normalized();
+        var z = math.max(view.z, 0.0001f);
+        var slope = view.xy / z;
+        var min = new float2(normalized.Left / normalized.Near, normalized.Bottom / normalized.Near);
+        var max = new float2(normalized.Right / normalized.Near, normalized.Top / normalized.Near);
+        var uv = (slope - min) / math.max(max - min, new float2(0.0001f, 0.0001f));
+        return new float4(uv * 2.0f - 1.0f, math.saturate(z / math.max(normalized.Far, 0.0001f)), 1.0f);
+    }
+
+    private static float3 ToFloat3(Vector3 value) => new(value.X, value.Y, value.Z);
+
+    private static Vector3 ToVector3(float3 value) => new(value.x, value.y, value.z);
+
+    private static IEnumerable<Vector3> SpectrumAabbCorners(Vector3 min, Vector3 max)
+    {
+        for (var x = 0; x < 2; x++)
+        {
+            for (var y = 0; y < 2; y++)
+            {
+                for (var z = 0; z < 2; z++)
+                {
+                    yield return new Vector3(
+                        x == 0 ? min.X : max.X,
+                        y == 0 ? min.Y : max.Y,
+                        z == 0 ? min.Z : max.Z);
+                }
+            }
+        }
     }
 
     public AquariumSynthDocument Synth => AquariumSynthDocument.Empty;
@@ -240,6 +379,23 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
                 panel.Readout("Spectrum cadence", () => sceneReady
                     ? $"{lastAudioSpectra.Count} spectra fft={lastAudioSpectra.FirstOrDefault()?.FftSize ?? 0} analyze={lastSpectrumAnalysisMilliseconds:0.00}ms"
                     : "waiting for Fensalir scene ready");
+                panel.Slider(
+                    "Perspective",
+                    () => spectrumCameraDistanceMultiplier,
+                    value => spectrumCameraDistanceMultiplier = Math.Clamp(value, 1.0f, 80.0f),
+                    1.0f,
+                    80.0f,
+                    "0.0x",
+                    "Dolly distance multiplier. The projection frustum is fitted to the full spectrum trail AABB.");
+                panel.Slider(
+                    "Angle",
+                    () => spectrumCameraAngleDegrees,
+                    value => spectrumCameraAngleDegrees = Math.Clamp(value, -85.0f, 85.0f),
+                    -85.0f,
+                    85.0f,
+                    "0.0 deg",
+                    "Polar camera angle in the YZ plane around the spectrum trail AABB.");
+                panel.Readout("Frustum", DescribeSpectrumFrustum);
                 panel.TextBox(
                     "Spectra",
                     DescribeSpectra,
@@ -462,6 +618,7 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
         Console.WriteLine(
             $"mimir-sync-telemetry t={runtimeSeconds:0.00}s audioSync={audioSyncSettings.Mode} loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} analyzeMs={lastAudioSyncAnalysisMilliseconds:0.0} aligned={DescribeAlignedAudio()}");
         Console.WriteLine($"mimir-sync-buffers {DescribeAudioBuffers()}");
+        Console.WriteLine($"mimir-spectrum-frustum {DescribeSpectrumFrustum()}");
         foreach (var spectrum in lastAudioSpectra.OrderBy(snapshot => snapshot.SourceId, StringComparer.Ordinal))
         {
             Console.WriteLine(
@@ -643,6 +800,37 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
         return builder.ToString().TrimEnd();
     }
 
+    private string DescribeSpectrumFrustum()
+    {
+        var frustum = lastSpectrumFrustum.Normalized();
+        var clip = SpectrumClipBounds(
+            lastSpectrumAabb.Min,
+            lastSpectrumAabb.Max,
+            lastSpectrumCameraPosition,
+            lastSpectrumCameraTarget,
+            frustum);
+        return $"dolly={spectrumCameraDistanceMultiplier:0.0}x angle={spectrumCameraAngleDegrees:0.0}deg L/R={frustum.Left:0.###}/{frustum.Right:0.###} B/T={frustum.Bottom:0.###}/{frustum.Top:0.###} N/F={frustum.Near:0.###}/{frustum.Far:0.###} clip={clip.Min.x:0.###},{clip.Min.y:0.###}->{clip.Max.x:0.###},{clip.Max.y:0.###}";
+    }
+
+    private static (float2 Min, float2 Max) SpectrumClipBounds(
+        Vector3 aabbMin,
+        Vector3 aabbMax,
+        Vector3 cameraPosition,
+        Vector3 cameraTarget,
+        AquariumCameraFrustum frustum)
+    {
+        var min = new float2(float.PositiveInfinity, float.PositiveInfinity);
+        var max = new float2(float.NegativeInfinity, float.NegativeInfinity);
+        foreach (var corner in SpectrumAabbCorners(aabbMin, aabbMax))
+        {
+            var clip = ProjectSpectrumPoint(corner, cameraPosition, cameraTarget, frustum);
+            min = math.min(min, clip.xy);
+            max = math.max(max, clip.xy);
+        }
+
+        return (min, max);
+    }
+
     private AquariumSplineFrame BuildSpectrumSplineFrame()
     {
         if (!sceneReady || spectrumHistory.Count == 0)
@@ -662,17 +850,14 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
         }
 
         var splines = new List<AquariumSpline3D>(windows.Length * sourceIds.Length + sourceIds.Length * 4);
-        var channelCenter = (sourceIds.Length - 1) * SpectrumChannelSeparation * 0.5f;
-        var cameraZ = Math.Max(1, sourceIds.Length) * SpectrumChannelSeparation;
-        var nearZ = cameraZ + 2.4f;
-        AddSpectrumGridSplines(splines, sourceIds.Length, channelCenter, nearZ, windows.Length);
+        AddSpectrumGridSplines(splines, sourceIds.Length, windows.Length);
 
         for (var windowIndex = 0; windowIndex < windows.Length; windowIndex++)
         {
             var ageFromNewest = windows.Length - 1 - windowIndex;
             var ageT = windows.Length <= 1 ? 0.0f : ageFromNewest / (float)(windows.Length - 1);
             var alpha = Math.Clamp(0.10f + MathF.Pow(1.0f - ageT, 1.35f) * 0.90f, 0.10f, 1.0f);
-            var z = nearZ + ageFromNewest * SpectrumWindowDepthSeparation;
+            var z = ageFromNewest * SpectrumWindowDepthSeparation;
             var spectraBySource = windows[windowIndex].ToDictionary(spectrum => spectrum.SourceId, StringComparer.Ordinal);
             for (var channelIndex = 0; channelIndex < sourceIds.Length; channelIndex++)
             {
@@ -681,7 +866,7 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
                     continue;
                 }
 
-                var points = BuildSpectrumWindowSpline(spectrum, channelCenter - channelIndex * SpectrumChannelSeparation, z, alpha);
+                var points = BuildSpectrumWindowSpline(spectrum, channelIndex * SpectrumChannelSeparation, z, alpha);
                 splines.Add(new AquariumSpline3D(
                     $"spectrum-{spectrum.SourceId}-{windowIndex}",
                     points,
@@ -822,14 +1007,13 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
     private static void AddSpectrumGridSplines(
         List<AquariumSpline3D> splines,
         int channelCount,
-        float channelCenter,
-        float nearZ,
         int windowCount)
     {
-        var farZ = nearZ + Math.Max(1, windowCount - 1) * SpectrumWindowDepthSeparation;
+        var nearZ = 0.0f;
+        var farZ = Math.Max(1, windowCount - 1) * SpectrumWindowDepthSeparation;
         for (var channelIndex = 0; channelIndex < channelCount; channelIndex++)
         {
-            var y = channelCenter - channelIndex * SpectrumChannelSeparation;
+            var y = channelIndex * SpectrumChannelSeparation;
             var color = new Vector4(0.24f, 0.90f, 1.05f, 0.28f);
             splines.Add(new AquariumSpline3D(
                 $"spectrum-grid-x-{channelIndex}",
