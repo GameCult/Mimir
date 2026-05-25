@@ -32,7 +32,7 @@ surface id=derivative op=dFdx inputs=amplitude value=0,0,0,0
 surface id=curvature op=d2Fdx2 inputs=amplitude value=0,0,0,0
 surface id=emission op=mix inputs=amplitude,derivative,curvature value=1.0,0.72,0.22,1.0
 surface id=coverage op=sdf.tube inputs=amplitude,derivative,curvature value=0.74,0.20,0.0,0.0
-splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=160 columnStride=1 rollingModulo=160 subdivisions=4 density=1.0 minimumContribution=0.004 origin=-0.82,0.40,-0.18 axisStep=0.016,0.0,0.0 columnStep=0.0,-0.0055,0.0060 amplitudeScale=0.34 radius=0.064 alpha=0.98 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,4.0 seed=2971668797
+splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=$ROW_COUNT columnStride=1 rollingModulo=$ROW_COUNT subdivisions=4 density=1.0 minimumContribution=0.004 origin=-6.0,0.0,0.0 axisStep=0.2553,0.0,0.0 columnStep=0.0,0.0,0.18 columnGroupSize=$HISTORY_COUNT columnGroupStep=0.0,1.75,0.0 amplitudeScale=1.1 radius=0.042 alpha=0.98 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,4.0 seed=2971668797
 lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBias=1.0
 """;
     private readonly MimirSynchronizationHub synchronization;
@@ -132,19 +132,9 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
     private AquariumFrame CreateFrame()
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
-        var cameraZ = channelCount * SpectrumChannelSeparation;
         var bufferFieldFrame = BuildSpectrumBufferFieldFrame();
-        var directField = bufferFieldFrame.HasInput && !bufferFieldFrame.UseReservoirLowering;
-        var cameraPosition = directField
-            ? new Vector3(0.0f, -1.85f, 0.68f)
-            : bufferFieldFrame.HasInput
-            ? new Vector3(0.0f, -13.5f, 10.5f)
-            : new Vector3(0.0f, 0.0f, cameraZ);
-        var cameraTarget = directField
-            ? new Vector3(0.0f, -0.04f, 0.08f)
-            : bufferFieldFrame.HasInput
-            ? new Vector3(0.0f, 0.0f, 12.0f)
-            : new Vector3(0.0f, 0.0f, cameraZ + 12.0f);
+        var cameraPosition = SpectrumCameraPosition(channelCount);
+        var cameraTarget = SpectrumSplineAabbCenter(channelCount, spectrumHistory.Count);
         return new AquariumFrame(
             new ViewFrame(Vector2.Zero, 24.0f),
             cameraPosition,
@@ -158,6 +148,20 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
                 BufferFieldFrame = bufferFieldFrame,
                 SplineFrame = ShouldRenderSpectrumPreviewSplines() ? BuildSpectrumSplineFrame() : AquariumSplineFrame.Empty,
             });
+    }
+
+    private static Vector3 SpectrumCameraPosition(int spectrumCount)
+    {
+        var distance = Math.Max(1, spectrumCount) * SpectrumChannelSeparation;
+        return new Vector3(0.0f, distance, -distance);
+    }
+
+    private static Vector3 SpectrumSplineAabbCenter(int spectrumCount, int windowCount)
+    {
+        var x = 0.0f;
+        var y = (Math.Max(1, spectrumCount) - 1) * SpectrumChannelSeparation * 0.5f + SpectrumAmplitudeHeight * 0.5f;
+        var z = Math.Max(0, windowCount - 1) * SpectrumWindowDepthSeparation * 0.5f;
+        return new Vector3(x, y, z);
     }
 
     public AquariumSynthDocument Synth => AquariumSynthDocument.Empty;
@@ -726,7 +730,7 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
                     continue;
                 }
 
-                var row = baseRow + windowIndex * sourceIds.Length + channelIndex;
+                var row = baseRow + channelIndex * SpectrumHistoryWindowCount + windowIndex;
                 WriteSpectrumRow(samples, row * bandCount, spectrum);
             }
         }
@@ -740,7 +744,7 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
             AquariumRollingModuloMode.Rows,
             samples);
         return AquariumFieldScriptCompiler.Compile(
-            LoadSpectrumFieldScript(),
+            LoadSpectrumFieldScript(rowCount),
             new Dictionary<string, AquariumTextureFieldBinding>(StringComparer.Ordinal)
             {
                 [texture.Id] = texture,
@@ -763,18 +767,22 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
     private static bool ShouldRenderSpectrumPreviewSplines() =>
         string.Equals(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_PREVIEW_SPLINES"), "1", StringComparison.Ordinal);
 
-    private static string LoadSpectrumFieldScript()
+    private static string LoadSpectrumFieldScript(int rowCount)
     {
+        string Expand(string script) => script
+            .Replace("$ROW_COUNT", rowCount.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("$HISTORY_COUNT", SpectrumHistoryWindowCount.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+
         foreach (var basePath in AncestorDirectories(Environment.CurrentDirectory).Concat(AncestorDirectories(AppContext.BaseDirectory)))
         {
             var candidate = Path.Combine(basePath, SpectrumFieldScriptPath);
             if (File.Exists(candidate))
             {
-                return File.ReadAllText(candidate);
+                return Expand(File.ReadAllText(candidate));
             }
         }
 
-        return DefaultSpectrumFieldScript;
+        return Expand(DefaultSpectrumFieldScript);
     }
 
     private static IEnumerable<string> AncestorDirectories(string path)
