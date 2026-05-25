@@ -23,6 +23,18 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumWindowDepthSeparation = 0.18f;
     private const float SpectrumWidth = 12.0f;
     private const float SpectrumAmplitudeHeight = 1.1f;
+    private const string SpectrumFieldScriptPath = "config/mimir-spectrum-field.aquafield";
+    private const string DefaultSpectrumFieldScript = """
+# Fensalir field DSL fallback for deployed Mimir layouts.
+texture id=spectrumHistory
+surface id=amplitude op=texture.sample value=0,0,0,0
+surface id=derivative op=dFdx inputs=amplitude value=0,0,0,0
+surface id=curvature op=d2Fdx2 inputs=amplitude value=0,0,0,0
+surface id=emission op=mix inputs=amplitude,derivative,curvature value=1.0,0.72,0.22,1.0
+surface id=coverage op=sdf.tube inputs=amplitude,derivative,curvature value=0.74,0.20,0.0,0.0
+splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=160 columnStride=1 rollingModulo=160 subdivisions=4 maxProbes=131072 density=1.0 minimumContribution=0.004 origin=-0.82,0.40,-0.18 axisStep=0.016,0.0,0.0 columnStep=0.0,-0.0055,0.0060 amplitudeScale=0.34 radius=0.052 alpha=0.94 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,1.0 seed=2971668797
+reservoir splats=131072 updates=131072 candidates=2 seed=270943260
+""";
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
@@ -119,19 +131,25 @@ public sealed class MimirRuntime : IAquariumRuntime
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
         var cameraZ = channelCount * SpectrumChannelSeparation;
-        var spectrumSplineFrame = BuildSpectrumSplineFrame();
+        var bufferFieldFrame = BuildSpectrumBufferFieldFrame();
+        var cameraPosition = bufferFieldFrame.HasInput
+            ? new Vector3(0.0f, -13.5f, 10.5f)
+            : new Vector3(0.0f, 0.0f, cameraZ);
+        var cameraTarget = bufferFieldFrame.HasInput
+            ? new Vector3(0.0f, 0.0f, 12.0f)
+            : new Vector3(0.0f, 0.0f, cameraZ + 12.0f);
         return new AquariumFrame(
             new ViewFrame(Vector2.Zero, 24.0f),
-            new Vector3(0.0f, 0.0f, cameraZ),
-            new Vector3(0.0f, 0.0f, cameraZ + 12.0f),
+            cameraPosition,
+            cameraTarget,
             runtimeSeconds,
             Vector2.Zero,
             new AquariumSceneState
             {
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
-                BufferFieldFrame = BuildSpectrumBufferFieldFrame(spectrumSplineFrame),
-                SplineFrame = spectrumSplineFrame,
+                BufferFieldFrame = bufferFieldFrame,
+                SplineFrame = ShouldRenderSpectrumPreviewSplines() ? BuildSpectrumSplineFrame() : AquariumSplineFrame.Empty,
             });
     }
 
@@ -617,61 +635,101 @@ public sealed class MimirRuntime : IAquariumRuntime
         return new AquariumSplineFrame { Splines = splines };
     }
 
-    private static AquariumBufferFieldFrame BuildSpectrumBufferFieldFrame(AquariumSplineFrame previewFrame)
+    private AquariumBufferFieldFrame BuildSpectrumBufferFieldFrame()
     {
-        if (!previewFrame.HasInput)
+        if (!sceneReady || spectrumHistory.Count == 0)
         {
             return AquariumBufferFieldFrame.Empty;
         }
 
-        return AquariumBufferFieldFrame.Compose(fields =>
+        var windows = spectrumHistory.ToArray();
+        var latest = windows[^1];
+        var sourceIds = latest
+            .Select(spectrum => spectrum.SourceId)
+            .OrderBy(sourceId => sourceId, StringComparer.Ordinal)
+            .ToArray();
+        if (sourceIds.Length == 0)
         {
-            foreach (var spline in previewFrame.Splines)
+            return AquariumBufferFieldFrame.Empty;
+        }
+
+        var bandCount = latest.FirstOrDefault(spectrum => spectrum.BandDecibels.Count > 0)?.BandDecibels.Count ?? 0;
+        if (bandCount <= 1)
+        {
+            return AquariumBufferFieldFrame.Empty;
+        }
+
+        var rowCount = SpectrumHistoryWindowCount * sourceIds.Length;
+        var samples = new float[bandCount * rowCount];
+        var baseRow = 0;
+        for (var windowIndex = 0; windowIndex < windows.Length; windowIndex++)
+        {
+            var spectraBySource = windows[windowIndex].ToDictionary(spectrum => spectrum.SourceId, StringComparer.Ordinal);
+            for (var channelIndex = 0; channelIndex < sourceIds.Length; channelIndex++)
             {
-                if (!spline.Id.StartsWith("spectrum-", StringComparison.Ordinal))
+                if (!spectraBySource.TryGetValue(sourceIds[channelIndex], out var spectrum) || spectrum.BandDecibels.Count != bandCount)
                 {
                     continue;
                 }
 
-                fields.SplineTube(
-                    $"mimir.audio.field.{spline.Id}",
-                    "mimir.audio.spectrum-history",
-                    spline,
-                    AquariumFieldDomainBinding.Identity(
-                        "spline.frequency-window",
-                        "mimir.audio.spectrum-lane",
-                        "mimir.audio.spectrum-stack"),
-                    new AquariumSplineTubeAppearance(
-                        new Vector4(1.0f, 0.72f, 0.22f, 1.0f),
-                        spline.Style.Radius,
-                        spline.Style.Alpha,
-                        spline.Style.ZeroThreshold,
-                        spline.Style.Feather,
-                        TangentWeight: 1.0f,
-                        CurvatureWeight: 0.55f,
-                        NormalWeight: 0.35f,
-                        DerivativeWeight: 0.70f),
-                    new AquariumSplineTubeProbePolicy(
-                        MaxProbeCount: Math.Clamp(spline.Vertices.Count * Math.Max(1, spline.CatmullRomSubdivisions), 16, 512),
-                        BaseDensity: 1.0f,
-                        MinimumVisualContribution: 0.008f,
-                        Seed: StableSeed(spline.Id)));
+                var row = baseRow + windowIndex * sourceIds.Length + channelIndex;
+                WriteSpectrumRow(samples, row * bandCount, spectrum);
             }
-        });
+        }
+
+        var texture = new AquariumTextureFieldBinding(
+            "spectrumHistory",
+            bandCount,
+            rowCount,
+            1,
+            RollingOffset: Math.Max(0, baseRow),
+            AquariumRollingModuloMode.Rows,
+            samples);
+        return AquariumFieldScriptCompiler.Compile(
+            LoadSpectrumFieldScript(),
+            new Dictionary<string, AquariumTextureFieldBinding>(StringComparer.Ordinal)
+            {
+                [texture.Id] = texture,
+            },
+            reservoirRadius: 10.0f);
     }
 
-    private static uint StableSeed(string text)
+    private static void WriteSpectrumRow(float[] samples, int offset, MimirAudioSpectrumSnapshot spectrum)
     {
-        unchecked
+        var bands = spectrum.BandDecibels;
+        var floor = Math.Min(spectrum.NoiseFloorDb, bands.Min());
+        var ceiling = Math.Max(-24.0, bands.Max());
+        var span = Math.Max(18.0, ceiling - floor);
+        for (var index = 0; index < bands.Count; index++)
         {
-            var hash = 2166136261u;
-            foreach (var ch in text)
-            {
-                hash ^= ch;
-                hash *= 16777619u;
-            }
+            samples[offset + index] = (float)Math.Clamp((bands[index] - floor) / span, 0.0, 1.0);
+        }
+    }
 
-            return hash == 0u ? 0xB11FF13Du : hash;
+    private static bool ShouldRenderSpectrumPreviewSplines() =>
+        string.Equals(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_PREVIEW_SPLINES"), "1", StringComparison.Ordinal);
+
+    private static string LoadSpectrumFieldScript()
+    {
+        foreach (var basePath in AncestorDirectories(Environment.CurrentDirectory).Concat(AncestorDirectories(AppContext.BaseDirectory)))
+        {
+            var candidate = Path.Combine(basePath, SpectrumFieldScriptPath);
+            if (File.Exists(candidate))
+            {
+                return File.ReadAllText(candidate);
+            }
+        }
+
+        return DefaultSpectrumFieldScript;
+    }
+
+    private static IEnumerable<string> AncestorDirectories(string path)
+    {
+        var current = new DirectoryInfo(path);
+        while (current is not null)
+        {
+            yield return current.FullName;
+            current = current.Parent;
         }
     }
 
