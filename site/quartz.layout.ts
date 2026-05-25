@@ -6,8 +6,8 @@ import MimirThemeLock from "./quartz/components/MimirThemeLock";
 
 const MimirGraphShell = Component.GameCultGraphSpaShell({
   stylesheetHref:
-    "/static/epiphany-graph/assets/viewer.css?v=graph-mimir-corpus-20260524",
-  moduleSrc: "/static/epiphany-graph/assets/viewer.js?v=graph-mimir-corpus-20260524",
+    "/static/norn-graph/assets/viewer.css?v=graph-mimir-corpus-20260524",
+  moduleSrc: "/static/norn-graph/assets/viewer.js?v=graph-mimir-corpus-20260524",
   config: {
     title: "Mimir Knowledge Graph",
     architectureDescription:
