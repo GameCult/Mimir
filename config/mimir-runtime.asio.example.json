@@ -24,7 +24,13 @@
         "asio-ch1",
         "asio-ch2",
         "asio-ch3"
-      ]
+      ],
+      "sourceLabels": {
+        "asio-ch0": "Focusrite Input 1",
+        "asio-ch1": "Focusrite Input 2",
+        "asio-ch2": "Focusrite Loopback 1",
+        "asio-ch3": "Focusrite Loopback 2"
+      }
     }
   ]
 }

@@ -7,6 +7,7 @@ public sealed record MimirAudioSpectrumBin(double FrequencyHz, double Decibels, 
 
 public sealed record MimirAudioSpectrumSnapshot(
     string SourceId,
+    string Label,
     int SampleRate,
     int FftSize,
     int WindowSamples,
@@ -85,7 +86,7 @@ public sealed class MimirAudioSpectrumAnalyzer
             spectrum[index] = new Complex(window[index], 0.0);
         }
 
-        return AnalyzePreparedSpectrum(sourceId, sampleRate, written, edgeNs: 0);
+        return AnalyzePreparedSpectrum(sourceId, sourceId, sampleRate, written, edgeNs: 0);
     }
 
     private MimirAudioSpectrumSnapshot? AnalyzeBuffer(MimirRollingStreamBuffer buffer)
@@ -103,11 +104,12 @@ public sealed class MimirAudioSpectrumAnalyzer
             return null;
         }
 
-        return AnalyzePreparedSpectrum(buffer.Descriptor.SourceId, latestBlock.SampleRate, written, buffer.EdgeNs);
+        return AnalyzePreparedSpectrum(buffer.Descriptor.SourceId, buffer.Descriptor.Label, latestBlock.SampleRate, written, buffer.EdgeNs);
     }
 
     private MimirAudioSpectrumSnapshot AnalyzePreparedSpectrum(
         string sourceId,
+        string label,
         int sampleRate,
         int written,
         long edgeNs)
@@ -136,6 +138,7 @@ public sealed class MimirAudioSpectrumAnalyzer
         var floor = bands.Count == 0 ? -120.0 : bands.OrderBy(value => value).ElementAt(Math.Clamp(bands.Count / 4, 0, bands.Count - 1));
         return new MimirAudioSpectrumSnapshot(
             sourceId,
+            label,
             sampleRate,
             fftSize,
             written,

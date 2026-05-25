@@ -404,7 +404,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         foreach (var spectrum in lastAudioSpectra.OrderBy(snapshot => snapshot.SourceId, StringComparer.Ordinal))
         {
             Console.WriteLine(
-                $"mimir-spectrum {spectrum.SourceId} rate={spectrum.SampleRate} fft={spectrum.FftSize} rms={spectrum.Rms:0.000000} peak={spectrum.Peak:0.000000} floorDb={spectrum.NoiseFloorDb:0.0} peaks={DescribeSpectrumPeaks(spectrum)}");
+                $"mimir-spectrum {spectrum.SourceId} label=\"{spectrum.Label}\" rate={spectrum.SampleRate} fft={spectrum.FftSize} rms={spectrum.Rms:0.000000} peak={spectrum.Peak:0.000000} floorDb={spectrum.NoiseFloorDb:0.0} peaks={DescribeSpectrumPeaks(spectrum)}");
         }
 
         foreach (var report in lastAudioSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
@@ -501,7 +501,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         return string.Join(" | ", synchronization.Buffers.Buffers
             .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio)
             .OrderBy(buffer => buffer.Descriptor.SourceId, StringComparer.Ordinal)
-            .Select(buffer => $"{buffer.Descriptor.SourceId}:{buffer.Count}@{buffer.EdgeNs}"));
+            .Select(buffer => $"{buffer.Descriptor.Label}[{buffer.Descriptor.SourceId}]:{buffer.Count}@{buffer.EdgeNs}"));
     }
 
     private string DescribeSpectra()
@@ -520,7 +520,10 @@ public sealed class MimirRuntime : IAquariumRuntime
         foreach (var spectrum in lastAudioSpectra)
         {
             builder
+                .Append(spectrum.Label)
+                .Append(" [")
                 .Append(spectrum.SourceId)
+                .Append("]")
                 .Append(" rms=")
                 .Append(spectrum.Rms.ToString("0.000000"))
                 .Append(" peak=")
@@ -580,15 +583,15 @@ public sealed class MimirRuntime : IAquariumRuntime
         var latest = buffer.Latest;
         if (latest?.VideoFrame is { } frame)
         {
-            return $"{buffer.Descriptor.SourceId}: {buffer.Count} {frame.Width}x{frame.Height} {frame.PixelFormat} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
+            return $"{buffer.Descriptor.Label} [{buffer.Descriptor.SourceId}]: {buffer.Count} {frame.Width}x{frame.Height} {frame.PixelFormat} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
         }
 
         if (latest?.AudioBlock is { } block)
         {
-            return $"{buffer.Descriptor.SourceId}: {buffer.Count} {block.Channels}ch {block.SampleRate}Hz {block.SampleFormat} frames {block.FrameCount} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
+            return $"{buffer.Descriptor.Label} [{buffer.Descriptor.SourceId}]: {buffer.Count} {block.Channels}ch {block.SampleRate}Hz {block.SampleFormat} frames {block.FrameCount} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
         }
 
-        return $"{buffer.Descriptor.SourceId}: {buffer.Count} edge {buffer.EdgeNs}";
+        return $"{buffer.Descriptor.Label} [{buffer.Descriptor.SourceId}]: {buffer.Count} edge {buffer.EdgeNs}";
     }
 
     private string DescribeAudioSync()

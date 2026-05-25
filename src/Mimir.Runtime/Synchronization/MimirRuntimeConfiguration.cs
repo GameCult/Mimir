@@ -101,7 +101,8 @@ public sealed class MimirRuntimeConfiguration
             stream.SourceId,
             ParseKind(stream.Kind),
             ParseOrigin(stream.Origin),
-            stream.Enabled);
+            stream.Enabled,
+            stream.DisplayName);
     }
 
     private static IEnumerable<MimirStreamDescriptor> ToDescriptors(MimirStreamConfig stream)
@@ -118,7 +119,8 @@ public sealed class MimirRuntimeConfiguration
                 sourceId,
                 ParseKind(stream.Kind),
                 ParseOrigin(stream.Origin),
-                stream.Enabled);
+                stream.Enabled,
+                stream.DisplayNameForSource(sourceId));
         }
     }
 
@@ -282,6 +284,8 @@ public sealed class MimirStreamConfig
 {
     public string SourceId { get; set; } = "";
 
+    public string DisplayName { get; set; } = "";
+
     public string Kind { get; set; } = "Video";
 
     public string Origin { get; set; } = "LocalDevice";
@@ -296,9 +300,21 @@ public sealed class MimirStreamConfig
 
     public string[] AcceptSourceIds { get; set; } = [];
 
+    public Dictionary<string, string> SourceLabels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public int ChunkBytes { get; set; } = 65_536;
 
     public int SampleRate { get; set; } = 192_000;
 
     public string DriverClsid { get; set; } = "";
+
+    public string DisplayNameForSource(string sourceId)
+    {
+        if (SourceLabels.TryGetValue(sourceId, out var label) && !string.IsNullOrWhiteSpace(label))
+        {
+            return label.Trim();
+        }
+
+        return sourceId;
+    }
 }
