@@ -40,8 +40,8 @@ surface id=derivative op=dFdx inputs=amplitude value=0,0,0,0
 surface id=curvature op=d2Fdx2 inputs=amplitude value=0,0,0,0
 surface id=emission op=mix inputs=amplitude,derivative,curvature value=1.0,0.72,0.22,1.0
 surface id=coverage op=sdf.tube inputs=amplitude,derivative,curvature value=0.74,0.20,0.0,0.0
-splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=$ROW_COUNT columnStride=1 rollingModulo=$ROW_COUNT subdivisions=4 density=1.0 minimumContribution=0.004 origin=-6.0,0.0,0.0 axisStep=0.2553,0.0,0.0 columnStep=0.0,0.0,0.18 columnGroupSize=$HISTORY_COUNT columnGroupStep=0.0,1.75,0.0 amplitudeScale=1.1 radius=0.042 alpha=0.98 zeroThreshold=0.68 feather=0.18 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,4.0 seed=2971668797
-lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBias=1.0
+splinefield id=asioSpectrumWaterfall texture=spectrumHistory frequencyAxis=x firstColumn=0 columns=$ROW_COUNT columnStride=1 rollingModulo=$ROW_COUNT subdivisions=6 density=1.0 minimumContribution=0.004 origin=-6.0,0.0,0.0 axisStep=$BAND_STEP,0.0,0.0 columnStep=0.0,0.0,0.18 columnGroupSize=$HISTORY_COUNT columnGroupStep=0.0,1.75,0.0 amplitudeScale=1.1 radius=0.028 alpha=0.92 zeroThreshold=0.68 feather=0.10 tangent=1.0 curvature=0.68 normal=0.34 derivative=0.88 emission=1.0,0.72,0.22,3.2 seed=2971668797
+lowering mode=ReservoirSplats maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBias=1.0
 """;
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
@@ -111,7 +111,7 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
     {
         Options = options;
         synchronization = new MimirSynchronizationHub(settings);
-        spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize());
+        spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize(), ParseSpectrumBandCount());
         this.sourceFactories = sourceFactories.ToArray();
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
@@ -688,6 +688,13 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
             : 8192;
     }
 
+    private static int ParseSpectrumBandCount()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_BANDS"), out var value)
+            ? Math.Clamp(value, 32, 192)
+            : 96;
+    }
+
     private static bool IsTruthy(string? value) =>
         string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
@@ -912,9 +919,9 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
 
         var rowCount = SpectrumHistoryWindowCount * sourceIds.Length;
         var samples = new float[bandCount * rowCount];
-        var baseRow = 0;
         for (var windowIndex = 0; windowIndex < windows.Length; windowIndex++)
         {
+            var ageFromNewest = windows.Length - 1 - windowIndex;
             var spectraBySource = windows[windowIndex].ToDictionary(spectrum => spectrum.SourceId, StringComparer.Ordinal);
             for (var channelIndex = 0; channelIndex < sourceIds.Length; channelIndex++)
             {
@@ -923,7 +930,7 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
                     continue;
                 }
 
-                var row = baseRow + channelIndex * SpectrumHistoryWindowCount + windowIndex;
+                var row = channelIndex * SpectrumHistoryWindowCount + ageFromNewest;
                 WriteSpectrumRow(samples, row * bandCount, spectrum);
             }
         }
@@ -933,11 +940,11 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
             bandCount,
             rowCount,
             1,
-            RollingOffset: Math.Max(0, baseRow),
+            RollingOffset: 0,
             AquariumRollingModuloMode.Rows,
             samples);
         return AquariumFieldScriptCompiler.Compile(
-            LoadSpectrumFieldScript(rowCount),
+            LoadSpectrumFieldScript(rowCount, bandCount),
             new Dictionary<string, AquariumTextureFieldBinding>(StringComparer.Ordinal)
             {
                 [texture.Id] = texture,
@@ -960,11 +967,13 @@ lowering mode=auto maxSplines=384 maxControlPoints=32768 maxSplats=131072 lodBia
     private static bool ShouldRenderSpectrumPreviewSplines() =>
         string.Equals(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_PREVIEW_SPLINES"), "1", StringComparison.Ordinal);
 
-    private static string LoadSpectrumFieldScript(int rowCount)
+    private static string LoadSpectrumFieldScript(int rowCount, int bandCount)
     {
+        var bandStep = SpectrumWidth / Math.Max(1, bandCount - 1);
         string Expand(string script) => script
             .Replace("$ROW_COUNT", rowCount.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            .Replace("$HISTORY_COUNT", SpectrumHistoryWindowCount.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            .Replace("$HISTORY_COUNT", SpectrumHistoryWindowCount.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("$BAND_STEP", bandStep.ToString("0.#######", System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         foreach (var basePath in AncestorDirectories(Environment.CurrentDirectory).Concat(AncestorDirectories(AppContext.BaseDirectory)))
         {

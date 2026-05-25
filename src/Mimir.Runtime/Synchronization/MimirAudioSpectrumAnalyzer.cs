@@ -29,7 +29,7 @@ public sealed class MimirAudioSpectrumAnalyzer
     public MimirAudioSpectrumAnalyzer(int fftSize = 8192, int displayBandCount = 48)
     {
         this.fftSize = Math.Clamp(NextPowerOfTwo(Math.Max(MinimumFftSize, fftSize)), MinimumFftSize, MaximumFftSize);
-        this.displayBandCount = Math.Clamp(displayBandCount, 16, 96);
+        this.displayBandCount = Math.Clamp(displayBandCount, 16, 192);
         spectrum = new Complex[this.fftSize];
     }
 
