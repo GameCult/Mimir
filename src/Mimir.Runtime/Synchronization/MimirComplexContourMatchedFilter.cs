@@ -418,13 +418,6 @@ public sealed class MimirDirectPathTracker(
             ? 0.0
             : bandObservations.Sum(observation => Math.Abs(observation.PhaseResidualRadians) * Math.Max(observation.Weight, 1.0e-9)) /
                 Math.Max(1.0e-9, bandObservations.Sum(observation => Math.Max(observation.Weight, 1.0e-9)));
-        var confidence = Math.Clamp(
-            direct.Weight / Math.Max(1.0e-9, clusters.Sum(cluster => cluster.Weight)) *
-            Math.Clamp(direct.Count / 16.0, 0.0, 1.0) *
-            (1.0 / (1.0 + mae / Math.Max(1.0, sampleRate * 0.00005))) *
-            (1.0 / (1.0 + meanAbsolutePhaseError / 0.75)),
-            0.0,
-            1.0);
         var reflectionTaps = clusters
             .Where(cluster => cluster.Delay > direct.Delay + options.DirectClusterRadiusSamples)
             .Select(cluster => new MimirAcousticReflectionTap(
@@ -435,6 +428,12 @@ public sealed class MimirDirectPathTracker(
             .OrderBy(tap => tap.RelativeDelaySamples)
             .Take(6)
             .ToArray();
+        var confidence = ScoreDirectPathConfidence(
+            direct,
+            clusters,
+            mae,
+            meanAbsolutePhaseError,
+            predictedDelaySamples);
         return new MimirDirectPathEstimate(
             updatedDelay,
             updatedDelay * 1_000_000.0 / sampleRate,
@@ -444,6 +443,34 @@ public sealed class MimirDirectPathTracker(
             direct.Count,
             bandObservations,
             reflectionTaps);
+    }
+
+    private double ScoreDirectPathConfidence(
+        MimirDelayCluster direct,
+        IReadOnlyList<MimirDelayCluster> clusters,
+        double meanAbsoluteErrorSamples,
+        double meanAbsolutePhaseErrorRadians,
+        double? predictedDelaySamples)
+    {
+        var hitConfidence = Math.Clamp(direct.Count / 24.0, 0.0, 1.0);
+        var residualConfidence = 1.0 / (1.0 + meanAbsoluteErrorSamples / Math.Max(0.25, sampleRate * 0.000006));
+        var phaseConfidence = 1.0 / (1.0 + meanAbsolutePhaseErrorRadians / 0.35);
+        var predictionConfidence = predictedDelaySamples == null
+            ? 0.75
+            : 1.0 / (1.0 + Math.Abs(direct.Delay - predictedDelaySamples.Value) / Math.Max(0.5, options.DirectClusterRadiusSamples));
+        var coreConfidence =
+            0.30 * hitConfidence +
+            0.30 * residualConfidence +
+            0.25 * phaseConfidence +
+            0.15 * predictionConfidence;
+        var nearCompetitorWeight = clusters
+            .Where(cluster => !ReferenceEquals(cluster, direct))
+            .Where(cluster => Math.Abs(cluster.Delay - direct.Delay) <= options.DirectClusterRadiusSamples * 3.0)
+            .Sum(cluster => cluster.Weight);
+        var ambiguity = nearCompetitorWeight <= 0.0
+            ? 1.0
+            : direct.Weight / Math.Max(1.0e-9, direct.Weight + nearCompetitorWeight);
+        return Math.Clamp(coreConfidence * (0.70 + 0.30 * ambiguity), 0.0, 1.0);
     }
 
     private MimirDelayCluster[] ClusterDelays(IReadOnlyList<MimirDirectPathObservation> observations)

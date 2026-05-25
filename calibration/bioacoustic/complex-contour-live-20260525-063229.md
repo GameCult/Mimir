@@ -20,9 +20,9 @@ Reference channel is `asio-ch2` / Loopback 1.
 
 | Candidate | Meaning | Prediction | Estimate | Prediction Error | Confidence | Direct Hits | Cluster MAE | Phase MAE |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `asio-ch3` | Loopback 2 | `0.000000` samples | `-0.002628` samples | `-0.014 us` | `0.126` | `216` | `0.008405` samples | `0.001 rad` |
-| `asio-ch1` | shotgun/co-streamer mic path | `544.244999` samples | `543.480112` samples | `-3.984 us` | `0.002` | `14` | `3.335599` samples | `0.858 rad` |
-| `asio-ch0` | cardioid/local mic path | `781.490952` samples | `781.787929` samples | `+1.547 us` | `0.011` | `23` | `2.949737` samples | `0.382 rad` |
+| `asio-ch3` | Loopback 2 | `0.000000` samples | `-0.002628` samples | `-0.014 us` | `0.971` | `216` | `0.008405` samples | `0.001 rad` |
+| `asio-ch1` | shotgun/co-streamer mic path | `544.244999` samples | `543.480112` samples | `-3.984 us` | `0.335` | `14` | `3.335599` samples | `0.858 rad` |
+| `asio-ch0` | cardioid/local mic path | `781.490952` samples | `781.787929` samples | `+1.547 us` | `0.488` | `23` | `2.949737` samples | `0.382 rad` |
 
 ## Interpretation
 
@@ -32,9 +32,15 @@ live DAC/speaker/room/mic/ADC path: both physical mics land within four
 microseconds of their prior path seeds in this run, and the cardioid is within
 about one and a half microseconds.
 
-This is not a final microsecond sync claim because the physical mic confidence
-is still low and the estimates are judged against previous path seeds rather
-than an independently measured ground-truth distance. It is, however, the first
-fresh meatspace proof that the complex contour/channel-model path can hear the
-current witness and return usable direct-path timing instead of only replaying
-old artifacts.
+This is not a final microsecond sync claim because the estimates are judged
+against previous path seeds rather than an independently measured ground-truth
+distance. It is, however, the first fresh meatspace proof that the complex
+contour/channel-model path can hear the current witness and return usable
+direct-path timing instead of only replaying old artifacts.
+
+The first receipt pass reported much lower confidence because the tracker
+normalized the direct cluster against every alternate matched-filter lobe. The
+corrected scorer treats alternate lobes as ambiguity evidence while making
+direct-hit count, residual tightness, phase coherence, and prediction agreement
+the primary confidence owners. That raised loopback confidence from `0.126` to
+`0.971` without changing the measured delay.

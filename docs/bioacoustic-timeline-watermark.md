@@ -215,6 +215,9 @@ all four 192 kHz inputs, and analyzed the capture with the current complex
 contour channel model. Loopback 1 to Loopback 2 measured `-0.014 us`, proving
 the interface clock path is effectively sample-locked. Physical mic paths
 survived the room: the shotgun path landed `-3.984 us` from its prior seed and
-the cardioid landed `+1.547 us`. Confidence is still too low for a final
-microsecond sync claim, but this is fresh meatspace evidence through the actual
-DAC/speaker/room/mic/ADC path.
+the cardioid landed `+1.547 us`. After correcting the direct-path confidence
+scorer, loopback confidence is `0.971`, cardioid confidence is `0.488`, and the
+weaker/disconnected-looking path is `0.335`. This is fresh meatspace evidence
+through the actual DAC/speaker/room/mic/ADC path, though final microsecond sync
+still needs independently measured path truth instead of comparison to prior
+seeds.

@@ -250,10 +250,12 @@ accepted_design:
     `calibration/bioacoustic/complex-contour-live-20260525-063229.md`:
     Focusrite ASIO playback/capture measured Loopback 1 -> Loopback 2 at
     -0.014 us, shotgun at -3.984 us from prior seed, and cardioid at +1.547 us
-    from prior seed with the current channel model. This is fresh meatspace
-    evidence through DAC/speaker/room/mic/ADC, but physical confidence remains
-    low, so the next cut is stronger direct-path confidence and independent
-    path truth.
+    from prior seed with the current channel model. The direct-path confidence
+    scorer now belongs to selected-cluster quality rather than all alternate
+    matched-filter lobes: loopback confidence is 0.971, cardioid confidence is
+    0.488, and the weaker/disconnected-looking path is 0.335. This is fresh
+    meatspace evidence through DAC/speaker/room/mic/ADC, but the next cut is
+    independent path truth and better frequency/direct-path discrimination.
     `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
     current four-case replay receipt.
     Acoustic robustness remains open.
