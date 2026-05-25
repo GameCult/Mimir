@@ -216,7 +216,8 @@ accepted_design:
     `research/sonar-dsp-recursive-refinement-2026-05-25.md` points the next
     decoder cut at complex contour matched filters, phase-slope/group-delay
     fitting, acquisition/tracking loop bandwidths, and sparse multipath
-    residuals.
+    residuals. Its source ledger and local mirrors live under
+    `research/sonar-dsp-recursive-refinement-2026-05-25/`.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.

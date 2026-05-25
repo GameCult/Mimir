@@ -11,6 +11,11 @@ experiment rejected the naive objective function, not recursive refinement.
 
 ## Sources Checked
 
+The durable source ledger is
+`sonar-dsp-recursive-refinement-2026-05-25/sources.md`. Local mirrors of the
+source pages and PDF live under
+`sonar-dsp-recursive-refinement-2026-05-25/mirrors/`.
+
 - liquid-dsp: open-source C DSP library for SDR-style filters, transforms,
   synchronizers, modulators, demodulators, and frame processing.
   <https://github.com/jgaeddert/liquid-dsp>
