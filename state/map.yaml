@@ -228,7 +228,17 @@ accepted_design:
     Low confidence is expected until phase/group-delay surfaces are learned. The
     tracker now exposes per-band delay/phase residual observations and a
     `MimirDirectPathChannelModel` correction surface for multi-window
-    calibration; one-window self-correction is not live authority.
+    calibration; one-window self-correction is not live authority. The tracker
+    now consumes explicit channel models as phase/group-delay correction and
+    downweights bands outside the learned usable surface. `Mimir.BufferSmoke
+    --learn-complex-contour-channel-model` persists
+    `calibration/bioacoustic/complex-contour-channel-model.json` from the
+    replay panel, and `--evaluate-complex-contour-channel-model` persists
+    `calibration/bioacoustic/complex-contour-channel-model-evaluation.json`.
+    Current evaluation improves 3/4 absolute path-seed errors and lowers mean
+    direct-cluster MAE; the fresh cardioid case reaches about 0.202 us from
+    seed, while the stored cardioid case still worsens to about 17.476 us. The
+    model is explicit calibration evidence, not default runtime authority.
     `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
     current four-case replay receipt.
     Acoustic robustness remains open.

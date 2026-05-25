@@ -76,9 +76,14 @@ public sealed class MimirDirectPathChannelModel(IReadOnlyList<MimirDirectPathBan
 
     public double DelayCorrectionFor(double centerHz, double maxDistanceHz = 375.0)
     {
+        return CorrectionFor(centerHz, maxDistanceHz)?.DelayCorrectionSamples ?? 0.0;
+    }
+
+    public MimirDirectPathBandCorrection? CorrectionFor(double centerHz, double maxDistanceHz = 375.0)
+    {
         if (Corrections.Count == 0)
         {
-            return 0.0;
+            return null;
         }
 
         var nearest = Corrections
@@ -86,8 +91,8 @@ public sealed class MimirDirectPathChannelModel(IReadOnlyList<MimirDirectPathBan
             .OrderBy(pair => pair.Distance)
             .First();
         return nearest.Distance > maxDistanceHz
-            ? 0.0
-            : nearest.Correction.DelayCorrectionSamples;
+            ? null
+            : nearest.Correction;
     }
 }
 
@@ -327,14 +332,22 @@ public sealed class MimirDirectPathTracker(
 
             var weight = Math.Sqrt(Math.Max(0.0, reference.Score) * Math.Max(0.0, candidate.Score));
             var sampleDelay = candidate.SampleOffset - reference.SampleOffset;
-            var phaseDelta = WrapRadians(candidate.PhaseRadians - reference.PhaseRadians);
+            var channelModel = options.ChannelModel ?? MimirDirectPathChannelModel.Empty;
+            var channelCorrection = channelModel.CorrectionFor(candidate.CenterHz);
+            if (channelModel.Corrections.Count > 0)
+            {
+                weight *= channelCorrection == null
+                    ? 0.25
+                    : Math.Clamp(0.50 + channelCorrection.Weight, 0.25, 1.50);
+            }
+
+            var phaseDelta = WrapRadians(candidate.PhaseRadians - reference.PhaseRadians - (channelCorrection?.PhaseCorrectionRadians ?? 0.0));
             var phaseDelay = candidate.CenterHz <= 1.0
                 ? 0.0
                 : phaseDelta * sampleRate / (Math.Tau * candidate.CenterHz);
             var maxPhaseCorrection = sampleRate / Math.Max(1.0, candidate.CenterHz) * 0.5;
-            var channelCorrection = (options.ChannelModel ?? MimirDirectPathChannelModel.Empty).DelayCorrectionFor(candidate.CenterHz);
             observations.Add(new MimirDirectPathObservation(
-                sampleDelay + Math.Clamp(phaseDelay, -maxPhaseCorrection, maxPhaseCorrection) - channelCorrection,
+                sampleDelay + Math.Clamp(phaseDelay, -maxPhaseCorrection, maxPhaseCorrection) - (channelCorrection?.DelayCorrectionSamples ?? 0.0),
                 sampleDelay,
                 phaseDelta,
                 candidate.CenterHz,

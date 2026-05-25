@@ -258,6 +258,19 @@ per-band delay/phase residual observations and has a
 calibration; one-window self-correction is not allowed to become authority.
 `calibration/bioacoustic/complex-contour-replay-panel.json` is the current
 persisted receipt for this surface across stored/fresh shotgun/cardioid cases.
+`MimirDirectPathChannelModel` now applies learned per-band delay and phase
+correction when explicitly supplied, and downweights bands outside the learned
+usable surface. `Mimir.BufferSmoke --learn-complex-contour-channel-model`
+persists the current path-scoped model at
+`calibration/bioacoustic/complex-contour-channel-model.json`; it learns three
+usable cardioid bands and six usable shotgun bands from the four-case replay
+receipt. `--evaluate-complex-contour-channel-model` writes
+`calibration/bioacoustic/complex-contour-channel-model-evaluation.json`: the
+model improves 3/4 absolute path-seed errors and lowers mean cluster MAE, with
+the fresh cardioid reaching about 0.202 us from the seed, but the stored
+cardioid still worsens to about 17.476 us. Treat the model as explicit
+calibration evidence, not default runtime authority, until more captures prove
+the path surface stable.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

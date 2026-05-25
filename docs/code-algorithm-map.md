@@ -860,19 +860,27 @@ Blocks:
   score floor, lobe separation, and analysis-window bounds.
 - `MimirComplexContourAnchorHit`: event, anchor identity, center frequency,
   canonical timeline seconds, sample offset, score, phase, and rank.
+- `MimirDirectPathBandObservation`, `MimirDirectPathBandCorrection`, and
+  `MimirDirectPathChannelModel`: the per-band delay/phase residual surface used
+  to learn group-delay correction across replay windows.
 - `MimirComplexContourMatchedFilterBank`: renders known packet anchors into
   complex kernels, scans current samples around a predicted source offset, keeps
   multiple lobe candidates per anchor, and exposes phase/magnitude evidence.
 - `MimirDirectPathTracker`: matches reference and candidate anchor hits, gates
   updates around the current path prediction, selects the coherent direct-path
-  cluster, smooths bounded tracking corrections, and reports later coherent
-  clusters as `MimirAcousticReflectionTap` records.
+  cluster, applies explicit channel-model delay/phase correction when supplied,
+  downweights bands outside the learned usable surface, smooths bounded
+  tracking corrections, and reports later coherent clusters as
+  `MimirAcousticReflectionTap` records.
 
 Invariant:
 
 - Recursive refinement is constrained by a current path hypothesis. A loud
   reflection may be evidence about the room, but it does not get to become time
   just because its correlation peak is bigger.
+- Learned correction is explicit authority, not ambient magic. A
+  `MimirDirectPathChannelModel` is applied only when the caller supplies the
+  path model; otherwise the tracker stays measurement-only.
 
 ## Stage 9: Chirp-Bin Reference Timeline
 

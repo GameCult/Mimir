@@ -187,6 +187,7 @@ if (args.Any(arg => string.Equals(arg, "--complex-contour-asio-f32", StringCompa
         ParseDoubleOption(args, "--seconds", 3.0),
         ParseDoubleOption(args, "--schedule-offset-samples", 1623.0),
         ParseDoubleOption(args, "--predicted-delay-samples", 0.0),
+        ParseStringOption(args, "--channel-model", ""),
         ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id));
 }
 
@@ -194,6 +195,21 @@ if (args.Any(arg => string.Equals(arg, "--complex-contour-replay-panel", StringC
 {
     return RunComplexContourReplayPanel(
         ParseStringOption(args, "--output", "calibration/bioacoustic/complex-contour-replay-panel.json"));
+}
+
+if (args.Any(arg => string.Equals(arg, "--learn-complex-contour-channel-model", StringComparison.OrdinalIgnoreCase)))
+{
+    return LearnComplexContourChannelModel(
+        ParseStringOption(args, "--input", "calibration/bioacoustic/complex-contour-replay-panel.json"),
+        ParseStringOption(args, "--output", "calibration/bioacoustic/complex-contour-channel-model.json"));
+}
+
+if (args.Any(arg => string.Equals(arg, "--evaluate-complex-contour-channel-model", StringComparison.OrdinalIgnoreCase)))
+{
+    return EvaluateComplexContourChannelModel(
+        ParseStringOption(args, "--receipt", "calibration/bioacoustic/complex-contour-replay-panel.json"),
+        ParseStringOption(args, "--channel-model", "calibration/bioacoustic/complex-contour-channel-model.json"),
+        ParseStringOption(args, "--output", "calibration/bioacoustic/complex-contour-channel-model-evaluation.json"));
 }
 
 if (args.Any(arg => string.Equals(arg, "--calibrate-contestant-asio-f32", StringComparison.OrdinalIgnoreCase)))
@@ -1732,8 +1748,10 @@ static int AnalyzeComplexContourAsioFloat32(
     double seconds,
     double scheduleOffsetSamples,
     double predictedDelaySamples,
+    string channelModelPath,
     string songId)
 {
+    var pathModel = LoadComplexContourPathModel(channelModelPath, sampleRate, referenceChannel, candidateChannel);
     var result = EstimateComplexContourAsioFloat32(
         inputPath,
         sampleRate,
@@ -1743,6 +1761,7 @@ static int AnalyzeComplexContourAsioFloat32(
         seconds,
         scheduleOffsetSamples,
         predictedDelaySamples,
+        pathModel?.ToRuntimeModel(),
         songId);
     if (result == null)
     {
@@ -1757,7 +1776,7 @@ static int AnalyzeComplexContourAsioFloat32(
         $"predictedDelaySamples={result.PredictedDelaySamples:0.000000} predictionErrorSamples={result.PredictionErrorSamples:0.000000} predictionErrorUs={result.PredictionErrorMicroseconds:0.000} " +
         $"confidence={result.Confidence:0.000} directHits={result.DirectHits} maeSamples={result.MeanAbsoluteErrorSamples:0.000000} phaseMaeRad={result.MeanAbsolutePhaseErrorRadians:0.000} " +
         $"referenceHits={result.ReferenceHits} candidateHits={result.CandidateHits} reflectionTaps={result.ReflectionTaps.Length} " +
-        $"firstReflectionSamples={result.FirstReflectionSamples:0.000} bands={bands}");
+        $"firstReflectionSamples={result.FirstReflectionSamples:0.000} channelModel={(pathModel?.PathId ?? "none")} bands={bands}");
     return 0;
 }
 
@@ -1770,6 +1789,7 @@ static ComplexContourReplayResult? EstimateComplexContourAsioFloat32(
     double seconds,
     double scheduleOffsetSamples,
     double predictedDelaySamples,
+    MimirDirectPathChannelModel? channelModel,
     string songId)
 {
     if (!File.Exists(inputPath))
@@ -1810,7 +1830,9 @@ static ComplexContourReplayResult? EstimateComplexContourAsioFloat32(
         eventIndices,
         scheduleOffsetSamples + predictedDelaySamples,
         Math.Max(48, sampleRate / 900));
-    var estimate = new MimirDirectPathTracker(sampleRate).Update(referenceHits, candidateHits, predictedDelaySamples);
+    var estimate = new MimirDirectPathTracker(
+        sampleRate,
+        new MimirDirectPathTrackerOptions(ChannelModel: channelModel)).Update(referenceHits, candidateHits, predictedDelaySamples);
     if (estimate == null)
     {
         Console.WriteLine(
@@ -1819,7 +1841,7 @@ static ComplexContourReplayResult? EstimateComplexContourAsioFloat32(
         return null;
     }
 
-    var strongestBands = estimate.BandObservations
+    var bandResiduals = estimate.BandObservations
         .GroupBy(observation => Math.Round(observation.CenterHz / 250.0) * 250.0)
         .Select(group =>
         {
@@ -1831,8 +1853,8 @@ static ComplexContourReplayResult? EstimateComplexContourAsioFloat32(
                 group.Sum(observation => observation.PhaseResidualRadians * Math.Max(observation.Weight, 1.0e-9)) / totalWeight);
         })
         .OrderByDescending(group => group.Weight)
-        .Take(8)
         .ToArray();
+    var strongestBands = bandResiduals.Take(8).ToArray();
     var predictionError = estimate.DelaySamples - predictedDelaySamples;
     return new ComplexContourReplayResult(
         "",
@@ -1853,7 +1875,8 @@ static ComplexContourReplayResult? EstimateComplexContourAsioFloat32(
         candidateHits.Count,
         estimate.ReflectionTaps.ToArray(),
         estimate.ReflectionTaps.FirstOrDefault()?.RelativeDelaySamples ?? double.NaN,
-        strongestBands);
+        strongestBands,
+        bandResiduals);
 }
 
 static int RunComplexContourReplayPanel(string outputPath)
@@ -1896,6 +1919,7 @@ static int RunComplexContourReplayPanel(string outputPath)
             seconds: 4.0,
             scheduleOffsetSamples: 1623.0,
             replayCase.PredictedDelaySamples,
+            channelModel: null,
             MimirBioacousticContestants.CanaryPacketTrill.Id);
         if (result == null)
         {
@@ -1926,6 +1950,266 @@ static int RunComplexContourReplayPanel(string outputPath)
             new JsonSerializerOptions { WriteIndented = true }));
     Console.WriteLine($"complex-contour-panel-receipt path={outputPath} cases={results.Count}");
     return failures == 0 ? 0 : 1;
+}
+
+static int LearnComplexContourChannelModel(string inputPath, string outputPath)
+{
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"complex-contour channel learning failed: input not found: {inputPath}");
+        return 1;
+    }
+
+    var receipt = JsonSerializer.Deserialize<ComplexContourReplayPanelReceipt>(File.ReadAllText(inputPath));
+    if (receipt == null || receipt.Cases.Length == 0)
+    {
+        Console.Error.WriteLine("complex-contour channel learning failed: receipt contains no cases");
+        return 1;
+    }
+
+    var pathModels = receipt.Cases
+        .GroupBy(result => (result.SampleRate, result.ReferenceChannel, result.CandidateChannel))
+        .Select(group => LearnComplexContourPathModel(group.Key.SampleRate, group.Key.ReferenceChannel, group.Key.CandidateChannel, group.ToArray()))
+        .Where(model => model.Corrections.Length > 0)
+        .OrderBy(model => model.PathId, StringComparer.Ordinal)
+        .ToArray();
+    var document = new ComplexContourChannelModelDocument(
+        "mimir.bioacoustic.complex-contour-channel-model.v1",
+        DateTimeOffset.UtcNow,
+        inputPath,
+        pathModels);
+    Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
+    File.WriteAllText(
+        outputPath,
+        JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));
+    foreach (var path in pathModels)
+    {
+        Console.WriteLine(
+            $"complex-contour-channel-model path={path.PathId} cases={path.CaseIds.Length} corrections={path.Corrections.Length} " +
+            $"usableBands={path.UsableBandCount} reliability={path.Reliability:0.000} delaySpreadSamples={path.DelaySpreadSamples:0.000}");
+    }
+
+    Console.WriteLine($"complex-contour-channel-model-receipt path={outputPath} paths={pathModels.Length}");
+    return pathModels.Length == 0 ? 1 : 0;
+}
+
+static ComplexContourPathChannelModel LearnComplexContourPathModel(
+    int sampleRate,
+    int referenceChannel,
+    int candidateChannel,
+    ComplexContourReplayResult[] cases)
+{
+    var corrections = cases
+        .SelectMany(result => (result.BandResiduals is { Length: > 0 } ? result.BandResiduals : result.StrongestBands)
+            .Select(band => (Result: result, Band: band)))
+        .GroupBy(pair => pair.Band.CenterHz)
+        .Select(group => LearnComplexContourBandCorrection(group.Key, group.Select(pair => pair.Band).ToArray()))
+        .Where(correction => correction != null)
+        .Select(correction => correction!)
+        .OrderBy(correction => correction.CenterHz)
+        .ToArray();
+    var reflectionTaps = cases
+        .SelectMany(result => result.ReflectionTaps.Select(tap => tap.RelativeDelaySamples))
+        .GroupBy(delay => Math.Round(delay / 2.0) * 2.0)
+        .Select(group => new ComplexContourReflectionCorrection(
+            group.Key,
+            group.Count(),
+            group.Average()))
+        .OrderByDescending(tap => tap.ObservationCount)
+        .ThenBy(tap => tap.RelativeDelaySamples)
+        .Take(8)
+        .ToArray();
+    var reliability = corrections.Length == 0
+        ? 0.0
+        : corrections.Average(correction => correction.Reliability);
+    var delaySpread = corrections.Length <= 1
+        ? 0.0
+        : corrections.Max(correction => correction.DelayCorrectionSamples) - corrections.Min(correction => correction.DelayCorrectionSamples);
+    return new ComplexContourPathChannelModel(
+        $"asio-ch{referenceChannel}->asio-ch{candidateChannel}@{sampleRate}",
+        sampleRate,
+        referenceChannel,
+        candidateChannel,
+        cases.Select(result => result.CaseId).Order(StringComparer.Ordinal).ToArray(),
+        corrections,
+        reflectionTaps,
+        corrections.Count(correction => correction.Usable),
+        reliability,
+        delaySpread);
+}
+
+static ComplexContourBandCorrection? LearnComplexContourBandCorrection(double centerHz, ComplexContourBandResidual[] bands)
+{
+    if (bands.Length < 2)
+    {
+        return null;
+    }
+
+    var totalWeight = Math.Max(1.0e-9, bands.Sum(band => Math.Max(band.Weight, 1.0e-9)));
+    var delay = bands.Sum(band => band.DelayResidualSamples * Math.Max(band.Weight, 1.0e-9)) / totalWeight;
+    var phaseVector = bands.Aggregate(
+        Complex.Zero,
+        (current, band) => current + Complex.FromPolarCoordinates(Math.Max(band.Weight, 1.0e-9), band.PhaseResidualRadians));
+    var phase = Math.Atan2(phaseVector.Imaginary, phaseVector.Real);
+    var variance = bands.Sum(band =>
+    {
+        var delta = band.DelayResidualSamples - delay;
+        return delta * delta * Math.Max(band.Weight, 1.0e-9);
+    }) / totalWeight;
+    var stdDev = Math.Sqrt(Math.Max(0.0, variance));
+    var signCoherent = bands.All(band => Math.Sign(band.DelayResidualSamples) == Math.Sign(delay) || Math.Abs(band.DelayResidualSamples) < 0.75);
+    var reliability = Math.Clamp(
+        (bands.Length / 2.0) *
+        (1.0 / (1.0 + stdDev / 1.5)) *
+        (phaseVector.Magnitude / totalWeight) *
+        (signCoherent ? 1.0 : 0.55),
+        0.0,
+        1.0);
+    var usable = reliability >= 0.35 && stdDev <= 3.0;
+    if (!usable)
+    {
+        return null;
+    }
+
+    return new ComplexContourBandCorrection(
+        centerHz,
+        delay,
+        phase,
+        totalWeight,
+        bands.Length,
+        stdDev,
+        reliability,
+        usable);
+}
+
+static ComplexContourPathChannelModel? LoadComplexContourPathModel(
+    string channelModelPath,
+    int sampleRate,
+    int referenceChannel,
+    int candidateChannel)
+{
+    if (string.IsNullOrWhiteSpace(channelModelPath))
+    {
+        return null;
+    }
+
+    if (!File.Exists(channelModelPath))
+    {
+        Console.Error.WriteLine($"complex-contour channel model not found: {channelModelPath}");
+        return null;
+    }
+
+    var document = JsonSerializer.Deserialize<ComplexContourChannelModelDocument>(File.ReadAllText(channelModelPath));
+    var model = document?.Paths.FirstOrDefault(path =>
+        path.SampleRate == sampleRate &&
+        path.ReferenceChannel == referenceChannel &&
+        path.CandidateChannel == candidateChannel);
+    if (model == null)
+    {
+        Console.Error.WriteLine(
+            $"complex-contour channel model has no path for asio-ch{referenceChannel}->asio-ch{candidateChannel}@{sampleRate}");
+    }
+
+    return model;
+}
+
+static int EvaluateComplexContourChannelModel(string receiptPath, string channelModelPath, string outputPath)
+{
+    if (!File.Exists(receiptPath))
+    {
+        Console.Error.WriteLine($"complex-contour model evaluation failed: receipt not found: {receiptPath}");
+        return 1;
+    }
+
+    if (!File.Exists(channelModelPath))
+    {
+        Console.Error.WriteLine($"complex-contour model evaluation failed: channel model not found: {channelModelPath}");
+        return 1;
+    }
+
+    var receipt = JsonSerializer.Deserialize<ComplexContourReplayPanelReceipt>(File.ReadAllText(receiptPath));
+    var document = JsonSerializer.Deserialize<ComplexContourChannelModelDocument>(File.ReadAllText(channelModelPath));
+    if (receipt == null || document == null)
+    {
+        Console.Error.WriteLine("complex-contour model evaluation failed: invalid JSON input");
+        return 1;
+    }
+
+    var results = new List<ComplexContourChannelModelEvaluationCase>();
+    foreach (var replayCase in receipt.Cases)
+    {
+        var pathModel = document.Paths.FirstOrDefault(path =>
+            path.SampleRate == replayCase.SampleRate &&
+            path.ReferenceChannel == replayCase.ReferenceChannel &&
+            path.CandidateChannel == replayCase.CandidateChannel);
+        var baseline = EstimateComplexContourAsioFloat32(
+            replayCase.InputPath,
+            replayCase.SampleRate,
+            channels: 4,
+            replayCase.ReferenceChannel,
+            replayCase.CandidateChannel,
+            seconds: 4.0,
+            scheduleOffsetSamples: 1623.0,
+            replayCase.PredictedDelaySamples,
+            channelModel: null,
+            MimirBioacousticContestants.CanaryPacketTrill.Id);
+        var modeled = EstimateComplexContourAsioFloat32(
+            replayCase.InputPath,
+            replayCase.SampleRate,
+            channels: 4,
+            replayCase.ReferenceChannel,
+            replayCase.CandidateChannel,
+            seconds: 4.0,
+            scheduleOffsetSamples: 1623.0,
+            replayCase.PredictedDelaySamples,
+            pathModel?.ToRuntimeModel(),
+            MimirBioacousticContestants.CanaryPacketTrill.Id);
+        if (baseline == null || modeled == null)
+        {
+            continue;
+        }
+
+        var baselineAbsError = Math.Abs(baseline.PredictionErrorMicroseconds);
+        var modeledAbsError = Math.Abs(modeled.PredictionErrorMicroseconds);
+        results.Add(new ComplexContourChannelModelEvaluationCase(
+            replayCase.CaseId,
+            pathModel?.PathId ?? "",
+            baseline.DelayMicroseconds,
+            modeled.DelayMicroseconds,
+            baselineAbsError,
+            modeledAbsError,
+            baseline.MeanAbsoluteErrorSamples,
+            modeled.MeanAbsoluteErrorSamples,
+            baseline.MeanAbsolutePhaseErrorRadians,
+            modeled.MeanAbsolutePhaseErrorRadians,
+            baseline.Confidence,
+            modeled.Confidence,
+            modeledAbsError - baselineAbsError,
+            modeled.MeanAbsoluteErrorSamples - baseline.MeanAbsoluteErrorSamples,
+            modeled.MeanAbsolutePhaseErrorRadians - baseline.MeanAbsolutePhaseErrorRadians));
+        Console.WriteLine(
+            $"complex-contour-channel-eval case={replayCase.CaseId} path={pathModel?.PathId ?? "none"} " +
+            $"baselineAbsUs={baselineAbsError:0.000} modeledAbsUs={modeledAbsError:0.000} deltaAbsUs={modeledAbsError - baselineAbsError:+0.000;-0.000;0.000} " +
+            $"maeSamples={baseline.MeanAbsoluteErrorSamples:0.000}->{modeled.MeanAbsoluteErrorSamples:0.000} phaseMae={baseline.MeanAbsolutePhaseErrorRadians:0.000}->{modeled.MeanAbsolutePhaseErrorRadians:0.000}");
+    }
+
+    var improved = results.Count(result => result.ModeledAbsolutePredictionErrorMicroseconds < result.BaselineAbsolutePredictionErrorMicroseconds);
+    var documentOut = new ComplexContourChannelModelEvaluationDocument(
+        "mimir.bioacoustic.complex-contour-channel-model-evaluation.v1",
+        DateTimeOffset.UtcNow,
+        receiptPath,
+        channelModelPath,
+        results.Count,
+        improved,
+        results.Count == 0 ? 0.0 : results.Average(result => result.DeltaAbsolutePredictionErrorMicroseconds),
+        results.Count == 0 ? 0.0 : results.Average(result => result.DeltaMeanAbsoluteErrorSamples),
+        results.ToArray());
+    Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
+    File.WriteAllText(outputPath, JsonSerializer.Serialize(documentOut, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine(
+        $"complex-contour-channel-evaluation path={outputPath} cases={documentOut.CasesEvaluated} improved={documentOut.CasesImproved} " +
+        $"meanDeltaAbsUs={documentOut.MeanDeltaAbsolutePredictionErrorMicroseconds:+0.000;-0.000;0.000} meanDeltaMaeSamples={documentOut.MeanDeltaMeanAbsoluteErrorSamples:+0.000;-0.000;0.000}");
+    return results.Count == 0 ? 1 : 0;
 }
 
 static int CalibrateContestantAsioFloat32(
@@ -4981,10 +5265,83 @@ public sealed record ComplexContourReplayResult(
     int CandidateHits,
     MimirAcousticReflectionTap[] ReflectionTaps,
     double FirstReflectionSamples,
-    ComplexContourBandResidual[] StrongestBands);
+    ComplexContourBandResidual[] StrongestBands,
+    ComplexContourBandResidual[] BandResiduals);
 
 public sealed record ComplexContourBandResidual(
     double CenterHz,
     double Weight,
     double DelayResidualSamples,
     double PhaseResidualRadians);
+
+public sealed record ComplexContourChannelModelDocument(
+    string Schema,
+    DateTimeOffset CreatedUtc,
+    string SourceReceiptPath,
+    ComplexContourPathChannelModel[] Paths);
+
+public sealed record ComplexContourPathChannelModel(
+    string PathId,
+    int SampleRate,
+    int ReferenceChannel,
+    int CandidateChannel,
+    string[] CaseIds,
+    ComplexContourBandCorrection[] Corrections,
+    ComplexContourReflectionCorrection[] ReflectionTaps,
+    int UsableBandCount,
+    double Reliability,
+    double DelaySpreadSamples)
+{
+    public MimirDirectPathChannelModel ToRuntimeModel() =>
+        new(Corrections
+            .Where(correction => correction.Usable)
+            .Select(correction => new MimirDirectPathBandCorrection(
+                correction.CenterHz,
+                correction.DelayCorrectionSamples,
+                correction.PhaseCorrectionRadians,
+                correction.Weight * correction.Reliability))
+            .ToArray());
+}
+
+public sealed record ComplexContourBandCorrection(
+    double CenterHz,
+    double DelayCorrectionSamples,
+    double PhaseCorrectionRadians,
+    double Weight,
+    int ObservationCount,
+    double DelayStdDevSamples,
+    double Reliability,
+    bool Usable);
+
+public sealed record ComplexContourReflectionCorrection(
+    double RelativeDelaySamples,
+    int ObservationCount,
+    double MeanRelativeDelaySamples);
+
+public sealed record ComplexContourChannelModelEvaluationDocument(
+    string Schema,
+    DateTimeOffset CreatedUtc,
+    string ReplayReceiptPath,
+    string ChannelModelPath,
+    int CasesEvaluated,
+    int CasesImproved,
+    double MeanDeltaAbsolutePredictionErrorMicroseconds,
+    double MeanDeltaMeanAbsoluteErrorSamples,
+    ComplexContourChannelModelEvaluationCase[] Cases);
+
+public sealed record ComplexContourChannelModelEvaluationCase(
+    string CaseId,
+    string PathId,
+    double BaselineDelayMicroseconds,
+    double ModeledDelayMicroseconds,
+    double BaselineAbsolutePredictionErrorMicroseconds,
+    double ModeledAbsolutePredictionErrorMicroseconds,
+    double BaselineMeanAbsoluteErrorSamples,
+    double ModeledMeanAbsoluteErrorSamples,
+    double BaselineMeanAbsolutePhaseErrorRadians,
+    double ModeledMeanAbsolutePhaseErrorRadians,
+    double BaselineConfidence,
+    double ModeledConfidence,
+    double DeltaAbsolutePredictionErrorMicroseconds,
+    double DeltaMeanAbsoluteErrorSamples,
+    double DeltaMeanAbsolutePhaseErrorRadians);

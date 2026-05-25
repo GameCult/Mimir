@@ -1,6 +1,6 @@
 {
   "Schema": "mimir.bioacoustic.complex-contour-replay.v1",
-  "CreatedUtc": "2026-05-25T00:23:48.2689725+00:00",
+  "CreatedUtc": "2026-05-25T00:35:16.0211249+00:00",
   "Cases": [
     {
       "CaseId": "stored-shotgun",
@@ -106,6 +106,116 @@
           "Weight": 0.47037755462147757,
           "DelayResidualSamples": 0.8667391978571636,
           "PhaseResidualRadians": 0.18091929609672733
+        }
+      ],
+      "BandResiduals": [
+        {
+          "CenterHz": 6750,
+          "Weight": 1.2699300283963697,
+          "DelayResidualSamples": 2.5673189716570537,
+          "PhaseResidualRadians": 0.5658813934187334
+        },
+        {
+          "CenterHz": 8750,
+          "Weight": 1.2568192590391993,
+          "DelayResidualSamples": -0.4597260852506658,
+          "PhaseResidualRadians": -0.12999969607089684
+        },
+        {
+          "CenterHz": 9500,
+          "Weight": 1.027566709608703,
+          "DelayResidualSamples": 1.2838263536332217,
+          "PhaseResidualRadians": 0.3950579393566654
+        },
+        {
+          "CenterHz": 3250,
+          "Weight": 0.7947593597178807,
+          "DelayResidualSamples": -3.765228895337047,
+          "PhaseResidualRadians": -0.3894062673999493
+        },
+        {
+          "CenterHz": 3500,
+          "Weight": 0.7529168073230323,
+          "DelayResidualSamples": -4.625383934838002,
+          "PhaseResidualRadians": -0.5149730771327364
+        },
+        {
+          "CenterHz": 13250,
+          "Weight": 0.6737108279691784,
+          "DelayResidualSamples": -2.4168494062876826,
+          "PhaseResidualRadians": -1.0485938214652033
+        },
+        {
+          "CenterHz": 8500,
+          "Weight": 0.6015228093118099,
+          "DelayResidualSamples": 1.1707146663913026,
+          "PhaseResidualRadians": 0.33160115736680457
+        },
+        {
+          "CenterHz": 6500,
+          "Weight": 0.47037755462147757,
+          "DelayResidualSamples": 0.8667391978571636,
+          "PhaseResidualRadians": 0.18091929609672733
+        },
+        {
+          "CenterHz": 7000,
+          "Weight": 0.4180309549411402,
+          "DelayResidualSamples": 4.206696192841818,
+          "PhaseResidualRadians": 0.9788491596158178
+        },
+        {
+          "CenterHz": 12000,
+          "Weight": 0.34870963753834217,
+          "DelayResidualSamples": -0.8416144627432232,
+          "PhaseResidualRadians": -0.32791802374977946
+        },
+        {
+          "CenterHz": 13500,
+          "Weight": 0.3408557430442181,
+          "DelayResidualSamples": -0.7583035197561686,
+          "PhaseResidualRadians": -0.33520285952180584
+        },
+        {
+          "CenterHz": 2750,
+          "Weight": 0.3220228225773948,
+          "DelayResidualSamples": -1.4643006545231856,
+          "PhaseResidualRadians": -0.1351458321084486
+        },
+        {
+          "CenterHz": 5500,
+          "Weight": 0.27331162789254393,
+          "DelayResidualSamples": -2.4449027466386832,
+          "PhaseResidualRadians": -0.44018835232080966
+        },
+        {
+          "CenterHz": 5000,
+          "Weight": 0.26586058278420227,
+          "DelayResidualSamples": -2.2615087582128646,
+          "PhaseResidualRadians": -0.3680700214469181
+        },
+        {
+          "CenterHz": 10250,
+          "Weight": 0.19141307586462278,
+          "DelayResidualSamples": 5.29849132713116,
+          "PhaseResidualRadians": 1.7591586790326341
+        },
+        {
+          "CenterHz": 7250,
+          "Weight": 0.12170465360563014,
+          "DelayResidualSamples": -1.097126941141717,
+          "PhaseResidualRadians": -0.2595639309850276
+        },
+        {
+          "CenterHz": 6250,
+          "Weight": 0.03498156544145096,
+          "DelayResidualSamples": 0.4755339728131957,
+          "PhaseResidualRadians": 0.09839773368213911
+        },
+        {
+          "CenterHz": 12750,
+          "Weight": 0.03408014687697398,
+          "DelayResidualSamples": -1.7678990270655959,
+          "PhaseResidualRadians": -0.7409251473608747
         }
       ]
     },
@@ -214,6 +324,92 @@
           "DelayResidualSamples": 5.932327618452064,
           "PhaseResidualRadians": 1.1557056318509606
         }
+      ],
+      "BandResiduals": [
+        {
+          "CenterHz": 3500,
+          "Weight": 1.4678635457303353,
+          "DelayResidualSamples": 0.10319879643340892,
+          "PhaseResidualRadians": 0.013162251967709516
+        },
+        {
+          "CenterHz": 6250,
+          "Weight": 0.595616635929512,
+          "DelayResidualSamples": 0.6124036977257589,
+          "PhaseResidualRadians": 0.1271354391988944
+        },
+        {
+          "CenterHz": 13000,
+          "Weight": 0.5567561239589848,
+          "DelayResidualSamples": 2.6753802477024133,
+          "PhaseResidualRadians": 1.1449354974851138
+        },
+        {
+          "CenterHz": 7250,
+          "Weight": 0.44458926425684897,
+          "DelayResidualSamples": -0.4646425397950185,
+          "PhaseResidualRadians": -0.11029550531251985
+        },
+        {
+          "CenterHz": 9500,
+          "Weight": 0.4068961583884891,
+          "DelayResidualSamples": -1.4174391923665974,
+          "PhaseResidualRadians": -0.43593239097651637
+        },
+        {
+          "CenterHz": 6750,
+          "Weight": 0.3710780968347314,
+          "DelayResidualSamples": -2.182853898329963,
+          "PhaseResidualRadians": -0.477976049907922
+        },
+        {
+          "CenterHz": 9250,
+          "Weight": 0.23665017208058042,
+          "DelayResidualSamples": 2.823144216376767,
+          "PhaseResidualRadians": 0.8534581210981982
+        },
+        {
+          "CenterHz": 6000,
+          "Weight": 0.20029070346773176,
+          "DelayResidualSamples": 5.932327618452064,
+          "PhaseResidualRadians": 1.1557056318509606
+        },
+        {
+          "CenterHz": 18500,
+          "Weight": 0.18094863887187154,
+          "DelayResidualSamples": -5.545837521129101,
+          "PhaseResidualRadians": 2.9363613327880596
+        },
+        {
+          "CenterHz": 18250,
+          "Weight": 0.17372862429411026,
+          "DelayResidualSamples": -1.366666108583786,
+          "PhaseResidualRadians": -0.8203977725269509
+        },
+        {
+          "CenterHz": 6500,
+          "Weight": 0.12728221912126889,
+          "DelayResidualSamples": -1.5783140657625836,
+          "PhaseResidualRadians": -0.33777380372894905
+        },
+        {
+          "CenterHz": 4500,
+          "Weight": 0.12290356057303883,
+          "DelayResidualSamples": -5.920977797438127,
+          "PhaseResidualRadians": -0.8480305771202491
+        },
+        {
+          "CenterHz": 5000,
+          "Weight": 0.04489399978915249,
+          "DelayResidualSamples": -4.06090584120966,
+          "PhaseResidualRadians": -0.6569598908932412
+        },
+        {
+          "CenterHz": 12500,
+          "Weight": 0.03707313281210611,
+          "DelayResidualSamples": -4.270345279624507,
+          "PhaseResidualRadians": -1.7528670201188614
+        }
       ]
     },
     {
@@ -321,6 +517,116 @@
           "DelayResidualSamples": -1.9652138109995578,
           "PhaseResidualRadians": -1.29593222952682
         }
+      ],
+      "BandResiduals": [
+        {
+          "CenterHz": 6750,
+          "Weight": 2.1446167112529992,
+          "DelayResidualSamples": 3.3535761936586694,
+          "PhaseResidualRadians": 0.7403126376512428
+        },
+        {
+          "CenterHz": 7000,
+          "Weight": 0.9863738950334722,
+          "DelayResidualSamples": -4.3123794157954585,
+          "PhaseResidualRadians": -0.9788777422159413
+        },
+        {
+          "CenterHz": 6500,
+          "Weight": 0.7859796833175395,
+          "DelayResidualSamples": 4.54702053502405,
+          "PhaseResidualRadians": 0.9622868397785674
+        },
+        {
+          "CenterHz": 9250,
+          "Weight": 0.7529325316166473,
+          "DelayResidualSamples": 1.467213791062176,
+          "PhaseResidualRadians": 0.440377835686411
+        },
+        {
+          "CenterHz": 7500,
+          "Weight": 0.36006454004405286,
+          "DelayResidualSamples": -2.2281848131519837,
+          "PhaseResidualRadians": -0.5389168818164407
+        },
+        {
+          "CenterHz": 9750,
+          "Weight": 0.35135027105121286,
+          "DelayResidualSamples": 0.5850716901119313,
+          "PhaseResidualRadians": 0.18792002661100599
+        },
+        {
+          "CenterHz": 13750,
+          "Weight": 0.3341554524774217,
+          "DelayResidualSamples": -1.965213816233927,
+          "PhaseResidualRadians": -0.885265020371404
+        },
+        {
+          "CenterHz": 20250,
+          "Weight": 0.31148893481945145,
+          "DelayResidualSamples": -1.9652138109995578,
+          "PhaseResidualRadians": -1.29593222952682
+        },
+        {
+          "CenterHz": 7250,
+          "Weight": 0.30458826375419357,
+          "DelayResidualSamples": 3.0249280786131463,
+          "PhaseResidualRadians": 0.7125700375874803
+        },
+        {
+          "CenterHz": 3000,
+          "Weight": 0.2951735906464143,
+          "DelayResidualSamples": -4.864411777261353,
+          "PhaseResidualRadians": -0.49242496662994284
+        },
+        {
+          "CenterHz": 6250,
+          "Weight": 0.18456185133268957,
+          "DelayResidualSamples": 5.296427380960267,
+          "PhaseResidualRadians": 1.0712995334867106
+        },
+        {
+          "CenterHz": 10250,
+          "Weight": 0.1521926744569775,
+          "DelayResidualSamples": 4.609949183942376,
+          "PhaseResidualRadians": 1.5622638961382556
+        },
+        {
+          "CenterHz": 4750,
+          "Weight": 0.0499382191959116,
+          "DelayResidualSamples": 5.786543330448353,
+          "PhaseResidualRadians": 0.8985126666876189
+        },
+        {
+          "CenterHz": 5250,
+          "Weight": 0.04448134170771759,
+          "DelayResidualSamples": 1.5336841599477111,
+          "PhaseResidualRadians": 0.26160820555928704
+        },
+        {
+          "CenterHz": 14000,
+          "Weight": 0.0397224736375682,
+          "DelayResidualSamples": 3.961355187395611,
+          "PhaseResidualRadians": 1.8237743276335885
+        },
+        {
+          "CenterHz": 12500,
+          "Weight": 0.03861714250811583,
+          "DelayResidualSamples": 0.47514367773169397,
+          "PhaseResidualRadians": 0.19503427193296652
+        },
+        {
+          "CenterHz": 5000,
+          "Weight": 0.037452210838550666,
+          "DelayResidualSamples": 0.02475698464513698,
+          "PhaseResidualRadians": 0.004058667040229211
+        },
+        {
+          "CenterHz": 9500,
+          "Weight": 0.030048103590025566,
+          "DelayResidualSamples": -2.2199947977094325,
+          "PhaseResidualRadians": -0.6838161961776569
+        }
       ]
     },
     {
@@ -427,6 +733,104 @@
           "Weight": 0.2755942546185756,
           "DelayResidualSamples": 4.517622003996394,
           "PhaseResidualRadians": 2.1315131125108575
+        }
+      ],
+      "BandResiduals": [
+        {
+          "CenterHz": 3500,
+          "Weight": 1.0292158248138983,
+          "DelayResidualSamples": -1.8683833694250642,
+          "PhaseResidualRadians": -0.2160553650846187
+        },
+        {
+          "CenterHz": 3250,
+          "Weight": 0.9689156979351102,
+          "DelayResidualSamples": 2.367757432999856,
+          "PhaseResidualRadians": 0.2591088800405311
+        },
+        {
+          "CenterHz": 3750,
+          "Weight": 0.8257896687014397,
+          "DelayResidualSamples": 0.7737901147281051,
+          "PhaseResidualRadians": 0.09485471658946629
+        },
+        {
+          "CenterHz": 3000,
+          "Weight": 0.7114835803280036,
+          "DelayResidualSamples": -3.860572966754169,
+          "PhaseResidualRadians": -0.3840924303579634
+        },
+        {
+          "CenterHz": 2750,
+          "Weight": 0.6891263688332048,
+          "DelayResidualSamples": -2.0878846225489225,
+          "PhaseResidualRadians": -0.1926987492556257
+        },
+        {
+          "CenterHz": 13500,
+          "Weight": 0.4537545008959113,
+          "DelayResidualSamples": 4.8576686994292855,
+          "PhaseResidualRadians": 2.1472990646038803
+        },
+        {
+          "CenterHz": 9000,
+          "Weight": 0.3377853536497608,
+          "DelayResidualSamples": 2.4170798183239413,
+          "PhaseResidualRadians": 0.7163738239152257
+        },
+        {
+          "CenterHz": 14500,
+          "Weight": 0.2755942546185756,
+          "DelayResidualSamples": 4.517622003996394,
+          "PhaseResidualRadians": 2.1315131125108575
+        },
+        {
+          "CenterHz": 8500,
+          "Weight": 0.23984708548916367,
+          "DelayResidualSamples": 5.5039932772551765,
+          "PhaseResidualRadians": 1.5378129510757694
+        },
+        {
+          "CenterHz": 18500,
+          "Weight": 0.21524110443799965,
+          "DelayResidualSamples": 0.9999232623606531,
+          "PhaseResidualRadians": 0.6034376474734766
+        },
+        {
+          "CenterHz": 17500,
+          "Weight": 0.18772248629934302,
+          "DelayResidualSamples": 1.7056313444122682,
+          "PhaseResidualRadians": 0.9728508309007613
+        },
+        {
+          "CenterHz": 7250,
+          "Weight": 0.17331525464185893,
+          "DelayResidualSamples": 3.644709113281465,
+          "PhaseResidualRadians": 0.8582473356903002
+        },
+        {
+          "CenterHz": 18250,
+          "Weight": 0.16190483383757942,
+          "DelayResidualSamples": -1.855694599162348,
+          "PhaseResidualRadians": -1.1139573199928852
+        },
+        {
+          "CenterHz": 4750,
+          "Weight": 0.1440152051953463,
+          "DelayResidualSamples": -2.1860839525520532,
+          "PhaseResidualRadians": -0.3439500292546649
+        },
+        {
+          "CenterHz": 13250,
+          "Weight": 0.10510607734758748,
+          "DelayResidualSamples": 1.4488027765736726,
+          "PhaseResidualRadians": 0.6292161948732933
+        },
+        {
+          "CenterHz": 9750,
+          "Weight": 0.07447043699438971,
+          "DelayResidualSamples": 4.5701124550750825,
+          "PhaseResidualRadians": 1.44228259520202
         }
       ]
     }

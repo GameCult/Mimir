@@ -180,3 +180,20 @@ reflection field.
 `--complex-contour-replay-panel` persists this measurement surface to
 `calibration/bioacoustic/complex-contour-replay-panel.json` for regression and
 path-learning work.
+
+`--learn-complex-contour-channel-model` now turns that replay receipt into a
+path-scoped complex contour channel model at
+`calibration/bioacoustic/complex-contour-channel-model.json`. The model records
+stable per-band delay and phase corrections plus observed reflection tap
+spacing. `--complex-contour-asio-f32 --channel-model ...` can apply it
+explicitly, and `--evaluate-complex-contour-channel-model` writes
+`calibration/bioacoustic/complex-contour-channel-model-evaluation.json`.
+
+The current model is useful but not yet trusted as silent runtime authority.
+Across the four stored/fresh Scarlett replay cases it improves 3/4 absolute
+path-seed errors and lowers mean direct-cluster residuals overall. The best
+fresh cardioid case reaches about `0.202 us` from the seeded path fit, but the
+stored cardioid path still worsens from about `15.817 us` to `17.476 us`.
+That means the learned phase/group-delay surface is real evidence, while the
+Perfect Machine still needs more captures and a stronger direct-path
+hypothesis before calibration can be applied automatically.

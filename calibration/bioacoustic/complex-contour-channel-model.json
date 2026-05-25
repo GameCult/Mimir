@@ -1,0 +1,211 @@
+{
+  "Schema": "mimir.bioacoustic.complex-contour-channel-model.v1",
+  "CreatedUtc": "2026-05-25T00:38:15.1446826+00:00",
+  "SourceReceiptPath": "calibration\\bioacoustic\\complex-contour-replay-panel.json",
+  "Paths": [
+    {
+      "PathId": "asio-ch2-\u003Easio-ch0@192000",
+      "SampleRate": 192000,
+      "ReferenceChannel": 2,
+      "CandidateChannel": 0,
+      "CaseIds": [
+        "fresh-cardioid",
+        "stored-cardioid"
+      ],
+      "Corrections": [
+        {
+          "CenterHz": 3500,
+          "DelayCorrectionSamples": -0.7094239775796349,
+          "PhaseCorrectionRadians": -0.0812280205621396,
+          "Weight": 2.497079370544234,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 0.970462155866937,
+          "Reliability": 0.6033138468538993,
+          "Usable": true
+        },
+        {
+          "CenterHz": 7250,
+          "DelayCorrectionSamples": 0.6879842923169613,
+          "PhaseCorrectionRadians": 0.1470066505771498,
+          "Weight": 0.6179045188987079,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 1.8460770200116723,
+          "Reliability": 0.4071827676776666,
+          "Usable": true
+        },
+        {
+          "CenterHz": 18250,
+          "DelayCorrectionSamples": -1.602566536835783,
+          "PhaseCorrectionRadians": -0.9619693373621746,
+          "Weight": 0.33563345813168965,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 0.24436247319389057,
+          "Reliability": 0.8506780619599758,
+          "Usable": true
+        }
+      ],
+      "ReflectionTaps": [
+        {
+          "RelativeDelaySamples": 8,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 8.12759631542417
+        },
+        {
+          "RelativeDelaySamples": 12,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 12.128720151940115
+        },
+        {
+          "RelativeDelaySamples": 14,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 14.697493366694744
+        },
+        {
+          "RelativeDelaySamples": 20,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 20.38429159887096
+        },
+        {
+          "RelativeDelaySamples": 22,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 21.471823084040807
+        },
+        {
+          "RelativeDelaySamples": 24,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 23.29111737086498
+        },
+        {
+          "RelativeDelaySamples": 28,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 28.067226337488933
+        },
+        {
+          "RelativeDelaySamples": 32,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 31.225995403332718
+        }
+      ],
+      "UsableBandCount": 3,
+      "Reliability": 0.6203915588305139,
+      "DelaySpreadSamples": 2.2905508291527443
+    },
+    {
+      "PathId": "asio-ch2-\u003Easio-ch1@192000",
+      "SampleRate": 192000,
+      "ReferenceChannel": 2,
+      "CandidateChannel": 1,
+      "CaseIds": [
+        "fresh-shotgun",
+        "stored-shotgun"
+      ],
+      "Corrections": [
+        {
+          "CenterHz": 5000,
+          "DelayCorrectionSamples": -1.9792070932822021,
+          "PhaseCorrectionRadians": -0.3228220471324046,
+          "Weight": 0.30331279362275293,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 0.7521451958632238,
+          "Reliability": 0.6610794242214837,
+          "Usable": true
+        },
+        {
+          "CenterHz": 6250,
+          "DelayCorrectionSamples": 4.52827682230858,
+          "PhaseCorrectionRadians": 0.9306787718916169,
+          "Weight": 0.21954341677414052,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 1.764402642230937,
+          "Reliability": 0.4317614950896053,
+          "Usable": true
+        },
+        {
+          "CenterHz": 6500,
+          "DelayCorrectionSamples": 3.169130804762752,
+          "PhaseCorrectionRadians": 0.6746958197422781,
+          "Weight": 1.256357237939017,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 1.7811349612522396,
+          "Reliability": 0.42496775534826026,
+          "Usable": true
+        },
+        {
+          "CenterHz": 6750,
+          "DelayCorrectionSamples": 3.061153294692614,
+          "PhaseCorrectionRadians": 0.6754916638237913,
+          "Weight": 3.414546739649369,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 0.38001113714073975,
+          "Reliability": 0.7950343756478847,
+          "Usable": true
+        },
+        {
+          "CenterHz": 9500,
+          "DelayCorrectionSamples": 1.184278598058543,
+          "PhaseCorrectionRadians": 0.36963988005116966,
+          "Weight": 1.0576148131987286,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 0.5821406839513044,
+          "Reliability": 0.3904127110697012,
+          "Usable": true
+        },
+        {
+          "CenterHz": 10250,
+          "DelayCorrectionSamples": 4.993516599117556,
+          "PhaseCorrectionRadians": 1.6719843951945104,
+          "Weight": 0.3436057503216003,
+          "ObservationCount": 2,
+          "DelayStdDevSamples": 0.3420210053753006,
+          "Reliability": 0.8104314791275469,
+          "Usable": true
+        }
+      ],
+      "ReflectionTaps": [
+        {
+          "RelativeDelaySamples": 6,
+          "ObservationCount": 2,
+          "MeanRelativeDelaySamples": 6.313098785407533
+        },
+        {
+          "RelativeDelaySamples": 20,
+          "ObservationCount": 2,
+          "MeanRelativeDelaySamples": 19.76702390859947
+        },
+        {
+          "RelativeDelaySamples": 26,
+          "ObservationCount": 2,
+          "MeanRelativeDelaySamples": 26.136297412642307
+        },
+        {
+          "RelativeDelaySamples": 12,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 11.957723721125149
+        },
+        {
+          "RelativeDelaySamples": 14,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 14.43637255997919
+        },
+        {
+          "RelativeDelaySamples": 32,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 32.31618934178596
+        },
+        {
+          "RelativeDelaySamples": 34,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 33.18148524783078
+        },
+        {
+          "RelativeDelaySamples": 38,
+          "ObservationCount": 1,
+          "MeanRelativeDelaySamples": 38.20039189612339
+        }
+      ],
+      "UsableBandCount": 6,
+      "Reliability": 0.5856145400840803,
+      "DelaySpreadSamples": 6.972723692399758
+    }
+  ]
+}
