@@ -202,6 +202,15 @@ public sealed class MimirRuntime : IAquariumRuntime
                     acceptsReturn: false,
                     monospace: true,
                     tooltip: "Cached FFT spectra from the runtime rolling audio buffers.");
+            })
+            .Panel("Mimir Audio Spectra", 18.0f, 18.0f, 1180.0f, fadeWhenMouseDistant: true, panel =>
+            {
+                panel.MelSpectrumStack(
+                    "Mel-space FFT",
+                    BuildMelSpectrumLanes,
+                    laneBins: 64,
+                    laneHeight: 116.0f,
+                    tooltip: "Live mel-spaced FFT lanes from the same rolling audio buffers used by synchronization.");
             });
     }
 
@@ -538,6 +547,26 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private IReadOnlyList<AquariumUiMelSpectrumLane> BuildMelSpectrumLanes()
+    {
+        if (!sceneReady)
+        {
+            return [];
+        }
+
+        return lastAudioSpectra
+            .OrderBy(spectrum => spectrum.SourceId, StringComparer.Ordinal)
+            .Select(spectrum => new AquariumUiMelSpectrumLane(
+                spectrum.Label,
+                spectrum.SourceId,
+                spectrum.Rms,
+                spectrum.Peak,
+                spectrum.NoiseFloorDb,
+                spectrum.BandDecibels,
+                spectrum.Peaks.Select(peak => $"{peak.FrequencyHz / 1000.0:0.00}kHz {peak.Decibels:0.0}dB").ToArray()))
+            .ToArray();
     }
 
     private static string SpectrumBars(MimirAudioSpectrumSnapshot spectrum)

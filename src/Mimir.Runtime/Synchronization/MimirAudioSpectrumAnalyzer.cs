@@ -133,7 +133,7 @@ public sealed class MimirAudioSpectrumAnalyzer
             magnitudes[index] = spectrum[index].Magnitude / Math.Max(1, written);
         }
 
-        var bands = BuildLogBands(magnitudes, sampleRate);
+        var bands = BuildMelBands(magnitudes, sampleRate);
         var peaks = FindPeaks(magnitudes, sampleRate, count: 6);
         var floor = bands.Count == 0 ? -120.0 : bands.OrderBy(value => value).ElementAt(Math.Clamp(bands.Count / 4, 0, bands.Count - 1));
         return new MimirAudioSpectrumSnapshot(
@@ -191,18 +191,20 @@ public sealed class MimirAudioSpectrumAnalyzer
         return written;
     }
 
-    private IReadOnlyList<double> BuildLogBands(IReadOnlyList<double> magnitudes, int sampleRate)
+    private IReadOnlyList<double> BuildMelBands(IReadOnlyList<double> magnitudes, int sampleRate)
     {
         var bands = new double[displayBandCount];
         var nyquist = sampleRate * 0.5;
         var minHz = 40.0;
         var maxHz = Math.Max(minHz * 2.0, nyquist);
+        var minMel = HertzToMel(minHz);
+        var maxMel = HertzToMel(maxHz);
         for (var band = 0; band < bands.Length; band++)
         {
             var start = band / (double)bands.Length;
             var end = (band + 1) / (double)bands.Length;
-            var lowHz = minHz * Math.Pow(maxHz / minHz, start);
-            var highHz = minHz * Math.Pow(maxHz / minHz, end);
+            var lowHz = MelToHertz(minMel + (maxMel - minMel) * start);
+            var highHz = MelToHertz(minMel + (maxMel - minMel) * end);
             var firstBin = Math.Clamp((int)Math.Floor(lowHz * fftSize / sampleRate), 1, magnitudes.Count - 1);
             var lastBin = Math.Clamp((int)Math.Ceiling(highHz * fftSize / sampleRate), firstBin, magnitudes.Count - 1);
             var sum = 0.0;
@@ -218,6 +220,10 @@ public sealed class MimirAudioSpectrumAnalyzer
 
         return bands;
     }
+
+    private static double HertzToMel(double hertz) => 2595.0 * Math.Log10(1.0 + hertz / 700.0);
+
+    private static double MelToHertz(double mel) => 700.0 * (Math.Pow(10.0, mel / 2595.0) - 1.0);
 
     private IReadOnlyList<MimirAudioSpectrumBin> FindPeaks(IReadOnlyList<double> magnitudes, int sampleRate, int count)
     {
