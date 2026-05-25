@@ -41,6 +41,12 @@ what did this room/mic path do to the spectrum?
   pivots, harmonic-envelope notches, and payload ornaments. Calibration receipts
   now persist those intra-call anchors so path learning can discover which
   features survive each output/mic pair.
+- `MimirComplexContourMatchedFilterBank` is the first sonar-shaped receiver
+  cut: it turns known contour anchors into complex matched-filter responses,
+  keeps multiple lobes per anchor, and hands them to `MimirDirectPathTracker`.
+  The tracker takes the current path hypothesis as authority, chooses the
+  coherent direct-path cluster inside that gate, and records later clusters as
+  reflection taps instead of letting them become alternate timelines.
 - Runtime emission sends the left vocabulary to the left speaker and the right
   vocabulary to the right speaker, so microphones can learn each side of the
   room separately.
@@ -96,6 +102,7 @@ Synthetic checks:
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --standalone-bioacoustic-self-test --sample-rate 48000 --delay-samples 1269.5
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --chirp-only-sync-self-test --sample-rate 48000
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --complex-contour-tracker-self-test --sample-rate 192000 --delay-samples 693.5 --reflection-delay-samples 116
 ```
 
 Expected state:
@@ -113,6 +120,10 @@ Expected state:
   CultCache receipts plus pre-warp, post-warp, and reconstructed-from-detections
   WAV artifacts. See [[bioacoustic-training-harness|Bioacoustic Training
   Harness]].
+- `--complex-contour-tracker-self-test` proves the first direct-path tracker
+  shape with a louder delayed reflection present. The current 192 kHz synthetic
+  smoke reports about `5.249 us` error, so this is a useful tracker surface, not
+  the final microsecond claim.
 
 Render a raw Float32 preview:
 
@@ -154,4 +165,10 @@ identity; the remaining work is to make each syllable/formant contour emit
 enough stable anchors that physical mic residuals collapse from tens of
 microseconds toward the one-microsecond target. The first anchor-rich receipt
 improves loopback but not the physical mics, which means anchor observability is
-now present and anchor survivability is the next design problem.
+now present and anchor survivability is the next design problem. The complex
+contour tracker now runs against stored Scarlett ASIO captures with seeded path
+hypotheses: stored/fresh shotgun estimates land within about `5.860 us` and
+`7.247 us` of the existing path fit, while stored/fresh cardioid estimates land
+within about `15.817 us` and `8.963 us`. Confidence remains low because the
+current matched-filter bank exposes reflection taps but does not yet fit a full
+phase/group-delay channel surface.

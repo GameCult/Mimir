@@ -64,6 +64,14 @@ if (args.Any(arg => string.Equals(arg, "--bioacoustic-actuator-self-test", Strin
         ParseDoubleOption(args, "--delay-samples", 317.375));
 }
 
+if (args.Any(arg => string.Equals(arg, "--complex-contour-tracker-self-test", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunComplexContourTrackerSelfTest(
+        ParseIntOption(args, "--sample-rate", 48_000),
+        ParseDoubleOption(args, "--delay-samples", 173.375),
+        ParseDoubleOption(args, "--reflection-delay-samples", 29.0));
+}
+
 if (args.Any(arg => string.Equals(arg, "--perfect-machine-profile-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunPerfectMachineProfileSmoke();
@@ -165,6 +173,20 @@ if (args.Any(arg => string.Equals(arg, "--analyze-contestant-asio-f32", StringCo
         ParseIntOption(args, "--candidate-channel", -1),
         ParseDoubleOption(args, "--seconds", 3.0),
         ParseDoubleOption(args, "--schedule-offset-samples", 0.0),
+        ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id));
+}
+
+if (args.Any(arg => string.Equals(arg, "--complex-contour-asio-f32", StringComparison.OrdinalIgnoreCase)))
+{
+    return AnalyzeComplexContourAsioFloat32(
+        ParseStringOption(args, "--input", "artifacts/asio/scarlett-canary-packet-anchor-rich-192k-f32.raw"),
+        ParseIntOption(args, "--sample-rate", MimirBioacousticTimeline.SampleRate),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--reference-channel", 2),
+        ParseIntOption(args, "--candidate-channel", 1),
+        ParseDoubleOption(args, "--seconds", 3.0),
+        ParseDoubleOption(args, "--schedule-offset-samples", 1623.0),
+        ParseDoubleOption(args, "--predicted-delay-samples", 0.0),
         ParseStringOption(args, "--song", MimirBioacousticContestants.CanaryPacketTrill.Id));
 }
 
@@ -1071,6 +1093,45 @@ static int RunBioacousticActuatorSelfTest(int sampleRate, double delaySamples)
             : 1;
 }
 
+static int RunComplexContourTrackerSelfTest(int sampleRate, double delaySamples, double reflectionDelaySamples)
+{
+    var renderer = new MimirBioacousticContestantRenderer(MimirBioacousticContestants.CanaryPacketTrill);
+    var seconds = 1.45;
+    var reference = renderer.RenderSequenceMonoFloat(seconds, sampleRate);
+    var direct = ApplyFractionalDelay(reference, delaySamples);
+    var reflection = ApplyFractionalDelay(reference, delaySamples + reflectionDelaySamples);
+    var candidate = new float[reference.Length];
+    for (var index = 0; index < candidate.Length; index++)
+    {
+        candidate[index] = (float)(direct[index] * 0.62 + reflection[index] * 1.00);
+    }
+
+    var bank = new MimirComplexContourMatchedFilterBank(renderer, sampleRate);
+    var eventIndices = Enumerable.Range(0, renderer.ExpectedEventCount(seconds)).Select(index => (ulong)index).ToArray();
+    var referenceHits = bank.AnalyzeEvents(reference, eventIndices, 0.0, Math.Max(2, sampleRate / 4_000));
+    var candidateHits = bank.AnalyzeEvents(candidate, eventIndices, delaySamples, Math.Max(48, sampleRate / 900));
+    var tracker = new MimirDirectPathTracker(sampleRate);
+    var estimate = tracker.Update(referenceHits, candidateHits, delaySamples);
+    if (estimate == null)
+    {
+        Console.WriteLine(
+            $"complex-contour-tracker-self-test status=no-lock referenceHits={referenceHits.Count} candidateHits={candidateHits.Count}");
+        return 1;
+    }
+
+    var errorSamples = Math.Abs(estimate.DelaySamples - delaySamples);
+    var firstReflection = estimate.ReflectionTaps.FirstOrDefault();
+    Console.WriteLine(
+        $"complex-contour-tracker-self-test delaySamples={estimate.DelaySamples:0.000000} expected={delaySamples:0.000000} " +
+        $"errorSamples={errorSamples:0.000000} errorUs={errorSamples * 1_000_000.0 / sampleRate:0.000} " +
+        $"confidence={estimate.Confidence:0.000} directHits={estimate.DirectHitCount} maeSamples={estimate.MeanAbsoluteErrorSamples:0.000000} " +
+        $"referenceHits={referenceHits.Count} candidateHits={candidateHits.Count} reflectionTaps={estimate.ReflectionTaps.Count} " +
+        $"firstReflectionSamples={(firstReflection?.RelativeDelaySamples ?? double.NaN):0.000}");
+    return errorSamples < 3.0 && estimate.DirectHitCount >= 8
+        ? 0
+        : 1;
+}
+
 static int RunPerfectMachineProfileSmoke()
 {
     var profiles = MimirPerfectMachineProfiles.All;
@@ -1654,6 +1715,77 @@ static int AnalyzeContestantAsioFloat32(
     }
 
     return failures == 0 ? 0 : 1;
+}
+
+static int AnalyzeComplexContourAsioFloat32(
+    string inputPath,
+    int sampleRate,
+    int channels,
+    int referenceChannel,
+    int candidateChannel,
+    double seconds,
+    double scheduleOffsetSamples,
+    double predictedDelaySamples,
+    string songId)
+{
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"complex-contour ASIO analysis failed: input not found: {inputPath}");
+        return 1;
+    }
+
+    var profile = MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
+        string.Equals(profile.Id, songId, StringComparison.OrdinalIgnoreCase));
+    if (profile == null)
+    {
+        Console.Error.WriteLine($"complex-contour ASIO analysis failed: unknown song '{songId}'");
+        return 1;
+    }
+
+    if (referenceChannel < 0 || referenceChannel >= channels ||
+        candidateChannel < 0 || candidateChannel >= channels)
+    {
+        Console.Error.WriteLine("complex-contour ASIO analysis failed: channel index outside capture channel count");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
+    var renderer = new MimirBioacousticContestantRenderer(profile);
+    var captureSeconds = seconds > 0.0 ? Math.Min(seconds, frameCount / (double)sampleRate) : frameCount / (double)sampleRate;
+    var eventIndices = renderer.ExpectedEvents(captureSeconds)
+        .Order()
+        .ToArray();
+    var bank = new MimirComplexContourMatchedFilterBank(renderer, sampleRate);
+    var referenceHits = bank.AnalyzeEvents(
+        channelSamples[referenceChannel],
+        eventIndices,
+        scheduleOffsetSamples,
+        Math.Max(2, sampleRate / 4_000));
+    var candidateHits = bank.AnalyzeEvents(
+        channelSamples[candidateChannel],
+        eventIndices,
+        scheduleOffsetSamples + predictedDelaySamples,
+        Math.Max(48, sampleRate / 900));
+    var tracker = new MimirDirectPathTracker(sampleRate);
+    var estimate = tracker.Update(referenceHits, candidateHits, predictedDelaySamples);
+    if (estimate == null)
+    {
+        Console.WriteLine(
+            $"complex-contour-asio-f32 status=no-lock input={inputPath} reference=asio-ch{referenceChannel} candidate=asio-ch{candidateChannel} " +
+            $"referenceHits={referenceHits.Count} candidateHits={candidateHits.Count} predictedDelaySamples={predictedDelaySamples:0.000}");
+        return 1;
+    }
+
+    var predictionError = estimate.DelaySamples - predictedDelaySamples;
+    var firstReflection = estimate.ReflectionTaps.FirstOrDefault();
+    Console.WriteLine(
+        $"complex-contour-asio-f32 input={inputPath} reference=asio-ch{referenceChannel} candidate=asio-ch{candidateChannel} " +
+        $"delaySamples={estimate.DelaySamples:0.000000} delayUs={estimate.DelayMicroseconds:0.000} " +
+        $"predictedDelaySamples={predictedDelaySamples:0.000000} predictionErrorSamples={predictionError:0.000000} predictionErrorUs={predictionError * 1_000_000.0 / sampleRate:0.000} " +
+        $"confidence={estimate.Confidence:0.000} directHits={estimate.DirectHitCount} maeSamples={estimate.MeanAbsoluteErrorSamples:0.000000} " +
+        $"referenceHits={referenceHits.Count} candidateHits={candidateHits.Count} reflectionTaps={estimate.ReflectionTaps.Count} " +
+        $"firstReflectionSamples={(firstReflection?.RelativeDelaySamples ?? double.NaN):0.000}");
+    return 0;
 }
 
 static int CalibrateContestantAsioFloat32(

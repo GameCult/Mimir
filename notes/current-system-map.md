@@ -243,6 +243,16 @@ reflection energy. The follow-up sonar/DSP research note at
 use complex matched filters, phase-slope/group-delay fitting, acquisition versus
 tracking loop bandwidths, and sparse multipath residuals before attempting
 another recursive fitter.
+The first implementation slice now exists in
+`MimirComplexContourMatchedFilterBank` and `MimirDirectPathTracker`: known
+canary packet anchors become complex matched-filter responses with multiple
+candidate lobes, then the tracker uses the current path prediction as authority,
+selects the coherent direct-path cluster inside that gate, and reports later
+clusters as reflection taps. Synthetic 192 kHz reflection smoke currently lands
+about 5.249 us from the expected delay; stored Scarlett shotgun runs land within
+about 5.860 us and 7.247 us of the seeded path fits, while cardioid runs land
+within about 15.817 us and 8.963 us. This is the correct receiver shape, but
+not yet the final phase/group-delay channel model.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

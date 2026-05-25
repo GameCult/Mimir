@@ -38,6 +38,11 @@ Active bioacoustic decode uses known codebook/schedule state. It proposes motif
 times from local energy, classifies log-frequency/formant symbols by bounded
 matched motif scoring, maps self-identifying words directly to canonical events,
 fits a clock, and records band response evidence for calibration.
+The first sonar-shaped refinement module now sits beside that path:
+`MimirComplexContourMatchedFilterBank` emits complex contour-anchor hits with
+multiple lobes per anchor, and `MimirDirectPathTracker` uses the current path
+prediction to select the direct-path cluster while preserving later clusters as
+reflection taps.
 
 ## Invariants
 
@@ -842,6 +847,33 @@ Invariant:
   syllable timing, formants, payload ornaments, speaker tint, and spectral flux
   are the local anchor field.
 
+### `MimirComplexContourMatchedFilter.cs`
+
+Owns:
+
+- The first complex matched-filter/direct-path tracker surface for canary
+  packet contour anchors.
+
+Blocks:
+
+- `MimirComplexContourFilterOptions`: anchor count, candidate lobe count,
+  score floor, lobe separation, and analysis-window bounds.
+- `MimirComplexContourAnchorHit`: event, anchor identity, center frequency,
+  canonical timeline seconds, sample offset, score, phase, and rank.
+- `MimirComplexContourMatchedFilterBank`: renders known packet anchors into
+  complex kernels, scans current samples around a predicted source offset, keeps
+  multiple lobe candidates per anchor, and exposes phase/magnitude evidence.
+- `MimirDirectPathTracker`: matches reference and candidate anchor hits, gates
+  updates around the current path prediction, selects the coherent direct-path
+  cluster, smooths bounded tracking corrections, and reports later coherent
+  clusters as `MimirAcousticReflectionTap` records.
+
+Invariant:
+
+- Recursive refinement is constrained by a current path hypothesis. A loud
+  reflection may be evidence about the room, but it does not get to become time
+  just because its correlation peak is bigger.
+
 ## Stage 9: Chirp-Bin Reference Timeline
 
 ### `MimirChirpBinTimeline.cs`
@@ -1083,6 +1115,8 @@ Function blocks:
 - `RunPassiveSyncSelfTest`: PHAT passive proof.
 - `RunHybridSyncSelfTest`: hybrid mode proof.
 - `RunActiveSyncSelfTest`: chirp-only/hybrid rolling-buffer analyzer proof.
+- `RunComplexContourTrackerSelfTest`: synthetic direct-path tracker proof with
+  a louder delayed reflection present.
 - `SyncModeLabel`: CLI label helper.
 - `RenderChirpletFloat32`: writes legacy timeline Float32 samples.
 - `RenderChirpBinFloat32`: writes chirp-bin timeline Float32 samples.
@@ -1091,6 +1125,9 @@ Function blocks:
 - `LoadOptionalCalibration`: loads model from CLI path.
 - `AnalyzeAsioFloat32`: reads interleaved ASIO artifact and feeds runtime
   analyzer.
+- `AnalyzeComplexContourAsioFloat32`: reads interleaved ASIO packet-song
+  captures and runs the complex contour matched-filter/direct-path tracker
+  against one candidate channel with a seeded path prediction.
 - `CalibrateChirpBinAsioFloat32`: renders/captures/ingests a calibration
   session and writes model JSON.
 - `RunAsioProbeCapture`: drives native ASIO probe capture.

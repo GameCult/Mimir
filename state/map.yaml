@@ -218,6 +218,14 @@ accepted_design:
     fitting, acquisition/tracking loop bandwidths, and sparse multipath
     residuals. Its source ledger and local mirrors live under
     `research/sonar-dsp-recursive-refinement-2026-05-25/`.
+    `MimirComplexContourMatchedFilterBank` and `MimirDirectPathTracker` are the
+    first implementation slice of that shape: complex anchor responses keep
+    multiple lobes, the current path prediction gates direct-path ownership, and
+    later coherent clusters are reported as reflection taps. Synthetic 192 kHz
+    reflection smoke currently lands about 5.249 us from expected delay; stored
+    Scarlett shotgun receipts land within about 5.860 us and 7.247 us of seeded
+    path fits, while cardioid receipts land within about 15.817 us and 8.963 us.
+    Low confidence is expected until phase/group-delay surfaces are learned.
     Acoustic robustness remains open.
     The old arbitrary-chirplet matcher is a diagnostic/reference artifact only,
     not the runtime hot path.
