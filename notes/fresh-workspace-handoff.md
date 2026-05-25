@@ -43,6 +43,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `native/reservoir` owns the lower shared-edge typed-handle invariant for
   Fensalir/Faust binding work.
 - Fensalir owns production GPU fusion, UI, and Spout2 publication.
+- Fensalir also owns the EVE-facing dashboard pixels through
+  `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
+  texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas
+  over `/stream`; EveCanvas decodes with `AVSampleBufferDisplayLayer`. The
+  launch script uses an SSH reverse tunnel to Eve when Windows firewall blocks
+  direct inbound TCP.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
 - OBS receives final program surfaces; it does not own synchronization.
