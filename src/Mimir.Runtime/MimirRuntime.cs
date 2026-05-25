@@ -6,6 +6,7 @@ using Aquarium.Engine.Ui;
 using Mimir.Runtime.Synchronization;
 using System.Diagnostics;
 using System.Numerics;
+using System.Text;
 
 namespace Mimir.Runtime;
 
@@ -14,26 +15,33 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float DefaultAudioSyncUpdateIntervalSeconds = 0.1f;
     private const double HybridPassiveConfidenceThreshold = 0.12;
     private const double CalibrationStartSeconds = 0.5;
-    private const int CalibrationBatchSegments = 120;
+    private const int CalibrationBatchSegments = 4;
     private const int HybridWatermarkIntervalSegments = 4;
+    private const float DefaultSpectrumUpdateIntervalSeconds = 0.2f;
     private readonly MimirSynchronizationHub synchronization;
+    private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly AquariumUiDocument ui;
     private readonly AquariumAudioDocument audio = new();
     private readonly MimirAudioSynchronizationSettings audioSyncSettings;
     private readonly float telemetryIntervalSeconds;
     private readonly float audioSyncUpdateIntervalSeconds;
+    private readonly float spectrumUpdateIntervalSeconds;
     private readonly float calibrationGain;
     private readonly float watermarkGain;
     private readonly MimirBioacousticContestantRenderer? complexContourWitness;
     private int lastPollCount;
     private float runtimeSeconds;
     private float nextAudioSyncSeconds;
+    private float nextSpectrumSeconds;
     private float nextTelemetrySeconds;
+    private bool sceneReady;
     private ulong calibrationSegmentIndex;
     private long lastHybridWatermarkSegment = -1;
     private double lastAudioSyncAnalysisMilliseconds;
+    private double lastSpectrumAnalysisMilliseconds;
     private double lastPassiveSynchronizationConfidence;
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
+    private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -57,9 +65,11 @@ public sealed class MimirRuntime : IAquariumRuntime
     {
         Options = options;
         synchronization = new MimirSynchronizationHub(settings);
+        spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize());
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
+        spectrumUpdateIntervalSeconds = ParseSpectrumUpdateIntervalSeconds();
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
         complexContourWitness = settings.Audio.EnableComplexContourRuntime
@@ -115,10 +125,28 @@ public sealed class MimirRuntime : IAquariumRuntime
     public void Update(float deltaSeconds, InputState input)
     {
         runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
-        QueueCalibrationTimeline();
         lastPollCount = synchronization.PollSources();
-        UpdateAudioSynchronization();
+        if (sceneReady)
+        {
+            QueueCalibrationTimeline();
+            UpdateAudioSpectra();
+            UpdateAudioSynchronization();
+        }
+
         EmitTelemetry();
+    }
+
+    public void OnSceneReady()
+    {
+        if (sceneReady)
+        {
+            return;
+        }
+
+        sceneReady = true;
+        nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
+        nextSpectrumSeconds = runtimeSeconds;
+        Console.WriteLine($"Mimir Fensalir scene ready at {runtimeSeconds:0.000}s; runtime audio tests and spectra enabled.");
     }
 
     public AquariumFrame ComposeFrame(AquariumFrame frame, AquariumFrameInput input)
@@ -151,6 +179,18 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Audio sync state", DescribeAudioSyncState);
                 panel.Readout("Aligned audio", DescribeAlignedAudio);
                 panel.Readout("Chirplet reference", DescribeChirpletReference);
+                panel.Section("Live FFT");
+                panel.Readout("Spectrum cadence", () => sceneReady
+                    ? $"{lastAudioSpectra.Count} spectra fft={lastAudioSpectra.FirstOrDefault()?.FftSize ?? 0} analyze={lastSpectrumAnalysisMilliseconds:0.00}ms"
+                    : "waiting for Fensalir scene ready");
+                panel.TextBox(
+                    "Spectra",
+                    DescribeSpectra,
+                    _ => { },
+                    lines: 12,
+                    acceptsReturn: false,
+                    monospace: true,
+                    tooltip: "Cached FFT spectra from the runtime rolling audio buffers.");
             });
     }
 
@@ -311,6 +351,20 @@ public sealed class MimirRuntime : IAquariumRuntime
         nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
     }
 
+    private void UpdateAudioSpectra()
+    {
+        if (runtimeSeconds < nextSpectrumSeconds)
+        {
+            return;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        lastAudioSpectra = spectrumAnalyzer.Analyze(synchronization.Buffers.Buffers, audioSyncSettings.ReferenceSourceId);
+        stopwatch.Stop();
+        lastSpectrumAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+        nextSpectrumSeconds = runtimeSeconds + spectrumUpdateIntervalSeconds;
+    }
+
     private void EmitTelemetry()
     {
         if (telemetryIntervalSeconds <= 0.0f || runtimeSeconds < nextTelemetrySeconds)
@@ -324,6 +378,12 @@ public sealed class MimirRuntime : IAquariumRuntime
         Console.WriteLine(
             $"mimir-sync-telemetry t={runtimeSeconds:0.00}s audioSync={audioSyncSettings.Mode} loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} analyzeMs={lastAudioSyncAnalysisMilliseconds:0.0} aligned={DescribeAlignedAudio()}");
         Console.WriteLine($"mimir-sync-buffers {DescribeAudioBuffers()}");
+        foreach (var spectrum in lastAudioSpectra.OrderBy(snapshot => snapshot.SourceId, StringComparer.Ordinal))
+        {
+            Console.WriteLine(
+                $"mimir-spectrum {spectrum.SourceId} rate={spectrum.SampleRate} fft={spectrum.FftSize} rms={spectrum.Rms:0.000000} peak={spectrum.Peak:0.000000} floorDb={spectrum.NoiseFloorDb:0.0} peaks={DescribeSpectrumPeaks(spectrum)}");
+        }
+
         foreach (var report in lastAudioSynchronizationReports.OrderBy(report => report.SourceId, StringComparer.Ordinal))
         {
             Console.WriteLine(
@@ -363,6 +423,20 @@ public sealed class MimirRuntime : IAquariumRuntime
         return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_AUDIO_SYNC_INTERVAL_SECONDS"), out var seconds)
             ? Math.Clamp(seconds, 0.1f, 10.0f)
             : DefaultAudioSyncUpdateIntervalSeconds;
+    }
+
+    private static float ParseSpectrumUpdateIntervalSeconds()
+    {
+        return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_INTERVAL_SECONDS"), out var seconds)
+            ? Math.Clamp(seconds, 0.05f, 10.0f)
+            : DefaultSpectrumUpdateIntervalSeconds;
+    }
+
+    private static int ParseSpectrumFftSize()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_FFT_SIZE"), out var value)
+            ? Math.Clamp(value, 1024, 32768)
+            : 8192;
     }
 
     private bool ShouldEmitCalibrationTimeline()
@@ -405,6 +479,65 @@ public sealed class MimirRuntime : IAquariumRuntime
             .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio)
             .OrderBy(buffer => buffer.Descriptor.SourceId, StringComparer.Ordinal)
             .Select(buffer => $"{buffer.Descriptor.SourceId}:{buffer.Count}@{buffer.EdgeNs}"));
+    }
+
+    private string DescribeSpectra()
+    {
+        if (!sceneReady)
+        {
+            return "Fensalir scene not ready.";
+        }
+
+        if (lastAudioSpectra.Count == 0)
+        {
+            return "No sample-bearing audio buffers yet.";
+        }
+
+        var builder = new StringBuilder();
+        foreach (var spectrum in lastAudioSpectra)
+        {
+            builder
+                .Append(spectrum.SourceId)
+                .Append(" rms=")
+                .Append(spectrum.Rms.ToString("0.000000"))
+                .Append(" peak=")
+                .Append(spectrum.Peak.ToString("0.000000"))
+                .Append(" ")
+                .Append(SpectrumBars(spectrum))
+                .AppendLine();
+            builder
+                .Append("  ")
+                .Append(DescribeSpectrumPeaks(spectrum))
+                .AppendLine();
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string SpectrumBars(MimirAudioSpectrumSnapshot spectrum)
+    {
+        const string ramp = " .:-=+*#%@";
+        if (spectrum.BandDecibels.Count == 0)
+        {
+            return "";
+        }
+
+        var floor = Math.Min(spectrum.NoiseFloorDb, spectrum.BandDecibels.Min());
+        var ceiling = Math.Max(-24.0, spectrum.BandDecibels.Max());
+        var span = Math.Max(12.0, ceiling - floor);
+        var chars = spectrum.BandDecibels.Select(value =>
+        {
+            var normalized = Math.Clamp((value - floor) / span, 0.0, 1.0);
+            return ramp[(int)Math.Round(normalized * (ramp.Length - 1))];
+        });
+        return new string(chars.ToArray());
+    }
+
+    private static string DescribeSpectrumPeaks(MimirAudioSpectrumSnapshot spectrum)
+    {
+        return spectrum.Peaks.Count == 0
+            ? "no FFT peaks"
+            : string.Join(", ", spectrum.Peaks.Select(peak => $"{peak.FrequencyHz / 1000.0:0.00}kHz {peak.Decibels:0.0}dB"));
     }
 
     private void UpdatePassiveSynchronizationConfidence(IReadOnlyList<MimirAudioSynchronizationReport> reports)
