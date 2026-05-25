@@ -282,6 +282,16 @@ extracts Float32 windows from rolling audio buffers to publish
 with about 0.219 us error from rolling buffers. The next real-world proof is to
 run that lane through live Scarlett loopback and mics, not only stored ASIO
 artifacts.
+That real-world proof now has a first receipt:
+`calibration/bioacoustic/complex-contour-live-20260525-063229.md`. A freshly
+rendered canary-packet witness was played through Focusrite ASIO and captured
+from all four 192 kHz Scarlett inputs. Loopback 1 to Loopback 2 measured
+-0.014 us, the shotgun path landed -3.984 us from its prior path seed, and the
+cardioid path landed +1.547 us from its prior path seed with the current
+channel model loaded. This proves the contour/channel-model path survives a
+fresh DAC/speaker/room/mic/ADC pass, but low physical confidence means the next
+cut is stronger direct-path confidence and independently measured path truth,
+not a victory lap.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

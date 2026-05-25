@@ -207,3 +207,14 @@ rolling buffers directly, and publishes `complex-contour` reports alongside the
 existing audio sync reports. `--complex-contour-runtime-self-test` proves the
 surface synthetically at 192 kHz: a `693.5` sample delay is recovered at about
 `0.219 us` error from runtime-shaped rolling buffers.
+
+The first fresh live Scarlett run after this wiring is preserved at
+`calibration/bioacoustic/complex-contour-live-20260525-063229.md`. It rendered a
+new `canary-packet-trill` witness, played it through Focusrite ASIO, recorded
+all four 192 kHz inputs, and analyzed the capture with the current complex
+contour channel model. Loopback 1 to Loopback 2 measured `-0.014 us`, proving
+the interface clock path is effectively sample-locked. Physical mic paths
+survived the room: the shotgun path landed `-3.984 us` from its prior seed and
+the cardioid landed `+1.547 us`. Confidence is still too low for a final
+microsecond sync claim, but this is fresh meatspace evidence through the actual
+DAC/speaker/room/mic/ADC path.

@@ -246,6 +246,14 @@ accepted_design:
     rolling buffers, and publishes `evidence=complex-contour` reports. The
     synthetic runtime-shaped proof `--complex-contour-runtime-self-test` at
     192 kHz recovers a 693.5-sample delay with about 0.219 us error.
+    A fresh live Scarlett proof is preserved at
+    `calibration/bioacoustic/complex-contour-live-20260525-063229.md`:
+    Focusrite ASIO playback/capture measured Loopback 1 -> Loopback 2 at
+    -0.014 us, shotgun at -3.984 us from prior seed, and cardioid at +1.547 us
+    from prior seed with the current channel model. This is fresh meatspace
+    evidence through DAC/speaker/room/mic/ADC, but physical confidence remains
+    low, so the next cut is stronger direct-path confidence and independent
+    path truth.
     `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
     current four-case replay receipt.
     Acoustic robustness remains open.

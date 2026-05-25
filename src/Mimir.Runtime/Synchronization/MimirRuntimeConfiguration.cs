@@ -29,7 +29,8 @@ public sealed class MimirRuntimeConfiguration
         var bufferDuration = model.BufferSeconds > 0.0
             ? TimeSpan.FromSeconds(Math.Clamp(model.BufferSeconds, 0.25, 60.0))
             : MimirSynchronizationSettings.FromEnvironment().BufferDuration;
-        var audio = (model.AudioSync?.ToSettings(new MimirAudioSynchronizationSettings()) ?? new MimirAudioSynchronizationSettings())
+        var configDirectory = Path.GetDirectoryName(path);
+        var audio = (model.AudioSync?.ToSettings(new MimirAudioSynchronizationSettings(), configDirectory) ?? new MimirAudioSynchronizationSettings())
             .WithEnvironmentOverrides();
 
         var sourceModels = model.Streams
@@ -39,7 +40,7 @@ public sealed class MimirRuntimeConfiguration
             .SelectMany(ToDescriptors)
             .ToArray();
         var sources = sourceModels
-            .Select(stream => TryCreateSource(stream, Path.GetDirectoryName(path)))
+            .Select(stream => TryCreateSource(stream, configDirectory))
             .Where(source => source != null)
             .Cast<IMimirStreamSource>()
             .ToArray();
@@ -227,7 +228,7 @@ public sealed class MimirAudioSyncConfig
 
     public bool EnableComplexContourRuntime { get; set; }
 
-    public MimirAudioSynchronizationSettings ToSettings(MimirAudioSynchronizationSettings fallback)
+    public MimirAudioSynchronizationSettings ToSettings(MimirAudioSynchronizationSettings fallback, string? configDirectory = null)
     {
         return new MimirAudioSynchronizationSettings
         {
@@ -243,15 +244,23 @@ public sealed class MimirAudioSyncConfig
                 : fallback.WatermarkGain,
             CalibrationModelPath = string.IsNullOrWhiteSpace(CalibrationModelPath)
                 ? fallback.CalibrationModelPath
-                : CalibrationModelPath.Trim(),
+                : ResolveConfigPath(CalibrationModelPath, configDirectory),
             ComplexContourChannelModelPath = string.IsNullOrWhiteSpace(ComplexContourChannelModelPath)
                 ? fallback.ComplexContourChannelModelPath
-                : ComplexContourChannelModelPath.Trim(),
+                : ResolveConfigPath(ComplexContourChannelModelPath, configDirectory),
             BioacousticWitnessProfileId = string.IsNullOrWhiteSpace(BioacousticWitnessProfileId)
                 ? fallback.BioacousticWitnessProfileId
                 : BioacousticWitnessProfileId.Trim(),
             EnableComplexContourRuntime = EnableComplexContourRuntime || fallback.EnableComplexContourRuntime,
         };
+    }
+
+    private static string ResolveConfigPath(string path, string? configDirectory)
+    {
+        var trimmed = path.Trim();
+        return Path.IsPathRooted(trimmed) || string.IsNullOrWhiteSpace(configDirectory)
+            ? trimmed
+            : Path.GetFullPath(Path.Combine(configDirectory, trimmed));
     }
 }
 
