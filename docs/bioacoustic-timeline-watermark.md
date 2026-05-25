@@ -221,3 +221,10 @@ weaker/disconnected-looking path is `0.335`. This is fresh meatspace evidence
 through the actual DAC/speaker/room/mic/ADC path, though final microsecond sync
 still needs independently measured path truth instead of comparison to prior
 seeds.
+
+Correction after signal inspection: the apparent `asio-ch0` cardioid estimate
+from that receipt is invalid. Its log-mel panel and channel statistics show a
+flat low-level signal with essentially zero correlation to loopback
+(`0.000032`). The tracker had enough seeded timing pressure to fit noise near
+the expected delay. Treat that receipt as a clean loopback/interface proof plus
+a weak/non-authoritative input witness, not a physical cardioid proof.

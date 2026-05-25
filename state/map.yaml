@@ -249,13 +249,12 @@ accepted_design:
     A fresh live Scarlett proof is preserved at
     `calibration/bioacoustic/complex-contour-live-20260525-063229.md`:
     Focusrite ASIO playback/capture measured Loopback 1 -> Loopback 2 at
-    -0.014 us, shotgun at -3.984 us from prior seed, and cardioid at +1.547 us
-    from prior seed with the current channel model. The direct-path confidence
-    scorer now belongs to selected-cluster quality rather than all alternate
-    matched-filter lobes: loopback confidence is 0.971, cardioid confidence is
-    0.488, and the weaker/disconnected-looking path is 0.335. This is fresh
-    meatspace evidence through DAC/speaker/room/mic/ADC, but the next cut is
-    independent path truth and better frequency/direct-path discrimination.
+    -0.014 us with corrected confidence 0.971. The apparent `asio-ch0`
+    near-seed/cardioid estimate is invalidated: signal inspection shows flat
+    low-level noise with zero-lag loopback correlation 0.000032, so the tracker
+    fit noise under seeded timing pressure. `asio-ch1` remains only a weak,
+    non-authoritative input witness. The next cut is signal-presence gating,
+    independent path truth, and better frequency/direct-path discrimination.
     `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
     current four-case replay receipt.
     Acoustic robustness remains open.
