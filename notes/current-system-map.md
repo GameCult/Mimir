@@ -26,6 +26,7 @@ flowchart TD
     N --> E["Fensalir GPU fusion + UI"]
     N --> F["Faust/native DSP"]
     E --> G["Spout2/program video"]
+    E --> V["EVE native shared-texture stream"]
     F --> H["program stems + spatial bed"]
     G --> I["OBS"]
     H --> I
@@ -42,10 +43,13 @@ Ownership:
 - `Mimir.Runtime` owns app-level stream buffers and synchronization.
 - Native capture workers own device reads.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
-  D3D12 interop, runtime UI, and Spout2 publication.
+  D3D12 interop, runtime UI, Spout2 publication, and the completed backbuffer
+  texture copied into the EVE shared D3D12 program-output surface.
 - Faust/native DSP owns hot audio alignment, suppression, separation,
   spatialization, and stem generation.
 - OBS owns broadcast controls.
+- EVE owns native decode/composite for its fullscreen display path; it does not
+  own layout, WebKit compatibility, or timing authority.
 
 Invariant: the live window is bounded, in memory, and has one timing authority.
 No private history outlives the rolling buffer.

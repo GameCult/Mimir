@@ -28,6 +28,11 @@ a named invariant that the native runtime cannot protect yet.
 - Mimir public identity, branding, and Face memory.
 - `Mimir.slnx` with `src/Mimir.App` and `src/Mimir.Runtime`.
 - Fensalir host bootstrapping from `Mimir.App`.
+- [[eve-program-output|EVE Program Output]] now owns the first native EVE
+  streaming contract: Fensalir can publish the completed D3D12 backbuffer into a
+  named shared texture when `FENSALIR_PROGRAM_OUTPUT_D3D12=1`, and Mimir records
+  the EVE-facing publication profile as a native D3D12 stream rather than a
+  WebKit/dashboard path.
 - `MimirSynchronizationHub`, `MimirRollingStreamBuffer`, stream descriptors, and
   `IMimirStreamSource`.
 - Configurable five-second default rolling buffers for local and network audio

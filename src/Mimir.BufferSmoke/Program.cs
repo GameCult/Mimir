@@ -84,6 +84,11 @@ if (args.Any(arg => string.Equals(arg, "--perfect-machine-profile-smoke", String
     return RunPerfectMachineProfileSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--eve-program-output-contract-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunEveProgramOutputContractSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--perfect-machine-contract-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return await RunPerfectMachineContractSmokeAsync(
@@ -417,6 +422,32 @@ static int RunChirpletSelfTest()
     if (decode.ClockFit == null || decode.Anchors.Count < 12 || meanAbsoluteError > 0.25)
     {
         Console.Error.WriteLine("chirplet self-test failed: canonical timeline did not decode to sub-frame anchors");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int RunEveProgramOutputContractSmoke()
+{
+    var output = MimirEveProgramOutputConfigurations.NativeSharedTexture;
+    var publication = MimirObsPublicationConfigurations.EveNativeProgram;
+    Console.WriteLine(
+        $"eve-output id={output.Id} host={output.TargetHost} port={output.TargetPort} texture=\"{output.SharedTextureName}\" {output.TargetWidth}x{output.TargetHeight}@{output.TargetFramesPerSecond} transport={output.Transport} webkit={output.UsesWebKit} diagnostic={output.DiagnosticOnly}");
+    Console.WriteLine(
+        $"eve-publication id={publication.Id} videoKind={publication.VideoKind} source=\"{publication.VideoSourceName}\" diagnostic={publication.DiagnosticOnly}");
+    foreach (var requirement in output.RequiredEnvironment)
+    {
+        Console.WriteLine($"eve-env {requirement}");
+    }
+
+    if (output.UsesWebKit ||
+        output.DiagnosticOnly ||
+        output.Transport != MimirEveProgramOutputTransport.D3D12SharedTextureHardwareEncode ||
+        publication.VideoKind != MimirObsVideoPublicationKind.EveNativeD3D12Stream ||
+        !string.Equals(output.SharedTextureName, publication.VideoSourceName, StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("EVE program output contract is split-brained.");
         return 1;
     }
 

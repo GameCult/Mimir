@@ -46,7 +46,10 @@ invariants:
     to line up feeds and crunch data before OBS-facing output is emitted.
   - Typed views may index the rolling buffer, but no per-kind ring owns
     retention.
-  - Fensalir owns production UI, GPU fusion, D3D12 interop, and Spout2 output.
+  - Fensalir owns production UI, GPU fusion, D3D12 interop, Spout2 output, and
+    the EVE shared D3D12 program-output texture.
+  - EVE fullscreen output must use native decode/composite over Fensalir-owned
+    program pixels; WebKit/DOM layout is forbidden as pixel authority.
   - Faust/native DSP owns hot audio alignment, separation, spatialization, and
     stems.
   - Local secrets remain untracked.
@@ -63,6 +66,11 @@ accepted_design:
     direct native ingest, process bridge ingest, and video capture driver seams.
   - `MimirVideoFrameDescriptor` carries width, height, pixel format, stride,
     device timestamp, and optional native/GPU handle.
+  - `MimirEveProgramOutputConfigurations.NativeSharedTexture` records the
+    EVE-facing program-output contract: Fensalir publishes
+    `Global\MimirFensalirProgramTexture` when
+    `FENSALIR_PROGRAM_OUTPUT_D3D12=1`; EVE receives decoded native pixels and
+    owns only final composite/input uplink.
   - `MimirAudioBlockDescriptor` carries sample rate, channels, sample format,
     frame count, timestamp, and optional native handle.
   - `MimirFrameEventProcessStreamSource` is a temporary diagnostic adapter for

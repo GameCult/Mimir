@@ -4,6 +4,7 @@ public enum MimirObsVideoPublicationKind
 {
     Spout2,
     SharedD3D12Texture,
+    EveNativeD3D12Stream,
     SrtDiagnosticBridge,
     WindowCaptureDiagnostic
 }
@@ -74,10 +75,20 @@ public static class MimirObsPublicationConfigurations
         TargetPresentationDelaySeconds: 1.5,
         DiagnosticOnly: true);
 
+    public static MimirObsPublicationConfiguration EveNativeProgram { get; } = NativeProgram with
+    {
+        Id = "eve-native-d3d12-stream",
+        Description = "EVE-facing native program output: Fensalir publishes a shared D3D12 texture for hardware encode; EVE receives decoded pixels without WebKit layout authority.",
+        VideoKind = MimirObsVideoPublicationKind.EveNativeD3D12Stream,
+        VideoSourceName = MimirEveProgramOutputConfigurations.DefaultSharedTextureName,
+        DiagnosticOnly = false
+    };
+
     public static IReadOnlyList<MimirObsPublicationConfiguration> BuiltIn { get; } =
     [
         NativeProgram,
         TextureInteropProgram,
+        EveNativeProgram,
         DiagnosticSrtBridge
     ];
 }
