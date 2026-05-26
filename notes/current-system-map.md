@@ -350,7 +350,8 @@ its compute pass emits private vertex/index/indirect buffers and render binds
 them as `D3D12PipelinePrivateGeneratedMesh` before applying source/ramp/material
 state. The DrawIndexed indirect command signature has been lifted to the
 generated-mesh lane instead of being TubeField-owned. TubeField expansion now
-requires a planned TubeField backend packet for the lowering's claim.
+requires a planned TubeField backend packet for the lowering's claim, and
+validation rejects TubeSpline metadata whose claim/resource authority is split.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

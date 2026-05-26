@@ -223,8 +223,10 @@ binds them as a pipeline-private generated mesh before applying TubeField
 material state. The generated-mesh DrawIndexed indirect command signature is
 shared ABI; TubeField only owns the argument buffer it emits. TubeField
 expansion is now gated by selected backend packets, so explicit lowering
-metadata cannot bypass validation/planning authority. That is engine ownership,
-not a reason for Mimir to create a parallel renderer.
+metadata cannot bypass validation/planning authority. Validation also rejects
+TubeSpline metadata whose claim is not Tube-encoded or whose resource differs
+from the claim payload. That is engine ownership, not a reason for Mimir to
+create a parallel renderer.
 
 ### 3. Calibration Constraint
 

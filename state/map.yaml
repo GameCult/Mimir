@@ -345,7 +345,9 @@ accepted_design:
     The generated-mesh DrawIndexed indirect command signature is shared ABI now;
     TubeField only owns the argument buffer it emits. TubeField expansion is now
     gated by the selected backend packet plan, so lowering metadata cannot
-    bypass validation/planning authority.
+    bypass validation/planning authority. Validation also rejects TubeSpline
+    lowering metadata if its claim is not Tube-encoded or if its resource does
+    not match the claim payload.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

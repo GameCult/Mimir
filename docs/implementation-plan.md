@@ -196,7 +196,9 @@ a named invariant that the native runtime cannot protect yet.
   generated lowerings can reuse the same draw ABI with their own producer
   buffers and material bindings. TubeField dispatch now obeys the selected
   backend packet plan; unplanned `TubeSplineLowering` records are counted but
-  not expanded.
+  not expanded. Fensalir validation also rejects TubeSpline lowering metadata
+  whose claim is not Tube-encoded or whose resource differs from the claim
+  payload.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
