@@ -319,12 +319,15 @@ whose truth is a tube SDF.
 Fensalir's spline shader owns visible coverage. Geometry is only the
 conservative segment envelope; the pixel shader evaluates capsule/tube
 distance, applies native blue-noise sample jitter, writes color/metadata/control,
-and emits `reservoirGuide` for the scene temporal path. Mimir intentionally
-submits a sparse rotating surface budget with
-`MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE`, `MIMIR_SPECTRUM_SPLINE_BAND_STRIDE`, and
-`MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS` so the temporal reservoir/TAA path
-amortizes the surface instead of paying the full polygon-equivalent cost every
-frame.
+and emits `reservoirGuide` for the scene temporal path. Mimir must not rotate
+which rows or bands exist per frame: that made the surface temporally
+incoherent and impossible to follow. The live model stores timestamped spectrum
+history frames with monotonically increasing sequence ids, computes Z from
+continuous sample age, keeps source ordering stable across the whole history,
+and keeps band selection stable. `MIMIR_SPECTRUM_SPLINE_BAND_STRIDE` and
+`MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE` and `MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS`
+remain budget knobs, but they may only select by persistent frequency-bin or
+history-sequence identity. Render-frame phase is forbidden as a visual owner.
 
 ## Known Risks
 

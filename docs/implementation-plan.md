@@ -111,12 +111,15 @@ a named invariant that the native runtime cannot protect yet.
   it evaluates capsule/tube distance, applies native blue-noise jitter, and
   writes scene color plus temporal reservoir guide MRTs. The old
   `AquariumBufferFieldFrame` / `ReservoirSplats` dashboard path is no longer
-  allowed to decide this surface. Current budget knobs are
-  `MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE`,
+  allowed to decide this surface. Spectrum rows are timestamped history frames:
+  row identity is stable, source identity is stable, band identity is stable,
+  and Z is continuous time-age instead of integer queue age. Current budget
+  knobs are `MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE`,
   `MIMIR_SPECTRUM_SPLINE_BAND_STRIDE`, and
-  `MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS`; defaults intentionally undersample the
-  current frame so the temporal path amortizes the surface instead of drawing
-  every equivalent segment every frame.
+  `MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS`; defaults draw every second history row,
+  every second frequency bin, and one subdivision per segment. Decimation is
+  allowed only by persistent sequence or frequency-bin identity, never by
+  render-frame phase.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
