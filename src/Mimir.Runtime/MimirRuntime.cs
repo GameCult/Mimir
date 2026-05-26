@@ -34,8 +34,8 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumSplineEmission = 1.85f;
     private const float SpectrumSplineHotBloom = 8.0f;
     private const int DefaultSpectrumSplineWindowStride = 2;
-    private const int DefaultSpectrumSplineBandStride = 2;
-    private const int DefaultSpectrumSplineSubdivisions = 1;
+    private const int DefaultSpectrumSplineBandStride = 1;
+    private const int DefaultSpectrumSplineSubdivisions = 2;
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
@@ -935,9 +935,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         int bandStride)
     {
         var bands = spectrum.BandDecibels;
-        var floor = Math.Min(spectrum.NoiseFloorDb, bands.Min());
-        var ceiling = Math.Max(-24.0, bands.Max());
-        var span = Math.Max(18.0, ceiling - floor);
+        var envelope = SmoothedSpectrumEnvelope(spectrum);
         var points = new List<AquariumSplineVertex>((bands.Count + bandStride - 1) / bandStride + 2);
         for (var index = 0; index < bands.Count; index++)
         {
@@ -948,7 +946,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             }
 
             var x = -SpectrumWidth * 0.5f + SpectrumWidth * index / Math.Max(1, bands.Count - 1);
-            var normalized = (float)Math.Clamp((bands[index] - floor) / span, 0.0, 1.0);
+            var normalized = envelope[index];
             var y = channelBaseY + normalized * SpectrumAmplitudeHeight;
             points.Add(new AquariumSplineVertex(
                 new Vector3(x, y, z),
@@ -956,6 +954,50 @@ public sealed class MimirRuntime : IAquariumRuntime
         }
 
         return points;
+    }
+
+    private static float[] SmoothedSpectrumEnvelope(MimirAudioSpectrumSnapshot spectrum)
+    {
+        var bands = spectrum.BandDecibels;
+        var floor = Math.Min(spectrum.NoiseFloorDb, bands.Min());
+        var ceiling = Math.Max(-24.0, Percentile(bands, 0.96));
+        var span = Math.Max(18.0, ceiling - floor);
+        var normalized = new float[bands.Count];
+        for (var index = 0; index < bands.Count; index++)
+        {
+            normalized[index] = (float)Math.Clamp((bands[index] - floor) / span, 0.0, 1.35);
+        }
+
+        return GaussianSmooth5(normalized);
+    }
+
+    private static float[] GaussianSmooth5(IReadOnlyList<float> values)
+    {
+        var smoothed = new float[values.Count];
+        for (var index = 0; index < values.Count; index++)
+        {
+            var value =
+                values[Math.Max(0, index - 2)] * 0.0625f +
+                values[Math.Max(0, index - 1)] * 0.25f +
+                values[index] * 0.375f +
+                values[Math.Min(values.Count - 1, index + 1)] * 0.25f +
+                values[Math.Min(values.Count - 1, index + 2)] * 0.0625f;
+            smoothed[index] = Math.Clamp(value, 0.0f, 1.25f);
+        }
+
+        return smoothed;
+    }
+
+    private static double Percentile(IReadOnlyList<double> values, double percentile)
+    {
+        if (values.Count == 0)
+        {
+            return 0.0;
+        }
+
+        var sorted = values.OrderBy(value => value).ToArray();
+        var index = Math.Clamp((int)Math.Round((sorted.Length - 1) * percentile), 0, sorted.Length - 1);
+        return sorted[index];
     }
 
     private static void AddSpectrumGridSplines(

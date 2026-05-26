@@ -318,8 +318,11 @@ whose truth is a tube SDF.
 
 Fensalir's spline shader owns visible coverage. Geometry is only the
 conservative segment envelope; the pixel shader evaluates capsule/tube
-distance, applies native blue-noise sample jitter, writes color/metadata/control,
-and emits `reservoirGuide` for the scene temporal path. Mimir must not rotate
+distance, writes color/metadata/control, and emits `reservoirGuide` for the
+scene temporal path. The direct spline fallback does not use stochastic
+blue-noise perturbation; blue-noise sampling belongs in a real reservoir
+producer, not in a direct debug surface where the viewer needs coherent lines.
+Mimir must not rotate
 which rows or bands exist per frame: that made the surface temporally
 incoherent and impossible to follow. The live model stores timestamped spectrum
 history frames with monotonically increasing sequence ids, computes Z from

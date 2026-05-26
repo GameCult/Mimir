@@ -108,8 +108,10 @@ a named invariant that the native runtime cannot protect yet.
   they do not run synchronization analysis.
 - `MimirRuntime` publishes live ASIO spectrum history to Fensalir as direct
   `AquariumSplineFrame` tube surfaces. The spline shader owns visible coverage:
-  it evaluates capsule/tube distance, applies native blue-noise jitter, and
-  writes scene color plus temporal reservoir guide MRTs. The old
+  it evaluates capsule/tube distance and writes scene color plus temporal
+  reservoir guide MRTs. Direct spline rendering is deterministic; native
+  blue-noise jitter belongs in a future stochastic surface-claim producer, not
+  in the direct debug surface. The old
   `AquariumBufferFieldFrame` / `ReservoirSplats` dashboard path is no longer
   allowed to decide this surface. Spectrum rows are timestamped history frames:
   row identity is stable, source identity is stable, band identity is stable,
@@ -253,9 +255,10 @@ a named invariant that the native runtime cannot protect yet.
 6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 7. Tighten the spectrum spline tube temporal path until it behaves like a
-   production debug surface: shader-owned tube SDF coverage, native blue-noise
-   sample jitter, and temporal accumulation from sparse frame budgets. Do not
-   route this dashboard back through fractal point splats.
+   production debug surface: shader-owned tube SDF coverage, correct
+   camera-travel metadata, deterministic direct rendering, and temporal
+   accumulation from stable frame budgets. Do not route this dashboard back
+   through fractal point splats.
 8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
