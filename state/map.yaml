@@ -308,14 +308,18 @@ accepted_design:
     copy back and forth. The TubeField DSL can now express a 2D rolling float
     buffer as Catmull-Rom XY tubes with modulo column addressing, amplitude
     power/normalization, radius, ramp texture path, and emission scale.
-    Fensalir now has the first D3D12 TubeField rendering path: a compute shader
+    Fensalir now has the first D3D12 TubeField compute/render lowering: compute
     binds the declared rolling sample buffer as read-only GPU memory, expands
     endpoint-clamped Catmull-Rom tube envelopes into fixed-budget vertex/index
-    UAVs, honors declared float sample stride with byte-address loads, draws
-    opaque field geometry through the spline SDF pipeline, and reports
-    geometry-budget overflow. Remaining visual cuts are per-pixel source-row
-    material sampling, ramp texture binding/fallback, indirect draw packets,
-    then honest texture/mesh/page/volume resolvers.
+    UAVs, honors declared float sample stride with byte-address loads, records
+    one draw batch per lowering, then the TubeField pixel shader binds the
+    matching source buffer and resamples material per pixel by column+spline
+    coordinate with the cheap 5-tap approximation. The first material is opaque
+    field geometry with fallback black-to-warm ramp, squared normalized
+    emission, fake Fresnel center-bright/edge-dark shaping, and
+    geometry-budget overflow reporting. Remaining visual cuts are real ramp
+    texture binding, indirect draw packets, then honest texture/mesh/page/
+    volume resolvers.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
