@@ -359,6 +359,9 @@ accepted_design:
     `Mimir.BufferSmoke --mimir-spectrum-upload-smoke` verifies the live
     `MimirRuntime` frame path emits that Float32 upload and planned TubeField
     packet while direct spline and buffer-field dashboard inputs remain empty.
+    The runtime spectrum path also declares the local blackbody PNG as a
+    GPU-resident Texture2D field resource and binds the TubeField material by
+    `RampResourceKey`.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

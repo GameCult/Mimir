@@ -145,7 +145,8 @@ a named invariant that the native runtime cannot protect yet.
   --mimir-spectrum-upload-smoke` boots `MimirRuntime`, advances the synthetic
   spectrum preview path, and verifies that the frame contains the Float32
   resource upload plus planned TubeField packet while legacy spline and buffer
-  field inputs stay empty.
+  field inputs stay empty. The same runtime path declares the local blackbody
+  ramp PNG as a GPU-resident Texture2D resource and binds it by resource key.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer

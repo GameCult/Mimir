@@ -31,6 +31,9 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumCameraFitPadding = 1.12f;
     private const float SpectrumFrustumMinimumNear = 0.01f;
     private const float SpectrumSplineTubePadding = 0.18f;
+    private const string SpectrumFieldResourceKey = "mimir:resource:spectrum:field-upload";
+    private const string SpectrumRampResourceKey = "aquarium:resource:ramp:blackbody";
+    private const string SpectrumRampTexturePath = @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png";
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirFensalirFieldLowering fieldLowering;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
@@ -244,7 +247,6 @@ public sealed class MimirRuntime : IAquariumRuntime
             WriteNormalizedSpectrum(spectra[row], samples.AsSpan(row * width, width));
         }
 
-        const string resourceKey = "mimir:resource:spectrum:field-upload";
         const string domainKey = "mimir:domain:spectrum:field-upload";
         const string claimKey = "intent:mimir:spectrum:field-upload";
         var version = unchecked((ulong)Math.Max(0, spectrumHistorySequence));
@@ -264,7 +266,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             RepresentedCandidateCount: height,
             Seed: 0x5EC7_0001u);
         var resource = new AquariumFieldResourceDeclaration(
-            ResourceKey: resourceKey,
+            ResourceKey: SpectrumFieldResourceKey,
             Kind: AquariumFieldResourceKind.StructuredBuffer,
             Residency: AquariumFieldResourceResidency.GpuResident,
             Access: AquariumFieldShaderAccess.ShaderResource,
@@ -278,6 +280,10 @@ public sealed class MimirRuntime : IAquariumRuntime
             Version: version,
             NativeHandle: IntPtr.Zero,
             NativeHandleKind: "fensalir-owned-spectrum-upload");
+        var ramp = AquariumFieldResourceDeclaration.LocalTexture2D(
+            SpectrumRampResourceKey,
+            SpectrumRampTexturePath,
+            version: 1);
         var claim = new AquariumFieldClaim(
             ClaimKey: claimKey,
             DomainKey: domainKey,
@@ -286,7 +292,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             Encoding: AquariumFieldEncoding.Tube,
             Support: support,
             Proposal: proposal,
-            PayloadHandle: resourceKey,
+            PayloadHandle: SpectrumFieldResourceKey,
             ObservedTimeNs: 0,
             Confidence: confidence);
         var axisStepX = width > 1 ? 10.0f / (width - 1) : 10.0f;
@@ -320,13 +326,13 @@ public sealed class MimirRuntime : IAquariumRuntime
                     AquariumFieldGuide.Valid(confidence, spectrumUpdateIntervalSeconds)),
             ],
             BackendPackets = frame.BackendPackets,
-            Resources = [.. frame.Resources, resource],
+            Resources = [.. frame.Resources, resource, ramp],
             ResourceUploads =
             [
                 .. frame.ResourceUploads,
                 new AquariumFieldResourceUpload
                 {
-                    ResourceKey = resourceKey,
+                    ResourceKey = SpectrumFieldResourceKey,
                     Version = version,
                     Float32Data = samples,
                 },
@@ -337,7 +343,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 new AquariumFieldTubeSplineLowering(
                     LoweringKey: "tube-spline:mimir:spectrum:field-upload",
                     ClaimKey: claimKey,
-                    ResourceKey: resourceKey,
+                    ResourceKey: SpectrumFieldResourceKey,
                     Width: width,
                     Height: height,
                     StrideBytes: sizeof(float),
@@ -357,8 +363,8 @@ public sealed class MimirRuntime : IAquariumRuntime
                     RadiusScale: 0.030f,
                     Alpha: 0.92f,
                     Feather: 0.20f,
-                    RampTexturePath: "",
-                    RampResourceKey: "",
+                    RampTexturePath: SpectrumRampTexturePath,
+                    RampResourceKey: SpectrumRampResourceKey,
                     EmissionScale: 10.0f,
                     CatmullRomSubdivisions: 4).Normalized(),
             ],

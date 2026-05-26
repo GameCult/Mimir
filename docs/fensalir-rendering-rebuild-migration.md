@@ -233,7 +233,8 @@ Fensalir-owned structured buffer resource, so the TubeField path consumes live
 GPU buffer contents rather than an empty declaration. The runtime-level receipt
 is `Mimir.BufferSmoke --mimir-spectrum-upload-smoke`: it boots Mimir's frame
 path, advances spectrum analysis, and verifies one Float32 upload, one planned
-TubeField packet, and no live legacy spline/buffer-field dashboard input.
+TubeField packet, a resource-bound local blackbody ramp Texture2D, and no live
+legacy spline/buffer-field dashboard input.
 
 ### 3. Calibration Constraint
 

@@ -382,7 +382,9 @@ a handle: Mimir uploads the current spectral amplitudes as row-major Float32
 data into a Fensalir-owned GPU structured buffer before TubeField compute reads
 it. `Mimir.BufferSmoke --mimir-spectrum-upload-smoke` verifies this through the
 actual `MimirRuntime` frame path and confirms the legacy direct spline and
-buffer-field dashboard inputs are empty.
+buffer-field dashboard inputs are empty. The same path declares the local
+blackbody ramp as a Texture2D field resource and binds the TubeField material by
+resource key.
 
 ## Known Risks
 

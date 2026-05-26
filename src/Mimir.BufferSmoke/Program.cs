@@ -653,6 +653,9 @@ static int RunMimirSpectrumUploadSmoke()
         var matchingResources = field.Resources
             .Where(resource => string.Equals(resource.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
             .ToArray();
+        var matchingRamps = field.Resources
+            .Where(resource => string.Equals(resource.ResourceKey, "aquarium:resource:ramp:blackbody", StringComparison.Ordinal))
+            .ToArray();
         var matchingLowerings = field.TubeSplineLowerings
             .Where(lowering => string.Equals(lowering.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
             .ToArray();
@@ -660,6 +663,7 @@ static int RunMimirSpectrumUploadSmoke()
             .Where(claim => string.Equals(claim.ClaimKey, "intent:mimir:spectrum:field-upload", StringComparison.Ordinal))
             .ToArray();
         var resource = matchingResources.FirstOrDefault();
+        var ramp = matchingRamps.FirstOrDefault();
         var lowering = matchingLowerings.FirstOrDefault();
         var claim = matchingClaims.FirstOrDefault();
         var validation = AquariumFieldEvidenceValidator.Validate(field);
@@ -674,6 +678,7 @@ static int RunMimirSpectrumUploadSmoke()
             !frame.Scene.BufferFieldFrame.HasInput &&
             upload is not null &&
             matchingResources.Length == 1 &&
+            matchingRamps.Length == 1 &&
             matchingLowerings.Length == 1 &&
             matchingClaims.Length == 1 &&
             upload.Version == resource.Version &&
@@ -683,8 +688,14 @@ static int RunMimirSpectrumUploadSmoke()
             resource.Access == AquariumFieldShaderAccess.ShaderResource &&
             string.Equals(resource.Format, "Float32", StringComparison.OrdinalIgnoreCase) &&
             resource.StrideBytes == sizeof(float) &&
+            ramp.Kind == AquariumFieldResourceKind.Texture2D &&
+            ramp.Residency == AquariumFieldResourceResidency.GpuResident &&
+            ramp.Access == AquariumFieldShaderAccess.ShaderResource &&
+            string.Equals(ramp.Format, "Rgba8Unorm", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(ramp.SourceUri, @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png", StringComparison.OrdinalIgnoreCase) &&
             lowering.Width * lowering.Height == upload.Float32Data.Count &&
             lowering.ClaimKey == claim.ClaimKey &&
+            string.Equals(lowering.RampResourceKey, ramp.ResourceKey, StringComparison.Ordinal) &&
             claim.PayloadHandle == resource.ResourceKey &&
             plan.Packets.Any(packet =>
                 packet.Backend == AquariumFieldBackendKind.TubeField &&
