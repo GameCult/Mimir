@@ -324,7 +324,11 @@ accepted_design:
     reporting. TubeField compute now emits GPU-resident D3D12 indirect draw
     argument packets, and render executes those packets after binding each
     batch's source/ramp material state. Remaining visual cuts are honest mesh/
-    page/volume resolvers.
+    page/volume resolvers. SurfacePage resources now have the first Fensalir
+    resolver: engine users can declare GPU-resident 2D pages with dimensions,
+    format, version, and optional local source, and Fensalir allocates/binds
+    them as shader-readable page textures for future Height/SDF/material
+    lowerings.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

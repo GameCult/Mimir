@@ -172,8 +172,10 @@ a named invariant that the native runtime cannot protect yet.
   normalization, radius, ramp texture resource, and emission scale. D3D12 now
   expands and renders those tubes from GPU-resident buffers, samples material
   per pixel, binds declared local ramp textures, and executes GPU-emitted
-  indirect draw argument packets; mesh, surface-page, and volume resource kinds
-  remain future engine cuts.
+  indirect draw argument packets. Surface-page resources can now be declared and
+  resolved as GPU-resident shader-readable 2D pages; render lowerings that
+  consume those pages as height/SDF/material domains remain future engine cuts.
+  Mesh and volume resource kinds remain unresolved.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
