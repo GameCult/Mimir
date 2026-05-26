@@ -348,7 +348,8 @@ generated meshes can be `PipelinePrivate` so each lowering owns the bytes it
 emits and consumes. TubeField is the first concrete generated-mesh consumer:
 its compute pass emits private vertex/index/indirect buffers and render binds
 them as `D3D12PipelinePrivateGeneratedMesh` before applying source/ramp/material
-state.
+state. The DrawIndexed indirect command signature has been lifted to the
+generated-mesh lane instead of being TubeField-owned.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

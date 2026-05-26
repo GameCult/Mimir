@@ -191,7 +191,10 @@ a named invariant that the native runtime cannot protect yet.
   bytes it emits and consumes. TubeField is the first explicit generated-mesh
   render consumer: its compute path emits private vertex/index/indirect buffers,
   and render binds them as a `D3D12PipelinePrivateGeneratedMesh` before applying
-  TubeField source/ramp/material state.
+  TubeField source/ramp/material state. The DrawIndexed indirect command
+  signature is now generated-mesh-owned rather than TubeField-owned, so future
+  generated lowerings can reuse the same draw ABI with their own producer
+  buffers and material bindings.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
