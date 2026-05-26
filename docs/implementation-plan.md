@@ -106,13 +106,17 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis.
-- `MimirRuntime` publishes live ASIO spectrum history to Fensalir as one
-  `AquariumBufferFieldFrame` texture-spline reservoir surface. Direct
-  `AquariumSplineFrame` submission is disabled for this dashboard. The current
-  tuning defaults to 32,768 reservoir samples with 8,192 updates per frame and
-  exposes `MIMIR_SPECTRUM_RESERVOIR_SPLATS`,
-  `MIMIR_SPECTRUM_RESERVOIR_UPDATES`, and
-  `MIMIR_SPECTRUM_RESERVOIR_CANDIDATES` for budget cuts.
+- `MimirRuntime` publishes live ASIO spectrum history to Fensalir as direct
+  `AquariumSplineFrame` tube surfaces. The spline shader owns visible coverage:
+  it evaluates capsule/tube distance, applies native blue-noise jitter, and
+  writes scene color plus temporal reservoir guide MRTs. The old
+  `AquariumBufferFieldFrame` / `ReservoirSplats` dashboard path is no longer
+  allowed to decide this surface. Current budget knobs are
+  `MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE`,
+  `MIMIR_SPECTRUM_SPLINE_BAND_STRIDE`, and
+  `MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS`; defaults intentionally undersample the
+  current frame so the temporal path amortizes the surface instead of drawing
+  every equivalent segment every frame.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -245,10 +249,10 @@ a named invariant that the native runtime cannot protect yet.
    with probe durations long enough to keep loopback and mic windows live.
 6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-7. Promote the spectrum reservoir producer from hash-jittered texture-spline
-   samples to native blue-noise compute sampling once Fensalir exposes the
-   blue-noise tile to the reservoir compute root. Keep direct spline triangles
-   off for this dashboard unless explicitly debugging the spline shader.
+7. Tighten the spectrum spline tube temporal path until it behaves like a
+   production debug surface: shader-owned tube SDF coverage, native blue-noise
+   sample jitter, and temporal accumulation from sparse frame budgets. Do not
+   route this dashboard back through fractal point splats.
 8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
 9. Move mic alignment, room suppression, voice separation, spatialization, and

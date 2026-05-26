@@ -31,9 +31,9 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumCameraFitPadding = 1.12f;
     private const float SpectrumFrustumMinimumNear = 0.01f;
     private const float SpectrumSplineTubePadding = 0.18f;
-    private const int DefaultSpectrumReservoirSplatCount = 32768;
-    private const int DefaultSpectrumReservoirUpdatesPerFrame = 8192;
-    private const int DefaultSpectrumReservoirCandidates = 1;
+    private const int DefaultSpectrumSplineWindowStride = 4;
+    private const int DefaultSpectrumSplineBandStride = 2;
+    private const int DefaultSpectrumSplineSubdivisions = 1;
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
@@ -60,6 +60,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private double lastPassiveSynchronizationConfidence;
     private float spectrumCameraDistanceMultiplier = SpectrumCameraDefaultDistanceMultiplier;
     private float spectrumCameraAngleDegrees = SpectrumCameraDefaultAngleDegrees;
+    private ulong spectrumSurfaceFrameIndex;
     private AquariumCameraFrustum lastSpectrumFrustum = AquariumCameraFrustum.Default;
     private Vector3 lastSpectrumCameraPosition;
     private Vector3 lastSpectrumCameraTarget;
@@ -137,7 +138,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private AquariumFrame CreateFrame()
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
-        var bufferFieldFrame = BuildSpectrumBufferFieldFrame();
+        var splineFrame = BuildSpectrumSplineFrame(spectrumSurfaceFrameIndex++);
         var windowCount = Math.Max(1, spectrumHistory.Count);
         var (splineMin, splineMax) = SpectrumSplineAabb(channelCount, windowCount);
         var cameraTarget = (splineMin + splineMax) * 0.5f;
@@ -162,8 +163,8 @@ public sealed class MimirRuntime : IAquariumRuntime
             {
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
-                BufferFieldFrame = bufferFieldFrame,
-                SplineFrame = AquariumSplineFrame.Empty,
+                BufferFieldFrame = AquariumBufferFieldFrame.Empty,
+                SplineFrame = splineFrame,
             });
     }
 
@@ -686,25 +687,25 @@ public sealed class MimirRuntime : IAquariumRuntime
             : 96;
     }
 
-    private static int ParseSpectrumReservoirSplatCount()
+    private static int ParseSpectrumSplineWindowStride()
     {
-        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_RESERVOIR_SPLATS"), out var value)
-            ? Math.Clamp(value, 1024, 524288)
-            : DefaultSpectrumReservoirSplatCount;
+        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE"), out var value)
+            ? Math.Clamp(value, 1, 16)
+            : DefaultSpectrumSplineWindowStride;
     }
 
-    private static int ParseSpectrumReservoirUpdatesPerFrame()
+    private static int ParseSpectrumSplineBandStride()
     {
-        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_RESERVOIR_UPDATES"), out var value)
-            ? Math.Clamp(value, 1, 524288)
-            : DefaultSpectrumReservoirUpdatesPerFrame;
+        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_SPLINE_BAND_STRIDE"), out var value)
+            ? Math.Clamp(value, 1, 16)
+            : DefaultSpectrumSplineBandStride;
     }
 
-    private static int ParseSpectrumReservoirCandidates()
+    private static int ParseSpectrumSplineSubdivisions()
     {
-        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_RESERVOIR_CANDIDATES"), out var value)
+        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS"), out var value)
             ? Math.Clamp(value, 1, 8)
-            : DefaultSpectrumReservoirCandidates;
+            : DefaultSpectrumSplineSubdivisions;
     }
 
     private static bool IsTruthy(string? value) =>
@@ -858,7 +859,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         return (min, max);
     }
 
-    private AquariumSplineFrame BuildSpectrumSplineFrame()
+    private AquariumSplineFrame BuildSpectrumSplineFrame(ulong frameIndex)
     {
         if (!sceneReady || spectrumHistory.Count == 0)
         {
@@ -876,12 +877,22 @@ public sealed class MimirRuntime : IAquariumRuntime
             return AquariumSplineFrame.Empty;
         }
 
-        var splines = new List<AquariumSpline3D>(windows.Length * sourceIds.Length + sourceIds.Length * 4);
+        var windowStride = ParseSpectrumSplineWindowStride();
+        var bandStride = ParseSpectrumSplineBandStride();
+        var subdivisions = ParseSpectrumSplineSubdivisions();
+        var windowPhase = (int)(frameIndex % (ulong)windowStride);
+        var approximateWindowCount = Math.Max(1, (windows.Length + windowStride - 1) / windowStride);
+        var splines = new List<AquariumSpline3D>(approximateWindowCount * sourceIds.Length + sourceIds.Length * 4);
         AddSpectrumGridSplines(splines, sourceIds.Length, windows.Length);
 
         for (var windowIndex = 0; windowIndex < windows.Length; windowIndex++)
         {
             var ageFromNewest = windows.Length - 1 - windowIndex;
+            if (windowStride > 1 && ageFromNewest != 0 && ageFromNewest % windowStride != windowPhase)
+            {
+                continue;
+            }
+
             var ageT = windows.Length <= 1 ? 0.0f : ageFromNewest / (float)(windows.Length - 1);
             var alpha = Math.Clamp(0.10f + MathF.Pow(1.0f - ageT, 1.35f) * 0.90f, 0.10f, 1.0f);
             var z = ageFromNewest * SpectrumWindowDepthSeparation;
@@ -893,155 +904,54 @@ public sealed class MimirRuntime : IAquariumRuntime
                     continue;
                 }
 
-                var points = BuildSpectrumWindowSpline(spectrum, channelIndex * SpectrumChannelSeparation, z, alpha);
+                var bandPhase = bandStride <= 1
+                    ? 0
+                    : (int)((frameIndex + (ulong)channelIndex + (ulong)ageFromNewest) % (ulong)bandStride);
+                var points = BuildSpectrumWindowSpline(
+                    spectrum,
+                    channelIndex * SpectrumChannelSeparation,
+                    z,
+                    alpha,
+                    bandStride,
+                    bandPhase);
                 splines.Add(new AquariumSpline3D(
                     $"spectrum-{spectrum.SourceId}-{windowIndex}",
                     points,
                     new AquariumSplineStyle(0.018f, 1.35f, 1.0f, 0.78f, 0.22f),
-                    CatmullRomSubdivisions: 3));
+                    CatmullRomSubdivisions: subdivisions));
             }
         }
 
         return new AquariumSplineFrame { Splines = splines };
     }
 
-    private AquariumBufferFieldFrame BuildSpectrumBufferFieldFrame()
-    {
-        if (!sceneReady || spectrumHistory.Count == 0)
-        {
-            return AquariumBufferFieldFrame.Empty;
-        }
-
-        var windows = spectrumHistory.ToArray();
-        var latest = windows[^1];
-        var sourceIds = latest
-            .Select(spectrum => spectrum.SourceId)
-            .OrderBy(sourceId => sourceId, StringComparer.Ordinal)
-            .ToArray();
-        if (sourceIds.Length == 0)
-        {
-            return AquariumBufferFieldFrame.Empty;
-        }
-
-        var bandCount = latest.FirstOrDefault(spectrum => spectrum.BandDecibels.Count > 0)?.BandDecibels.Count ?? 0;
-        if (bandCount <= 1)
-        {
-            return AquariumBufferFieldFrame.Empty;
-        }
-
-        var rowCount = SpectrumHistoryWindowCount * sourceIds.Length;
-        var samples = new float[bandCount * rowCount];
-        for (var windowIndex = 0; windowIndex < windows.Length; windowIndex++)
-        {
-            var ageFromNewest = windows.Length - 1 - windowIndex;
-            var spectraBySource = windows[windowIndex].ToDictionary(spectrum => spectrum.SourceId, StringComparer.Ordinal);
-            for (var channelIndex = 0; channelIndex < sourceIds.Length; channelIndex++)
-            {
-                if (!spectraBySource.TryGetValue(sourceIds[channelIndex], out var spectrum) || spectrum.BandDecibels.Count != bandCount)
-                {
-                    continue;
-                }
-
-                var row = channelIndex * SpectrumHistoryWindowCount + ageFromNewest;
-                WriteSpectrumRow(samples, row * bandCount, spectrum);
-            }
-        }
-
-        var splatCount = ParseSpectrumReservoirSplatCount();
-        var updatesPerFrame = Math.Clamp(ParseSpectrumReservoirUpdatesPerFrame(), 1, splatCount);
-        var bandStep = SpectrumWidth / Math.Max(1, bandCount - 1);
-        var reservoir = new AquariumFractalReservoirField
-        {
-            SplatCount = splatCount,
-            Depth = 1,
-            Seed = 0xB11FF13Du,
-            CandidatesPerReservoirUpdate = ParseSpectrumReservoirCandidates(),
-            SplatUpdatesPerFrame = updatesPerFrame,
-            ReservoirUpdatesPerPass = updatesPerFrame,
-            WorldCenterRadius = new Vector4(0.0f, 0.0f, 0.0f, 1.0f),
-        };
-        var program = new AquariumTextureSplineFieldProgram(
-            "asioSpectrumWaterfall",
-            "spectrumHistory",
-            AquariumTextureAxis.X,
-            FirstColumn: 0,
-            ColumnCount: rowCount,
-            ColumnStride: 1,
-            RollingWindowModulo: rowCount,
-            Subdivisions: 1,
-            Origin: new Vector3(-SpectrumWidth * 0.5f, 0.0f, 0.0f),
-            AxisStep: new Vector3(bandStep, 0.0f, 0.0f),
-            ColumnStep: new Vector3(0.0f, 0.0f, SpectrumWindowDepthSeparation),
-            ColumnGroupSize: SpectrumHistoryWindowCount,
-            ColumnGroupStep: new Vector3(0.0f, SpectrumChannelSeparation, 0.0f),
-            AmplitudeScale: SpectrumAmplitudeHeight,
-            Appearance: new AquariumSplineTubeAppearance(
-                new Vector4(1.0f, 0.68f, 0.12f, 2.5f),
-                Radius: 0.012f,
-                Alpha: 0.82f,
-                ZeroThreshold: 0.68f,
-                Feather: 0.08f,
-                TangentWeight: 1.0f,
-                CurvatureWeight: 0.68f,
-                NormalWeight: 0.34f,
-                DerivativeWeight: 0.88f),
-            ProbePolicy: new AquariumSplineTubeProbePolicy(
-                MaxProbeCount: updatesPerFrame,
-                BaseDensity: 1.0f,
-                MinimumVisualContribution: 0.004f,
-                Seed: 0xB11FF13Du),
-            SurfaceGraph: []);
-
-        return AquariumBufferFieldFrame.Compose(builder => builder
-            .Texture(
-                "spectrumHistory",
-                bandCount,
-                rowCount,
-                1,
-                0,
-                AquariumRollingModuloMode.Rows,
-                samples)
-            .TextureSplineField(program)
-            .Reservoir(reservoir)
-            .Lowering(new AquariumFieldLoweringPolicy(
-                AquariumFieldLoweringMode.ReservoirSplats,
-                MaxDirectSplines: 1,
-                MaxDirectControlPoints: 2,
-                MaxReservoirSplats: splatCount,
-                LodBias: 1.0f)));
-    }
-
-    private static void WriteSpectrumRow(float[] samples, int offset, MimirAudioSpectrumSnapshot spectrum)
-    {
-        var bands = spectrum.BandDecibels;
-        var floor = Math.Min(spectrum.NoiseFloorDb, bands.Min());
-        var ceiling = Math.Max(-24.0, bands.Max());
-        var span = Math.Max(18.0, ceiling - floor);
-        for (var index = 0; index < bands.Count; index++)
-        {
-            samples[offset + index] = (float)Math.Clamp((bands[index] - floor) / span, 0.0, 1.0);
-        }
-    }
-
     private static IReadOnlyList<AquariumSplineVertex> BuildSpectrumWindowSpline(
         MimirAudioSpectrumSnapshot spectrum,
         float channelBaseY,
         float z,
-        float alpha)
+        float alpha,
+        int bandStride,
+        int bandPhase)
     {
         var bands = spectrum.BandDecibels;
         var floor = Math.Min(spectrum.NoiseFloorDb, bands.Min());
         var ceiling = Math.Max(-24.0, bands.Max());
         var span = Math.Max(18.0, ceiling - floor);
-        var points = new AquariumSplineVertex[bands.Count];
+        var points = new List<AquariumSplineVertex>((bands.Count + bandStride - 1) / bandStride + 2);
         for (var index = 0; index < bands.Count; index++)
         {
+            var isEdge = index == 0 || index == bands.Count - 1;
+            if (!isEdge && bandStride > 1 && index % bandStride != bandPhase)
+            {
+                continue;
+            }
+
             var x = -SpectrumWidth * 0.5f + SpectrumWidth * index / Math.Max(1, bands.Count - 1);
             var normalized = (float)Math.Clamp((bands[index] - floor) / span, 0.0, 1.0);
             var y = channelBaseY + normalized * SpectrumAmplitudeHeight;
-            points[index] = new AquariumSplineVertex(
+            points.Add(new AquariumSplineVertex(
                 new Vector3(x, y, z),
-                SpectrumColor(normalized, alpha));
+                SpectrumColor(normalized, alpha)));
         }
 
         return points;

@@ -309,18 +309,22 @@ Visual fusion belongs in Fensalir over current reservoir claims. Native capture
 workers provide frames; Fensalir owns feature extraction, matching, material
 fitting, render budgeting, and publication.
 
-The live debug spectrum view is a Fensalir buffer-field reservoir surface, not
-direct spline triangles. Mimir submits one `AquariumBufferFieldFrame` texture
-spline program for the rolling ASIO spectrum: frequency lives on X, amplitude
-on Y, history on Z, and channels stack along Y. Direct `AquariumSplineFrame`
-submission is disabled for this surface so there is one visual authority.
+The live debug spectrum view is a Fensalir spline-tube SDF surface. Mimir
+submits rolling ASIO spectrum history as `AquariumSplineFrame` trails:
+frequency lives on X, amplitude on Y, history on Z, and channels stack along
+Y. `AquariumBufferFieldFrame` / fractal `ReservoirSplats` no longer own this
+dashboard, because point splats were the wrong visible primitive for a surface
+whose truth is a tube SDF.
 
-The current reservoir cut defaults to 32,768 spectrum samples, 8,192 sample
-updates per frame, one candidate per update, and `WorldCenterRadius=(0,0,0,1)`
-so sample radii stay in spectrum-world units instead of inflating into giant
-screen plates. Fensalir still uses hash/jittered compute sampling for this
-producer; native blue-noise sampling is available in scene shaders but is not
-yet bound into the reservoir compute root.
+Fensalir's spline shader owns visible coverage. Geometry is only the
+conservative segment envelope; the pixel shader evaluates capsule/tube
+distance, applies native blue-noise sample jitter, writes color/metadata/control,
+and emits `reservoirGuide` for the scene temporal path. Mimir intentionally
+submits a sparse rotating surface budget with
+`MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE`, `MIMIR_SPECTRUM_SPLINE_BAND_STRIDE`, and
+`MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS` so the temporal reservoir/TAA path
+amortizes the surface instead of paying the full polygon-equivalent cost every
+frame.
 
 ## Known Risks
 
