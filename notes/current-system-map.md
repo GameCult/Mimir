@@ -309,15 +309,18 @@ Visual fusion belongs in Fensalir over current reservoir claims. Native capture
 workers provide frames; Fensalir owns feature extraction, matching, material
 fitting, render budgeting, and publication.
 
-The live debug spectrum view is direct spline-tube rendering. Mimir submits an
-`AquariumSplineFrame` only: each rolling audio spectrum window becomes a
-Catmull-Rom tube trail with frequency on X, amplitude on Y, history on Z, and
-channels stacked along Y. Fensalir owns the shader-side tube SDF coverage for
-those splines.
+The live debug spectrum view is a Fensalir buffer-field reservoir surface, not
+direct spline triangles. Mimir submits one `AquariumBufferFieldFrame` texture
+spline program for the rolling ASIO spectrum: frequency lives on X, amplitude
+on Y, history on Z, and channels stack along Y. Direct `AquariumSplineFrame`
+submission is disabled for this surface so there is one visual authority.
 
-`AquariumBufferFieldFrame`/reservoir splats are not part of this spectrum
-dashboard. That previous path made the debug surface look like point/probe
-dust and split visual authority between reservoir dots and direct tubes.
+The current reservoir cut defaults to 32,768 spectrum samples, 8,192 sample
+updates per frame, one candidate per update, and `WorldCenterRadius=(0,0,0,1)`
+so sample radii stay in spectrum-world units instead of inflating into giant
+screen plates. Fensalir still uses hash/jittered compute sampling for this
+producer; native blue-noise sampling is available in scene shaders but is not
+yet bound into the reservoir compute root.
 
 ## Known Risks
 

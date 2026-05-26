@@ -106,10 +106,13 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis.
-- `MimirRuntime` publishes live ASIO spectrum history to Fensalir as direct
-  `AquariumSplineFrame` tube trails. The spectrum dashboard is a debug/runtime
-  surface, not a reservoir-splat field; no `AquariumBufferFieldFrame` is
-  submitted for it.
+- `MimirRuntime` publishes live ASIO spectrum history to Fensalir as one
+  `AquariumBufferFieldFrame` texture-spline reservoir surface. Direct
+  `AquariumSplineFrame` submission is disabled for this dashboard. The current
+  tuning defaults to 32,768 reservoir samples with 8,192 updates per frame and
+  exposes `MIMIR_SPECTRUM_RESERVOIR_SPLATS`,
+  `MIMIR_SPECTRUM_RESERVOIR_UPDATES`, and
+  `MIMIR_SPECTRUM_RESERVOIR_CANDIDATES` for budget cuts.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -242,9 +245,10 @@ a named invariant that the native runtime cannot protect yet.
    with probe durations long enough to keep loopback and mic windows live.
 6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-7. Keep the spectrum dashboard on direct spline-tube rendering. Future buffer
-   fields may exist for other volumetric surfaces, but this debug surface must
-   not submit reservoir splats.
+7. Promote the spectrum reservoir producer from hash-jittered texture-spline
+   samples to native blue-noise compute sampling once Fensalir exposes the
+   blue-noise tile to the reservoir compute root. Keep direct spline triangles
+   off for this dashboard unless explicitly debugging the spline shader.
 8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
