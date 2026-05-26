@@ -184,10 +184,12 @@ Mimir may mint stable resource keys from native/GPU handles, but Fensalir owns
 resolution. A DSL packet may reference `mimir:resource:*`; it may not treat a
 bare string as payload truth. In the same runtime, a Mimir-declared buffer is a
 Fensalir resource slot once the declaration is accepted; native/shared handle
-metadata is an import edge, not a separate payload authority. If the resource
-contract is absent, expired, duplicated, CPU-only, or incompatible with the
-selected backend, lowering must defer instead of rendering a lie with nice
-lighting.
+metadata is an import edge, not a separate payload authority. Rendering-relevant
+buffers move to GPU residency as early as possible and stay there; Fensalir
+passes resource handles/SRVs/UAVs between compute and render lowerings instead
+of copying samples back to CPU. If the resource contract is absent, expired,
+duplicated, CPU-only, or incompatible with the selected backend, lowering must
+defer instead of rendering a lie with nice lighting.
 
 Current proof surface:
 
@@ -200,10 +202,13 @@ Current proof surface:
   `TubeField` packet with no deferred requests.
 
 Fensalir now owns the first D3D12 resource resolver cut below this contract:
-declared structured/curve buffers allocate, reuse, and retire engine-owned GPU
-slots under their resource keys. Current blocker for visible rendering is
-shader binding: selected `TubeField` packets must consume those resolved slots
-through a concrete lowering. Texture, mesh, surface-page, and volume resolvers
+shared structured/curve buffers import/alias GPU-resident resources by handle,
+while Fensalir-created resources allocate GPU slots only when Fensalir is the
+producer. The DSL can describe a 2D rolling float buffer as Catmull-Rom XY
+tubes with modulo column addressing, amplitude power/normalization, radius,
+ramp texture path, and emission scale. Current blocker for visible rendering is
+shader binding/expansion: selected `TubeField` packets must consume those
+resolved GPU slots directly. Texture, mesh, surface-page, and volume resolvers
 remain explicit future engine cuts. That is engine ownership, not a reason for
 Mimir to create a parallel renderer.
 

@@ -300,12 +300,16 @@ accepted_design:
     `--fensalir-field-dsl-resource-smoke` proves Fensalir's field evidence DSL
     can bind a declared resource directly and produce one planned `TubeField`
     packet with no deferred requests. Fensalir now owns the first in-process
-    D3D12 field resource registry: declared structured/curve buffer resources
-    allocate/reuse/retire engine-owned GPU slots under the resource key.
-    Mimir-declared buffers are therefore Fensalir resources in the same runtime,
-    not cross-process payload truth. Visible packet rendering is blocked on
-    binding those resolved slots into a concrete TubeField shader lowering and
-    then adding honest texture/mesh/page/volume resolvers.
+    D3D12 field resource registry: declared shared structured/curve buffers
+    import/alias GPU-resident resources by handle, while Fensalir-owned
+    resources allocate GPU slots only when Fensalir is the producer.
+    Mimir-declared rendering buffers are therefore Fensalir GPU resources in
+    the same runtime, not cross-process payload truth and not CPU payloads to
+    copy back and forth. The TubeField DSL can now express a 2D rolling float
+    buffer as Catmull-Rom XY tubes with modulo column addressing, amplitude
+    power/normalization, radius, ramp texture path, and emission scale. Visible
+    packet rendering is blocked on shader-side expansion and binding of those
+    GPU-resident slots, then honest texture/mesh/page/volume resolvers.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
