@@ -321,8 +321,10 @@ accepted_design:
     Missing ramps fall back to a Fensalir-owned 0-1 linear texture. The first
     material is opaque field geometry with squared normalized emission, fake
     Fresnel center-bright/edge-dark shaping, and geometry-budget overflow
-    reporting. Remaining visual cuts are indirect draw packets, then honest
-    mesh/page/volume resolvers.
+    reporting. TubeField compute now emits GPU-resident D3D12 indirect draw
+    argument packets, and render executes those packets after binding each
+    batch's source/ramp material state. Remaining visual cuts are honest mesh/
+    page/volume resolvers.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

@@ -171,8 +171,9 @@ a named invariant that the native runtime cannot protect yet.
   Catmull-Rom XY tubes with modulo column addressing, amplitude power/
   normalization, radius, ramp texture resource, and emission scale. D3D12 now
   expands and renders those tubes from GPU-resident buffers, samples material
-  per pixel, and binds declared local ramp textures; indirect draw packets,
-  mesh, surface-page, and volume resource kinds remain future engine cuts.
+  per pixel, binds declared local ramp textures, and executes GPU-emitted
+  indirect draw argument packets; mesh, surface-page, and volume resource kinds
+  remain future engine cuts.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
