@@ -336,7 +336,9 @@ accepted_design:
     backing vertex/index buffers under the mesh resource key. The DSL can also
     create generic resource-backed claims, so mesh/page/volume resources can
     reach backend packet planning. Mesh draw/material lowerings remain future
-    engine work and need an explicit vertex attribute/material contract first.
+    engine work. Mesh layout authority is split: imported/user-facing meshes use
+    the standard `PositionNormalUvColor` vertex layout, while generated meshes
+    can be `PipelinePrivate` and let the lowering own the minimal bytes.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

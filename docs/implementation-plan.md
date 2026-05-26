@@ -185,7 +185,10 @@ a named invariant that the native runtime cannot protect yet.
   only; mesh draw/material lowerings remain future engine work. Fensalir's
   evidence DSL can also create generic resource-backed claims, so mesh/page/
   volume resources can plan into backend packets before their selected render
-  lowerings exist.
+  lowerings exist. Mesh layout authority is split by source: imported/user
+  meshes use the standard `PositionNormalUvColor` vertex layout, while generated
+  meshes declare `PipelinePrivate` and let the selected lowering own the minimal
+  bytes it emits and consumes.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -329,9 +332,10 @@ a named invariant that the native runtime cannot protect yet.
    volume textures, and mesh packages, and the evidence DSL can plan generic
    resource-backed claims against those resources. The next engine cuts are
    selected render lowerings that consume those resources as mesh geometry,
-   height/SDF/material pages, and density/extinction/SDF3D volumes. Mesh
-   rendering needs an explicit vertex attribute/material contract before code
-   should touch the draw path.
+   height/SDF/material pages, and density/extinction/SDF3D volumes. The generic
+   imported mesh ABI is no longer the blocker; the next renderer decision is
+   which selected generated/imported mesh lowering and material path should be
+   implemented first.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver

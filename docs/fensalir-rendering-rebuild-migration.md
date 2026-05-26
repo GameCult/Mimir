@@ -214,10 +214,11 @@ buffer shape under one resource key. The evidence DSL can now plan generic
 resource-backed claims over those declarations. Current blocker for the
 remaining visual surface is not resource ownership; it is the selected render
 lowerings that interpret mesh/page/volume resources as geometry, height/SDF/
-material pages, or density/extinction/SDF3D domains. Mesh drawing also needs a
-vertex attribute/material contract before the D3D12 path can bind a real
-pipeline. That is engine ownership, not a reason for Mimir to create a parallel
-renderer.
+material pages, or density/extinction/SDF3D domains. Mesh layout authority is
+split by source: imported/user meshes use the standard `PositionNormalUvColor`
+layout, while generated meshes can be `PipelinePrivate` and leave byte
+semantics to their selected lowering. That is engine ownership, not a reason
+for Mimir to create a parallel renderer.
 
 ### 3. Calibration Constraint
 

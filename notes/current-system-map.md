@@ -342,8 +342,10 @@ textures allocate shader-readable GPU textures, and mesh packages own
 can plan generic resource-backed claims over those declarations. The next
 blocker is no longer resolver ownership; it is selected render lowerings that
 consume mesh/page/volume resources as geometry, height/SDF/material pages, or
-density/extinction/SDF3D domains. Mesh drawing specifically needs vertex
-attribute and material semantics before Fensalir can honestly bind a pipeline.
+density/extinction/SDF3D domains. Mesh layout authority is split by source:
+imported/user meshes use the standard `PositionNormalUvColor` layout, and
+generated meshes can be `PipelinePrivate` so each lowering owns the bytes it
+emits and consumes.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's
