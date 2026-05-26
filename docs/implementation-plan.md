@@ -34,6 +34,13 @@ surface domains with 2D brushes painting tile payloads, and SDF probes emitting
 surface splats only where curvature, projected error, material/brush detail, or
 silhouettes justify subdivision.
 
+The current teardown/migration map lives in
+[[fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild Migration]].
+Mimir's side of that rebuild is to publish typed physical observations,
+calibration constraints, and surface intent; Fensalir's side is to turn those
+into field claims, selected lowerings, reusable evidence, temporal guides, and
+program output.
+
 The old script stack is gone. Do not add a compatibility edge unless it protects
 a named invariant that the native runtime cannot protect yet.
 

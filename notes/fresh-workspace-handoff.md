@@ -43,6 +43,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `native/reservoir` owns the lower shared-edge typed-handle invariant for
   Fensalir/Faust binding work.
 - Fensalir owns production GPU fusion, UI, and Spout2 publication.
+- The current Mimir/Fensalir rendering teardown map is
+  [[docs/fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild
+  Migration]]. Mimir's production visual output path must publish typed
+  physical observations, calibration constraints, and surface intent; Fensalir
+  turns those into field claims, selected lowerings, reusable evidence,
+  temporal guide lanes, and presentation.
 - Fensalir also owns the EVE-facing dashboard pixels through
   `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
   texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas
@@ -56,6 +62,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 ## Current Pressure
 
 - Implement the first concrete Leap direct capture driver and measure cadence.
+- Cut the Phase 1 Mimir-to-Fensalir bridge DTOs for rolling windows,
+  observations, calibration constraints, and surface intent before adding
+  another backend-specific visual path.
 - Add remaining camera drivers through `IMimirVideoCaptureDriver`.
 - Add native audio capture workers for mic, loopback, and network audio feeds.
 - Turn the current loopback-referenced chirplet measurement into the real

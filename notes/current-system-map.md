@@ -316,6 +316,14 @@ lowers those into field claims with travel/depth, metadata, control, and
 reservoir-guide lanes. If a path only paints pixels, it is a fallback/debug
 draw, not the Perfect Machine surface.
 
+The current teardown/migration map is
+`docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's
+`docs/rendering-teardown-rebuild-protocol.md`. The intended cut is explicit:
+Mimir publishes typed physical observations, calibration constraints, and
+surface intent; Fensalir owns field domains, field claims, candidate selection,
+track/reservoir state, selected lowerings, temporal guide lanes, and
+presentation.
+
 The reservoir can resolve pixel-level claims without requiring pixel-sized
 contents. Claim support belongs to the represented domain. A smooth flat surface
 can be a few huge surface claims; a heightfield terrain belongs in a quadtree of

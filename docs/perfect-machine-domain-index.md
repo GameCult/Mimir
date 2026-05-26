@@ -27,6 +27,9 @@ Read this with:
   loop candidates.
 - [[research/perfect-machine-study-2026-05-23/fensalir-integration-map|Fensalir Integration Map]]
   for the Mimir/Fensalir ownership cut.
+- [[fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild Migration]]
+  for the current teardown/rebuild plan that keeps Mimir on physical evidence
+  and pushes field rendering authority into Fensalir's evidence machine.
 - [[research/perfect-machine-study-2026-05-23/calibration-session-spec|Calibration Session Spec]]
   for the planned physical-path calibration command.
 - [[perfect-machine-module-library|Perfect Machine Module Library]] for the

@@ -48,6 +48,9 @@ invariants:
     retention.
   - Fensalir owns production UI, GPU fusion, D3D12 interop, Spout2 output, and
     the EVE shared D3D12 program-output texture.
+  - Mimir publishes physical observations, calibration constraints, and surface
+    intent. Fensalir owns field claims, selected lowerings, evidence reservoirs,
+    temporal guide lanes, and program presentation.
   - EVE fullscreen output must use native decode/composite over Fensalir-owned
     program pixels; WebKit/DOM layout is forbidden as pixel authority.
   - Faust/native DSP owns hot audio alignment, separation, spatialization, and

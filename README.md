@@ -50,6 +50,9 @@ Start with:
   source-level code map.
 - [docs/perfect-machine-domain-index.md](docs/perfect-machine-domain-index.md)
   for the indexed problem-domain map and implementation cuts.
+- [docs/fensalir-rendering-rebuild-migration.md](docs/fensalir-rendering-rebuild-migration.md)
+  for the current teardown/rebuild migration plan between Mimir's physical
+  evidence window and Fensalir's field-evidence renderer.
 
 Naming note: **Fensalir** is the engine/windowing/rendering/D3D12 layer. Older
 research notes may still use the previous engine name.
