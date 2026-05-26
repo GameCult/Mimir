@@ -309,6 +309,13 @@ Visual fusion belongs in Fensalir over current reservoir claims. Native capture
 workers provide frames; Fensalir owns feature extraction, matching, material
 fitting, render budgeting, and publication.
 
+Fensalir must not be treated as a traditional rendering pipeline. Mimir does
+not ask it to "draw a thing" and hope post-processing makes the result true.
+Mimir submits evidence, buffers, constraints, and surface intent; Fensalir
+lowers those into field claims with travel/depth, metadata, control, and
+reservoir-guide lanes. If a path only paints pixels, it is a fallback/debug
+draw, not the Perfect Machine surface.
+
 The live debug spectrum view is a Fensalir spline-tube SDF surface. Mimir
 submits rolling ASIO spectrum history as `AquariumSplineFrame` trails:
 frequency lives on X, amplitude on Y, history on Z, and channels stack along

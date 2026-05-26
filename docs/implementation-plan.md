@@ -20,6 +20,13 @@ For the source-level ownership map, read [[code-algorithm-map|Code Algorithm Map
 - PowerShell/FFmpeg/SRT remains a bridge utility for LAN OBS feeds. It is not
   the synchronized program authority.
 
+Fensalir is not a conventional renderer bolted onto Mimir. It is the engine-side
+field/evidence machine. Mimir must submit synchronized buffers, constraints,
+surface intent, and calibration evidence; Fensalir lowers them into claims with
+travel/depth, metadata, control, and reservoir-guide lanes. Any path that only
+paints pixels is a fallback/debug draw and must not be mistaken for the
+spatiotemporal machine.
+
 The old script stack is gone. Do not add a compatibility edge unless it protects
 a named invariant that the native runtime cannot protect yet.
 
