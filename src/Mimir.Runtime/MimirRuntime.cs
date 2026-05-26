@@ -37,6 +37,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const int DefaultSpectrumSplineBandStride = 1;
     private const int DefaultSpectrumSplineSubdivisions = 2;
     private readonly MimirSynchronizationHub synchronization;
+    private readonly MimirFensalirFieldLowering fieldLowering;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
     private readonly AquariumUiDocument ui;
@@ -105,6 +106,9 @@ public sealed class MimirRuntime : IAquariumRuntime
     {
         Options = options;
         synchronization = new MimirSynchronizationHub(settings);
+        fieldLowering = new MimirFensalirFieldLowering(new MimirFensalirLoweringOptions(
+            settings.BufferDuration.TotalSeconds,
+            settings.BufferDuration.TotalSeconds));
         spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize(), ParseSpectrumBandCount());
         this.sourceFactories = sourceFactories.ToArray();
         audioSyncSettings = settings.Audio;
@@ -140,6 +144,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private AquariumFrame CreateFrame()
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
+        var fieldEvidenceFrame = BuildFieldEvidenceFrame();
         var splineFrame = BuildSpectrumSplineFrame();
         var windowCount = Math.Max(1, spectrumHistory.Count);
         var (splineMin, splineMax) = SpectrumSplineAabb(channelCount, windowCount);
@@ -165,9 +170,54 @@ public sealed class MimirRuntime : IAquariumRuntime
             {
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
+                FieldEvidenceFrame = fieldEvidenceFrame,
                 BufferFieldFrame = AquariumBufferFieldFrame.Empty,
                 SplineFrame = splineFrame,
             });
+    }
+
+    private AquariumFieldEvidenceFrame BuildFieldEvidenceFrame()
+    {
+        var buffers = synchronization.Buffers.Buffers;
+        var windows = new List<MimirRollingStreamWindow>(buffers.Count);
+        var observations = new List<MimirObservation>(buffers.Count);
+        MimirFensalirBridgeMapper.MapWindows(buffers, windows);
+        MimirFensalirBridgeMapper.MapLatestObservations(buffers, observations);
+
+        var constraints = new List<MimirCalibrationConstraint>(synchronization.AudioSynchronizationStates.Count);
+        MimirFensalirBridgeMapper.MapCalibrationConstraints(synchronization.AudioSynchronizationStates, constraints);
+
+        var observationsByWindow = observations.ToDictionary(observation => observation.WindowId, StringComparer.Ordinal);
+        var intents = new List<MimirSurfaceIntent>(observations.Count);
+        foreach (var window in windows)
+        {
+            if (!observationsByWindow.TryGetValue(window.WindowId, out var observation))
+            {
+                continue;
+            }
+
+            intents.Add(BuildSurfaceIntent(window, observation));
+        }
+
+        return fieldLowering.BuildFieldEvidenceFrame(windows, observations, constraints, intents);
+    }
+
+    private static MimirSurfaceIntent BuildSurfaceIntent(MimirRollingStreamWindow window, MimirObservation observation)
+    {
+        if (window.SourceKind == MimirStreamKind.Audio)
+        {
+            return new MimirSurfaceIntent(
+                IntentKey: $"{window.WindowId}:spectrum",
+                SourceObservationKeys: [observation.ObservationKey],
+                Domain: MimirSurfaceDomain.AudioSpectrum,
+                Axes: new MimirSurfaceAxes("frequency", "amplitude", "time-age", "stream"),
+                SupportPolicy: new MimirSurfaceSupportPolicy("rolling-spectrum", 0.0, window.Duration.TotalSeconds),
+                MaterialGraph: new MimirSurfaceMaterialIntent("spectrum-evidence", "source-evidence", observation.Confidence),
+                UpdateBudget: new MimirSurfaceUpdateBudget(0.0, 1, Math.Max(0, window.Payload.ByteLength)),
+                Purpose: MimirSurfaceIntentPurpose.Debug);
+        }
+
+        return MimirFensalirBridgeMapper.MapDefaultSurfaceIntent(window, observation);
     }
 
     private static Vector3 SpectrumCameraPosition(
