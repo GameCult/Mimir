@@ -377,7 +377,10 @@ submits direct `AquariumSplineFrame` trails for the spectrum dashboard and does
 not submit `AquariumBufferFieldFrame` / fractal `ReservoirSplats` for it either.
 Mimir declares the rolling resource, publishes a Tube claim plus
 `AquariumFieldTubeSplineLowering`, and Fensalir owns planning, generated mesh
-expansion, and TubeField material rendering.
+expansion, and TubeField material rendering. The spectrum resource is not just
+a handle: Mimir uploads the current spectral amplitudes as row-major Float32
+data into a Fensalir-owned GPU structured buffer before TubeField compute reads
+it.
 
 ## Known Risks
 

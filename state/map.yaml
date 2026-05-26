@@ -352,7 +352,10 @@ accepted_design:
     generated mesh path is fed by real Mimir evidence rather than only the DSL
     smoke. The legacy direct `AquariumSplineFrame` spectrum dashboard is silent:
     `MimirRuntime` submits an empty spline frame and the old direct spectrum
-    spline builder has been deleted.
+    spline builder has been deleted. Live spectrum samples are now normalized
+    into a row-major Float32 matrix, declared as
+    `mimir:resource:spectrum:field-upload`, uploaded into a Fensalir-owned
+    GPU-resident structured buffer, and consumed by the TubeField lowering.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

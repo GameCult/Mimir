@@ -228,6 +228,9 @@ TubeSpline metadata whose claim is not Tube-encoded or whose resource differs
 from the claim payload. Mimir's typed surface-intent lowering now emits the
 matching TubeSpline metadata for audio spectrum/waveform Tube claims. That is
 engine ownership, not a reason for Mimir to create a parallel renderer.
+Mimir also uploads normalized spectral frames as Float32 data into a
+Fensalir-owned structured buffer resource, so the TubeField path consumes live
+GPU buffer contents rather than an empty declaration.
 
 ### 3. Calibration Constraint
 

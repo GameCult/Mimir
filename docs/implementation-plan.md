@@ -137,8 +137,11 @@ a named invariant that the native runtime cannot protect yet.
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a
   Tube claim and `AquariumFieldTubeSplineLowering`, and Fensalir plans/expands
-  the TubeField generated mesh. The old `AquariumBufferFieldFrame` /
-  `ReservoirSplats` dashboard path is also silent.
+  the TubeField generated mesh. Mimir now normalizes current spectral frames
+  into a row-major Float32 matrix, attaches that as a field resource upload, and
+  Fensalir copies it into the resolved GPU structured buffer before TubeField
+  compute reads. The old `AquariumBufferFieldFrame` / `ReservoirSplats`
+  dashboard path is also silent.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer
