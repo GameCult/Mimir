@@ -31,6 +31,8 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumCameraFitPadding = 1.12f;
     private const float SpectrumFrustumMinimumNear = 0.01f;
     private const float SpectrumSplineTubePadding = 0.18f;
+    private const float SpectrumSplineEmission = 1.85f;
+    private const float SpectrumSplineHotBloom = 8.0f;
     private const int DefaultSpectrumSplineWindowStride = 4;
     private const int DefaultSpectrumSplineBandStride = 2;
     private const int DefaultSpectrumSplineSubdivisions = 1;
@@ -917,7 +919,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 splines.Add(new AquariumSpline3D(
                     $"spectrum-{spectrum.SourceId}-{windowIndex}",
                     points,
-                    new AquariumSplineStyle(0.018f, 1.35f, 1.0f, 0.78f, 0.22f),
+                    new AquariumSplineStyle(0.020f, SpectrumSplineEmission, 1.0f, 0.72f, 0.20f),
                     CatmullRomSubdivisions: subdivisions));
             }
         }
@@ -998,10 +1000,19 @@ public sealed class MimirRuntime : IAquariumRuntime
     private static Vector4 SpectrumColor(float normalized, float alpha)
     {
         var hot = Math.Clamp(normalized, 0.0f, 1.0f);
-        var red = 0.90f + 2.20f * hot;
-        var green = 0.14f + 1.55f * hot * hot;
-        var blue = 0.42f * (1.0f - hot) + 0.08f * hot;
-        return new Vector4(red, green, blue, alpha);
+        var hardDrive = SmoothStep(0.58f, 0.96f, hot);
+        var bloom = 1.0f + SpectrumSplineHotBloom * hardDrive * hardDrive;
+        var red = (0.72f + 2.35f * hot) * bloom;
+        var green = (0.10f + 1.90f * hot * hot) * bloom;
+        var blue = (0.40f * (1.0f - hot) + 0.16f * hot + 0.22f * hardDrive) * (1.0f + 2.8f * hardDrive);
+        var drivenAlpha = alpha * Math.Clamp(0.34f + 0.88f * hot + 0.35f * hardDrive, 0.24f, 1.0f);
+        return new Vector4(red, green, blue, drivenAlpha);
+    }
+
+    private static float SmoothStep(float edge0, float edge1, float value)
+    {
+        var t = Math.Clamp((value - edge0) / Math.Max(0.0001f, edge1 - edge0), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
     }
 
     private static string SpectrumBars(MimirAudioSpectrumSnapshot spectrum)
