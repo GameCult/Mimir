@@ -316,6 +316,13 @@ lowers those into field claims with travel/depth, metadata, control, and
 reservoir-guide lanes. If a path only paints pixels, it is a fallback/debug
 draw, not the Perfect Machine surface.
 
+The live payload boundary is now explicit. Mimir declares each live native/GPU
+payload view as an `AquariumFieldResourceDeclaration` with resource key, kind,
+residency, shader access, format, shape, valid time range, version, and native
+handle metadata. Field claims and lowering requests reference those
+`mimir:resource:*` keys. The handle string is only a name; Fensalir validation
+and planning own typed resource resolution before shader lowering.
+
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's
 `docs/rendering-teardown-rebuild-protocol.md`. The intended cut is explicit:

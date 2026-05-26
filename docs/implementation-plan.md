@@ -41,6 +41,12 @@ calibration constraints, and surface intent; Fensalir's side is to turn those
 into field claims, selected lowerings, reusable evidence, temporal guides, and
 program output.
 
+Payload handles are now demoted to names inside a resource authority. Mimir
+declares live native/GPU payloads as typed Fensalir resources with shape,
+residency, shader access, validity, version, and native handle metadata; claims
+and lowering requests reference those resource keys. A string handle without a
+matching resource declaration is not payload truth.
+
 The old script stack is gone. Do not add a compatibility edge unless it protects
 a named invariant that the native runtime cannot protect yet.
 
@@ -143,6 +149,13 @@ a named invariant that the native runtime cannot protect yet.
   every second frequency bin, and one subdivision per segment. Decimation is
   allowed only by persistent sequence or frequency-bin identity, never by
   render-frame phase.
+- `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
+  rows for live native/GPU payload views. Observation claims reference
+  `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer
+  packets whose resources are missing, CPU-only, or backend-incompatible.
+  `Mimir.BufferSmoke --fensalir-field-evidence-smoke` proves the first
+  hardware-free receipt with one declared resource, three claims, three pending
+  lowering requests, and zero backend packets.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active

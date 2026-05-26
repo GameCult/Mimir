@@ -23,17 +23,21 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         var claims = new List<AquariumFieldClaim>();
         var candidates = new List<AquariumFieldCandidate>();
         var packets = new List<AquariumFieldBackendPacket>();
+        var resources = new List<AquariumFieldResourceDeclaration>();
+        var seenResources = new HashSet<string>(StringComparer.Ordinal);
         var seenDomains = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var window in windows)
         {
             AddDomain(domains, seenDomains, DomainForWindow(window));
+            AddResource(resources, seenResources, ResourceForWindow(window));
         }
 
         foreach (var observation in observations)
         {
             var domain = DomainForObservation(observation);
             AddDomain(domains, seenDomains, domain);
+            AddResource(resources, seenResources, ResourceForObservation(observation));
 
             var claim = ClaimForObservation(observation, domain.DomainKey);
             claims.Add(claim);
@@ -70,6 +74,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Claims = claims,
             Candidates = candidates,
             BackendPackets = packets,
+            Resources = resources,
             AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
             PresentationDelaySeconds = (float)options.PresentationDelaySeconds
         };
@@ -209,6 +214,17 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         }
     }
 
+    private static void AddResource(
+        ICollection<AquariumFieldResourceDeclaration> resources,
+        ISet<string> seenResources,
+        AquariumFieldResourceDeclaration resource)
+    {
+        if (resource.HasIdentity && seenResources.Add(resource.ResourceKey))
+        {
+            resources.Add(resource);
+        }
+    }
+
     private static AquariumFieldDomain DomainForWindow(MimirRollingStreamWindow window) =>
         new(
             DomainKeyForWindow(window.WindowId),
@@ -223,6 +239,81 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
                 Math.Max(0.0f, (float)window.Duration.TotalSeconds)),
             Vector3.Zero,
             "Mimir.Runtime");
+
+    private static AquariumFieldResourceDeclaration ResourceForWindow(MimirRollingStreamWindow window)
+    {
+        if (!window.Payload.HasResource)
+        {
+            return default;
+        }
+
+        var resourceKey = MimirFensalirBridgeMapper.ResourceKeyForPayload(window.Payload);
+        if (string.IsNullOrWhiteSpace(resourceKey))
+        {
+            return default;
+        }
+
+        var descriptor = window.SampleDescriptor;
+        var isVideo = descriptor.Kind == MimirStreamKind.Video;
+        var width = isVideo
+            ? Math.Max(1, descriptor.Width)
+            : Math.Max(1, descriptor.FrameCount);
+        var height = isVideo
+            ? Math.Max(1, descriptor.Height)
+            : Math.Max(1, descriptor.Channels);
+        var stride = isVideo
+            ? Math.Max(1, descriptor.StrideBytes)
+            : BytesPerAudioFrame(descriptor.AudioSampleFormat) * Math.Max(1, descriptor.Channels);
+        var count = isVideo
+            ? 1
+            : Math.Max(1, descriptor.FrameCount * descriptor.Channels);
+
+        return new AquariumFieldResourceDeclaration(
+            ResourceKey: resourceKey,
+            Kind: ResourceKindForDescriptor(descriptor, window.Payload.NativeHandleKind),
+            Residency: ResourceResidencyForHandle(window.Payload.NativeHandleKind),
+            Access: ResourceAccessForDescriptor(descriptor),
+            Format: ResourceFormatForDescriptor(descriptor),
+            Width: width,
+            Height: height,
+            DepthOrCount: count,
+            StrideBytes: stride,
+            ValidFromNs: window.WindowStartNs,
+            ValidUntilNs: window.EdgeNs,
+            Version: window.SequenceId,
+            NativeHandle: new IntPtr(unchecked((long)window.Payload.NativeHandle)),
+            NativeHandleKind: window.Payload.NativeHandleKind);
+    }
+
+    private static AquariumFieldResourceDeclaration ResourceForObservation(MimirObservation observation)
+    {
+        if (!observation.Payload.HasResource)
+        {
+            return default;
+        }
+
+        var resourceKey = MimirFensalirBridgeMapper.ResourceKeyForPayload(observation.Payload);
+        if (string.IsNullOrWhiteSpace(resourceKey))
+        {
+            return default;
+        }
+
+        return new AquariumFieldResourceDeclaration(
+            ResourceKey: resourceKey,
+            Kind: ResourceKindForObservation(observation.Modality, observation.Payload.NativeHandleKind),
+            Residency: ResourceResidencyForHandle(observation.Payload.NativeHandleKind),
+            Access: AquariumFieldShaderAccess.ShaderResource,
+            Format: observation.Modality == MimirObservationModality.Camera ? "native-video" : "native-audio",
+            Width: Math.Max(1, observation.Payload.ByteLength),
+            Height: 1,
+            DepthOrCount: Math.Max(1, observation.Payload.ByteLength),
+            StrideBytes: Math.Max(1, observation.Payload.ByteLength),
+            ValidFromNs: observation.ObservedTimeNs,
+            ValidUntilNs: observation.CanonicalTimeEstimateNs + Math.Max(0, observation.UncertaintyNs),
+            Version: observation.Provenance.SequenceId,
+            NativeHandle: new IntPtr(unchecked((long)observation.Payload.NativeHandle)),
+            NativeHandleKind: observation.Payload.NativeHandleKind);
+    }
 
     private static AquariumFieldDomain DomainForObservation(MimirObservation observation) =>
         new(
@@ -441,16 +532,66 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
 
     private static string PayloadHandle(MimirBridgePayloadView payload)
     {
-        if (payload.NativeHandle == 0)
+        return MimirFensalirBridgeMapper.ResourceKeyForPayload(payload);
+    }
+
+    private static AquariumFieldResourceKind ResourceKindForDescriptor(
+        MimirBridgeSampleDescriptor descriptor,
+        string nativeHandleKind)
+    {
+        if (descriptor.Kind == MimirStreamKind.Audio)
         {
-            return "";
+            return AquariumFieldResourceKind.StructuredBuffer;
         }
 
-        var kind = string.IsNullOrWhiteSpace(payload.NativeHandleKind)
-            ? "native"
-            : payload.NativeHandleKind;
-        return $"{kind}:{payload.NativeHandle:x}";
+        if (nativeHandleKind.Contains("mesh", StringComparison.OrdinalIgnoreCase))
+        {
+            return AquariumFieldResourceKind.Mesh;
+        }
+
+        return nativeHandleKind.Contains("rolling", StringComparison.OrdinalIgnoreCase)
+            ? AquariumFieldResourceKind.RollingTexture
+            : AquariumFieldResourceKind.Texture2D;
     }
+
+    private static AquariumFieldResourceKind ResourceKindForObservation(
+        MimirObservationModality modality,
+        string nativeHandleKind)
+    {
+        if (nativeHandleKind.Contains("curve", StringComparison.OrdinalIgnoreCase) ||
+            nativeHandleKind.Contains("spline", StringComparison.OrdinalIgnoreCase))
+        {
+            return AquariumFieldResourceKind.CurvePointBuffer;
+        }
+
+        return modality == MimirObservationModality.Camera
+            ? AquariumFieldResourceKind.Texture2D
+            : AquariumFieldResourceKind.StructuredBuffer;
+    }
+
+    private static AquariumFieldResourceResidency ResourceResidencyForHandle(string nativeHandleKind) =>
+        nativeHandleKind.Contains("cpu", StringComparison.OrdinalIgnoreCase)
+            ? AquariumFieldResourceResidency.CpuVisible
+            : AquariumFieldResourceResidency.SharedGpu;
+
+    private static AquariumFieldShaderAccess ResourceAccessForDescriptor(MimirBridgeSampleDescriptor descriptor) =>
+        descriptor.Kind == MimirStreamKind.Video
+            ? AquariumFieldShaderAccess.ShaderResource
+            : AquariumFieldShaderAccess.ShaderResource;
+
+    private static string ResourceFormatForDescriptor(MimirBridgeSampleDescriptor descriptor) =>
+        descriptor.Kind == MimirStreamKind.Video
+            ? descriptor.PixelFormat.ToString()
+            : descriptor.AudioSampleFormat.ToString();
+
+    private static int BytesPerAudioFrame(MimirAudioSampleFormat format) =>
+        format switch
+        {
+            MimirAudioSampleFormat.Float32 or MimirAudioSampleFormat.Int32 => 4,
+            MimirAudioSampleFormat.Int24 => 3,
+            MimirAudioSampleFormat.Int16 => 2,
+            _ => 1,
+        };
 
     private static string DomainKeyForWindow(string windowId) => $"mimir:window:{windowId}";
 

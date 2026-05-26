@@ -51,6 +51,10 @@ invariants:
   - Mimir publishes physical observations, calibration constraints, and surface
     intent. Fensalir owns field claims, selected lowerings, evidence reservoirs,
     temporal guide lanes, and program presentation.
+  - Fensalir packet payload handles are not authority. Live payload references
+    must resolve through declared typed GPU/native resources with shape,
+    residency, shader access, validity, version, and handle metadata before
+    shader lowering can consume them.
   - EVE fullscreen output must use native decode/composite over Fensalir-owned
     program pixels; WebKit/DOM layout is forbidden as pixel authority.
   - Faust/native DSP owns hot audio alignment, separation, spatialization, and
@@ -283,6 +287,13 @@ accepted_design:
     texture capture.
   - `native/reservoir` owns the lower shared-edge rolling-buffer invariant for
     Fensalir/Faust integration.
+  - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
+    rows for live payload views. Observation claims reference
+    `mimir:resource:*` keys, and Fensalir validation/planning can reject or
+    defer packets whose resource declaration is missing, CPU-only, or
+    backend-incompatible. `Mimir.BufferSmoke --fensalir-field-evidence-smoke`
+    proves the current receipt: one declared resource, three claims, three
+    pending lowering requests, zero backend packets, and no validation errors.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

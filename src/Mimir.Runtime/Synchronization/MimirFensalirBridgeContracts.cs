@@ -47,7 +47,11 @@ public enum MimirSurfaceIntentPurpose
 public readonly record struct MimirBridgePayloadView(
     ulong NativeHandle,
     string NativeHandleKind,
-    int ByteLength);
+    int ByteLength,
+    string ResourceKey = "")
+{
+    public bool HasResource => NativeHandle != 0 || !string.IsNullOrWhiteSpace(ResourceKey);
+}
 
 public readonly record struct MimirBridgeSampleDescriptor(
     MimirStreamKind Kind,
@@ -357,7 +361,29 @@ public static class MimirFensalirBridgeMapper
     {
         var nativeHandle = sample.VideoFrame?.NativeHandle ?? sample.AudioBlock?.NativeHandle ?? sample.PayloadHandle;
         var nativeHandleKind = sample.VideoFrame?.NativeHandleKind ?? sample.AudioBlock?.NativeHandleKind ?? "";
-        return new MimirBridgePayloadView(nativeHandle, nativeHandleKind, sample.ByteLength);
+        return new MimirBridgePayloadView(
+            nativeHandle,
+            nativeHandleKind,
+            sample.ByteLength,
+            ResourceKeyForPayload(nativeHandle, nativeHandleKind));
+    }
+
+    public static string ResourceKeyForPayload(MimirBridgePayloadView payload) =>
+        !string.IsNullOrWhiteSpace(payload.ResourceKey)
+            ? payload.ResourceKey
+            : ResourceKeyForPayload(payload.NativeHandle, payload.NativeHandleKind);
+
+    private static string ResourceKeyForPayload(ulong nativeHandle, string nativeHandleKind)
+    {
+        if (nativeHandle == 0)
+        {
+            return "";
+        }
+
+        var kind = string.IsNullOrWhiteSpace(nativeHandleKind)
+            ? "native"
+            : nativeHandleKind.Trim().ToLowerInvariant();
+        return $"mimir:resource:{kind}:{nativeHandle:x}";
     }
 
     private static long DeviceTimestampNs(MimirStreamSample sample) =>

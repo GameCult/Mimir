@@ -536,7 +536,7 @@ static int RunFensalirFieldEvidenceSmoke()
     var requests = AquariumFieldEvidenceNormalizer.BuildLoweringRequests(frame);
 
     Console.WriteLine(
-        $"fensalir-field-evidence-smoke domains={frame.Domains.Count} claims={frame.Claims.Count} candidates={frame.Candidates.Count} packets={frame.BackendPackets.Count} requests={requests.Count} errors={validation.HasErrors}");
+        $"fensalir-field-evidence-smoke domains={frame.Domains.Count} resources={frame.Resources.Count} claims={frame.Claims.Count} candidates={frame.Candidates.Count} packets={frame.BackendPackets.Count} requests={requests.Count} errors={validation.HasErrors}");
 
     if (validation.HasErrors)
     {
@@ -547,8 +547,11 @@ static int RunFensalirFieldEvidenceSmoke()
     }
 
     return !validation.HasErrors &&
+        frame.Resources.Count == 1 &&
+        frame.Resources[0].ResourceKey == MimirFensalirBridgeMapper.ResourceKeyForPayload(window.Payload) &&
         frame.BackendPackets.Count == 0 &&
         frame.Claims.Count == 3 &&
+        frame.Claims.Any(claim => claim.PayloadHandle == frame.Resources[0].ResourceKey) &&
         requests.Count == 3 &&
         requests.All(static request => request.IsPendingBackendSelection)
             ? 0

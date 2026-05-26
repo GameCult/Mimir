@@ -159,6 +159,33 @@ MimirObservation {
 }
 ```
 
+The payload handle is not authority. It must resolve through a declared
+resource before shader lowering can consume it.
+
+### 2.5. Resource Declaration
+
+Live payloads have an explicit Fensalir resource contract:
+
+```text
+FensalirResource {
+  resourceKey
+  kind: structured-buffer | texture2d | rolling-texture | mesh | surface-page | volume
+  residency: gpu-resident | shared-gpu
+  shaderAccess: SRV | UAV | vertex-buffer | index-buffer | indirect-args
+  format
+  dimensions / count / stride
+  nativeHandle and nativeHandleKind
+  valid time range
+  version / sequence
+}
+```
+
+Mimir may mint stable resource keys from native/GPU handles, but Fensalir owns
+resolution. A DSL packet may reference `mimir:resource:*`; it may not treat a
+bare string as payload truth. If the resource contract is absent, expired,
+CPU-only, or incompatible with the selected backend, lowering must defer instead
+of rendering a lie with nice lighting.
+
 ### 3. Calibration Constraint
 
 Calibration and sync become explicit constraints:
@@ -238,6 +265,7 @@ owner.
 Create pure mapping types for:
 
 - rolling stream windows;
+- resource declarations for live GPU/native payload views;
 - observations;
 - calibration constraints;
 - surface intent.
@@ -249,6 +277,7 @@ Acceptance:
 
 - one synthetic buffer can produce observations and surface intent in a unit
   test;
+- claims that reference live payloads also declare a typed Fensalir resource;
 - the mapping can run repeatedly without growing allocations;
 - stream/source ids remain stable across frames.
 
