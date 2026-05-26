@@ -356,6 +356,9 @@ accepted_design:
     into a row-major Float32 matrix, declared as
     `mimir:resource:spectrum:field-upload`, uploaded into a Fensalir-owned
     GPU-resident structured buffer, and consumed by the TubeField lowering.
+    `Mimir.BufferSmoke --mimir-spectrum-upload-smoke` verifies the live
+    `MimirRuntime` frame path emits that Float32 upload and planned TubeField
+    packet while direct spline and buffer-field dashboard inputs remain empty.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

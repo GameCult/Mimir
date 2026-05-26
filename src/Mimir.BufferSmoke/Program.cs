@@ -2,10 +2,13 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Aquarium.Engine;
+using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
 using MessagePack;
+using Mimir.Runtime;
 using Mimir.Runtime.Synchronization;
 
 if (args.Any(arg => string.Equals(arg, "--chirplet-self-test", StringComparison.OrdinalIgnoreCase)))
@@ -98,6 +101,11 @@ if (args.Any(arg => string.Equals(arg, "--fensalir-field-evidence-smoke", String
 if (args.Any(arg => string.Equals(arg, "--fensalir-field-dsl-resource-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunFensalirFieldDslResourceSmoke();
+}
+
+if (args.Any(arg => string.Equals(arg, "--mimir-spectrum-upload-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMimirSpectrumUploadSmoke();
 }
 
 if (args.Any(arg => string.Equals(arg, "--perfect-machine-contract-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -617,6 +625,78 @@ tubespline id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum conf
         plan.DeferredRequests.Count == 0
             ? 0
             : 1;
+}
+
+static int RunMimirSpectrumUploadSmoke()
+{
+    var previousSyntheticPreview = Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW");
+    Environment.SetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW", "1");
+    try
+    {
+        var settings = new MimirSynchronizationSettings
+        {
+            BufferDuration = TimeSpan.FromSeconds(5),
+            Audio = new MimirAudioSynchronizationSettings
+            {
+                Mode = MimirAudioSyncMode.Passive,
+                ReferenceSourceId = "loopback-scarlett-speakers",
+            },
+        };
+        using var runtime = new MimirRuntime(new AquariumRuntimeOptions(Headless: true, CultCachePath: null), settings);
+        runtime.OnSceneReady();
+        runtime.Update(0.0f, new InputState());
+
+        var frame = runtime.Frame;
+        var field = frame.Scene.FieldEvidenceFrame;
+        var upload = field.ResourceUploads.SingleOrDefault(upload =>
+            string.Equals(upload.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal));
+        var matchingResources = field.Resources
+            .Where(resource => string.Equals(resource.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
+            .ToArray();
+        var matchingLowerings = field.TubeSplineLowerings
+            .Where(lowering => string.Equals(lowering.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
+            .ToArray();
+        var matchingClaims = field.Claims
+            .Where(claim => string.Equals(claim.ClaimKey, "intent:mimir:spectrum:field-upload", StringComparison.Ordinal))
+            .ToArray();
+        var resource = matchingResources.FirstOrDefault();
+        var lowering = matchingLowerings.FirstOrDefault();
+        var claim = matchingClaims.FirstOrDefault();
+        var validation = AquariumFieldEvidenceValidator.Validate(field);
+        var plan = AquariumFieldLoweringPlanner.Plan(field);
+
+        Console.WriteLine(
+            $"mimir-spectrum-upload-smoke resources={field.Resources.Count} uploads={field.ResourceUploads.Count} claims={field.Claims.Count} tubeLowerings={field.TubeSplineLowerings.Count} planned={plan.Packets.Count} errors={validation.HasErrors} legacySplines={frame.Scene.SplineFrame.Splines.Count} bufferFields={frame.Scene.BufferFieldFrame.SplineTubeFields.Count + frame.Scene.BufferFieldFrame.TextureSplineFields.Count} uploadFloats={upload?.Float32Data.Count ?? 0}");
+
+        return
+            !validation.HasErrors &&
+            !frame.Scene.SplineFrame.HasInput &&
+            !frame.Scene.BufferFieldFrame.HasInput &&
+            upload is not null &&
+            matchingResources.Length == 1 &&
+            matchingLowerings.Length == 1 &&
+            matchingClaims.Length == 1 &&
+            upload.Version == resource.Version &&
+            upload.Float32Data.Count == resource.DepthOrCount &&
+            resource.Kind == AquariumFieldResourceKind.StructuredBuffer &&
+            resource.Residency == AquariumFieldResourceResidency.GpuResident &&
+            resource.Access == AquariumFieldShaderAccess.ShaderResource &&
+            string.Equals(resource.Format, "Float32", StringComparison.OrdinalIgnoreCase) &&
+            resource.StrideBytes == sizeof(float) &&
+            lowering.Width * lowering.Height == upload.Float32Data.Count &&
+            lowering.ClaimKey == claim.ClaimKey &&
+            claim.PayloadHandle == resource.ResourceKey &&
+            plan.Packets.Any(packet =>
+                packet.Backend == AquariumFieldBackendKind.TubeField &&
+                string.Equals(packet.ClaimKey, claim.ClaimKey, StringComparison.Ordinal) &&
+                string.Equals(packet.PayloadHandle, resource.ResourceKey, StringComparison.Ordinal))
+                ? 0
+                : 1;
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW", previousSyntheticPreview);
+    }
 }
 
 static int RunChirpBinSelfTest()

@@ -141,7 +141,11 @@ a named invariant that the native runtime cannot protect yet.
   into a row-major Float32 matrix, attaches that as a field resource upload, and
   Fensalir copies it into the resolved GPU structured buffer before TubeField
   compute reads. The old `AquariumBufferFieldFrame` / `ReservoirSplats`
-  dashboard path is also silent.
+  dashboard path is also silent. `Mimir.BufferSmoke
+  --mimir-spectrum-upload-smoke` boots `MimirRuntime`, advances the synthetic
+  spectrum preview path, and verifies that the frame contains the Float32
+  resource upload plus planned TubeField packet while legacy spline and buffer
+  field inputs stay empty.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer

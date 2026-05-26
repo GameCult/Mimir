@@ -380,7 +380,9 @@ Mimir declares the rolling resource, publishes a Tube claim plus
 expansion, and TubeField material rendering. The spectrum resource is not just
 a handle: Mimir uploads the current spectral amplitudes as row-major Float32
 data into a Fensalir-owned GPU structured buffer before TubeField compute reads
-it.
+it. `Mimir.BufferSmoke --mimir-spectrum-upload-smoke` verifies this through the
+actual `MimirRuntime` frame path and confirms the legacy direct spline and
+buffer-field dashboard inputs are empty.
 
 ## Known Risks
 
