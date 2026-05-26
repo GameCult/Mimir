@@ -1,6 +1,6 @@
 {
   "status": "starting",
-  "startedAt": "2026-05-26T09:55:23.428Z",
+  "startedAt": "2026-05-26T10:21:23.942Z",
   "stateFile": "E:\\Projects\\Mimir\\.voidbot\\state\\mimir.cc",
   "reason": "repo_face_stale_short_term_memory",
   "shortTermCount": 4,
