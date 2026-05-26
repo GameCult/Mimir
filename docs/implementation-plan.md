@@ -188,7 +188,10 @@ a named invariant that the native runtime cannot protect yet.
   lowerings exist. Mesh layout authority is split by source: imported/user
   meshes use the standard `PositionNormalUvColor` vertex layout, while generated
   meshes declare `PipelinePrivate` and let the selected lowering own the minimal
-  bytes it emits and consumes.
+  bytes it emits and consumes. TubeField is the first explicit generated-mesh
+  render consumer: its compute path emits private vertex/index/indirect buffers,
+  and render binds them as a `D3D12PipelinePrivateGeneratedMesh` before applying
+  TubeField source/ramp/material state.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -333,9 +336,10 @@ a named invariant that the native runtime cannot protect yet.
    resource-backed claims against those resources. The next engine cuts are
    selected render lowerings that consume those resources as mesh geometry,
    height/SDF/material pages, and density/extinction/SDF3D volumes. The generic
-   imported mesh ABI is no longer the blocker; the next renderer decision is
-   which selected generated/imported mesh lowering and material path should be
-   implemented first.
+   imported mesh ABI is no longer the blocker; TubeField now occupies the first
+   generated-mesh lowering lane. The next renderer decisions are how to expose
+   additional generated mesh producers and which page/volume/material lowering
+   should follow.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver

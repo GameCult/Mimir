@@ -339,6 +339,9 @@ accepted_design:
     engine work. Mesh layout authority is split: imported/user-facing meshes use
     the standard `PositionNormalUvColor` vertex layout, while generated meshes
     can be `PipelinePrivate` and let the lowering own the minimal bytes.
+    TubeField now renders through the first explicit pipeline-private generated
+    mesh binding: compute owns the private vertex/index/indirect layout, and
+    render binds that generated mesh before applying TubeField material state.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

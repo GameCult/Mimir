@@ -345,7 +345,10 @@ consume mesh/page/volume resources as geometry, height/SDF/material pages, or
 density/extinction/SDF3D domains. Mesh layout authority is split by source:
 imported/user meshes use the standard `PositionNormalUvColor` layout, and
 generated meshes can be `PipelinePrivate` so each lowering owns the bytes it
-emits and consumes.
+emits and consumes. TubeField is the first concrete generated-mesh consumer:
+its compute pass emits private vertex/index/indirect buffers and render binds
+them as `D3D12PipelinePrivateGeneratedMesh` before applying source/ramp/material
+state.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's
