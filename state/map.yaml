@@ -290,18 +290,22 @@ accepted_design:
   - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
     rows for live payload views. Observation claims reference
     `mimir:resource:*` keys, and Fensalir validation/planning can reject or
-    defer packets whose resource declaration is missing, CPU-only, or
-    backend-incompatible. Audio spectrum/waveform surface intents now use the
-    source observation resource key and plan as `TubeField` packets when the
-    resource is compatible. `Mimir.BufferSmoke --fensalir-field-evidence-smoke`
-    proves one declared resource, three claims, one planned resource-backed
-    `TubeField` packet, two deferred non-backend claims, and no validation
-    errors. `--fensalir-field-dsl-resource-smoke` proves Fensalir's field
-    evidence DSL can bind a declared resource directly and produce one planned
-    `TubeField` packet with no deferred requests. Visible packet rendering is
-    blocked on a Fensalir D3D12 packet/resource resolver that imports/binds
-    structured buffers, textures, meshes, surface pages, and volumes to selected
-    shader lowerings.
+    defer packets whose resource declaration is missing, CPU-only, duplicated,
+    or backend-incompatible. Audio spectrum/waveform surface intents now use
+    the source observation resource key and plan as `TubeField` packets when
+    the resource is compatible. `Mimir.BufferSmoke
+    --fensalir-field-evidence-smoke` proves one declared resource, three
+    claims, one planned resource-backed `TubeField` packet, two deferred
+    non-backend claims, and no validation errors.
+    `--fensalir-field-dsl-resource-smoke` proves Fensalir's field evidence DSL
+    can bind a declared resource directly and produce one planned `TubeField`
+    packet with no deferred requests. Fensalir now owns the first in-process
+    D3D12 field resource registry: declared structured/curve buffer resources
+    allocate/reuse/retire engine-owned GPU slots under the resource key.
+    Mimir-declared buffers are therefore Fensalir resources in the same runtime,
+    not cross-process payload truth. Visible packet rendering is blocked on
+    binding those resolved slots into a concrete TubeField shader lowering and
+    then adding honest texture/mesh/page/volume resolvers.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

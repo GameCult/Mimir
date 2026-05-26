@@ -152,13 +152,20 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer
-  packets whose resources are missing, CPU-only, or backend-incompatible.
+  packets whose resources are missing, duplicated, CPU-only, or
+  backend-incompatible.
   `Mimir.BufferSmoke --fensalir-field-evidence-smoke` proves the first
   hardware-free receipt with one declared resource, three claims, one planned
   resource-backed `TubeField` packet, and two deferred non-backend claims.
   `Mimir.BufferSmoke --fensalir-field-dsl-resource-smoke` proves Fensalir's DSL
   evidence compiler can bind a declared resource and produce one planned
   `TubeField` packet with no deferred requests.
+- Fensalir now owns the first in-process D3D12 field resource resolver cut:
+  declared structured/curve buffer resources allocate, reuse, and retire
+  engine-owned GPU slots under the resource key. Mimir-declared buffers are
+  Fensalir buffers in the same runtime. Visible rendering still needs the
+  TubeField shader binding that consumes those resolved slots; texture,
+  mesh, surface-page, and volume resource kinds remain future engine cuts.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active

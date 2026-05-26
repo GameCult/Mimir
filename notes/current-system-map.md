@@ -320,14 +320,20 @@ The live payload boundary is now explicit. Mimir declares each live native/GPU
 payload view as an `AquariumFieldResourceDeclaration` with resource key, kind,
 residency, shader access, format, shape, valid time range, version, and native
 handle metadata. Field claims and lowering requests reference those
-`mimir:resource:*` keys. The handle string is only a name; Fensalir validation
-and planning own typed resource resolution before shader lowering.
+`mimir:resource:*` keys. The handle string is only a name; Fensalir validation,
+planning, and renderer-owned resource slots own typed resource resolution before
+shader lowering. Mimir-declared buffers are Fensalir buffers in the same
+runtime; native/shared handle metadata is an import edge, not a separate
+authority regime.
 The current smokes prove planning, not visible packet rendering:
 `--fensalir-field-evidence-smoke` now produces one planned resource-backed
 `TubeField` packet from Mimir's spectrum intent, and
 `--fensalir-field-dsl-resource-smoke` proves the Fensalir DSL can bind the same
-kind of declared resource directly. The next blocker is engine-side D3D12
-packet/resource binding for structured buffers/textures/meshes/pages/volumes.
+kind of declared resource directly. Fensalir now has the first D3D12 resolver
+cut for structured/curve buffers: it allocates, reuses, and retires
+engine-owned GPU slots under the declared resource key. The next blocker is
+shader-side packet binding for those resolved TubeField resources, plus later
+texture/mesh/page/volume resolvers.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

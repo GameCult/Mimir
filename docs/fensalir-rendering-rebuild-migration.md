@@ -182,9 +182,12 @@ FensalirResource {
 
 Mimir may mint stable resource keys from native/GPU handles, but Fensalir owns
 resolution. A DSL packet may reference `mimir:resource:*`; it may not treat a
-bare string as payload truth. If the resource contract is absent, expired,
-CPU-only, or incompatible with the selected backend, lowering must defer instead
-of rendering a lie with nice lighting.
+bare string as payload truth. In the same runtime, a Mimir-declared buffer is a
+Fensalir resource slot once the declaration is accepted; native/shared handle
+metadata is an import edge, not a separate payload authority. If the resource
+contract is absent, expired, duplicated, CPU-only, or incompatible with the
+selected backend, lowering must defer instead of rendering a lie with nice
+lighting.
 
 Current proof surface:
 
@@ -196,10 +199,12 @@ Current proof surface:
   evidence DSL to bind the declared resource directly and produce one planned
   `TubeField` packet with no deferred requests.
 
-Current blocker for visible rendering is below this contract: Fensalir still
-needs a D3D12 packet/resource resolver that imports or aliases GPU-resident
-structured buffers, textures, meshes, surface pages, and volumes and binds them
-to the selected shader lowering. That is engine ownership, not a reason for
+Fensalir now owns the first D3D12 resource resolver cut below this contract:
+declared structured/curve buffers allocate, reuse, and retire engine-owned GPU
+slots under their resource keys. Current blocker for visible rendering is
+shader binding: selected `TubeField` packets must consume those resolved slots
+through a concrete lowering. Texture, mesh, surface-page, and volume resolvers
+remain explicit future engine cuts. That is engine ownership, not a reason for
 Mimir to create a parallel renderer.
 
 ### 3. Calibration Constraint
