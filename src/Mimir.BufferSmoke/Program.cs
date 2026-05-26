@@ -95,6 +95,11 @@ if (args.Any(arg => string.Equals(arg, "--fensalir-field-evidence-smoke", String
     return RunFensalirFieldEvidenceSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--fensalir-field-dsl-resource-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunFensalirFieldDslResourceSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--perfect-machine-contract-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return await RunPerfectMachineContractSmokeAsync(
@@ -534,9 +539,10 @@ static int RunFensalirFieldEvidenceSmoke()
         [intent]);
     var validation = AquariumFieldEvidenceValidator.Validate(frame);
     var requests = AquariumFieldEvidenceNormalizer.BuildLoweringRequests(frame);
+    var plan = AquariumFieldLoweringPlanner.Plan(frame);
 
     Console.WriteLine(
-        $"fensalir-field-evidence-smoke domains={frame.Domains.Count} resources={frame.Resources.Count} claims={frame.Claims.Count} candidates={frame.Candidates.Count} packets={frame.BackendPackets.Count} requests={requests.Count} errors={validation.HasErrors}");
+        $"fensalir-field-evidence-smoke domains={frame.Domains.Count} resources={frame.Resources.Count} claims={frame.Claims.Count} candidates={frame.Candidates.Count} packets={frame.BackendPackets.Count} requests={requests.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
 
     if (validation.HasErrors)
     {
@@ -553,7 +559,56 @@ static int RunFensalirFieldEvidenceSmoke()
         frame.Claims.Count == 3 &&
         frame.Claims.Any(claim => claim.PayloadHandle == frame.Resources[0].ResourceKey) &&
         requests.Count == 3 &&
-        requests.All(static request => request.IsPendingBackendSelection)
+        requests.All(static request => request.IsPendingBackendSelection) &&
+        plan.Packets.Count == 1 &&
+        plan.Packets[0].Backend == AquariumFieldBackendKind.TubeField &&
+        plan.Packets[0].PayloadHandle == frame.Resources[0].ResourceKey &&
+        plan.DeferredRequests.Count == 2
+            ? 0
+            : 1;
+}
+
+static int RunFensalirFieldDslResourceSmoke()
+{
+    var resource = new AquariumFieldResourceDeclaration(
+        ResourceKey: "mimir:resource:native-ring:1234",
+        Kind: AquariumFieldResourceKind.StructuredBuffer,
+        Residency: AquariumFieldResourceResidency.SharedGpu,
+        Access: AquariumFieldShaderAccess.ShaderResource,
+        Format: "Float32",
+        Width: 192,
+        Height: 1,
+        DepthOrCount: 192,
+        StrideBytes: 4,
+        ValidFromNs: 0,
+        ValidUntilNs: 1_000_000_000,
+        Version: 42,
+        NativeHandle: new IntPtr(0x1234),
+        NativeHandleKind: "native-ring");
+    const string source = """
+resource id=spectrum key=mimir:resource:native-ring:1234
+domain id=mimir:domain:spectrum kind=RollingBuffer min=0,0,0 max=192,1,5 owner=Mimir.Runtime
+tubeclaim id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum confidence=0.94 radius=0.02 support=0.02,0.02,5
+""";
+    var frame = AquariumFieldScriptCompiler.CompileEvidence(
+        source,
+        new Dictionary<string, AquariumFieldResourceDeclaration>(StringComparer.Ordinal)
+        {
+            [resource.ResourceKey] = resource,
+        });
+    var plan = AquariumFieldLoweringPlanner.Plan(frame);
+    var validation = AquariumFieldEvidenceValidator.Validate(frame);
+
+    Console.WriteLine(
+        $"fensalir-field-dsl-resource-smoke resources={frame.Resources.Count} claims={frame.Claims.Count} requests={AquariumFieldEvidenceNormalizer.BuildLoweringRequests(frame).Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
+
+    return !validation.HasErrors &&
+        frame.Resources.Count == 1 &&
+        frame.Claims.Count == 1 &&
+        plan.Packets.Count == 1 &&
+        plan.Packets[0].Backend == AquariumFieldBackendKind.TubeField &&
+        plan.Packets[0].PayloadHandle == resource.ResourceKey &&
+        plan.DeferredRequests.Count == 0
             ? 0
             : 1;
 }

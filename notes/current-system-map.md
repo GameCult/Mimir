@@ -322,6 +322,12 @@ residency, shader access, format, shape, valid time range, version, and native
 handle metadata. Field claims and lowering requests reference those
 `mimir:resource:*` keys. The handle string is only a name; Fensalir validation
 and planning own typed resource resolution before shader lowering.
+The current smokes prove planning, not visible packet rendering:
+`--fensalir-field-evidence-smoke` now produces one planned resource-backed
+`TubeField` packet from Mimir's spectrum intent, and
+`--fensalir-field-dsl-resource-smoke` proves the Fensalir DSL can bind the same
+kind of declared resource directly. The next blocker is engine-side D3D12
+packet/resource binding for structured buffers/textures/meshes/pages/volumes.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

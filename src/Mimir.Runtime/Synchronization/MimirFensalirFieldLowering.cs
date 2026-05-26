@@ -19,6 +19,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         IEnumerable<MimirCalibrationConstraint> calibrationConstraints,
         IEnumerable<MimirSurfaceIntent> surfaceIntents)
     {
+        var observationByKey = observations.ToDictionary(static observation => observation.ObservationKey, StringComparer.Ordinal);
         var domains = new List<AquariumFieldDomain>();
         var claims = new List<AquariumFieldClaim>();
         var candidates = new List<AquariumFieldCandidate>();
@@ -59,7 +60,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             var domain = DomainForSurfaceIntent(intent);
             AddDomain(domains, seenDomains, domain);
 
-            var claim = ClaimForSurfaceIntent(intent, domain.DomainKey);
+            var claim = ClaimForSurfaceIntent(intent, domain.DomainKey, observationByKey);
             claims.Add(claim);
 
             var guide = AquariumFieldGuide.Valid(
@@ -397,7 +398,10 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Confidence: confidence);
     }
 
-    private AquariumFieldClaim ClaimForSurfaceIntent(MimirSurfaceIntent intent, string domainKey)
+    private AquariumFieldClaim ClaimForSurfaceIntent(
+        MimirSurfaceIntent intent,
+        string domainKey,
+        IReadOnlyDictionary<string, MimirObservation> observationByKey)
     {
         var confidence = Clamp01((float)intent.MaterialGraph.Confidence);
         var proposal = new AquariumFieldProposalPolicy(
@@ -415,7 +419,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Encoding: EncodingForSurfaceIntent(intent.Domain),
             Support: SupportForSurfaceIntent(intent),
             Proposal: proposal,
-            PayloadHandle: intent.SupportPolicy.PolicyId,
+            PayloadHandle: PayloadHandleForSurfaceIntent(intent, observationByKey),
             ObservedTimeNs: 0,
             Confidence: confidence);
     }
@@ -514,6 +518,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
     private static AquariumFieldEncoding EncodingForSurfaceIntent(MimirSurfaceDomain domain) =>
         domain switch
         {
+            MimirSurfaceDomain.AudioSpectrum or MimirSurfaceDomain.AudioWaveform => AquariumFieldEncoding.Tube,
             MimirSurfaceDomain.Timing => AquariumFieldEncoding.Phase,
             MimirSurfaceDomain.AcousticResponse => AquariumFieldEncoding.Confidence,
             _ => AquariumFieldEncoding.Feature,
@@ -533,6 +538,25 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
     private static string PayloadHandle(MimirBridgePayloadView payload)
     {
         return MimirFensalirBridgeMapper.ResourceKeyForPayload(payload);
+    }
+
+    private static string PayloadHandleForSurfaceIntent(
+        MimirSurfaceIntent intent,
+        IReadOnlyDictionary<string, MimirObservation> observationByKey)
+    {
+        foreach (var observationKey in intent.SourceObservationKeys)
+        {
+            if (observationByKey.TryGetValue(observationKey, out var observation))
+            {
+                var resourceKey = PayloadHandle(observation.Payload);
+                if (!string.IsNullOrWhiteSpace(resourceKey))
+                {
+                    return resourceKey;
+                }
+            }
+        }
+
+        return intent.SupportPolicy.PolicyId;
     }
 
     private static AquariumFieldResourceKind ResourceKindForDescriptor(

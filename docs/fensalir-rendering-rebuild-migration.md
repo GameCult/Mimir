@@ -186,6 +186,22 @@ bare string as payload truth. If the resource contract is absent, expired,
 CPU-only, or incompatible with the selected backend, lowering must defer instead
 of rendering a lie with nice lighting.
 
+Current proof surface:
+
+- `Mimir.BufferSmoke --fensalir-field-evidence-smoke` maps a Mimir rolling
+  window/observation/spectrum intent into one declared resource, three claims,
+  one planned resource-backed `TubeField` packet, and two deferred non-backend
+  claims.
+- `Mimir.BufferSmoke --fensalir-field-dsl-resource-smoke` uses Fensalir's field
+  evidence DSL to bind the declared resource directly and produce one planned
+  `TubeField` packet with no deferred requests.
+
+Current blocker for visible rendering is below this contract: Fensalir still
+needs a D3D12 packet/resource resolver that imports or aliases GPU-resident
+structured buffers, textures, meshes, surface pages, and volumes and binds them
+to the selected shader lowering. That is engine ownership, not a reason for
+Mimir to create a parallel renderer.
+
 ### 3. Calibration Constraint
 
 Calibration and sync become explicit constraints:

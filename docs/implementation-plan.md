@@ -154,8 +154,11 @@ a named invariant that the native runtime cannot protect yet.
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer
   packets whose resources are missing, CPU-only, or backend-incompatible.
   `Mimir.BufferSmoke --fensalir-field-evidence-smoke` proves the first
-  hardware-free receipt with one declared resource, three claims, three pending
-  lowering requests, and zero backend packets.
+  hardware-free receipt with one declared resource, three claims, one planned
+  resource-backed `TubeField` packet, and two deferred non-backend claims.
+  `Mimir.BufferSmoke --fensalir-field-dsl-resource-smoke` proves Fensalir's DSL
+  evidence compiler can bind a declared resource and produce one planned
+  `TubeField` packet with no deferred requests.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -294,7 +297,10 @@ a named invariant that the native runtime cannot protect yet.
    accumulation from stable frame budgets. Do not route this dashboard back
    through fractal point splats.
 8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
-   Spout2 publication into Fensalir.
+   Spout2 publication into Fensalir. The next unresolved engine cut is the
+   D3D12 packet/resource resolver: planned field packets need imported
+   GPU-resident resource bindings for structured buffers, textures, meshes,
+   surface pages, and volumes before they can become shader dispatch/draw work.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver
