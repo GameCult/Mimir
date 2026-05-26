@@ -182,7 +182,10 @@ a named invariant that the native runtime cannot protect yet.
   format, bounds, submesh count, and version. The Fensalir DSL can declare a
   mesh package, and the D3D12 registry allocates/reuses its GPU-resident vertex
   and index buffers under the mesh resource key. This is resolver authority
-  only; mesh draw/material lowerings remain future engine work.
+  only; mesh draw/material lowerings remain future engine work. Fensalir's
+  evidence DSL can also create generic resource-backed claims, so mesh/page/
+  volume resources can plan into backend packets before their selected render
+  lowerings exist.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -323,9 +326,12 @@ a named invariant that the native runtime cannot protect yet.
 8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir. The D3D12 packet/resource resolver now has
    first authority for structured buffers, local textures, surface pages,
-   volume textures, and mesh packages. The next engine cuts are selected render
-   lowerings that consume those resources as mesh geometry, height/SDF/material
-   pages, and density/extinction/SDF3D volumes.
+   volume textures, and mesh packages, and the evidence DSL can plan generic
+   resource-backed claims against those resources. The next engine cuts are
+   selected render lowerings that consume those resources as mesh geometry,
+   height/SDF/material pages, and density/extinction/SDF3D volumes. Mesh
+   rendering needs an explicit vertex attribute/material contract before code
+   should touch the draw path.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver

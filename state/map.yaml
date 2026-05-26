@@ -333,8 +333,10 @@ accepted_design:
     `Mesh.Vertices` and `Mesh.Indices` describe the GPU buffers, plus topology,
     index format, bounds, submesh count, and version. The Fensalir DSL can
     declare those mesh packages, and the D3D12 registry allocates/reuses the
-    backing vertex/index buffers under the mesh resource key. Mesh draw/material
-    lowerings remain future engine work.
+    backing vertex/index buffers under the mesh resource key. The DSL can also
+    create generic resource-backed claims, so mesh/page/volume resources can
+    reach backend packet planning. Mesh draw/material lowerings remain future
+    engine work and need an explicit vertex attribute/material contract first.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

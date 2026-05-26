@@ -338,10 +338,12 @@ column addressing, amplitude power/normalization, radius, ramp texture path, and
 emission scale. Fensalir now resolves the first non-buffer resource family too:
 Texture2D local assets bind as TubeField ramps, surface pages and volume
 textures allocate shader-readable GPU textures, and mesh packages own
-`Mesh.Vertices`/`Mesh.Indices` GPU buffer shape under one resource key. The
-next blocker is no longer resolver ownership; it is selected render lowerings
-that consume mesh/page/volume resources as geometry, height/SDF/material pages,
-or density/extinction/SDF3D domains.
+`Mesh.Vertices`/`Mesh.Indices` GPU buffer shape under one resource key. The DSL
+can plan generic resource-backed claims over those declarations. The next
+blocker is no longer resolver ownership; it is selected render lowerings that
+consume mesh/page/volume resources as geometry, height/SDF/material pages, or
+density/extinction/SDF3D domains. Mesh drawing specifically needs vertex
+attribute and material semantics before Fensalir can honestly bind a pipeline.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

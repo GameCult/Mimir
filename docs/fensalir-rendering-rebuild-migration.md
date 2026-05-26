@@ -210,11 +210,14 @@ ramp texture path, and emission scale. TubeField now consumes those resources
 through a GPU compute/render path, local Texture2D resources can bind as ramps,
 SurfacePage and VolumeTexture declarations resolve into shader-readable GPU
 textures, and Mesh declarations package `Mesh.Vertices`/`Mesh.Indices` GPU
-buffer shape under one resource key. Current blocker for the remaining visual
-surface is not resource ownership; it is the selected render lowerings that
-interpret mesh/page/volume resources as geometry, height/SDF/material pages, or
-density/extinction/SDF3D domains. That is engine ownership, not a reason for
-Mimir to create a parallel renderer.
+buffer shape under one resource key. The evidence DSL can now plan generic
+resource-backed claims over those declarations. Current blocker for the
+remaining visual surface is not resource ownership; it is the selected render
+lowerings that interpret mesh/page/volume resources as geometry, height/SDF/
+material pages, or density/extinction/SDF3D domains. Mesh drawing also needs a
+vertex attribute/material contract before the D3D12 path can bind a real
+pipeline. That is engine ownership, not a reason for Mimir to create a parallel
+renderer.
 
 ### 3. Calibration Constraint
 
