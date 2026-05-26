@@ -350,7 +350,9 @@ accepted_design:
     not match the claim payload. Mimir's typed surface-intent lowering now emits
     TubeSpline lowering metadata for audio spectrum/waveform Tube claims, so the
     generated mesh path is fed by real Mimir evidence rather than only the DSL
-    smoke.
+    smoke. The legacy direct `AquariumSplineFrame` spectrum dashboard is silent:
+    `MimirRuntime` submits an empty spline frame and the old direct spectrum
+    spline builder has been deleted.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

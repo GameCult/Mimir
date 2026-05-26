@@ -372,28 +372,12 @@ larger claims dishonest. Fensalir's SDF probe/lowering stage should emit
 surface splats at that detail-adaptive density, not one splat per pixel by
 default.
 
-The live debug spectrum view is a Fensalir spline-tube SDF surface. Mimir
-submits rolling ASIO spectrum history as `AquariumSplineFrame` trails:
-frequency lives on X, amplitude on Y, history on Z, and channels stack along
-Y. `AquariumBufferFieldFrame` / fractal `ReservoirSplats` no longer own this
-dashboard, because point splats were the wrong visible primitive for a surface
-whose truth is a tube SDF.
-
-Fensalir's spline shader owns visible coverage. Geometry is only the
-conservative segment envelope; the pixel shader evaluates capsule/tube
-distance, writes color/metadata/control, and emits `reservoirGuide` for the
-scene temporal path. The direct spline fallback does not use stochastic
-blue-noise perturbation; blue-noise sampling belongs in a real reservoir
-producer, not in a direct debug surface where the viewer needs coherent lines.
-Mimir must not rotate
-which rows or bands exist per frame: that made the surface temporally
-incoherent and impossible to follow. The live model stores timestamped spectrum
-history frames with monotonically increasing sequence ids, computes Z from
-continuous sample age, keeps source ordering stable across the whole history,
-and keeps band selection stable. `MIMIR_SPECTRUM_SPLINE_BAND_STRIDE` and
-`MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE` and `MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS`
-remain budget knobs, but they may only select by persistent frequency-bin or
-history-sequence identity. Render-frame phase is forbidden as a visual owner.
+The live debug spectrum view is now field-evidence owned. Mimir no longer
+submits direct `AquariumSplineFrame` trails for the spectrum dashboard and does
+not submit `AquariumBufferFieldFrame` / fractal `ReservoirSplats` for it either.
+Mimir declares the rolling resource, publishes a Tube claim plus
+`AquariumFieldTubeSplineLowering`, and Fensalir owns planning, generated mesh
+expansion, and TubeField material rendering.
 
 ## Known Risks
 

@@ -93,8 +93,8 @@ Derived state:
 
 - spectrum lines, debug views, screenshots, OBS bridge endpoints, FFmpeg/SRT
   helpers, and Eve dashboard feeds are views or diagnostics.
-- The direct spline-spectrum dashboard is useful because it reveals buffers; it
-  is not the architectural owner of field rendering.
+- The old direct spline-spectrum dashboard is silent. FieldEvidence TubeField
+  owns the spectrum surface path; screenshots and logs remain diagnostics.
 
 Forbidden writers:
 
@@ -294,14 +294,11 @@ flowchart TD
 
 ## Migration Plan
 
-### Phase 0: Freeze The Current Debug Surface
+### Phase 0: Silence Legacy Debug Surfaces
 
-Keep the direct `AquariumSplineFrame` dashboard because it exposes live audio
-buffers and is useful for sanity checks. Label it as deterministic debug
-surface, not production field evidence.
-
-Delete or keep dead any point-splat spectrum path. It already proved the wrong
-owner.
+The direct `AquariumSplineFrame` spectrum dashboard and point-splat spectrum
+path are no longer scene writers. Live spectrum rendering flows through
+FieldEvidence TubeField claims and generated mesh expansion.
 
 ### Phase 1: Add Bridge DTOs In Mimir.Runtime
 

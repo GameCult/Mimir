@@ -133,22 +133,12 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis.
-- `MimirRuntime` publishes live ASIO spectrum history to Fensalir as direct
-  `AquariumSplineFrame` tube surfaces. The spline shader owns visible coverage:
-  it evaluates capsule/tube distance and writes scene color plus temporal
-  reservoir guide MRTs. Direct spline rendering is deterministic; native
-  blue-noise jitter belongs in a future stochastic surface-claim producer, not
-  in the direct debug surface. The old
-  `AquariumBufferFieldFrame` / `ReservoirSplats` dashboard path is no longer
-  allowed to decide this surface. Spectrum rows are timestamped history frames:
-  row identity is stable, source identity is stable, band identity is stable,
-  and Z is continuous time-age instead of integer queue age. Current budget
-  knobs are `MIMIR_SPECTRUM_SPLINE_WINDOW_STRIDE`,
-  `MIMIR_SPECTRUM_SPLINE_BAND_STRIDE`, and
-  `MIMIR_SPECTRUM_SPLINE_SUBDIVISIONS`; defaults draw every second history row,
-  every second frequency bin, and one subdivision per segment. Decimation is
-  allowed only by persistent sequence or frequency-bin identity, never by
-  render-frame phase.
+- `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
+  spectrum dashboard. Live spectrum visualization authority is the
+  `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a
+  Tube claim and `AquariumFieldTubeSplineLowering`, and Fensalir plans/expands
+  the TubeField generated mesh. The old `AquariumBufferFieldFrame` /
+  `ReservoirSplats` dashboard path is also silent.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer
