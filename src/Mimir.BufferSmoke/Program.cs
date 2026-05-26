@@ -542,7 +542,7 @@ static int RunFensalirFieldEvidenceSmoke()
     var plan = AquariumFieldLoweringPlanner.Plan(frame);
 
     Console.WriteLine(
-        $"fensalir-field-evidence-smoke domains={frame.Domains.Count} resources={frame.Resources.Count} claims={frame.Claims.Count} candidates={frame.Candidates.Count} packets={frame.BackendPackets.Count} requests={requests.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
+        $"fensalir-field-evidence-smoke domains={frame.Domains.Count} resources={frame.Resources.Count} claims={frame.Claims.Count} candidates={frame.Candidates.Count} tubeLowerings={frame.TubeSplineLowerings.Count} packets={frame.BackendPackets.Count} requests={requests.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
 
     if (validation.HasErrors)
     {
@@ -557,6 +557,9 @@ static int RunFensalirFieldEvidenceSmoke()
         frame.Resources[0].ResourceKey == MimirFensalirBridgeMapper.ResourceKeyForPayload(window.Payload) &&
         frame.BackendPackets.Count == 0 &&
         frame.Claims.Count == 3 &&
+        frame.TubeSplineLowerings.Count == 1 &&
+        frame.TubeSplineLowerings[0].ClaimKey == plan.Packets[0].ClaimKey &&
+        frame.TubeSplineLowerings[0].ResourceKey == frame.Resources[0].ResourceKey &&
         frame.Claims.Any(claim => claim.PayloadHandle == frame.Resources[0].ResourceKey) &&
         requests.Count == 3 &&
         requests.All(static request => request.IsPendingBackendSelection) &&

@@ -225,8 +225,9 @@ shared ABI; TubeField only owns the argument buffer it emits. TubeField
 expansion is now gated by selected backend packets, so explicit lowering
 metadata cannot bypass validation/planning authority. Validation also rejects
 TubeSpline metadata whose claim is not Tube-encoded or whose resource differs
-from the claim payload. That is engine ownership, not a reason for Mimir to
-create a parallel renderer.
+from the claim payload. Mimir's typed surface-intent lowering now emits the
+matching TubeSpline metadata for audio spectrum/waveform Tube claims. That is
+engine ownership, not a reason for Mimir to create a parallel renderer.
 
 ### 3. Calibration Constraint
 

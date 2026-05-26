@@ -25,6 +25,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         var candidates = new List<AquariumFieldCandidate>();
         var packets = new List<AquariumFieldBackendPacket>();
         var resources = new List<AquariumFieldResourceDeclaration>();
+        var tubeSplineLowerings = new List<AquariumFieldTubeSplineLowering>();
         var seenResources = new HashSet<string>(StringComparer.Ordinal);
         var seenDomains = new HashSet<string>(StringComparer.Ordinal);
 
@@ -67,6 +68,10 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
                 claim.Confidence,
                 Math.Max(0.0f, (float)intent.SupportPolicy.MaximumAgeSeconds));
             candidates.Add(CandidateForClaim(claim, guide));
+            if (TryBuildTubeSplineLowering(intent, claim, resources, out var tubeSplineLowering))
+            {
+                tubeSplineLowerings.Add(tubeSplineLowering);
+            }
         }
 
         return new AquariumFieldEvidenceFrame
@@ -76,6 +81,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Candidates = candidates,
             BackendPackets = packets,
             Resources = resources,
+            TubeSplineLowerings = tubeSplineLowerings,
             AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
             PresentationDelaySeconds = (float)options.PresentationDelaySeconds
         };
@@ -432,6 +438,59 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Encoding: claim.Encoding,
             Proposal: claim.Proposal,
             Guide: guide);
+
+    private static bool TryBuildTubeSplineLowering(
+        MimirSurfaceIntent intent,
+        AquariumFieldClaim claim,
+        IReadOnlyList<AquariumFieldResourceDeclaration> resources,
+        out AquariumFieldTubeSplineLowering lowering)
+    {
+        lowering = default;
+        if (claim.Encoding != AquariumFieldEncoding.Tube ||
+            string.IsNullOrWhiteSpace(claim.PayloadHandle))
+        {
+            return false;
+        }
+
+        var resource = resources.FirstOrDefault(resource => string.Equals(resource.ResourceKey, claim.PayloadHandle, StringComparison.Ordinal));
+        if (!resource.HasIdentity ||
+            resource.Kind is not (AquariumFieldResourceKind.StructuredBuffer or AquariumFieldResourceKind.CurvePointBuffer))
+        {
+            return false;
+        }
+
+        var width = Math.Max(2, resource.Width);
+        var height = Math.Max(1, resource.Height);
+        var axisStepX = width > 1 ? 10.0f / (width - 1) : 10.0f;
+        lowering = new AquariumFieldTubeSplineLowering(
+            LoweringKey: $"tube-spline:{intent.IntentKey}",
+            ClaimKey: claim.ClaimKey,
+            ResourceKey: resource.ResourceKey,
+            Width: width,
+            Height: height,
+            StrideBytes: Math.Max(4, resource.StrideBytes),
+            FirstColumn: 0,
+            ColumnCount: height,
+            ColumnStride: 1,
+            RollingModulo: height,
+            RollingOffset: 0,
+            Origin: new Vector3(-5.0f, 0.0f, 0.0f),
+            AxisStep: new Vector3(axisStepX, 0.0f, 0.0f),
+            ColumnStep: new Vector3(0.0f, 0.0f, 0.1f),
+            AmplitudePower: 2.0f,
+            AmplitudeScale: 1.0f,
+            NormalizeMin: 0.0f,
+            NormalizeMax: 1.0f,
+            BaseRadius: 0.012f,
+            RadiusScale: 0.030f,
+            Alpha: 0.92f,
+            Feather: 0.20f,
+            RampTexturePath: "",
+            RampResourceKey: "",
+            EmissionScale: 10.0f,
+            CatmullRomSubdivisions: 4).Normalized();
+        return true;
+    }
 
     private AquariumFieldSupport SupportForTiming(long uncertaintyNs)
     {

@@ -352,6 +352,8 @@ state. The DrawIndexed indirect command signature has been lifted to the
 generated-mesh lane instead of being TubeField-owned. TubeField expansion now
 requires a planned TubeField backend packet for the lowering's claim, and
 validation rejects TubeSpline metadata whose claim/resource authority is split.
+Mimir's typed surface-intent lowering now emits the matching TubeSpline
+lowering for audio spectrum/waveform Tube claims.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's
