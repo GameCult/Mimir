@@ -309,23 +309,15 @@ Visual fusion belongs in Fensalir over current reservoir claims. Native capture
 workers provide frames; Fensalir owns feature extraction, matching, material
 fitting, render budgeting, and publication.
 
-The live debug spectrum view now has two separate authorities:
+The live debug spectrum view is direct spline-tube rendering. Mimir submits an
+`AquariumSplineFrame` only: each rolling audio spectrum window becomes a
+Catmull-Rom tube trail with frequency on X, amplitude on Y, history on Z, and
+channels stacked along Y. Fensalir owns the shader-side tube SDF coverage for
+those splines.
 
-- `AquariumBufferFieldFrame` is the real Fensalir contract. Mimir expresses
-  each rolling audio spectrum window as a buffer-backed spline tube field:
-  frequency lives in the spline domain, amplitude shapes the tube path, and
-  appearance/probe policy can reference tangent, curvature, normal, derivative,
-  object domain, and parent-space transforms. This is the surface the future
-  compute lowering consumes.
-- `AquariumSplineFrame` is only the immediate preview witness. It renders the
-  same spectrum windows as camera-facing Catmull-Rom tube ribbons so humans can
-  sanity-check ASIO loopback and mic buffers before the reservoir path owns the
-  draw. It must not become the final visual authority.
-
-The intended Fensalir lowering is buffer field expression -> compute-generated
-stochastic SDF splat probes -> spatiotemporal splat reservoir -> reservoir
-sampling for temporally antialiased surface contribution. Splat density is a
-function of visual contribution, not uniform polyline tessellation.
+`AquariumBufferFieldFrame`/reservoir splats are not part of this spectrum
+dashboard. That previous path made the debug surface look like point/probe
+dust and split visual authority between reservoir dots and direct tubes.
 
 ## Known Risks
 
