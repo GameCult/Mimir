@@ -1,8 +1,17 @@
 {
-  "status": "starting",
-  "startedAt": "2026-05-26T11:16:24.780Z",
-  "stateFile": "E:\\Projects\\Mimir\\.voidbot\\state\\mimir.cc",
-  "reason": "repo_face_stale_short_term_memory",
-  "shortTermCount": 4,
-  "newestShortTermUpdatedAt": "2026-05-25T05:08:28.095Z"
+    "durationSeconds":  156.39,
+    "stateUpdated":  true,
+    "exitCode":  0,
+    "finishedAt":  "2026-05-26T13:16:04.3756979Z",
+    "stateFile":  "E:\\Projects\\Mimir\\.voidbot\\state\\mimir.cc",
+    "skipModel":  false,
+    "startedAt":  "2026-05-26T13:13:27.9905441Z",
+    "lastMessagePath":  "E:\\Projects\\Mimir\\.voidbot\\status\\void-memory-maintenance-last-message.txt",
+    "appliedOperationCount":  4,
+    "status":  "ok",
+    "contextPath":  "E:\\Projects\\Mimir\\.voidbot\\status\\void-memory-maintenance-context.json",
+    "mode":  "typed_memory_maintenance",
+    "proposedOperationCount":  4,
+    "forceDistillation":  true,
+    "operationOutputPath":  "E:\\Projects\\Mimir\\.voidbot\\status\\void-memory-maintenance-operations.json"
 }
