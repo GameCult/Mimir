@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Aquarium.Engine.Render;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
 using MessagePack;
@@ -87,6 +88,11 @@ if (args.Any(arg => string.Equals(arg, "--perfect-machine-profile-smoke", String
 if (args.Any(arg => string.Equals(arg, "--eve-program-output-contract-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunEveProgramOutputContractSmoke();
+}
+
+if (args.Any(arg => string.Equals(arg, "--fensalir-field-evidence-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunFensalirFieldEvidenceSmoke();
 }
 
 if (args.Any(arg => string.Equals(arg, "--perfect-machine-contract-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -452,6 +458,101 @@ static int RunEveProgramOutputContractSmoke()
     }
 
     return 0;
+}
+
+static int RunFensalirFieldEvidenceSmoke()
+{
+    var window = new MimirRollingStreamWindow(
+        WindowId: "Audio:LocalDevice:scarlett-input-1",
+        Duration: TimeSpan.FromSeconds(5),
+        StreamId: "scarlett-input-1",
+        SourceKind: MimirStreamKind.Audio,
+        Origin: MimirStreamOrigin.LocalDevice,
+        SampleDescriptor: new MimirBridgeSampleDescriptor(
+            MimirStreamKind.Audio,
+            ByteLength: 192 * 4,
+            Width: 0,
+            Height: 0,
+            MimirVideoPixelFormat.Unknown,
+            StrideBytes: 0,
+            SampleRate: 192_000,
+            Channels: 1,
+            MimirAudioSampleFormat.Float32,
+            FrameCount: 192),
+        Payload: new MimirBridgePayloadView(0x1234ul, "native-ring", 192 * 4),
+        DeviceTimestampNs: 1_000_000_000,
+        CanonicalTimestampEstimateNs: 1_000_000_050,
+        SequenceId: 42,
+        Status: MimirBridgeWindowStatus.Live,
+        SampleCount: 64,
+        WindowStartNs: 0,
+        EdgeNs: 1_000_000_000);
+    var observation = new MimirObservation(
+        ObservationKey: "scarlett-input-1:42",
+        WindowId: window.WindowId,
+        StreamId: window.StreamId,
+        SensorId: "scarlett-input-1",
+        CalibrationId: "scarlett-room-v1",
+        Modality: MimirObservationModality.Audio,
+        ObservedTimeNs: window.DeviceTimestampNs,
+        CanonicalTimeEstimateNs: window.CanonicalTimestampEstimateNs,
+        UncertaintyNs: 2_000,
+        Payload: window.Payload,
+        Provenance: new MimirObservationProvenance(window.Origin, window.StreamId, window.SequenceId, window.EdgeNs),
+        Confidence: 0.94);
+    var calibration = new MimirCalibrationConstraint(
+        ConstraintKey: "loopback-scarlett-speakers->scarlett-input-1:bioacoustic",
+        PathId: "loopback-scarlett-speakers->scarlett-input-1",
+        SourceId: "loopback-scarlett-speakers",
+        ReceiverId: "scarlett-input-1",
+        EvidenceKind: MimirCalibrationEvidenceKind.Bioacoustic,
+        DelayEstimateMicroseconds: 61.25,
+        DelayUncertaintyMicroseconds: 2.0,
+        PhaseOrGroupDelayMicroseconds: 0.0,
+        FrequencyResponse:
+        [
+            new MimirCalibrationBandConstraint(5600.0, 0.92, 0.1, 0.9),
+            new MimirCalibrationBandConstraint(8400.0, 0.86, 0.2, 0.8),
+        ],
+        UsableBandMask: "5600,8400",
+        Confidence: 0.91);
+    var intent = new MimirSurfaceIntent(
+        IntentKey: "debug-spectrum:scarlett-input-1",
+        SourceObservationKeys: [observation.ObservationKey],
+        Domain: MimirSurfaceDomain.AudioSpectrum,
+        Axes: new MimirSurfaceAxes("frequency", "amplitude", "age", "stream"),
+        SupportPolicy: new MimirSurfaceSupportPolicy("rolling-spectrum", 0.1, 5.0),
+        MaterialGraph: new MimirSurfaceMaterialIntent("spectrum-evidence", "source-evidence", 0.88),
+        UpdateBudget: new MimirSurfaceUpdateBudget(60.0, 1, 4096),
+        Purpose: MimirSurfaceIntentPurpose.Debug);
+
+    var lowering = new MimirFensalirFieldLowering();
+    var frame = lowering.BuildFieldEvidenceFrame(
+        [window],
+        [observation],
+        [calibration],
+        [intent]);
+    var validation = AquariumFieldEvidenceValidator.Validate(frame);
+    var requests = AquariumFieldEvidenceNormalizer.BuildLoweringRequests(frame);
+
+    Console.WriteLine(
+        $"fensalir-field-evidence-smoke domains={frame.Domains.Count} claims={frame.Claims.Count} candidates={frame.Candidates.Count} packets={frame.BackendPackets.Count} requests={requests.Count} errors={validation.HasErrors}");
+
+    if (validation.HasErrors)
+    {
+        foreach (var issue in validation.Issues)
+        {
+            Console.Error.WriteLine($"field-evidence-issue {issue.Severity} {issue.Key}: {issue.Message}");
+        }
+    }
+
+    return !validation.HasErrors &&
+        frame.BackendPackets.Count == 0 &&
+        frame.Claims.Count == 3 &&
+        requests.Count == 3 &&
+        requests.All(static request => request.IsPendingBackendSelection)
+            ? 0
+            : 1;
 }
 
 static int RunChirpBinSelfTest()
