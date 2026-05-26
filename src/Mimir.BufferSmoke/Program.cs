@@ -587,8 +587,9 @@ static int RunFensalirFieldDslResourceSmoke()
         NativeHandleKind: "native-ring");
     const string source = """
 resource id=spectrum key=mimir:resource:native-ring:1234
+texture2d id=blackbody key=aquarium:resource:ramp:blackbody path=D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png format=Rgba8Unorm
 domain id=mimir:domain:spectrum kind=RollingBuffer min=0,0,0 max=192,1,5 owner=Mimir.Runtime
-tubeclaim id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum confidence=0.94 radius=0.02 support=0.02,0.02,5
+tubespline id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum confidence=0.94 radius=0.02 support=0.02,0.02,5 width=192 height=1 stride=4 columns=1 ramp=blackbody
 """;
     var frame = AquariumFieldScriptCompiler.CompileEvidence(
         source,
@@ -600,11 +601,13 @@ tubeclaim id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum confi
     var validation = AquariumFieldEvidenceValidator.Validate(frame);
 
     Console.WriteLine(
-        $"fensalir-field-dsl-resource-smoke resources={frame.Resources.Count} claims={frame.Claims.Count} requests={AquariumFieldEvidenceNormalizer.BuildLoweringRequests(frame).Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
+        $"fensalir-field-dsl-resource-smoke resources={frame.Resources.Count} claims={frame.Claims.Count} tubeLowerings={frame.TubeSplineLowerings.Count} requests={AquariumFieldEvidenceNormalizer.BuildLoweringRequests(frame).Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
 
     return !validation.HasErrors &&
-        frame.Resources.Count == 1 &&
+        frame.Resources.Count == 2 &&
         frame.Claims.Count == 1 &&
+        frame.TubeSplineLowerings.Count == 1 &&
+        frame.TubeSplineLowerings[0].RampResourceKey == "aquarium:resource:ramp:blackbody" &&
         plan.Packets.Count == 1 &&
         plan.Packets[0].Backend == AquariumFieldBackendKind.TubeField &&
         plan.Packets[0].PayloadHandle == resource.ResourceKey &&

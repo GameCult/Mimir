@@ -314,12 +314,15 @@ accepted_design:
     UAVs, honors declared float sample stride with byte-address loads, records
     one draw batch per lowering, then the TubeField pixel shader binds the
     matching source buffer and resamples material per pixel by column+spline
-    coordinate with the cheap 5-tap approximation. The first material is opaque
-    field geometry with fallback black-to-warm ramp, squared normalized
-    emission, fake Fresnel center-bright/edge-dark shaping, and
-    geometry-budget overflow reporting. Remaining visual cuts are real ramp
-    texture binding, indirect draw packets, then honest texture/mesh/page/
-    volume resolvers.
+    coordinate with the cheap 5-tap approximation. Texture2D local assets are
+    now first-class Fensalir field resources: the DSL can declare a local PNG
+    ramp resource, TubeField `ramp=` aliases bind automatically by resource
+    key, and D3D12 uploads/binds the texture SRV with a linear-clamp sampler.
+    Missing ramps fall back to a Fensalir-owned 0-1 linear texture. The first
+    material is opaque field geometry with squared normalized emission, fake
+    Fresnel center-bright/edge-dark shaping, and geometry-budget overflow
+    reporting. Remaining visual cuts are indirect draw packets, then honest
+    mesh/page/volume resolvers.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

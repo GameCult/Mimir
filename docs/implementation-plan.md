@@ -163,13 +163,16 @@ a named invariant that the native runtime cannot protect yet.
 - Fensalir now owns the first in-process D3D12 field resource resolver cut:
   shared structured/curve buffer resources import/alias GPU-resident handles,
   and Fensalir-owned resources allocate GPU slots only when Fensalir is the
-  producer. Mimir-declared rendering buffers are Fensalir GPU resources in the
-  same runtime and should not round-trip through CPU payloads. The TubeField DSL
-  can now describe a 2D rolling float buffer as Catmull-Rom XY tubes with
-  modulo column addressing, amplitude power/normalization, radius, ramp texture
-  path, and emission scale. Visible rendering still needs shader-side expansion
-  and binding over those GPU-resident slots; texture, mesh, surface-page, and
-  volume resource kinds remain future engine cuts.
+  producer. Texture2D local assets can now be declared as field resources and
+  bound automatically by DSL handles, so TubeField ramps use resource keys
+  rather than raw paths as live authority. Mimir-declared rendering buffers are
+  Fensalir GPU resources in the same runtime and should not round-trip through
+  CPU payloads. The TubeField DSL can now describe a 2D rolling float buffer as
+  Catmull-Rom XY tubes with modulo column addressing, amplitude power/
+  normalization, radius, ramp texture resource, and emission scale. D3D12 now
+  expands and renders those tubes from GPU-resident buffers, samples material
+  per pixel, and binds declared local ramp textures; indirect draw packets,
+  mesh, surface-page, and volume resource kinds remain future engine cuts.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
