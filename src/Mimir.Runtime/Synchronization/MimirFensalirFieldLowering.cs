@@ -62,7 +62,6 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
                 claim.Confidence,
                 Math.Max(0.0f, (float)intent.SupportPolicy.MaximumAgeSeconds));
             candidates.Add(CandidateForClaim(claim, guide));
-            packets.Add(PacketForSurfaceIntent(intent, claim, guide));
         }
 
         return new AquariumFieldEvidenceFrame
@@ -339,21 +338,6 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Proposal: claim.Proposal,
             Guide: guide);
 
-    private static AquariumFieldBackendPacket PacketForSurfaceIntent(
-        MimirSurfaceIntent intent,
-        AquariumFieldClaim claim,
-        AquariumFieldGuide guide) =>
-        new(
-            PacketKey: $"packet:{intent.IntentKey}",
-            ClaimKey: claim.ClaimKey,
-            DomainKey: claim.DomainKey,
-            Layer: claim.Layer,
-            Encoding: claim.Encoding,
-            Backend: BackendForSurfaceIntent(intent),
-            Support: claim.Support,
-            Guide: guide,
-            PayloadHandle: intent.MaterialGraph.IntentId);
-
     private AquariumFieldSupport SupportForTiming(long uncertaintyNs)
     {
         var radius = Math.Max(options.DefaultSupportRadius, (float)(Math.Max(0, uncertaintyNs) / 1_000_000_000.0));
@@ -454,9 +438,6 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         purpose == MimirSurfaceIntentPurpose.Debug
             ? AquariumFieldProposalKind.DebugIntent
             : AquariumFieldProposalKind.DeterministicStructural;
-
-    private static AquariumFieldBackendKind BackendForSurfaceIntent(MimirSurfaceIntent intent) =>
-        AquariumFieldBackendKind.Unknown;
 
     private static string PayloadHandle(MimirBridgePayloadView payload)
     {
