@@ -194,7 +194,9 @@ a named invariant that the native runtime cannot protect yet.
   TubeField source/ramp/material state. The DrawIndexed indirect command
   signature is now generated-mesh-owned rather than TubeField-owned, so future
   generated lowerings can reuse the same draw ABI with their own producer
-  buffers and material bindings.
+  buffers and material bindings. TubeField dispatch now obeys the selected
+  backend packet plan; unplanned `TubeSplineLowering` records are counted but
+  not expanded.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active

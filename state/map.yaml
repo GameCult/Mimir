@@ -343,7 +343,9 @@ accepted_design:
     mesh binding: compute owns the private vertex/index/indirect layout, and
     render binds that generated mesh before applying TubeField material state.
     The generated-mesh DrawIndexed indirect command signature is shared ABI now;
-    TubeField only owns the argument buffer it emits.
+    TubeField only owns the argument buffer it emits. TubeField expansion is now
+    gated by the selected backend packet plan, so lowering metadata cannot
+    bypass validation/planning authority.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

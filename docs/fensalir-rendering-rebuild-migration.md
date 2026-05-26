@@ -221,8 +221,10 @@ semantics to their selected lowering. TubeField now uses that generated-mesh
 lane explicitly: compute emits private geometry/indirect buffers and render
 binds them as a pipeline-private generated mesh before applying TubeField
 material state. The generated-mesh DrawIndexed indirect command signature is
-shared ABI; TubeField only owns the argument buffer it emits. That is engine
-ownership, not a reason for Mimir to create a parallel renderer.
+shared ABI; TubeField only owns the argument buffer it emits. TubeField
+expansion is now gated by selected backend packets, so explicit lowering
+metadata cannot bypass validation/planning authority. That is engine ownership,
+not a reason for Mimir to create a parallel renderer.
 
 ### 3. Calibration Constraint
 
