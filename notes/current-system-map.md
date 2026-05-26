@@ -316,6 +316,15 @@ lowers those into field claims with travel/depth, metadata, control, and
 reservoir-guide lanes. If a path only paints pixels, it is a fallback/debug
 draw, not the Perfect Machine surface.
 
+The reservoir can resolve pixel-level claims without requiring pixel-sized
+contents. Claim support belongs to the represented domain. A smooth flat surface
+can be a few huge surface claims; a heightfield terrain belongs in a quadtree of
+brush-painted surface tiles, subdivided only where projected footprint,
+curvature, material/brush detail, silhouette risk, or temporal uncertainty make
+larger claims dishonest. Fensalir's SDF probe/lowering stage should emit
+surface splats at that detail-adaptive density, not one splat per pixel by
+default.
+
 The live debug spectrum view is a Fensalir spline-tube SDF surface. Mimir
 submits rolling ASIO spectrum history as `AquariumSplineFrame` trails:
 frequency lives on X, amplitude on Y, history on Z, and channels stack along

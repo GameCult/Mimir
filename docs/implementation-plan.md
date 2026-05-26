@@ -27,6 +27,13 @@ travel/depth, metadata, control, and reservoir-guide lanes. Any path that only
 paints pixels is a fallback/debug draw and must not be mistaken for the
 spatiotemporal machine.
 
+Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
+reservoir, but claim support is chosen from the represented field. Smooth
+surfaces should stay broad. Aquarium-style heightfields should be quadtree
+surface domains with 2D brushes painting tile payloads, and SDF probes emitting
+surface splats only where curvature, projected error, material/brush detail, or
+silhouettes justify subdivision.
+
 The old script stack is gone. Do not add a compatibility edge unless it protects
 a named invariant that the native runtime cannot protect yet.
 
