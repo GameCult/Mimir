@@ -328,6 +328,8 @@ accepted_design:
     resolver: engine users can declare GPU-resident 2D pages with dimensions,
     format, version, and optional local source, and Fensalir allocates/binds
     them as shader-readable page textures for future Height/SDF/material
+    lowerings. VolumeTexture resources can now be declared and resolved as
+    GPU-resident shader-readable 3D textures for future density/extinction/SDF3D
     lowerings.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.

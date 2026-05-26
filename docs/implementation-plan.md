@@ -175,7 +175,10 @@ a named invariant that the native runtime cannot protect yet.
   indirect draw argument packets. Surface-page resources can now be declared and
   resolved as GPU-resident shader-readable 2D pages; render lowerings that
   consume those pages as height/SDF/material domains remain future engine cuts.
-  Mesh and volume resource kinds remain unresolved.
+  VolumeTexture resources can now be declared and resolved as GPU-resident
+  shader-readable 3D textures for future density/extinction/SDF3D lowerings.
+  Mesh remains unresolved because it needs an explicit vertex/index ownership
+  contract rather than one scalar texture shape.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
