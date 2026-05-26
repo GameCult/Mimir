@@ -335,9 +335,13 @@ cut for structured/curve buffers: it imports shared GPU buffers by handle and
 allocates engine-owned GPU slots only for Fensalir-produced resources. The DSL
 can describe a 2D rolling float buffer as Catmull-Rom XY tubes with modulo
 column addressing, amplitude power/normalization, radius, ramp texture path, and
-emission scale. The next blocker is shader-side packet binding/expansion for
-those GPU-resident TubeField resources, plus later texture/mesh/page/volume
-resolvers.
+emission scale. Fensalir now resolves the first non-buffer resource family too:
+Texture2D local assets bind as TubeField ramps, surface pages and volume
+textures allocate shader-readable GPU textures, and mesh packages own
+`Mesh.Vertices`/`Mesh.Indices` GPU buffer shape under one resource key. The
+next blocker is no longer resolver ownership; it is selected render lowerings
+that consume mesh/page/volume resources as geometry, height/SDF/material pages,
+or density/extinction/SDF3D domains.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

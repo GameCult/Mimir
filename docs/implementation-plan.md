@@ -177,8 +177,12 @@ a named invariant that the native runtime cannot protect yet.
   consume those pages as height/SDF/material domains remain future engine cuts.
   VolumeTexture resources can now be declared and resolved as GPU-resident
   shader-readable 3D textures for future density/extinction/SDF3D lowerings.
-  Mesh remains unresolved because it needs an explicit vertex/index ownership
-  contract rather than one scalar texture shape.
+  Mesh resources now have that explicit ownership contract: `Mesh.Vertices` and
+  `Mesh.Indices` package the vertex/index GPU buffers with topology, index
+  format, bounds, submesh count, and version. The Fensalir DSL can declare a
+  mesh package, and the D3D12 registry allocates/reuses its GPU-resident vertex
+  and index buffers under the mesh resource key. This is resolver authority
+  only; mesh draw/material lowerings remain future engine work.
 - `MimirRuntime` queues bioacoustic timeline PCM through Fensalir audio when the
   active timing witness is allowed. `MimirAudioSynchronizationSettings.Mode`
   selects `chirp-only`, `passive`, or `hybrid`; passive disables active
@@ -317,10 +321,11 @@ a named invariant that the native runtime cannot protect yet.
    accumulation from stable frame budgets. Do not route this dashboard back
    through fractal point splats.
 8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
-   Spout2 publication into Fensalir. The next unresolved engine cut is the
-   D3D12 packet/resource resolver: planned field packets need imported
-   GPU-resident resource bindings for structured buffers, textures, meshes,
-   surface pages, and volumes before they can become shader dispatch/draw work.
+   Spout2 publication into Fensalir. The D3D12 packet/resource resolver now has
+   first authority for structured buffers, local textures, surface pages,
+   volume textures, and mesh packages. The next engine cuts are selected render
+   lowerings that consume those resources as mesh geometry, height/SDF/material
+   pages, and density/extinction/SDF3D volumes.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver

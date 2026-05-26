@@ -206,10 +206,14 @@ shared structured/curve buffers import/alias GPU-resident resources by handle,
 while Fensalir-created resources allocate GPU slots only when Fensalir is the
 producer. The DSL can describe a 2D rolling float buffer as Catmull-Rom XY
 tubes with modulo column addressing, amplitude power/normalization, radius,
-ramp texture path, and emission scale. Current blocker for visible rendering is
-shader binding/expansion: selected `TubeField` packets must consume those
-resolved GPU slots directly. Texture, mesh, surface-page, and volume resolvers
-remain explicit future engine cuts. That is engine ownership, not a reason for
+ramp texture path, and emission scale. TubeField now consumes those resources
+through a GPU compute/render path, local Texture2D resources can bind as ramps,
+SurfacePage and VolumeTexture declarations resolve into shader-readable GPU
+textures, and Mesh declarations package `Mesh.Vertices`/`Mesh.Indices` GPU
+buffer shape under one resource key. Current blocker for the remaining visual
+surface is not resource ownership; it is the selected render lowerings that
+interpret mesh/page/volume resources as geometry, height/SDF/material pages, or
+density/extinction/SDF3D domains. That is engine ownership, not a reason for
 Mimir to create a parallel renderer.
 
 ### 3. Calibration Constraint

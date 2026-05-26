@@ -323,14 +323,18 @@ accepted_design:
     Fresnel center-bright/edge-dark shaping, and geometry-budget overflow
     reporting. TubeField compute now emits GPU-resident D3D12 indirect draw
     argument packets, and render executes those packets after binding each
-    batch's source/ramp material state. Remaining visual cuts are honest mesh/
-    page/volume resolvers. SurfacePage resources now have the first Fensalir
+    batch's source/ramp material state. SurfacePage resources now have the first Fensalir
     resolver: engine users can declare GPU-resident 2D pages with dimensions,
     format, version, and optional local source, and Fensalir allocates/binds
     them as shader-readable page textures for future Height/SDF/material
     lowerings. VolumeTexture resources can now be declared and resolved as
     GPU-resident shader-readable 3D textures for future density/extinction/SDF3D
-    lowerings.
+    lowerings. Mesh resources now package friendly vertex/index ownership:
+    `Mesh.Vertices` and `Mesh.Indices` describe the GPU buffers, plus topology,
+    index format, bounds, submesh count, and version. The Fensalir DSL can
+    declare those mesh packages, and the D3D12 registry allocates/reuses the
+    backing vertex/index buffers under the mesh resource key. Mesh draw/material
+    lowerings remain future engine work.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
