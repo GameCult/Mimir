@@ -159,10 +159,15 @@ a named invariant that the native runtime cannot protect yet.
   audio and validates ready/missing/unconfigured lanes against the
   alignment-actuator OBS stem profile. `MimirObsStemSharedMemoryPublisher` now
   publishes those validated stems into a fixed Windows shared-memory ABI, and
-  `native/obs_stem_source` is the first OBS source plugin that reads one named
-  stem and submits it to OBS as an audio source. `scripts/build-obs-stem-plugin.ps1`
-  stages the upstream OBS plugin template SDK under `artifacts/obs-sdk/` and
-  builds the plugin DLL locally.
+  `native/obs_stem_source` is the first OBS source plugin bundle. It registers
+  `Mimir Audio Stem`, which reads one named stem and submits it to OBS as an
+  audio source, and `Mimir Program Texture`, which opens Fensalir's named D3D12
+  program-output texture and feeds OBS through a GPU-to-GPU D3D12-to-D3D11
+  bridge texture. This avoids CPU readback and removes Spout2 as a required
+  program-video dependency, while preserving the explicit boundary cost that
+  libobs is D3D11 on Windows. `scripts/build-obs-stem-plugin.ps1` stages the
+  upstream OBS plugin template SDK under `artifacts/obs-sdk/` and builds the
+  plugin DLL locally.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

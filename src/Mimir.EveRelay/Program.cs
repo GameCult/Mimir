@@ -304,7 +304,15 @@ internal sealed unsafe class D3D12SharedTextureReader : IDisposable
                 Offset = 0,
                 Footprint = new SubresourceFootPrint(Format.B8G8R8A8_UNorm, (uint)Width, (uint)Height, 1, (uint)readbackRowPitch),
             });
+        commandList.ResourceBarrier(ResourceBarrier.BarrierTransition(
+            texture,
+            ResourceStates.Common,
+            ResourceStates.CopySource));
         commandList.CopyTextureRegion(dest, 0, 0, 0, source, null);
+        commandList.ResourceBarrier(ResourceBarrier.BarrierTransition(
+            texture,
+            ResourceStates.CopySource,
+            ResourceStates.Common));
         commandList.Close();
         queue.ExecuteCommandList(commandList);
         WaitForGpu();

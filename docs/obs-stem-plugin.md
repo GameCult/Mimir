@@ -1,22 +1,49 @@
-# OBS Stem Plugin
+# OBS Native Plugin
 
-The production audio path is a Mimir/Fensalir-owned stem bus plus a narrow OBS
-source plugin.
+The production OBS path is a Mimir/Fensalir-owned program texture plus a
+Mimir/Fensalir-owned stem bus, exposed through a narrow native OBS plugin.
 
 ## Authority
 
+- Fensalir owns the completed program pixels.
 - Mimir/Fensalir own timing, alignment, DSP, and stem identity.
 - OBS owns broadcast mixing and scene composition.
-- The plugin reads already-processed stem samples. It does not synchronize raw
-  sources, estimate clocks, or decide which stem is true.
+- The plugin imports already-produced program pixels and reads already-processed
+  stem samples. It does not synchronize raw sources, estimate clocks, render the
+  field, or decide which payload is true.
 
 ## Current Contract
+
+### Video
+
+Fensalir publishes the completed backbuffer into a named shared D3D12
+`B8G8R8A8_UNorm` texture when these environment variables are set:
+
+```text
+FENSALIR_PROGRAM_OUTPUT_D3D12=1
+FENSALIR_PROGRAM_OUTPUT_NAME=Global\MimirFensalirProgramTexture
+```
+
+The native OBS plugin in `native/obs_stem_source` exposes a `Mimir Program
+Texture` video source. Set:
+
+```text
+Shared D3D12 texture name: Global\MimirFensalirProgramTexture
+```
+
+OBS/libobs is D3D11 internally on Windows, so this source opens the named D3D12
+texture, creates an OBS-readable shared D3D11 texture, and performs a GPU-to-GPU
+copy during OBS render before drawing the source. This avoids CPU readback and
+does not require Spout2. It is not pure zero-copy yet; the remaining copy is the
+D3D12-to-libobs-D3D11 boundary.
+
+### Audio
 
 `MimirObsStemSharedMemoryPublisher` writes the latest validated
 `MimirObsStemPublicationSnapshot` into a Windows shared-memory map named
 `Local\MimirObsStemBus` by default. The native OBS plugin in
-`native/obs_stem_source` exposes one audio input source. Add one source per stem
-and set:
+`native/obs_stem_source` exposes a `Mimir Audio Stem` input source. Add one
+source per stem and set:
 
 ```text
 Shared memory map: Local\MimirObsStemBus
@@ -47,4 +74,11 @@ The local native plugin build currently succeeds and emits:
 
 ```text
 native\obs_stem_source\build\Release\mimir_obs_stem_source.dll
+```
+
+That DLL currently registers both source types:
+
+```text
+Mimir Program Texture
+Mimir Audio Stem
 ```

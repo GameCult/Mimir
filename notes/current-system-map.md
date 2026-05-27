@@ -320,10 +320,14 @@ publication now has a first readiness surface:
 reports ready, missing, and unconfigured stems against the alignment actuator
 stem-bus profile. `MimirObsStemSharedMemoryPublisher` writes the validated stem
 frames into `Local\MimirObsStemBus`, and `native/obs_stem_source` is the first
-OBS source plugin: one OBS source reads one named stem from that map and submits
-it through libobs audio. `scripts/build-obs-stem-plugin.ps1` stages the
-upstream OBS plugin-template SDK under `artifacts/obs-sdk/` and builds the
-plugin DLL locally.
+OBS source plugin bundle: `Mimir Audio Stem` reads one named stem from that map
+and submits it through libobs audio, while `Mimir Program Texture` opens
+Fensalir's named shared D3D12 program-output texture and draws it through an
+OBS-readable shared D3D11 bridge texture. The video path is GPU-to-GPU and does
+not require Spout2 or CPU readback; the remaining copy is the explicit D3D12 to
+libobs-D3D11 boundary. `scripts/build-obs-stem-plugin.ps1` stages the upstream
+OBS plugin-template SDK under `artifacts/obs-sdk/` and builds the plugin DLL
+locally.
 
 ## Visual Fusion
 

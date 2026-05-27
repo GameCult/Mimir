@@ -15,6 +15,8 @@
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("mimir-obs-stem-source", "en-US")
 
+void mimir_register_program_texture_source();
+
 struct MimirStemSource {
     obs_source_t *source = nullptr;
     std::string map_name = "Local\\MimirObsStemBus";
@@ -206,6 +208,7 @@ static obs_source_info mimir_stem_source_info = {
 bool obs_module_load(void)
 {
     obs_register_source(&mimir_stem_source_info);
-    blog(LOG_INFO, "Mimir OBS audio stem source loaded");
+    mimir_register_program_texture_source();
+    blog(LOG_INFO, "Mimir OBS sources loaded");
     return true;
 }
