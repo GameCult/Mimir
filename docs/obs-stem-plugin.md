@@ -30,6 +30,7 @@ Texture` video source. Set:
 ```text
 Shared D3D12 texture name: Global\MimirFensalirProgramTexture
 Shared D3D12 fence name: Global\MimirFensalirProgramFence
+Consumer D3D12 fence name: Global\MimirObsProgramConsumerFence
 Texture ring slots: 1
 ```
 
@@ -41,22 +42,25 @@ Spout2. It is not pure zero-copy yet; the remaining copy is the
 D3D12-to-libobs-D3D11 boundary. Fensalir also publishes a named D3D12
 program-output fence; the OBS source opens it and observes publication
 completion before copying. This prevents blind read-before-producer-completion
-behavior without coupling OBS to Fensalir's private frame fence. A later consumer
-acknowledgement fence is still required to make overwrite races structurally
-impossible when producer and consumer cadence diverge.
+behavior without coupling OBS to Fensalir's private frame fence.
 
 For OBS-only stress testing, Fensalir and the OBS source can agree on a bounded
 texture ring:
 
 ```text
 FENSALIR_PROGRAM_OUTPUT_RING_COUNT=3
+FENSALIR_PROGRAM_OUTPUT_CONSUMER_FENCE_NAME=Global\MimirObsProgramConsumerFence
 Texture ring slots: 3
+Consumer D3D12 fence name: Global\MimirObsProgramConsumerFence
 ```
 
 With a ring count above one, Fensalir publishes textures named
 `Global\MimirFensalirProgramTexture.0`, `.1`, and so on. The OBS source uses the
-program-output fence value to copy the latest completed slot. Leave the ring
-count at `1` for EVE until the EVE relay speaks the same ring contract.
+program-output fence value to copy the latest completed slot and signals the
+consumer fence after its GPU copy. When Fensalir is launched with the matching
+consumer-fence environment variable, it will not reuse a ring slot until OBS has
+acknowledged a copy at or beyond that slot's published fence value. Leave the
+ring count at `1` for EVE until the EVE relay speaks the same ring contract.
 
 For a visible interop witness while the real Mimir scene is sparse, launch
 Mimir with:

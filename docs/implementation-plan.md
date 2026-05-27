@@ -170,9 +170,10 @@ a named invariant that the native runtime cannot protect yet.
   preserving the explicit boundary cost that libobs is D3D11 on Windows.
   Fensalir and the OBS source can optionally agree on a bounded publication
   ring using `FENSALIR_PROGRAM_OUTPUT_RING_COUNT`; OBS selects the latest
-  completed slot from the program-output fence value. A later consumer
-  acknowledgement fence is still required to make producer/consumer overwrite
-  races structurally impossible.
+  completed slot from the program-output fence value. OBS can also publish a
+  consumer fence, and when Fensalir is launched with
+  `FENSALIR_PROGRAM_OUTPUT_CONSUMER_FENCE_NAME`, Fensalir skips publication
+  instead of reusing a ring slot OBS has not acknowledged.
   `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
   SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`

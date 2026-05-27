@@ -21,6 +21,7 @@ struct MimirProgramTextureSource {
     obs_source_t *source = nullptr;
     std::string texture_name = "Global\\MimirFensalirProgramTexture";
     std::string fence_name = "Global\\MimirFensalirProgramFence";
+    std::string consumer_fence_name = "Global\\MimirObsProgramConsumerFence";
     uint32_t ring_count = 1;
     uint32_t width = 0;
     uint32_t height = 0;
@@ -29,6 +30,7 @@ struct MimirProgramTextureSource {
     uint64_t next_retry_ns = 0;
     uint64_t next_failure_log_ns = 0;
     HANDLE bridge_shared_handle = nullptr;
+    HANDLE consumer_fence_shared_handle = nullptr;
     HANDLE fence_event = nullptr;
     gs_texture_t *obs_texture = nullptr;
     ComPtr<ID3D12Device> d3d12_device;
@@ -37,6 +39,7 @@ struct MimirProgramTextureSource {
     ComPtr<ID3D12GraphicsCommandList> command_list;
     ComPtr<ID3D12Fence> fence;
     ComPtr<ID3D12Fence> producer_fence;
+    ComPtr<ID3D12Fence> consumer_fence;
     std::vector<ComPtr<ID3D12Resource>> source_textures;
     ComPtr<ID3D12Resource> bridge_texture_d3d12;
     ComPtr<ID3D11Device> d3d11_device;
@@ -119,6 +122,7 @@ static void release_bridge(MimirProgramTextureSource *ctx)
     ctx->source_textures.clear();
     ctx->fence.Reset();
     ctx->producer_fence.Reset();
+    ctx->consumer_fence.Reset();
     ctx->command_list.Reset();
     ctx->command_allocator.Reset();
     ctx->command_queue.Reset();
@@ -135,14 +139,28 @@ static void release_bridge(MimirProgramTextureSource *ctx)
         ctx->bridge_shared_handle = nullptr;
     }
 
+    if (ctx->consumer_fence_shared_handle) {
+        CloseHandle(ctx->consumer_fence_shared_handle);
+        ctx->consumer_fence_shared_handle = nullptr;
+    }
+
     if (ctx->fence_event) {
         CloseHandle(ctx->fence_event);
         ctx->fence_event = nullptr;
     }
 }
 
-static bool wait_for_copy(MimirProgramTextureSource *ctx)
+static bool wait_for_copy(MimirProgramTextureSource *ctx, uint64_t consumed_producer_value)
 {
+    if (ctx->consumer_fence && consumed_producer_value > 0) {
+        HRESULT consumer_hr = ctx->command_queue->Signal(ctx->consumer_fence.Get(), consumed_producer_value);
+        if (FAILED(consumer_hr)) {
+            blog(LOG_WARNING,
+                 "Mimir OBS program texture: consumer fence Signal failed: 0x%08lx",
+                 static_cast<unsigned long>(consumer_hr));
+        }
+    }
+
     const uint64_t value = ++ctx->fence_value;
     HRESULT hr = ctx->command_queue->Signal(ctx->fence.Get(), value);
     if (FAILED(hr)) {
@@ -231,6 +249,40 @@ static bool create_devices(MimirProgramTextureSource *ctx)
     }
 
     return true;
+}
+
+static void create_consumer_fence(MimirProgramTextureSource *ctx)
+{
+    if (ctx->consumer_fence_name.empty()) {
+        return;
+    }
+
+    HRESULT hr = ctx->d3d12_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&ctx->consumer_fence));
+    if (FAILED(hr)) {
+        log_retry_failure(ctx, "CreateFence consumer fence failed", hr);
+        return;
+    }
+
+    const auto wide_name = utf8_to_wide(ctx->consumer_fence_name);
+    if (wide_name.empty()) {
+        log_retry_failure(ctx, "consumer fence name is empty or invalid UTF-8");
+        ctx->consumer_fence.Reset();
+        return;
+    }
+
+    hr = ctx->d3d12_device->CreateSharedHandle(
+        ctx->consumer_fence.Get(),
+        nullptr,
+        GENERIC_ALL,
+        wide_name.c_str(),
+        &ctx->consumer_fence_shared_handle);
+    if (FAILED(hr)) {
+        log_retry_failure(ctx, "CreateSharedHandle consumer fence failed", hr);
+        ctx->consumer_fence.Reset();
+        return;
+    }
+
+    blog(LOG_INFO, "Mimir OBS program texture consumer fence published %s", ctx->consumer_fence_name.c_str());
 }
 
 static bool open_source_texture(MimirProgramTextureSource *ctx)
@@ -396,7 +448,13 @@ static bool ensure_bridge(MimirProgramTextureSource *ctx)
     ctx->next_retry_ns = now + 1000000000ULL;
     release_bridge(ctx);
 
-    if (!create_devices(ctx) || !open_source_texture(ctx) || !create_obs_bridge_texture(ctx)) {
+    if (!create_devices(ctx)) {
+        release_bridge(ctx);
+        return false;
+    }
+
+    create_consumer_fence(ctx);
+    if (!open_source_texture(ctx) || !create_obs_bridge_texture(ctx)) {
         release_bridge(ctx);
         return false;
     }
@@ -458,7 +516,7 @@ static bool copy_source_to_bridge(MimirProgramTextureSource *ctx)
 
     ID3D12CommandList *lists[] = {ctx->command_list.Get()};
     ctx->command_queue->ExecuteCommandLists(1, lists);
-    return wait_for_copy(ctx);
+    return wait_for_copy(ctx, completed_producer_value);
 }
 
 static const char *mimir_program_texture_get_name(void *)
@@ -471,6 +529,7 @@ static void mimir_program_texture_update(void *data, obs_data_t *settings)
     auto *ctx = static_cast<MimirProgramTextureSource *>(data);
     ctx->texture_name = obs_string(settings, "texture_name", "Global\\MimirFensalirProgramTexture");
     ctx->fence_name = obs_string(settings, "fence_name", "Global\\MimirFensalirProgramFence");
+    ctx->consumer_fence_name = obs_string(settings, "consumer_fence_name", "Global\\MimirObsProgramConsumerFence");
     ctx->ring_count = clamp_ring_count(obs_data_get_int(settings, "ring_count"));
     release_bridge(ctx);
 }
@@ -508,6 +567,7 @@ static void mimir_program_texture_defaults(obs_data_t *settings)
 {
     obs_data_set_default_string(settings, "texture_name", "Global\\MimirFensalirProgramTexture");
     obs_data_set_default_string(settings, "fence_name", "Global\\MimirFensalirProgramFence");
+    obs_data_set_default_string(settings, "consumer_fence_name", "Global\\MimirObsProgramConsumerFence");
     obs_data_set_default_int(settings, "ring_count", 1);
 }
 
@@ -516,6 +576,7 @@ static obs_properties_t *mimir_program_texture_properties(void *)
     obs_properties_t *props = obs_properties_create();
     obs_properties_add_text(props, "texture_name", "Shared D3D12 texture name", OBS_TEXT_DEFAULT);
     obs_properties_add_text(props, "fence_name", "Shared D3D12 fence name", OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "consumer_fence_name", "Consumer D3D12 fence name", OBS_TEXT_DEFAULT);
     obs_properties_add_int(props, "ring_count", "Texture ring slots", 1, 4, 1);
     return props;
 }

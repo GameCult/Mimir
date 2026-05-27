@@ -330,11 +330,12 @@ a program-output publication fence, and the OBS source opens that fence before
 copying. This prevents blind read-before-producer-completion without coupling
 OBS to Fensalir's private frame fence. An optional texture ring is available
 when Fensalir and OBS agree on `FENSALIR_PROGRAM_OUTPUT_RING_COUNT`; OBS selects
-the latest completed slot from the program-output fence value. A later consumer
-acknowledgement fence is still needed to make overwrite races structurally
-impossible. `scripts/build-obs-stem-plugin.ps1` stages the upstream
-OBS plugin-template SDK under `artifacts/obs-sdk/` and builds the plugin DLL
-locally.
+the latest completed slot from the program-output fence value. OBS can publish
+`Global\MimirObsProgramConsumerFence`; when Fensalir is launched with
+`FENSALIR_PROGRAM_OUTPUT_CONSUMER_FENCE_NAME` pointing at that fence, it skips
+publication instead of reusing a ring slot OBS has not acknowledged.
+`scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin-template SDK
+under `artifacts/obs-sdk/` and builds the plugin DLL locally.
 
 ## Visual Fusion
 

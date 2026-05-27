@@ -208,9 +208,10 @@ accepted_design:
     boundary. Fensalir and the OBS source can optionally agree on
     `FENSALIR_PROGRAM_OUTPUT_RING_COUNT>1`; Fensalir publishes
     `Global\MimirFensalirProgramTexture.0`, `.1`, and so on, and OBS chooses the
-    latest completed slot from the program-output fence value. A later consumer
-    acknowledgement fence is still required to make producer/consumer overwrite
-    races structurally impossible.
+    latest completed slot from the program-output fence value. OBS can publish
+    `Global\MimirObsProgramConsumerFence`; when Fensalir is launched with
+    `FENSALIR_PROGRAM_OUTPUT_CONSUMER_FENCE_NAME`, it skips publication instead
+    of reusing a ring slot OBS has not acknowledged.
     `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
     SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
     The synthetic
