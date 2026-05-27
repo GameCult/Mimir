@@ -630,7 +630,9 @@ tubespline id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum conf
 static int RunMimirSpectrumUploadSmoke()
 {
     var previousSyntheticPreview = Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW");
+    var previousTubeSubdivisions = Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS");
     Environment.SetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW", "1");
+    Environment.SetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS", "2");
     try
     {
         var settings = new MimirSynchronizationSettings
@@ -673,6 +675,7 @@ static int RunMimirSpectrumUploadSmoke()
         const int expectedSourceCount = 4;
         const int expectedHistoryCount = 3;
         const int expectedHistoryCapacity = 40;
+        const int expectedSubdivisions = 2;
         var plannedTubePackets = plan.Packets
             .Where(packet =>
                 packet.Backend == AquariumFieldBackendKind.TubeField &&
@@ -709,6 +712,7 @@ static int RunMimirSpectrumUploadSmoke()
                 item.ColumnCount == expectedHistoryCount &&
                 item.ColumnStride == expectedSourceCount &&
                 item.RollingModulo == resource.Height &&
+                item.CatmullRomSubdivisions == expectedSubdivisions &&
                 Math.Abs(item.ColumnStep.Z - 0.1f) < 0.0001f &&
                 string.Equals(item.RampResourceKey, ramp.ResourceKey, StringComparison.Ordinal) &&
                 matchingClaims.Any(claim =>
@@ -721,6 +725,7 @@ static int RunMimirSpectrumUploadSmoke()
     finally
     {
         Environment.SetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW", previousSyntheticPreview);
+        Environment.SetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS", previousTubeSubdivisions);
     }
 }
 

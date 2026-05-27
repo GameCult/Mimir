@@ -368,6 +368,9 @@ accepted_design:
     generated geometry renders a true age trail at `z = age * 0.1`. The
     spectrum resource advertises a fixed history capacity so frame content
     versions do not resize the GPU buffer while the rolling trail fills.
+    `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the Mimir-requested Catmull-Rom
+    subdivisions so Fensalir's TubeField truncation report has a direct cost
+    lever.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

@@ -241,6 +241,8 @@ per source lane, using `ColumnStride=sourceCount` and `ColumnStep.z=0.1` so
 each source renders its own age trail from newest to older samples. The
 resource declaration keeps a fixed history capacity; new frames update content
 version and upload data, but they do not grow the GPU buffer as the trail fills.
+Mimir exposes `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` as the first cost lever for
+responding to Fensalir's requested/dispatched/truncated TubeField budget report.
 
 ### 3. Calibration Constraint
 

@@ -389,7 +389,9 @@ lane)` pairs rather than only the latest spectra; Mimir emits one TubeField
 claim/lowering per source, each striding through the shared resource to render
 its own age trail at `z = age * 0.1`. The resource advertises a fixed history
 capacity, so content updates do not resize the GPU buffer while the rolling
-trail fills.
+trail fills. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` is the runtime cost lever for
+lowering Catmull-Rom subdivision count when Fensalir reports TubeField
+truncation.
 
 ## Known Risks
 

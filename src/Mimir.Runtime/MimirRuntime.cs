@@ -44,6 +44,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private readonly float telemetryIntervalSeconds;
     private readonly float audioSyncUpdateIntervalSeconds;
     private readonly float spectrumUpdateIntervalSeconds;
+    private readonly int spectrumTubeSubdivisions;
     private readonly float calibrationGain;
     private readonly float watermarkGain;
     private readonly bool syntheticSpectrumPreview;
@@ -113,6 +114,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
         spectrumUpdateIntervalSeconds = ParseSpectrumUpdateIntervalSeconds();
+        spectrumTubeSubdivisions = ParseSpectrumTubeSubdivisions();
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
         syntheticSpectrumPreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW"));
@@ -382,7 +384,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 RampTexturePath: SpectrumRampTexturePath,
                 RampResourceKey: SpectrumRampResourceKey,
                 EmissionScale: 10.0f,
-                CatmullRomSubdivisions: 4).Normalized());
+                CatmullRomSubdivisions: spectrumTubeSubdivisions).Normalized());
         }
 
         return new AquariumFieldEvidenceFrame
@@ -668,6 +670,10 @@ public sealed class MimirRuntime : IAquariumRuntime
                     "0.0 deg",
                     "Polar camera pitch from -Z toward +Y around the spectrum trail AABB.");
                 panel.Readout("Frustum", DescribeSpectrumFrustum);
+                panel.Readout(
+                    "Tube budget",
+                    () => $"{spectrumHistory.Count} age columns x {lastAudioSpectra.Count} lanes x {spectrumTubeSubdivisions} subdivisions",
+                    "Current Mimir-side TubeField subdivision cost before Fensalir applies its fixed geometry budget.");
                 panel.TextBox(
                     "Spectra",
                     DescribeSpectra,
@@ -960,6 +966,13 @@ public sealed class MimirRuntime : IAquariumRuntime
         return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_BANDS"), out var value)
             ? Math.Clamp(value, 32, 192)
             : 96;
+    }
+
+    private static int ParseSpectrumTubeSubdivisions()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS"), out var value)
+            ? Math.Clamp(value, 1, 16)
+            : 4;
     }
 
     private static bool IsTruthy(string? value) =>

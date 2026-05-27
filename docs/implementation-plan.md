@@ -152,7 +152,9 @@ a named invariant that the native runtime cannot protect yet.
   Tube claim/lowering per source with `ColumnStride=sourceCount` so each lane
   traverses its own age trail at `z = age * 0.1`. The resource uses a fixed
   history-column capacity so frame-to-frame content versions do not resize the
-  GPU buffer while the history fills.
+  GPU buffer while the history fills. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS`
+  controls the Mimir-requested Catmull-Rom subdivision count so Fensalir's
+  overflow report has a direct cost lever.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer
