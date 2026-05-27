@@ -301,7 +301,14 @@ six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000
 --delay-samples 317.375` proves the control loop shape by estimating a
 bioacoustic delay, applying fractional correction, and remeasuring residual
-below printed microsecond precision.
+below printed microsecond precision. `MimirAlignmentActuatorBank` is now the
+runtime command owner above that Faust surface: it converts smoothed sync states
+into nonnegative holdback commands, keeps source-to-`sourceN` slots stable,
+reports overflow beyond the six-source profile, and exposes the reference
+holdback separately. `MimirRuntime` updates that command frame on the sync
+analysis cadence and telemetry can print the current DSP targets. This is
+control-plane publication only; Faust/native DSP still has to be wired as the
+hot sample mover.
 
 ## Visual Fusion
 

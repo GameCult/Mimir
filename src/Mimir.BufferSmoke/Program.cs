@@ -68,6 +68,11 @@ if (args.Any(arg => string.Equals(arg, "--bioacoustic-actuator-self-test", Strin
         ParseDoubleOption(args, "--delay-samples", 317.375));
 }
 
+if (args.Any(arg => string.Equals(arg, "--audio-actuator-bank-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunAudioActuatorBankSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--complex-contour-tracker-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunComplexContourTrackerSelfTest(
@@ -1824,6 +1829,54 @@ static int RunBioacousticActuatorSelfTest(int sampleRate, double delaySamples)
             ? 0
             : 1;
 }
+
+static int RunAudioActuatorBankSmoke()
+{
+    var states = new[]
+    {
+        NewSyncState("mic-0-late", 120.0, 0.86),
+        NewSyncState("mic-1-early", -30.0, 0.90),
+        NewSyncState("mic-2-mid", 80.0, 0.75),
+        NewSyncState("mic-3-mid", 70.0, 0.75),
+        NewSyncState("mic-4-mid", 60.0, 0.75),
+        NewSyncState("mic-5-mid", 50.0, 0.75),
+        NewSyncState("mic-6-overflow", 40.0, 0.75),
+    };
+    var bank = new MimirAlignmentActuatorBank();
+    var frame = bank.Update(states, dtSeconds: 0.5);
+    var early = frame.Commands.First(command => string.Equals(command.SourceId, "mic-1-early", StringComparison.Ordinal));
+    var late = frame.Commands.First(command => string.Equals(command.SourceId, "mic-0-late", StringComparison.Ordinal));
+    var mid = frame.Commands.First(command => string.Equals(command.SourceId, "mic-2-mid", StringComparison.Ordinal));
+
+    Console.WriteLine(
+        $"audio-actuator-bank-smoke reference={frame.ReferenceSourceId} referenceHoldback={frame.ReferenceHoldbackSamples:0.000} commands={frame.Commands.Count} truncated={frame.TruncatedSourceCount} " +
+        $"lateDelay={late.TargetDelaySamples:0.000} midDelay={mid.TargetDelaySamples:0.000} earlyDelay={early.TargetDelaySamples:0.000} ratio={early.ResampleRatio:0.000000000}");
+
+    return string.Equals(frame.ReferenceSourceId, "loopback-scarlett-speakers", StringComparison.Ordinal) &&
+        Math.Abs(frame.ReferenceHoldbackSamples - 120.0) < 0.001 &&
+        frame.Commands.Count == MimirAlignmentActuatorProfile.SixSourceFaust.SourceCount &&
+        frame.TruncatedSourceCount == 1 &&
+        late.TargetDelaySamples <= mid.TargetDelaySamples &&
+        mid.TargetDelaySamples < early.TargetDelaySamples &&
+        early.FaustControls.ContainsKey("source1/delay_samples")
+            ? 0
+            : 1;
+}
+
+static MimirAudioSynchronizationState NewSyncState(string sourceId, double delaySamples, double confidence) =>
+    new(
+        "loopback-scarlett-speakers",
+        sourceId,
+        192_000,
+        delaySamples,
+        delaySamples,
+        delaySamples * 1000.0 / 192_000,
+        0.0,
+        confidence,
+        [],
+        1_000_000_000L,
+        10,
+        10);
 
 static int RunComplexContourTrackerSelfTest(int sampleRate, double delaySamples, double reflectionDelaySamples)
 {

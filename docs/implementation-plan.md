@@ -136,10 +136,17 @@ a named invariant that the native runtime cannot protect yet.
 - `faust/mimir_alignment_actuator.dsp` is the first Faust-owned sample movement
   surface: six channels of bounded fractional delay and gain controls. Mimir
   estimates delay/SRO; Faust/native DSP applies correction.
+- `MimirAlignmentActuatorBank` is the runtime control-plane owner for those
+  estimates: it converts smoothed per-source sync state into nonnegative
+  holdback commands, preserves stable Faust `sourceN` slots for live sources,
+  reports source overflow, and keeps the reference holdback explicit instead of
+  pretending a measured-late stream can be advanced by a positive delay line.
 - `MimirRuntime` updates audio sync analysis online as a bounded rotating
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
-  they do not run synchronization analysis.
+  they do not run synchronization analysis. The same cadence now publishes the
+  latest actuator command frame for telemetry/readout; Faust/native DSP still
+  owns actual sample movement.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

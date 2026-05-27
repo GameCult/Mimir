@@ -38,6 +38,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirFensalirFieldLowering fieldLowering;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
+    private readonly MimirAlignmentActuatorBank audioActuatorBank = new();
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
     private readonly AquariumUiDocument ui;
     private readonly AquariumAudioDocument audio = new();
@@ -74,6 +75,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private long spectrumHistorySequence;
     private readonly Queue<MimirSpectrumHistoryFrame> spectrumHistory = new();
     private AquariumRuntimeServices runtimeServices = AquariumRuntimeServices.Empty;
+    private MimirActuatorFrame lastAudioActuatorFrame = MimirActuatorFrame.Empty;
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -898,6 +900,9 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         lastAudioSyncAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         lastAudioSynchronizationReports = synchronization.AudioSynchronizationReports;
         UpdatePassiveSynchronizationConfidence(lastAudioSynchronizationReports);
+        lastAudioActuatorFrame = audioActuatorBank.Update(
+            synchronization.AudioSynchronizationStates,
+            audioSyncUpdateIntervalSeconds);
         nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
     }
 
@@ -981,6 +986,17 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         {
             Console.WriteLine(
                 $"mimir-sync-state {state.ReferenceSourceId}->{state.SourceId} delaySamples={state.SmoothedDelaySamples:0.000000} delayUs={state.DelayMicroseconds:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000}");
+        }
+
+        if (lastAudioActuatorFrame.Commands.Count > 0)
+        {
+            Console.WriteLine(
+                $"mimir-audio-actuator reference={lastAudioActuatorFrame.ReferenceSourceId} referenceHoldbackSamples={lastAudioActuatorFrame.ReferenceHoldbackSamples:0.000000} commands={lastAudioActuatorFrame.Commands.Count} truncated={lastAudioActuatorFrame.TruncatedSourceCount}");
+            foreach (var command in lastAudioActuatorFrame.Commands.OrderBy(command => command.SourceId, StringComparer.Ordinal))
+            {
+                Console.WriteLine(
+                    $"mimir-audio-actuator-command source={command.SourceId} delaySamples={command.TargetDelaySamples:0.000000} ratio={command.ResampleRatio:0.000000000} confidence={command.Confidence:0.000} controls={command.FaustControls.Count}");
+            }
         }
 
         foreach (var trace in synchronization.AudioSynchronizationDecodeTraces.OrderBy(trace => trace.SourceId, StringComparer.Ordinal))
@@ -1261,10 +1277,10 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
     private string DescribeAlignedAudio()
     {
-        var states = synchronization.AudioSynchronizationStates;
-        return states.Count == 0
+        var commands = lastAudioActuatorFrame.Commands;
+        return commands.Count == 0
             ? "no aligned state"
-            : $"{states.Count + 1}ch state-ready";
+            : $"{commands.Count + 1}ch commands-ready refHold={lastAudioActuatorFrame.ReferenceHoldbackSamples:0.000} samples";
     }
 
     private string DescribeAudioSyncState()

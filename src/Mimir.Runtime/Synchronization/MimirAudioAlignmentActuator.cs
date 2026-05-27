@@ -24,6 +24,15 @@ public sealed record MimirActuatorCommand(
     double Confidence,
     IReadOnlyDictionary<string, float> FaustControls);
 
+public sealed record MimirActuatorFrame(
+    string ReferenceSourceId,
+    double ReferenceHoldbackSamples,
+    IReadOnlyList<MimirActuatorCommand> Commands,
+    int TruncatedSourceCount)
+{
+    public static MimirActuatorFrame Empty { get; } = new("", 0.0, [], 0);
+}
+
 public sealed record MimirActuatorControllerOptions(
     double MinimumConfidence = 0.05,
     double MinimumDtSeconds = 0.001,
@@ -84,5 +93,70 @@ public sealed class MimirSroPllActuatorController(
         public double DelaySamples { get; set; }
         public double SroPpm { get; set; }
         public double Confidence { get; set; }
+    }
+}
+
+public sealed class MimirAlignmentActuatorBank(
+    MimirAlignmentActuatorProfile? profile = null,
+    MimirSroPllActuatorController? controller = null)
+{
+    private readonly MimirAlignmentActuatorProfile profile = profile ?? MimirAlignmentActuatorProfile.SixSourceFaust;
+    private readonly MimirSroPllActuatorController controller = controller ?? new(profile);
+    private readonly Dictionary<string, int> sourceSlots = new(StringComparer.Ordinal);
+
+    public MimirActuatorFrame Update(IReadOnlyList<MimirAudioSynchronizationState> states, double dtSeconds)
+    {
+        if (states.Count == 0)
+        {
+            return MimirActuatorFrame.Empty;
+        }
+
+        var ordered = states
+            .Where(state => !string.IsNullOrWhiteSpace(state.SourceId))
+            .OrderBy(state => state.SourceId, StringComparer.Ordinal)
+            .ToArray();
+        if (ordered.Length == 0)
+        {
+            return MimirActuatorFrame.Empty;
+        }
+
+        var referenceSourceId = ordered[0].ReferenceSourceId;
+        var referenceHoldbackSamples = Math.Clamp(
+            ordered.Max(state => Math.Max(0.0, state.SmoothedDelaySamples)),
+            0.0,
+            profile.MaxDelaySamples);
+        var commands = new List<MimirActuatorCommand>(Math.Min(ordered.Length, profile.SourceCount));
+        var truncatedSourceCount = 0;
+        foreach (var state in ordered)
+        {
+            if (!sourceSlots.TryGetValue(state.SourceId, out var sourceIndex))
+            {
+                if (sourceSlots.Count >= profile.SourceCount)
+                {
+                    truncatedSourceCount++;
+                    continue;
+                }
+
+                sourceIndex = sourceSlots.Count;
+                sourceSlots[state.SourceId] = sourceIndex;
+            }
+
+            var holdbackSamples = Math.Clamp(
+                referenceHoldbackSamples - state.SmoothedDelaySamples,
+                0.0,
+                profile.MaxDelaySamples);
+            commands.Add(controller.Update(
+                state.SourceId,
+                sourceIndex,
+                holdbackSamples,
+                state.Confidence,
+                dtSeconds));
+        }
+
+        return new MimirActuatorFrame(
+            referenceSourceId,
+            referenceHoldbackSamples,
+            commands,
+            truncatedSourceCount);
     }
 }
