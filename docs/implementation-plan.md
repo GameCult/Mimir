@@ -167,8 +167,11 @@ a named invariant that the native runtime cannot protect yet.
   OBS source opens it before copying so the consumer is not reading blindly.
   This avoids CPU readback and removes Spout2 as a required program-video
   dependency, while preserving the explicit boundary cost that libobs is D3D11
-  on Windows. A later publication ring is still required to make
-  producer/consumer overwrite races structurally impossible.
+  on Windows. Fensalir and the OBS source can optionally agree on a bounded
+  publication ring using `FENSALIR_PROGRAM_OUTPUT_RING_COUNT`; OBS selects the
+  latest completed slot from the producer fence value. A later consumer
+  acknowledgement fence is still required to make producer/consumer overwrite
+  races structurally impossible.
   `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
   SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`

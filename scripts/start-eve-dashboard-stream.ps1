@@ -2,6 +2,7 @@ param(
   [string] $Target = "eve",
   [string] $SharedTextureName = "Global\MimirFensalirProgramTexture",
   [string] $SharedFenceName = "Global\MimirFensalirProgramFence",
+  [int] $SharedTextureRingCount = 1,
   [string] $Configuration = "Debug",
   [int] $Width = 1620,
   [int] $Height = 2160,
@@ -37,6 +38,7 @@ ssh $Target "uname -a >/tmp/mimir-eve-dashboard-check.txt && cat /tmp/mimir-eve-
 $env:FENSALIR_PROGRAM_OUTPUT_D3D12 = "1"
 $env:FENSALIR_PROGRAM_OUTPUT_NAME = $SharedTextureName
 $env:FENSALIR_PROGRAM_OUTPUT_FENCE_NAME = $SharedFenceName
+$env:FENSALIR_PROGRAM_OUTPUT_RING_COUNT = [string] $SharedTextureRingCount
 
 $mimirProject = Join-Path $repoRoot "src\Mimir.App\Mimir.App.csproj"
 $mimirArgs = @(
@@ -50,6 +52,7 @@ $mimirArgs = @(
 
 Write-Host "Starting Mimir/Fensalir program output: $SharedTextureName"
 Write-Host "Program output fence: $SharedFenceName"
+Write-Host "Program output ring slots: $SharedTextureRingCount"
 $mimirProcess = Start-Process -FilePath "dotnet" `
   -ArgumentList $mimirArgs `
   -WorkingDirectory $repoRoot `

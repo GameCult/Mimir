@@ -24,6 +24,7 @@ Set these before launching the Mimir app:
 $env:FENSALIR_PROGRAM_OUTPUT_D3D12 = "1"
 $env:FENSALIR_PROGRAM_OUTPUT_NAME = "Global\MimirFensalirProgramTexture"
 $env:FENSALIR_PROGRAM_OUTPUT_FENCE_NAME = "Global\MimirFensalirProgramFence"
+$env:FENSALIR_PROGRAM_OUTPUT_RING_COUNT = "1"
 dotnet run --project .\src\Mimir.App\Mimir.App.csproj
 ```
 
@@ -35,6 +36,10 @@ access units to EveCanvas over the existing `/stream` WebSocket. EveCanvas
 treats JPEG frames as the old VoidBot dashboard fallback only; Mimir dashboard
 streaming is `h264-annexb` and displays through a native
 `AVSampleBufferDisplayLayer` so the iPad owns hardware decode/composite.
+
+The EVE relay currently consumes the single-texture contract. Keep
+`FENSALIR_PROGRAM_OUTPUT_RING_COUNT=1` for EVE until the relay has the same
+slot-selection contract as the OBS program texture source.
 
 `scripts/start-eve-dashboard-stream.ps1` starts the Mimir/Fensalir app with the
 shared-texture output enabled, starts the H.264 relay, verifies the `eve` SSH

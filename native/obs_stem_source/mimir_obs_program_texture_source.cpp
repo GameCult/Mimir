@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <d3d11_1.h>
 #include <d3d12.h>
@@ -20,6 +21,7 @@ struct MimirProgramTextureSource {
     obs_source_t *source = nullptr;
     std::string texture_name = "Global\\MimirFensalirProgramTexture";
     std::string fence_name = "Global\\MimirFensalirProgramFence";
+    uint32_t ring_count = 1;
     uint32_t width = 0;
     uint32_t height = 0;
     uint64_t fence_value = 0;
@@ -35,7 +37,7 @@ struct MimirProgramTextureSource {
     ComPtr<ID3D12GraphicsCommandList> command_list;
     ComPtr<ID3D12Fence> fence;
     ComPtr<ID3D12Fence> producer_fence;
-    ComPtr<ID3D12Resource> source_texture;
+    std::vector<ComPtr<ID3D12Resource>> source_textures;
     ComPtr<ID3D12Resource> bridge_texture_d3d12;
     ComPtr<ID3D11Device> d3d11_device;
     ComPtr<ID3D11DeviceContext> d3d11_context;
@@ -83,6 +85,28 @@ static std::string obs_string(obs_data_t *settings, const char *key, const char 
     return value && *value ? std::string(value) : std::string(fallback);
 }
 
+static uint32_t clamp_ring_count(long long value)
+{
+    if (value < 1) {
+        return 1;
+    }
+
+    if (value > 4) {
+        return 4;
+    }
+
+    return static_cast<uint32_t>(value);
+}
+
+static std::string texture_name_for_slot(const MimirProgramTextureSource *ctx, uint32_t slot)
+{
+    if (ctx->ring_count <= 1) {
+        return ctx->texture_name;
+    }
+
+    return ctx->texture_name + "." + std::to_string(slot);
+}
+
 static void release_bridge(MimirProgramTextureSource *ctx)
 {
     if (ctx->obs_texture) {
@@ -92,7 +116,7 @@ static void release_bridge(MimirProgramTextureSource *ctx)
 
     ctx->bridge_texture_d3d12.Reset();
     ctx->bridge_texture_d3d11.Reset();
-    ctx->source_texture.Reset();
+    ctx->source_textures.clear();
     ctx->fence.Reset();
     ctx->producer_fence.Reset();
     ctx->command_list.Reset();
@@ -211,35 +235,56 @@ static bool create_devices(MimirProgramTextureSource *ctx)
 
 static bool open_source_texture(MimirProgramTextureSource *ctx)
 {
-    const auto wide_name = utf8_to_wide(ctx->texture_name);
-    if (wide_name.empty()) {
-        log_retry_failure(ctx, "shared texture name is empty or invalid UTF-8");
-        return false;
+    ctx->source_textures.clear();
+    ctx->source_textures.reserve(ctx->ring_count);
+    for (uint32_t slot = 0; slot < ctx->ring_count; ++slot) {
+        const auto slot_name = texture_name_for_slot(ctx, slot);
+        const auto wide_name = utf8_to_wide(slot_name);
+        if (wide_name.empty()) {
+            log_retry_failure(ctx, "shared texture name is empty or invalid UTF-8");
+            return false;
+        }
+
+        HANDLE source_handle = nullptr;
+        HRESULT hr = ctx->d3d12_device->OpenSharedHandleByName(wide_name.c_str(), GENERIC_ALL, &source_handle);
+        if (FAILED(hr)) {
+            log_retry_failure(ctx, "OpenSharedHandleByName failed", hr);
+            return false;
+        }
+
+        ComPtr<ID3D12Resource> source_texture;
+        hr = ctx->d3d12_device->OpenSharedHandle(source_handle, IID_PPV_ARGS(&source_texture));
+        CloseHandle(source_handle);
+        if (FAILED(hr)) {
+            log_retry_failure(ctx, "OpenSharedHandle failed", hr);
+            return false;
+        }
+
+        const D3D12_RESOURCE_DESC desc = source_texture->GetDesc();
+        if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) {
+            log_retry_failure(ctx, "expected BGRA8 D3D12 Texture2D");
+            return false;
+        }
+
+        const uint32_t slot_width = static_cast<uint32_t>(desc.Width);
+        const uint32_t slot_height = desc.Height;
+        if (slot_width == 0 || slot_height == 0) {
+            log_retry_failure(ctx, "shared texture dimensions are empty");
+            return false;
+        }
+
+        if (slot == 0) {
+            ctx->width = slot_width;
+            ctx->height = slot_height;
+        } else if (slot_width != ctx->width || slot_height != ctx->height) {
+            log_retry_failure(ctx, "program output ring texture dimensions do not match");
+            return false;
+        }
+
+        ctx->source_textures.push_back(std::move(source_texture));
     }
 
-    HANDLE source_handle = nullptr;
-    HRESULT hr = ctx->d3d12_device->OpenSharedHandleByName(wide_name.c_str(), GENERIC_ALL, &source_handle);
-    if (FAILED(hr)) {
-        log_retry_failure(ctx, "OpenSharedHandleByName failed", hr);
-        return false;
-    }
-
-    hr = ctx->d3d12_device->OpenSharedHandle(source_handle, IID_PPV_ARGS(&ctx->source_texture));
-    CloseHandle(source_handle);
-    if (FAILED(hr)) {
-        log_retry_failure(ctx, "OpenSharedHandle failed", hr);
-        return false;
-    }
-
-    const D3D12_RESOURCE_DESC desc = ctx->source_texture->GetDesc();
-    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) {
-        log_retry_failure(ctx, "expected BGRA8 D3D12 Texture2D");
-        return false;
-    }
-
-    ctx->width = static_cast<uint32_t>(desc.Width);
-    ctx->height = desc.Height;
-    return ctx->width > 0 && ctx->height > 0;
+    return ctx->source_textures.size() == ctx->ring_count;
 }
 
 static void open_producer_fence(MimirProgramTextureSource *ctx)
@@ -270,20 +315,21 @@ static void open_producer_fence(MimirProgramTextureSource *ctx)
          static_cast<unsigned long long>(ctx->last_producer_fence_value));
 }
 
-static bool wait_for_producer(MimirProgramTextureSource *ctx)
+static bool read_producer_fence(MimirProgramTextureSource *ctx, uint64_t *completed)
 {
+    *completed = 0;
     if (!ctx->producer_fence) {
         return true;
     }
 
-    const uint64_t completed = ctx->producer_fence->GetCompletedValue();
-    if (completed == UINT64_MAX) {
+    *completed = ctx->producer_fence->GetCompletedValue();
+    if (*completed == UINT64_MAX) {
         blog(LOG_WARNING, "Mimir OBS program texture: producer fence reported device removal");
         return false;
     }
 
-    if (completed > ctx->last_producer_fence_value) {
-        ctx->last_producer_fence_value = completed;
+    if (*completed > ctx->last_producer_fence_value) {
+        ctx->last_producer_fence_value = *completed;
     }
 
     return true;
@@ -357,10 +403,11 @@ static bool ensure_bridge(MimirProgramTextureSource *ctx)
 
     open_producer_fence(ctx);
 
-    blog(LOG_INFO, "Mimir OBS program texture source opened %s (%ux%u)",
+    blog(LOG_INFO, "Mimir OBS program texture source opened %s (%ux%u ring=%u)",
          ctx->texture_name.c_str(),
          ctx->width,
-         ctx->height);
+         ctx->height,
+         ctx->ring_count);
     return true;
 }
 
@@ -371,9 +418,15 @@ static bool copy_source_to_bridge(MimirProgramTextureSource *ctx)
         return false;
     }
 
-    if (!wait_for_producer(ctx)) {
+    uint64_t completed_producer_value = 0;
+    if (!read_producer_fence(ctx, &completed_producer_value)) {
         return false;
     }
+
+    const uint32_t source_slot = ctx->source_textures.empty()
+        ? 0
+        : static_cast<uint32_t>(completed_producer_value % ctx->source_textures.size());
+    ID3D12Resource *source_texture = ctx->source_textures[source_slot].Get();
 
     hr = ctx->command_list->Reset(ctx->command_allocator.Get(), nullptr);
     if (FAILED(hr)) {
@@ -382,7 +435,7 @@ static bool copy_source_to_bridge(MimirProgramTextureSource *ctx)
 
     D3D12_RESOURCE_BARRIER barriers[2] = {};
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Transition.pResource = ctx->source_texture.Get();
+    barriers[0].Transition.pResource = source_texture;
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
     barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
@@ -392,7 +445,7 @@ static bool copy_source_to_bridge(MimirProgramTextureSource *ctx)
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     ctx->command_list->ResourceBarrier(2, barriers);
-    ctx->command_list->CopyResource(ctx->bridge_texture_d3d12.Get(), ctx->source_texture.Get());
+    ctx->command_list->CopyResource(ctx->bridge_texture_d3d12.Get(), source_texture);
 
     std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
     std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
@@ -418,6 +471,7 @@ static void mimir_program_texture_update(void *data, obs_data_t *settings)
     auto *ctx = static_cast<MimirProgramTextureSource *>(data);
     ctx->texture_name = obs_string(settings, "texture_name", "Global\\MimirFensalirProgramTexture");
     ctx->fence_name = obs_string(settings, "fence_name", "Global\\MimirFensalirProgramFence");
+    ctx->ring_count = clamp_ring_count(obs_data_get_int(settings, "ring_count"));
     release_bridge(ctx);
 }
 
@@ -454,6 +508,7 @@ static void mimir_program_texture_defaults(obs_data_t *settings)
 {
     obs_data_set_default_string(settings, "texture_name", "Global\\MimirFensalirProgramTexture");
     obs_data_set_default_string(settings, "fence_name", "Global\\MimirFensalirProgramFence");
+    obs_data_set_default_int(settings, "ring_count", 1);
 }
 
 static obs_properties_t *mimir_program_texture_properties(void *)
@@ -461,6 +516,7 @@ static obs_properties_t *mimir_program_texture_properties(void *)
     obs_properties_t *props = obs_properties_create();
     obs_properties_add_text(props, "texture_name", "Shared D3D12 texture name", OBS_TEXT_DEFAULT);
     obs_properties_add_text(props, "fence_name", "Shared D3D12 fence name", OBS_TEXT_DEFAULT);
+    obs_properties_add_int(props, "ring_count", "Texture ring slots", 1, 4, 1);
     return props;
 }
 

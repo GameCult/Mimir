@@ -204,9 +204,12 @@ accepted_design:
     publishes `Global\MimirFensalirProgramFence`; the OBS source opens that
     producer fence and observes completion before copying. The video path is
     GPU-to-GPU and does not require Spout2 or CPU readback; the remaining copy
-    is the explicit D3D12 to libobs-D3D11 boundary. A later publication ring is
-    still required to make producer/consumer overwrite races structurally
-    impossible.
+    is the explicit D3D12 to libobs-D3D11 boundary. Fensalir and the OBS source
+    can optionally agree on `FENSALIR_PROGRAM_OUTPUT_RING_COUNT>1`; Fensalir
+    publishes `Global\MimirFensalirProgramTexture.0`, `.1`, and so on, and OBS
+    chooses the latest completed slot from the producer fence value. A later
+    consumer acknowledgement fence is still required to make producer/consumer
+    overwrite races structurally impossible.
     `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
     SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
     The synthetic
