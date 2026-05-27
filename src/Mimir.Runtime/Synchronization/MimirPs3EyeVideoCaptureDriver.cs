@@ -84,7 +84,9 @@ public sealed unsafe class MimirPs3EyeVideoCaptureDriver : IMimirVideoCaptureDri
                 timestampNs,
                 ResourceKey: resourceKey,
                 ProducerFenceValue: sequence);
-            data = scratch.AsMemory(0, byteLength).ToArray();
+            data = string.IsNullOrWhiteSpace(resourceKey)
+                ? scratch.AsMemory(0, byteLength).ToArray()
+                : scratch.AsMemory(0, byteLength);
             return true;
         }
     }
