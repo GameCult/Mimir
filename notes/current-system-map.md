@@ -364,6 +364,10 @@ requires a planned TubeField backend packet for the lowering's claim, and
 validation rejects TubeSpline metadata whose claim/resource authority is split.
 Mimir's typed surface-intent lowering now emits the matching TubeSpline
 lowering for audio spectrum/waveform Tube claims.
+Mimir's active proof path also no longer uses the direct
+`AquariumAcousticFieldFrame` builder: sync states lower into FieldEvidence
+calibration constraints and remain deferred until Fensalir owns a selected
+acoustic visualization/fusion lowering.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

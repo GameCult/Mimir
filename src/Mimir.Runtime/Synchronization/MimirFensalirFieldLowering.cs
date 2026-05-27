@@ -114,55 +114,6 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         return BuildFieldEvidenceFrame(windows, observations, [], intents);
     }
 
-    public AquariumAcousticFieldFrame BuildAcousticFieldFrame(IEnumerable<MimirAudioSynchronizationState> states)
-    {
-        var capacity = states.TryGetNonEnumeratedCount(out var count) ? count : 0;
-        var orderedStates = new List<MimirAudioSynchronizationState>(capacity);
-        foreach (var state in states)
-        {
-            orderedStates.Add(state);
-        }
-
-        orderedStates.Sort(static (left, right) =>
-        {
-            var confidence = right.Confidence.CompareTo(left.Confidence);
-            return confidence != 0
-                ? confidence
-                : string.Compare(left.SourceId, right.SourceId, StringComparison.Ordinal);
-        });
-
-        var constraints = new List<AquariumAcousticConstraint>(orderedStates.Count);
-        foreach (var state in orderedStates)
-        {
-            if (state.Confidence <= 0.0)
-            {
-                continue;
-            }
-
-            constraints.Add(new AquariumAcousticConstraint(
-                $"{state.ReferenceSourceId}->{state.SourceId}",
-                AquariumAcousticConstraintKind.SpeakerProbe,
-                Vector3.Zero,
-                Vector3.Zero,
-                RadiusMeters: 0.10f,
-                Confidence: (float)Math.Clamp(state.Confidence, 0.0, 1.0),
-                TimestampNs: state.UpdatedAtNs));
-        }
-
-        var oracle = orderedStates.FirstOrDefault();
-        return new AquariumAcousticFieldFrame
-        {
-            Constraints = constraints,
-            TimingOracleNs = oracle?.UpdatedAtNs ?? 0,
-            TimingConfidence = (float)Math.Clamp(oracle?.Confidence ?? 0.0, 0.0, 1.0),
-            TimingUncertaintyMicroseconds = (float)(oracle == null
-                ? options.DefaultTimingUncertaintyMicroseconds
-                : Math.Max(0.1, (1.0 - Math.Clamp(oracle.Confidence, 0.0, 1.0)) * options.DefaultTimingUncertaintyMicroseconds)),
-            AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
-            PresentationDelaySeconds = (float)options.PresentationDelaySeconds
-        };
-    }
-
     private static void AddDomain(
         ICollection<AquariumFieldDomain> domains,
         ISet<string> seenDomains,

@@ -85,9 +85,10 @@ Derived state:
 
 - spectrum lines, debug views, screenshots, OBS bridge endpoints, FFmpeg/SRT
   helpers, and Eve dashboard feeds are views or diagnostics.
-- The old direct spline-spectrum dashboard and old direct GPU sensor frame
-  bridge are silent. FieldEvidence owns spectrum and camera observation
-  publication; screenshots and logs remain diagnostics.
+- The old direct spline-spectrum dashboard, direct GPU sensor frame bridge, and
+  direct acoustic field frame proof are silent from Mimir's active bridge path.
+  FieldEvidence owns spectrum, camera observation publication, and calibration
+  constraints; screenshots and logs remain diagnostics.
 
 Forbidden writers:
 
@@ -402,8 +403,12 @@ Lower sync and calibration state into audio field constraints:
 
 Acceptance:
 
-- Fensalir can visualize acoustic confidence and constraints without receiving
+- implemented bridge proof: sync states lower into FieldEvidence calibration
+  constraints instead of direct `AquariumAcousticFieldFrame` packets;
+- Fensalir can inspect acoustic confidence and constraints without receiving
   raw PCM as production truth;
+- no selected acoustic visualization/fusion lowering exists yet, so those
+  claims defer until Fensalir owns that lowering;
 - Faust/native DSP remains the actuator for sample movement.
 
 ### Phase 5: Sensor Fusion Claims

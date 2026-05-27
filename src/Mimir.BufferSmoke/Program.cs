@@ -1707,21 +1707,23 @@ static int RunPerfectMachineProfileSmoke()
     var lowerer = new MimirFensalirFieldLowering();
     var cameraFieldFrame = lowerer.BuildCameraObservationFrame([videoBuffer]);
     var cameraPlan = AquariumFieldLoweringPlanner.Plan(cameraFieldFrame);
-    var acousticFrame = lowerer.BuildAcousticFieldFrame([
-        new MimirAudioSynchronizationState(
-            "loopback-scarlett-speakers",
-            "scarlett-host-mic",
-            192_000,
-            61.25,
-            61.25,
-            0.319,
-            0.875,
-            0.94,
-            [],
-            1_000_000_000L,
-            10,
-            10)
-    ]);
+    var syncState = new MimirAudioSynchronizationState(
+        "loopback-scarlett-speakers",
+        "scarlett-host-mic",
+        192_000,
+        61.25,
+        61.25,
+        0.319,
+        0.875,
+        0.94,
+        [],
+        1_000_000_000L,
+        10,
+        10);
+    var acousticConstraints = new List<MimirCalibrationConstraint>(1);
+    MimirFensalirBridgeMapper.MapCalibrationConstraints([syncState], acousticConstraints);
+    var acousticFieldEvidence = lowerer.BuildFieldEvidenceFrame([], [], acousticConstraints, []);
+    var acousticPlan = AquariumFieldLoweringPlanner.Plan(acousticFieldEvidence);
     var localizationGrid = MimirSrpPhatGridSolver.BuildGrid(
         new Vector3(-0.5f, 0.0f, 1.0f),
         new Vector3(0.5f, 0.0f, 1.0f),
@@ -1758,7 +1760,7 @@ static int RunPerfectMachineProfileSmoke()
     Console.WriteLine(
         $"perfect-machine-clock anchors={clock?.AnchorCount ?? 0} coverage={clock?.AnchorCoverage ?? 0:0.000} offset={clock?.SourceOffsetSamples ?? double.NaN:0.000} confidence={clock?.Confidence ?? 0:0.000}");
     Console.WriteLine(
-        $"perfect-machine-fensalir cameraResources={cameraFieldFrame.Resources.Count} cameraClaims={cameraFieldFrame.Claims.Count} cameraPlanned={cameraPlan.Packets.Count} cameraDeferred={cameraPlan.DeferredRequests.Count} acousticConstraints={acousticFrame.Constraints.Count} timingConfidence={acousticFrame.TimingConfidence:0.000}");
+        $"perfect-machine-fensalir cameraResources={cameraFieldFrame.Resources.Count} cameraClaims={cameraFieldFrame.Claims.Count} cameraPlanned={cameraPlan.Packets.Count} cameraDeferred={cameraPlan.DeferredRequests.Count} acousticClaims={acousticFieldEvidence.Claims.Count} acousticPlanned={acousticPlan.Packets.Count} acousticDeferred={acousticPlan.DeferredRequests.Count}");
     Console.WriteLine(
         $"perfect-machine-localization candidates={localizationGrid.Count} best=({localization?.PositionMeters.X ?? float.NaN:0.000},{localization?.PositionMeters.Y ?? float.NaN:0.000},{localization?.PositionMeters.Z ?? float.NaN:0.000}) score={localization?.Score ?? 0.0:0.000}");
     Console.WriteLine(
@@ -1792,7 +1794,9 @@ static int RunPerfectMachineProfileSmoke()
         cameraFieldFrame.Claims.Count == 2 &&
         cameraPlan.Packets.Count == 0 &&
         cameraPlan.DeferredRequests.Count == 2 &&
-        acousticFrame.HasInput &&
+        acousticFieldEvidence.Claims.Count == 1 &&
+        acousticPlan.Packets.Count == 0 &&
+        acousticPlan.DeferredRequests.Count == 1 &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&
@@ -2051,8 +2055,10 @@ static int RunPerfectMachineLoweringBenchmark(int iterations)
             1)
     };
     var lowerer = new MimirFensalirFieldLowering();
+    var calibrationConstraints = new List<MimirCalibrationConstraint>(states.Length);
+    MimirFensalirBridgeMapper.MapCalibrationConstraints(states, calibrationConstraints);
     _ = lowerer.BuildCameraObservationFrame(buffers);
-    _ = lowerer.BuildAcousticFieldFrame(states);
+    _ = lowerer.BuildFieldEvidenceFrame([], [], calibrationConstraints, []);
 
     var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
     var stamp = Stopwatch.GetTimestamp();
@@ -2062,10 +2068,10 @@ static int RunPerfectMachineLoweringBenchmark(int iterations)
     for (var iteration = 0; iteration < iterations; iteration++)
     {
         var cameraFrame = lowerer.BuildCameraObservationFrame(buffers);
-        var acousticFrame = lowerer.BuildAcousticFieldFrame(states);
+        var acousticFrame = lowerer.BuildFieldEvidenceFrame([], [], calibrationConstraints, []);
         cameraResources += cameraFrame.Resources.Count;
         cameraClaims += cameraFrame.Claims.Count;
-        constraints += acousticFrame.Constraints.Count;
+        constraints += acousticFrame.Claims.Count;
     }
 
     var elapsed = Stopwatch.GetElapsedTime(stamp);

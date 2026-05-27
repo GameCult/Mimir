@@ -391,7 +391,10 @@ accepted_design:
     update.
     `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the Mimir-requested Catmull-Rom
     subdivisions so Fensalir's TubeField truncation report has a direct cost
-    lever.
+    lever. Mimir's active proof path no longer uses the direct
+    `AquariumAcousticFieldFrame` builder: sync states lower into FieldEvidence
+    calibration constraints and remain deferred until Fensalir owns a selected
+    acoustic visualization/fusion lowering.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
