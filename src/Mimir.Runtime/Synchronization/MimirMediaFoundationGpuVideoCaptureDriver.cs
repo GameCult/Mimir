@@ -58,7 +58,8 @@ public sealed unsafe class MimirMediaFoundationGpuVideoCaptureDriver : IMimirVid
                 out var height,
                 formatBytes,
                 out var timestampNs,
-                out var sequence) ||
+                out var sequence,
+                out var producerFenceHandle) ||
             sharedHandle == 0)
         {
             frame = default!;
@@ -76,6 +77,7 @@ public sealed unsafe class MimirMediaFoundationGpuVideoCaptureDriver : IMimirVid
             NativeHandle: unchecked((ulong)sharedHandle),
             NativeHandleKind: "shared-d3d11-texture",
             ResourceKey: MimirFensalirTextureLeaseClient.ResourceKeyForSource(sourceId),
+            ProducerFenceHandle: unchecked((ulong)producerFenceHandle),
             ProducerFenceValue: sequence);
         data = default;
         return true;
@@ -126,14 +128,14 @@ public sealed unsafe class MimirMediaFoundationGpuVideoCaptureDriver : IMimirVid
     {
         private readonly nint library;
         private readonly delegate* unmanaged[Stdcall]<byte*, int, int, byte*, byte*, double, nint> create;
-        private readonly delegate* unmanaged[Stdcall]<nint, out nint, out int, out int, byte*, int, out long, out ulong, int> read;
+        private readonly delegate* unmanaged[Stdcall]<nint, out nint, out int, out int, byte*, int, out long, out ulong, out nint, int> read;
         private readonly delegate* unmanaged[Stdcall]<nint, void> destroy;
 
         private Native(nint library)
         {
             this.library = library;
             create = (delegate* unmanaged[Stdcall]<byte*, int, int, byte*, byte*, double, nint>)NativeLibrary.GetExport(library, "mimir_mf_gpu_create");
-            read = (delegate* unmanaged[Stdcall]<nint, out nint, out int, out int, byte*, int, out long, out ulong, int>)NativeLibrary.GetExport(library, "mimir_mf_gpu_read");
+            read = (delegate* unmanaged[Stdcall]<nint, out nint, out int, out int, byte*, int, out long, out ulong, out nint, int>)NativeLibrary.GetExport(library, "mimir_mf_gpu_read");
             destroy = (delegate* unmanaged[Stdcall]<nint, void>)NativeLibrary.GetExport(library, "mimir_mf_gpu_destroy");
         }
 
@@ -159,11 +161,12 @@ public sealed unsafe class MimirMediaFoundationGpuVideoCaptureDriver : IMimirVid
             out int height,
             Span<byte> format,
             out long timestampNs,
-            out ulong sequence)
+            out ulong sequence,
+            out nint producerFenceHandle)
         {
             fixed (byte* formatPointer = format)
             {
-                return read(capture, out sharedHandle, out width, out height, formatPointer, format.Length, out timestampNs, out sequence) != 0;
+                return read(capture, out sharedHandle, out width, out height, formatPointer, format.Length, out timestampNs, out sequence, out producerFenceHandle) != 0;
             }
         }
 

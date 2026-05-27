@@ -193,7 +193,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             ValidUntilNs: window.EdgeNs,
             Version: window.SequenceId,
             NativeHandle: new IntPtr(unchecked((long)window.Payload.NativeHandle)),
-            NativeHandleKind: window.Payload.NativeHandleKind);
+            NativeHandleKind: window.Payload.NativeHandleKind,
+            ProducerFenceHandle: new IntPtr(unchecked((long)window.Payload.ProducerFenceHandle)),
+            ProducerFenceValue: window.Payload.ProducerFenceValue);
     }
 
     private static AquariumFieldResourceDeclaration ResourceForObservation(MimirObservation observation)
@@ -223,7 +225,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             ValidUntilNs: observation.CanonicalTimeEstimateNs + Math.Max(0, observation.UncertaintyNs),
             Version: observation.Provenance.SequenceId,
             NativeHandle: new IntPtr(unchecked((long)observation.Payload.NativeHandle)),
-            NativeHandleKind: observation.Payload.NativeHandleKind);
+            NativeHandleKind: observation.Payload.NativeHandleKind,
+            ProducerFenceHandle: new IntPtr(unchecked((long)observation.Payload.ProducerFenceHandle)),
+            ProducerFenceValue: observation.Payload.ProducerFenceValue);
     }
 
     private static AquariumFieldDomain DomainForObservation(MimirObservation observation) =>

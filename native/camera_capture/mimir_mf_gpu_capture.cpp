@@ -27,7 +27,10 @@ struct MimirMfGpuCapture
     ComPtr<ID3D11DeviceContext> context;
     ComPtr<IMFDXGIDeviceManager> deviceManager;
     ComPtr<ID3D11Texture2D> sharedTexture;
+    ComPtr<ID3D11Fence> producerFence;
+    ComPtr<ID3D11DeviceContext4> fenceContext;
     HANDLE sharedHandle = nullptr;
+    HANDLE producerFenceHandle = nullptr;
     int width = 0;
     int height = 0;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
@@ -339,6 +342,38 @@ bool createSharedTexture(MimirMfGpuCapture& capture, const GUID& outputSubtype)
     return true;
 }
 
+bool createProducerFence(MimirMfGpuCapture& capture)
+{
+    ComPtr<ID3D11Device5> device5;
+    if (FAILED(capture.device.As(&device5)) ||
+        FAILED(capture.context.As(&capture.fenceContext)))
+    {
+        debugLog("D3D11 fence interfaces unavailable; shared texture will be unsynchronized");
+        return true;
+    }
+
+    const HRESULT fenceHr = device5->CreateFence(
+        0,
+        D3D11_FENCE_FLAG_SHARED,
+        IID_PPV_ARGS(&capture.producerFence));
+    if (FAILED(fenceHr))
+    {
+        debugLog("CreateFence failed hr=0x%08lx; shared texture will be unsynchronized", static_cast<unsigned long>(fenceHr));
+        capture.fenceContext.Reset();
+        return true;
+    }
+
+    const HRESULT handleHr = capture.producerFence->CreateSharedHandle(nullptr, GENERIC_ALL, nullptr, &capture.producerFenceHandle);
+    if (FAILED(handleHr))
+    {
+        debugLog("CreateSharedHandle fence failed hr=0x%08lx; shared texture will be unsynchronized", static_cast<unsigned long>(handleHr));
+        capture.producerFence.Reset();
+        capture.fenceContext.Reset();
+    }
+
+    return true;
+}
+
 } // namespace
 
 extern "C"
@@ -430,7 +465,8 @@ __declspec(dllexport) MimirMfGpuCapture* mimir_mf_gpu_create(
         outputSubtype == GUID_NULL ||
         !setInputType(capture->reader.Get(), width, height, inputSubtype, minFps) ||
         !setOutputType(capture->reader.Get(), outputSubtype) ||
-        !createSharedTexture(*capture, outputSubtype))
+        !createSharedTexture(*capture, outputSubtype) ||
+        !createProducerFence(*capture))
     {
         debugLog("create failed input=%s output=%s", inputSubtypeText ? inputSubtypeText : "", outputSubtypeText ? outputSubtypeText : "");
         delete capture;
@@ -448,7 +484,8 @@ __declspec(dllexport) int mimir_mf_gpu_read(
     char* format,
     int formatCapacity,
     std::int64_t* timestampNs,
-    std::uint64_t* sequence)
+    std::uint64_t* sequence,
+    HANDLE* producerFenceHandle)
 {
     if (!capture || !capture->reader || !capture->sharedTexture || !sharedHandle)
     {
@@ -483,7 +520,13 @@ __declspec(dllexport) int mimir_mf_gpu_read(
         return 0;
     }
 
+    const auto nextSequence = capture->sequence + 1;
     capture->context->CopySubresourceRegion(capture->sharedTexture.Get(), 0, 0, 0, 0, decodedTexture.Get(), subresource, nullptr);
+    if (capture->producerFence && capture->fenceContext)
+    {
+        capture->fenceContext->Signal(capture->producerFence.Get(), nextSequence);
+    }
+
     capture->context->Flush();
     *sharedHandle = capture->sharedHandle;
     if (width) *width = capture->width;
@@ -498,7 +541,9 @@ __declspec(dllexport) int mimir_mf_gpu_read(
         std::snprintf(format, static_cast<std::size_t>(formatCapacity), "%s", text);
     }
     if (timestampNs) *timestampNs = timestamp * 100;
-    if (sequence) *sequence = ++capture->sequence;
+    capture->sequence = nextSequence;
+    if (sequence) *sequence = capture->sequence;
+    if (producerFenceHandle) *producerFenceHandle = capture->producerFenceHandle;
     return 1;
 }
 
@@ -512,6 +557,10 @@ __declspec(dllexport) void mimir_mf_gpu_destroy(MimirMfGpuCapture* capture)
     if (capture->sharedHandle)
     {
         CloseHandle(capture->sharedHandle);
+    }
+    if (capture->producerFenceHandle)
+    {
+        CloseHandle(capture->producerFenceHandle);
     }
     if (capture->source)
     {

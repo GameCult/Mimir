@@ -975,14 +975,18 @@ static int RunMfGpuDriverSmoke(string[] args)
         var evidence = new MimirFensalirFieldLowering().BuildCameraObservationFrame([buffer]);
         var validation = AquariumFieldEvidenceValidator.Validate(evidence);
         Console.WriteLine(
-            $"mf-gpu-driver-smoke source={sample.SourceId} {frame?.Width}x{frame?.Height} format={frame?.PixelFormat} liveBytes={sample.ByteLength} handle=0x{frame?.NativeHandle:x} kind={frame?.NativeHandleKind} resources={evidence.Resources.Count} errors={validation.HasErrors}");
+            $"mf-gpu-driver-smoke source={sample.SourceId} {frame?.Width}x{frame?.Height} format={frame?.PixelFormat} liveBytes={sample.ByteLength} handle=0x{frame?.NativeHandle:x} kind={frame?.NativeHandleKind} fence=0x{frame?.ProducerFenceHandle:x} fenceValue={frame?.ProducerFenceValue} resources={evidence.Resources.Count} errors={validation.HasErrors}");
         return frame != null &&
             frame.Width == width &&
             frame.Height == height &&
             frame.NativeHandle != 0 &&
             frame.NativeHandleKind == "shared-d3d11-texture" &&
+            frame.ProducerFenceHandle != 0 &&
+            frame.ProducerFenceValue > 0 &&
             sample.ByteLength == 0 &&
             evidence.Resources.Count == 1 &&
+            evidence.Resources[0].ProducerFenceHandle != IntPtr.Zero &&
+            evidence.Resources[0].ProducerFenceValue == frame.ProducerFenceValue &&
             evidence.Resources[0].Residency == AquariumFieldResourceResidency.SharedGpu &&
             !validation.HasErrors
             ? 0
