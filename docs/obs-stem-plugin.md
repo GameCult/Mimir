@@ -82,3 +82,20 @@ That DLL currently registers both source types:
 Mimir Program Texture
 Mimir Audio Stem
 ```
+
+## Install
+
+For a standard Windows OBS install:
+
+```powershell
+.\scripts\install-obs-mimir-plugin.ps1
+```
+
+For a portable OBS tree:
+
+```powershell
+.\scripts\install-obs-mimir-plugin.ps1 -ObsRoot D:\Tools\obs-studio
+```
+
+The script copies the built DLL into `obs-plugins\64bit`. It does not create
+scene items or alter OBS profiles.
