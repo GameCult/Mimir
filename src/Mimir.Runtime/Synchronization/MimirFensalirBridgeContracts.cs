@@ -48,7 +48,8 @@ public readonly record struct MimirBridgePayloadView(
     ulong NativeHandle,
     string NativeHandleKind,
     int ByteLength,
-    string ResourceKey = "")
+    string ResourceKey = "",
+    ulong ProducerFenceValue = 0)
 {
     public bool HasResource => NativeHandle != 0 || !string.IsNullOrWhiteSpace(ResourceKey);
 }
@@ -361,11 +362,14 @@ public static class MimirFensalirBridgeMapper
     {
         var nativeHandle = sample.VideoFrame?.NativeHandle ?? sample.AudioBlock?.NativeHandle ?? sample.PayloadHandle;
         var nativeHandleKind = sample.VideoFrame?.NativeHandleKind ?? sample.AudioBlock?.NativeHandleKind ?? "";
+        var resourceKey = sample.VideoFrame?.ResourceKey ?? "";
+        var producerFenceValue = sample.VideoFrame?.ProducerFenceValue ?? 0;
         return new MimirBridgePayloadView(
             nativeHandle,
             nativeHandleKind,
             sample.ByteLength,
-            ResourceKeyForPayload(nativeHandle, nativeHandleKind));
+            string.IsNullOrWhiteSpace(resourceKey) ? ResourceKeyForPayload(nativeHandle, nativeHandleKind) : resourceKey,
+            producerFenceValue);
     }
 
     public static string ResourceKeyForPayload(MimirBridgePayloadView payload) =>

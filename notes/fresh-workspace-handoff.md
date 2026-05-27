@@ -43,6 +43,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `native/reservoir` owns the lower shared-edge typed-handle invariant for
   Fensalir/Faust binding work.
 - Fensalir owns production GPU fusion, UI, and Spout2 publication.
+- Live camera image buffers should use Fensalir-owned texture leases when they
+  are rendering inputs: Mimir asks the engine broker for a keyed D3D12
+  Texture2D/fence lease, writes decoded frames into that texture, commits the
+  producer fence value, and lowers the same resource key through FieldEvidence.
+  Foreign shared texture handles are import edges, not the primary hot path.
 - The current Mimir/Fensalir rendering teardown map is
   [[docs/fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild
   Migration]]. Mimir's production visual output path must publish typed

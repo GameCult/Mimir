@@ -45,7 +45,12 @@ Payload handles are now demoted to names inside a resource authority. Mimir
 declares live native/GPU payloads as typed Fensalir resources with shape,
 residency, shader access, validity, version, and native handle metadata; claims
 and lowering requests reference those resource keys. A string handle without a
-matching resource declaration is not payload truth.
+matching resource declaration is not payload truth. For live camera images, the
+preferred authority is Fensalir-owned texture leasing: Mimir asks the engine
+broker for a keyed `Texture2D` lease, writes decoded frames into the returned
+shared D3D12 texture, signals the returned fence, and commits that fence value
+before the resource key is sampled by shader lowerings. Foreign shared handles
+remain import edges only.
 
 The old script stack is gone. Do not add a compatibility edge unless it protects
 a named invariant that the native runtime cannot protect yet.
@@ -176,14 +181,19 @@ a named invariant that the native runtime cannot protect yet.
   `TubeField` packet with no deferred requests.
 - `MimirFensalirFieldLowering.BuildCameraObservationFrame` is the current
   camera bridge proof. It lowers latest video buffers into FieldEvidence
-  observation claims, declares GPU/native video payloads as shared `Texture2D`
-  resources, and creates camera surface intent only when a resource exists.
+  observation claims, declares engine-owned or imported video payloads as
+  `Texture2D` resources, and creates camera surface intent only when a resource
+  exists. `MimirFensalirTextureLeaseClient` is the producer-side API for asking
+  Fensalir for a keyed D3D12 texture/fence lease before decoded camera frames
+  are written. `MimirRuntime` accepts `AquariumRuntimeServices` and commits
+  producer fence values for leased video payloads before Fensalir samples them.
   Metadata-only cadence frames remain observations with empty payload handles;
   they do not become fake render requests. The old direct
   `AquariumGpuSensorFrame` builder has been removed from Mimir's proof path.
-  Fensalir can now resolve those shared `Texture2D` resources by native D3D12
-  handle and accepts Mimir video format names. `Mimir.BufferSmoke
-  --fensalir-camera-observation-smoke` verifies the split.
+  Fensalir can still resolve imported shared `Texture2D` resources by native
+  D3D12 handle and accepts Mimir video format names.
+  `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split,
+  and `--fensalir-texture-lease-smoke` verifies the engine-owned lease path.
 - Mimir's active proof path no longer uses the direct
   `AquariumAcousticFieldFrame` builder either. Sync states lower into
   FieldEvidence calibration constraints through `MapCalibrationConstraints`,

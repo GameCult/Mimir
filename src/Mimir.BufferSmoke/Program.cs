@@ -108,6 +108,11 @@ if (args.Any(arg => string.Equals(arg, "--fensalir-camera-observation-smoke", St
     return RunFensalirCameraObservationSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunFensalirTextureLeaseSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--mimir-spectrum-upload-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMimirSpectrumUploadSmoke();
@@ -714,6 +719,78 @@ static int RunFensalirCameraObservationSmoke()
         requests.Count == 3 &&
         plan.Packets.Count == 0 &&
         plan.DeferredRequests.Count == 3
+            ? 0
+            : 1;
+}
+
+static int RunFensalirTextureLeaseSmoke()
+{
+    var broker = new FakeFieldResourceBroker();
+    var client = new MimirFensalirTextureLeaseClient(broker);
+    var requested = new MimirFensalirTextureLeaseRequest(
+        "kiyo-pro-rgb",
+        1920,
+        1080,
+        MimirVideoPixelFormat.Bgra8,
+        1920 * 4,
+        DeviceTimestampNs: 1_000_000_000L,
+        Version: 17);
+
+    if (!client.TryLeaseTexture2D(requested, out var lease))
+    {
+        Console.Error.WriteLine("fensalir-texture-lease-smoke failed to lease texture");
+        return 1;
+    }
+
+    var source = new MimirNativeIngestStreamSource(
+        new MimirStreamDescriptor("kiyo-pro-rgb", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice));
+    using (var runtime = new MimirRuntime(
+        new AquariumRuntimeOptions(Headless: true, CultCachePath: null),
+        new MimirSynchronizationSettings(),
+        [source]))
+    {
+        runtime.AttachServices(new AquariumRuntimeServices(broker));
+        runtime.OnSceneReady();
+        source.PushVideoFrame(lease.Frame with { ProducerFenceValue = 41 }, 1_000_000_010L);
+        runtime.Update(0.016f, new InputState());
+        _ = runtime.Frame;
+    }
+
+    var buffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor("kiyo-pro-rgb", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    buffer.Append(new MimirStreamSample(
+        "kiyo-pro-rgb",
+        MimirStreamKind.Video,
+        MimirStreamOrigin.LocalDevice,
+        TimestampNs: 1_000_000_000L,
+        ArrivalNs: 1_000_000_010L,
+        Sequence: 17,
+        PayloadHandle: 0,
+        ByteLength: 1920 * 1080 * 4,
+        Data: default,
+        VideoFrame: lease.Frame with { ProducerFenceValue = 41 }));
+
+    var frame = new MimirFensalirFieldLowering().BuildCameraObservationFrame([buffer]);
+    var validation = AquariumFieldEvidenceValidator.Validate(frame);
+    var expectedResourceKey = MimirFensalirTextureLeaseClient.ResourceKeyForSource("kiyo-pro-rgb");
+
+    Console.WriteLine(
+        $"fensalir-texture-lease-smoke leased={lease.IsValid} committed={broker.CommittedFenceValue > 0} resources={frame.Resources.Count} claims={frame.Claims.Count} errors={validation.HasErrors}");
+
+    return lease.IsValid &&
+        broker.CommittedResourceKey == expectedResourceKey &&
+        broker.CommittedVersion == 0 &&
+        broker.CommittedFenceValue == 41 &&
+        lease.Frame.ResourceKey == expectedResourceKey &&
+        lease.Frame.NativeHandle == 0xCAFE &&
+        lease.Frame.NativeHandleKind == "fensalir-owned-d3d12-texture2d" &&
+        frame.Resources.Count == 1 &&
+        frame.Resources[0].ResourceKey == expectedResourceKey &&
+        frame.Resources[0].NativeHandle == new IntPtr(0xCAFE) &&
+        frame.Resources[0].NativeHandleKind == "fensalir-owned-d3d12-texture2d" &&
+        frame.Claims.Any(claim => claim.PayloadHandle == expectedResourceKey) &&
+        !validation.HasErrors
             ? 0
             : 1;
 }
@@ -5948,3 +6025,46 @@ public sealed record ComplexContourChannelModelEvaluationCase(
     double DeltaAbsolutePredictionErrorMicroseconds,
     double DeltaMeanAbsoluteErrorSamples,
     double DeltaMeanAbsolutePhaseErrorRadians);
+
+sealed class FakeFieldResourceBroker : IAquariumFieldResourceBroker
+{
+    public string CommittedResourceKey { get; private set; } = "";
+
+    public ulong CommittedVersion { get; private set; }
+
+    public ulong CommittedFenceValue { get; private set; }
+
+    public AquariumFieldResourceLease LeaseTexture2D(AquariumTexture2DLeaseRequest request)
+    {
+        var declaration = new AquariumFieldResourceDeclaration(
+            request.ResourceKey,
+            AquariumFieldResourceKind.Texture2D,
+            AquariumFieldResourceResidency.SharedGpu,
+            AquariumFieldShaderAccess.ShaderResource,
+            request.Format,
+            request.Width,
+            request.Height,
+            DepthOrCount: 1,
+            StrideBytes: AquariumFieldResourceDeclaration.FormatStrideBytes(request.Format),
+            request.ValidFromNs,
+            request.ValidUntilNs,
+            request.Version,
+            new IntPtr(0xCAFE),
+            "fensalir-owned-d3d12-texture2d");
+        return new AquariumFieldResourceLease(
+            declaration,
+            new IntPtr(0xCAFE),
+            "fensalir-owned-d3d12-texture2d",
+            new IntPtr(0xF00D),
+            request.Version,
+            true);
+    }
+
+    public bool CommitLeaseVersion(string resourceKey, ulong version, ulong producerFenceValue)
+    {
+        CommittedResourceKey = resourceKey;
+        CommittedVersion = version;
+        CommittedFenceValue = producerFenceValue;
+        return true;
+    }
+}

@@ -22,4 +22,6 @@ public sealed record MimirVideoFrameDescriptor(
     int StrideBytes,
     long DeviceTimestampNs,
     ulong NativeHandle = 0,
-    string NativeHandleKind = "");
+    string NativeHandleKind = "",
+    string ResourceKey = "",
+    ulong ProducerFenceValue = 0);

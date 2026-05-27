@@ -11,7 +11,7 @@ using System.Text;
 
 namespace Mimir.Runtime;
 
-public sealed class MimirRuntime : IAquariumRuntime
+public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesReceiver
 {
     private const float DefaultAudioSyncUpdateIntervalSeconds = 0.1f;
     private const double HybridPassiveConfidenceThreshold = 0.12;
@@ -73,6 +73,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private long spectrumHistorySequence;
     private readonly Queue<MimirSpectrumHistoryFrame> spectrumHistory = new();
+    private AquariumRuntimeServices runtimeServices = AquariumRuntimeServices.Empty;
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -145,6 +146,11 @@ public sealed class MimirRuntime : IAquariumRuntime
 
     public AquariumAudioDocument Audio => audio;
 
+    public void AttachServices(AquariumRuntimeServices services)
+    {
+        runtimeServices = services;
+    }
+
     private AquariumFrame CreateFrame()
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
@@ -186,6 +192,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         var observations = new List<MimirObservation>(buffers.Count);
         MimirFensalirBridgeMapper.MapWindows(buffers, windows);
         MimirFensalirBridgeMapper.MapLatestObservations(buffers, observations);
+        CommitProducerLeases(windows);
 
         var constraints = new List<MimirCalibrationConstraint>(synchronization.AudioSynchronizationStates.Count);
         MimirFensalirBridgeMapper.MapCalibrationConstraints(synchronization.AudioSynchronizationStates, constraints);
@@ -214,6 +221,24 @@ public sealed class MimirRuntime : IAquariumRuntime
 
         var frame = fieldLowering.BuildFieldEvidenceFrame(windows, observations, constraints, intents);
         return AddSpectrumFieldEvidence(frame);
+    }
+
+    private void CommitProducerLeases(IReadOnlyList<MimirRollingStreamWindow> windows)
+    {
+        foreach (var window in windows)
+        {
+            if (window.SourceKind != MimirStreamKind.Video ||
+                string.IsNullOrWhiteSpace(window.Payload.ResourceKey) ||
+                window.Payload.ProducerFenceValue == 0)
+            {
+                continue;
+            }
+
+            runtimeServices.FieldResources.CommitLeaseVersion(
+                window.Payload.ResourceKey,
+                window.SequenceId,
+                window.Payload.ProducerFenceValue);
+        }
     }
 
     private static MimirSurfaceIntent BuildSurfaceIntent(MimirRollingStreamWindow window, MimirObservation observation)
