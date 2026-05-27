@@ -118,6 +118,11 @@ if (args.Any(arg => string.Equals(arg, "--ks-camera-driver-smoke", StringCompari
     return RunKsCameraDriverSmoke(args);
 }
 
+if (args.Any(arg => string.Equals(arg, "--ps3eye-driver-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunPs3EyeDriverSmoke(args);
+}
+
 if (args.Any(arg => string.Equals(arg, "--mimir-spectrum-upload-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMimirSpectrumUploadSmoke();
@@ -868,6 +873,57 @@ static int RunKsCameraDriverSmoke(string[] args)
     }
 
     Console.WriteLine($"ks-camera-driver-smoke timeout source={sourceId} pathNeedle={pathNeedle} {width}x{height} {fourCc}");
+    return 1;
+}
+
+static int RunPs3EyeDriverSmoke(string[] args)
+{
+    var library = ParseStringOption(args, "--native-library", Path.GetFullPath("native/camera_capture/build/Release/mimir_ps3eye_capture.dll"));
+    var sourceId = ParseStringOption(args, "--source-id", "ps3-eye-0");
+    var cameraIndex = ParseIntOption(args, "--camera-index", 0);
+    var width = ParseIntOption(args, "--width", 320);
+    var height = ParseIntOption(args, "--height", 240);
+    var fps = ParseIntOption(args, "--fps", 187);
+    var timeoutMs = ParseIntOption(args, "--timeout-ms", 3000);
+
+    var broker = new FakeFieldResourceBroker();
+    using var driver = new MimirPs3EyeVideoCaptureDriver(new MimirPs3EyeVideoCaptureDriverOptions(
+        library,
+        sourceId,
+        cameraIndex,
+        width,
+        height,
+        fps));
+    using var source = new MimirVideoCaptureDriverSource(
+        new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        driver,
+        static () => StopwatchTicksToNs(Stopwatch.GetTimestamp()));
+    source.AttachTextureLeaseClient(new MimirFensalirTextureLeaseClient(broker));
+
+    var deadline = Stopwatch.GetTimestamp() + (long)(timeoutMs / 1000.0 * Stopwatch.Frequency);
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        if (!source.TryRead(out var sample))
+        {
+            Thread.Sleep(1);
+            continue;
+        }
+
+        var frame = sample.VideoFrame;
+        Console.WriteLine(
+            $"ps3eye-driver-smoke source={sample.SourceId} camera={cameraIndex} {frame?.Width}x{frame?.Height} format={frame?.PixelFormat} liveBytes={sample.ByteLength} uploadedBytes={source.LastUploadedByteLength} uploaded={broker.UploadedResourceKey} copies={source.LastUploadedCopyCount}");
+        return frame != null &&
+            frame.Width == width &&
+            frame.Height == height &&
+            frame.PixelFormat == MimirVideoPixelFormat.Bayer8 &&
+            source.LastUploadedByteLength == width * height &&
+            source.LastUploadedCopyCount == 1 &&
+            broker.UploadedResourceKey == MimirFensalirTextureLeaseClient.ResourceKeyForSource(sourceId)
+            ? 0
+            : 1;
+    }
+
+    Console.WriteLine($"ps3eye-driver-smoke timeout source={sourceId} camera={cameraIndex} {width}x{height}@{fps}");
     return 1;
 }
 

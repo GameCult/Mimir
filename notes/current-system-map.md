@@ -349,6 +349,12 @@ is the first production-shaped KS/UVC driver: it opens a Kernel Streaming pin
 in process, queues uncompressed UVC frames, and feeds the same
 `IMimirVideoCaptureDriver` source path. MJPG/H264 still need a device/GPU
 decode producer; the KS driver rejects compressed capture formats.
+`MimirPs3EyeVideoCaptureDriver` plus
+`native/camera_capture/mimir_ps3eye_capture.dll` does the same for PS3 Eye raw
+WinUSB/libusb capture, emitting Bayer8 frames through the common upload lane.
+Driver smokes have pulled and uploaded real frames for LeapUVC 640x240 YUY2,
+both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular Kiyo
+640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
 Metadata-only cadence frames do not create camera surface intents or fake
 payload requests. The old direct `AquariumGpuSensorFrame` bridge proof has been
 removed from Mimir's active proof path. Camera image claims currently defer

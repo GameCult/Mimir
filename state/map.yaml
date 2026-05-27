@@ -329,6 +329,14 @@ accepted_design:
     in process, queues uncompressed UVC frames, and feeds the same driver source
     and Fensalir lease upload path. MJPG/H264 remain future device/GPU decode
     producer work.
+    `MimirPs3EyeVideoCaptureDriver` plus
+    `native/camera_capture/mimir_ps3eye_capture.dll` owns the equivalent raw
+    WinUSB/libusb PS3 Eye path and emits Bayer8 frames through the same upload
+    and copy-count machinery.
+    Fresh direct-driver smokes uploaded real frames for LeapUVC 640x240 YUY2,
+    PS3 Eye 0/1 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular Kiyo
+    640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open; compressed
+    MJPG/H264 remain device/GPU decode producer work.
     `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
     engine-owned lease path. Camera image claims currently defer until Fensalir

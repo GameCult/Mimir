@@ -208,6 +208,13 @@ a named invariant that the native runtime cannot protect yet.
   and lets `MimirVideoCaptureDriverSource` upload those raw frames into
   Fensalir texture leases. MJPG/H264 remain outside this lane; they need a
   device/GPU decode producer rather than a CPU convenience detour.
+  PS3 Eyes use the sibling `MimirPs3EyeVideoCaptureDriver` backed by
+  `native/camera_capture/mimir_ps3eye_capture.dll`; it opens the existing
+  WinUSB/libusb PS3EYEDriver path in process and emits Bayer8 frames through the
+  same source/upload/copy-count machinery.
+  Current direct-driver smokes prove real-frame upload for LeapUVC 640x240
+  YUY2, both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular
+  Kiyo 640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
   Fensalir can still resolve imported shared `Texture2D` resources by native
   D3D12 handle and accepts Mimir video format names.
   `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split,

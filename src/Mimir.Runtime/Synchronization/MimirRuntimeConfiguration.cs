@@ -172,6 +172,26 @@ public sealed class MimirRuntimeConfiguration
                 static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
         }
 
+        if (string.Equals(stream.Adapter, "ps3eye", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(stream.Adapter, "ps3eye-direct", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("The Mimir PS3 Eye source requires Windows.");
+            }
+
+            return new MimirStreamSourceFactory(descriptor, () => new MimirVideoCaptureDriverSource(
+                descriptor,
+                new MimirPs3EyeVideoCaptureDriver(new MimirPs3EyeVideoCaptureDriverOptions(
+                    ResolveCommand(stream.Command, configDirectory),
+                    stream.SourceId,
+                    stream.CameraIndex,
+                    stream.Width,
+                    stream.Height,
+                    stream.FramesPerSecond)),
+                static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
+        }
+
         if (string.Equals(stream.Adapter, "frame-events", StringComparison.OrdinalIgnoreCase)
             || string.Equals(stream.Adapter, "json-lines", StringComparison.OrdinalIgnoreCase))
         {
@@ -351,6 +371,10 @@ public sealed class MimirStreamConfig
     public double MinimumFramesPerSecond { get; set; }
 
     public int QueueDepth { get; set; } = 8;
+
+    public int CameraIndex { get; set; }
+
+    public int FramesPerSecond { get; set; }
 
     public string DisplayNameForSource(string sourceId)
     {

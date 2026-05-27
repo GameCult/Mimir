@@ -58,6 +58,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   The first direct KS/UVC driver is `MimirKsVideoCaptureDriver` backed by
   `native/camera_capture/mimir_camera_capture.dll`; the example config
   `config/mimir-runtime.ks-camera.example.json` targets LeapUVC 640x240 YUY2.
+  The same native folder also has `mimir_ps3eye_capture.dll` and
+  `MimirPs3EyeVideoCaptureDriver` for PS3 Eye Bayer8 frames through WinUSB/libusb.
+  Fresh driver smokes pulled and uploaded real frames for LeapUVC 640x240 YUY2,
+  both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular Kiyo
+  640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
   Compressed MJPG/H264 still need a device/GPU decode producer, not this raw
   upload lane.
   Foreign shared texture handles are import edges, not the primary hot path.
