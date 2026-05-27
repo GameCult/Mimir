@@ -149,8 +149,11 @@ a named invariant that the native runtime cannot protect yet.
   `AquariumAudioDocument` as an audio control frame. Mimir also declares the
   `faust/mimir_alignment_actuator.dsp` program as an
   `AquariumStreamingDspProgram`, so Fensalir has both the persistent Faust DSP
-  graph and the matching controls. Device I/O/stem routing is still the next
-  cut before live samples are actually aligned.
+  graph and the matching controls. The runtime now also queues sample-bearing
+  `AquariumStreamingAudioBlock` lanes from the latest actuator source buffers,
+  using the bank-assigned Faust `sourceN` slot as channel authority. Durable
+  stem routing/publication is still the next cut before aligned audio becomes a
+  separately mixable program output.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

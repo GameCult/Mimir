@@ -309,9 +309,11 @@ holdback separately. `MimirRuntime` updates that command frame on the sync
 analysis cadence, queues it into `AquariumAudioDocument` as an engine audio
 control frame, declares `faust/mimir_alignment_actuator.dsp` as an
 `AquariumStreamingDspProgram`, and telemetry can print the current DSP targets.
-Fensalir can now compile/host that persistent Faust graph, but device I/O and
-stem routing still have to feed live blocks through it before audio is actually
-aligned.
+Mimir also queues sample-bearing `AquariumStreamingAudioBlock` lanes from the
+latest actuator source buffers, using the bank-assigned Faust `sourceN` control
+path as channel authority. Fensalir can compile/host/process that persistent
+Faust graph now; durable stem routing and OBS-facing publication still have to
+turn processed output lanes into separately mixable program audio.
 
 ## Visual Fusion
 

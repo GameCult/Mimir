@@ -186,8 +186,11 @@ accepted_design:
     `AquariumAudioDocument` as engine audio control frames. Mimir also queues
     `faust/mimir_alignment_actuator.dsp` as an `AquariumStreamingDspProgram`
     so Fensalir can compile/host the persistent Faust graph that consumes those
-    controls; live sample movement still waits on device I/O and stem routing
-    through that graph. The synthetic
+    controls. The same runtime cadence queues sample-bearing
+    `AquariumStreamingAudioBlock` lanes from the latest actuator source buffers,
+    with channel indices derived from the bank-assigned Faust `sourceN` control
+    path; live stem publication still waits on routing processed DSP output
+    lanes into program audio. The synthetic
     codebook proof is `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`.
     `Mimir.BufferSmoke --render-chirp-bin-f32` plus

@@ -5,6 +5,7 @@ using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
 using CultMath;
 using Mimir.Runtime.Synchronization;
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Numerics;
 using System.Text;
@@ -932,6 +933,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 .ToArray(),
             frame.TruncatedSourceCount,
             ++audioActuatorFrameSequence));
+        QueueStreamingActuatorAudioBlock(frame, audioActuatorFrameSequence);
     }
 
     private void QueueAudioActuatorProgram()
@@ -955,6 +957,77 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             File.ReadAllText(path),
             unchecked((int)File.GetLastWriteTimeUtc(path).Ticks)));
         audioActuatorProgramQueued = true;
+    }
+
+    private void QueueStreamingActuatorAudioBlock(MimirActuatorFrame frame, long sequence)
+    {
+        var commands = frame.Commands.OrderBy(command => command.SourceId, StringComparer.Ordinal).ToArray();
+        if (commands.Length == 0)
+        {
+            return;
+        }
+
+        var buffers = synchronization.Buffers.Buffers
+            .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio && buffer.Latest?.AudioBlock != null)
+            .ToDictionary(buffer => buffer.Descriptor.SourceId, StringComparer.Ordinal);
+        var channels = new List<AquariumStreamingAudioChannel>(commands.Length);
+        var frameCount = int.MaxValue;
+        var sampleRate = 0;
+        for (var index = 0; index < commands.Length; index++)
+        {
+            if (!buffers.TryGetValue(commands[index].SourceId, out var buffer) ||
+                buffer.Latest is not { } latest ||
+                latest.AudioBlock is not { } block ||
+                latest.Data.IsEmpty)
+            {
+                continue;
+            }
+
+            if (sampleRate == 0)
+            {
+                sampleRate = block.SampleRate;
+            }
+            else if (block.SampleRate != sampleRate)
+            {
+                continue;
+            }
+
+            var samples = ExtractMonoAudioBlock(latest, block);
+            if (samples.Length == 0)
+            {
+                continue;
+            }
+
+            frameCount = Math.Min(frameCount, samples.Length);
+            var channelIndex = FaustSourceIndex(commands[index]);
+            if (channelIndex < 0)
+            {
+                continue;
+            }
+
+            channels.Add(new AquariumStreamingAudioChannel(channelIndex, commands[index].SourceId, samples));
+        }
+
+        if (channels.Count == 0 || sampleRate <= 0 || frameCount == int.MaxValue)
+        {
+            return;
+        }
+
+        if (channels.Any(channel => channel.Samples.Length != frameCount))
+        {
+            channels = channels
+                .Select(channel => channel.Samples.Length == frameCount
+                    ? channel
+                    : channel with { Samples = channel.Samples.AsSpan(0, frameCount).ToArray() })
+                .ToList();
+        }
+
+        audio.EnqueueStreamingAudioBlock(new AquariumStreamingAudioBlock(
+            MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+            channels,
+            frameCount,
+            sampleRate,
+            sequence));
     }
 
     private void UpdateAudioSpectra()
@@ -1086,6 +1159,87 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
 
         return null;
+    }
+
+    private static float[] ExtractMonoAudioBlock(MimirStreamSample sample, MimirAudioBlockDescriptor block)
+    {
+        var bytesPerSample = BytesPerSample(block.SampleFormat);
+        if (bytesPerSample == 0 || block.Channels <= 0 || block.FrameCount <= 0)
+        {
+            return [];
+        }
+
+        var data = sample.Data.Span;
+        var stride = block.Channels * bytesPerSample;
+        if (data.Length < stride)
+        {
+            return [];
+        }
+
+        var frameCount = Math.Min(block.FrameCount, data.Length / stride);
+        var output = new float[frameCount];
+        for (var frame = 0; frame < frameCount; frame++)
+        {
+            var sum = 0.0f;
+            var frameOffset = frame * stride;
+            for (var channel = 0; channel < block.Channels; channel++)
+            {
+                var offset = frameOffset + channel * bytesPerSample;
+                sum += ReadPcmSample(data.Slice(offset, bytesPerSample), block.SampleFormat);
+            }
+
+            output[frame] = Math.Clamp(sum / block.Channels, -1.0f, 1.0f);
+        }
+
+        return output;
+    }
+
+    private static int FaustSourceIndex(MimirActuatorCommand command)
+    {
+        foreach (var key in command.FaustControls.Keys)
+        {
+            const string prefix = "source";
+            const string suffix = "/delay_samples";
+            if (!key.StartsWith(prefix, StringComparison.Ordinal) ||
+                !key.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var indexText = key[prefix.Length..^suffix.Length];
+            if (int.TryParse(indexText, out var index))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int BytesPerSample(MimirAudioSampleFormat format) =>
+        format switch
+        {
+            MimirAudioSampleFormat.Float32 => 4,
+            MimirAudioSampleFormat.Int16 => 2,
+            MimirAudioSampleFormat.Int24 => 3,
+            MimirAudioSampleFormat.Int32 => 4,
+            _ => 0
+        };
+
+    private static float ReadPcmSample(ReadOnlySpan<byte> data, MimirAudioSampleFormat format) =>
+        format switch
+        {
+            MimirAudioSampleFormat.Float32 => BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(data)),
+            MimirAudioSampleFormat.Int16 => BinaryPrimitives.ReadInt16LittleEndian(data) / 32768.0f,
+            MimirAudioSampleFormat.Int24 => ReadInt24LittleEndian(data) / 8388608.0f,
+            MimirAudioSampleFormat.Int32 => BinaryPrimitives.ReadInt32LittleEndian(data) / 2147483648.0f,
+            _ => 0.0f
+        };
+
+    private static int ReadInt24LittleEndian(ReadOnlySpan<byte> data)
+    {
+        var value = data[0] | (data[1] << 8) | (data[2] << 16);
+        return (value & 0x800000) == 0 ? value : value | unchecked((int)0xff000000);
     }
 
     private static float ParseAudioSyncIntervalSeconds()
