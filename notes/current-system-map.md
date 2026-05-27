@@ -330,9 +330,10 @@ Camera descriptors now enter this bridge too: latest video buffers lower into
 FieldEvidence camera observations, GPU/native handles declare shared
 `Texture2D` resources, and metadata-only cadence frames do not create camera
 surface intents or fake payload requests. The old direct `AquariumGpuSensorFrame`
-bridge proof has been removed from Mimir's active proof path. Camera image
-claims currently defer until Fensalir owns a selected visual-fusion lowering for
-camera textures.
+bridge proof has been removed from Mimir's active proof path. Fensalir can now
+resolve those shared `Texture2D` resources by native D3D12 handle and accepts
+Mimir video format names. Camera image claims currently defer until Fensalir
+owns a selected visual-fusion lowering for camera textures.
 The current smokes prove planning, not visible packet rendering:
 `--fensalir-field-evidence-smoke` now produces one planned resource-backed
 `TubeField` packet from Mimir's spectrum intent, and

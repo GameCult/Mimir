@@ -305,9 +305,12 @@ accepted_design:
     Texture2D resources, and metadata-only cadence frames do not create camera
     surface intents or fake payload requests. The old direct
     `AquariumGpuSensorFrame` builder is no longer the active proof path;
-    `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split.
-    Camera image claims currently defer until Fensalir has a selected visual
-    fusion/feature extraction lowering for camera textures. Fensalir now owns the first in-process
+    Fensalir can now resolve those shared Texture2D resources by native D3D12
+    handle and accepts Mimir video format names such as Bgra8, Gray8, Rg8,
+    Nv12, and LeapStereoIr. `Mimir.BufferSmoke
+    --fensalir-camera-observation-smoke` verifies the split. Camera image
+    claims currently defer until Fensalir has a selected visual fusion/feature
+    extraction lowering for camera textures. Fensalir now owns the first in-process
     D3D12 field resource registry: declared shared structured/curve buffers
     import/alias GPU-resident resources by handle, while Fensalir-owned
     resources allocate GPU slots only when Fensalir is the producer.

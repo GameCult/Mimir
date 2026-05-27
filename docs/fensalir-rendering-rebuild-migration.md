@@ -253,8 +253,11 @@ Camera descriptors now follow the same evidence/resource boundary:
 buffers into observation claims and declares GPU-backed frames as shared
 `Texture2D` resources. Metadata-only/process-cadence frames do not create
 surface intents, so a missing payload cannot become a fake `latest-window`
-render request. Camera image claims currently defer because Fensalir has not
-selected a visual-fusion/render lowering for camera textures yet.
+render request. Fensalir can now resolve those shared `Texture2D` declarations
+by native D3D12 handle and accepts Mimir video format names such as `Bgra8`,
+`Gray8`, `Rg8`, `Nv12`, and `LeapStereoIr`. Camera image claims currently
+defer because Fensalir has not selected a visual-fusion/render lowering for
+camera textures yet.
 
 ### 3. Calibration Constraint
 

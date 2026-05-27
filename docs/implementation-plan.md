@@ -181,7 +181,9 @@ a named invariant that the native runtime cannot protect yet.
   Metadata-only cadence frames remain observations with empty payload handles;
   they do not become fake render requests. The old direct
   `AquariumGpuSensorFrame` builder has been removed from Mimir's proof path.
-  `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split.
+  Fensalir can now resolve those shared `Texture2D` resources by native D3D12
+  handle and accepts Mimir video format names. `Mimir.BufferSmoke
+  --fensalir-camera-observation-smoke` verifies the split.
 - Fensalir now owns the first in-process D3D12 field resource resolver cut:
   shared structured/curve buffer resources import/alias GPU-resident handles,
   and Fensalir-owned resources allocate GPU slots only when Fensalir is the
