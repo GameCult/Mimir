@@ -336,6 +336,9 @@ foreign texture handles remain an import edge, not the primary camera authority.
 `MimirVideoCaptureDriverSource` propagates the lease client to drivers that
 implement `IMimirFensalirTextureLeaseReceiver`, so direct camera drivers can
 request the destination texture before emitting a frame descriptor.
+Each camera backend must use the closest-to-device path available and expose
+its unavoidable copy count. Managed/process wrappers are diagnostic bring-up
+surfaces, not the production camera hot path.
 Metadata-only cadence frames do not create camera surface intents or fake
 payload requests. The old direct `AquariumGpuSensorFrame` bridge proof has been
 removed from Mimir's active proof path. Camera image claims currently defer

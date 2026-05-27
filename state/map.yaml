@@ -314,6 +314,9 @@ accepted_design:
     producer fence, and commits that fence value before the resource key reaches
     shader sampling. `MimirVideoCaptureDriverSource` forwards that lease client
     to direct camera drivers that implement `IMimirFensalirTextureLeaseReceiver`.
+    Camera backends must use the closest-to-device path available and report
+    unavoidable copies; process or managed convenience layers are diagnostics,
+    not production camera hot-path owners.
     `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
     engine-owned lease path. Camera image claims currently defer until Fensalir

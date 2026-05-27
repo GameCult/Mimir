@@ -49,6 +49,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   producer fence value, and lowers the same resource key through FieldEvidence.
   `MimirVideoCaptureDriverSource` forwards that lease client to direct drivers
   that implement `IMimirFensalirTextureLeaseReceiver`.
+  Camera backends must use the closest-to-device path available and report
+  unavoidable copies; process or managed convenience layers are diagnostics.
   Foreign shared texture handles are import edges, not the primary hot path.
 - The current Mimir/Fensalir rendering teardown map is
   [[docs/fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild

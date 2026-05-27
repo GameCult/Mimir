@@ -36,9 +36,13 @@ The app-level runtime initializes one rolling buffer per configured audio or
 video stream, defaulting to five seconds. The lower native reservoir keeps the
 single-edge typed-handle invariant for Fensalir/Faust integration.
 
-Payload memory belongs to the producing domain. The reservoir and runtime own
-timing, identity, ordering, retention, and lookup. They do not pretend to own
-camera driver buffers, GPU textures, or DSP audio memory.
+Payload memory belongs to the producing domain, but rendering inputs should be
+Fensalir-owned GPU resources whenever the device path allows it. The camera hot
+path is: ask Fensalir for a keyed `Texture2D` lease, speak to the device stack
+as directly as possible, populate that lease, signal the producer fence, and
+publish the resource key through Mimir's rolling buffers and FieldEvidence. The
+reservoir and runtime own timing, identity, ordering, retention, and lookup.
+They do not become pixel middlemen.
 
 ## Authoritative Boundaries
 
@@ -62,7 +66,10 @@ camera driver buffers, GPU textures, or DSP audio memory.
 
 1. Keep the C# app/runtime as the public Mimir surface.
 2. Implement Leap stereo IR direct ingest first and measure sustained cadence.
-3. Add the remaining local camera drivers through the same source seam.
+   Record the unavoidable copy count; do not hide CPU upload behind a friendly
+   adapter name.
+3. Add the remaining local camera drivers through the same source seam,
+   preferring device-direct producers that populate Fensalir texture leases.
 4. Add native audio capture workers and feed aligned blocks to Faust/native DSP.
 5. Bind Fensalir UI to stream health, buffer depth, source timestamps, settings,
    and output management.

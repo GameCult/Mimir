@@ -50,7 +50,9 @@ preferred authority is Fensalir-owned texture leasing: Mimir asks the engine
 broker for a keyed `Texture2D` lease, writes decoded frames into the returned
 shared D3D12 texture, signals the returned fence, and commits that fence value
 before the resource key is sampled by shader lowerings. Foreign shared handles
-remain import edges only.
+remain import edges only. Camera producers must choose the closest-to-device
+path available for each sensor and report the unavoidable copy count; convenient
+managed/process middlemen are diagnostic witnesses, not hot-path owners.
 
 The old script stack is gone. Do not add a compatibility edge unless it protects
 a named invariant that the native runtime cannot protect yet.
@@ -357,8 +359,8 @@ a named invariant that the native runtime cannot protect yet.
 ## Next
 
 1. Replace the frame-event diagnostic bridge with concrete direct capture
-   drivers for Leap stereo IR first, then the
-   other cameras.
+   drivers for Leap stereo IR first, then the other cameras. Each driver must
+   state its device API, destination resource, and unavoidable copy count.
 2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
 3. Promote the packet-song physical calibration receipt into the runtime

@@ -5,7 +5,8 @@ public enum MimirCameraIngestStrategy
     JsonCadenceProbe,
     ManagedNativeWrapper,
     NativeSpscFrameRing,
-    SharedGpuTexture
+    FensalirTextureLease,
+    DeviceDirectTextureProducer
 }
 
 public sealed record MimirCameraIngestConfiguration(
@@ -34,34 +35,44 @@ public static class MimirCameraIngestConfigurations
 
     public static MimirCameraIngestConfiguration ManagedWrapper { get; } = new(
         "managed-native-wrapper",
-        "First real driver integration shape through IMimirVideoCaptureDriver.",
+        "Managed polling seam for bring-up only; useful for proving timing and descriptor shape.",
         MimirCameraIngestStrategy.ManagedNativeWrapper,
         "Mimir.Runtime + native worker",
         CarriesPixels: true,
         HotPathCandidate: true,
         DeviceProfiles: ["leap-left-ir", "leap-right-ir"],
-        RequiredProofs: ["one-camera sustained cadence", "bounded allocation", "device timestamp preserved"],
-        "Good first cut for Leap because observability matters while the ABI is still moving.");
+        RequiredProofs: ["one-camera sustained cadence", "bounded allocation", "device timestamp preserved", "copy count reported"],
+        "This is a diagnostic bring-up seam, not the destination. Promote only when it is the shortest path to evidence.");
 
     public static MimirCameraIngestConfiguration NativeSpscRing { get; } = new(
         "native-spsc-frame-ring",
-        "Production local-camera ingest: native producer rings with typed payload handles.",
+        "Native producer ring for device APIs that must expose system-memory frames.",
         MimirCameraIngestStrategy.NativeSpscFrameRing,
         "native capture + native/reservoir",
         CarriesPixels: true,
         HotPathCandidate: true,
         DeviceProfiles: MimirNativeCaptureConfigurations.LocalSixCameraProfiles.Select(profile => profile.Id).ToArray(),
-        RequiredProofs: ["all six cameras sustained", "no stdout transport", "bounded memory", "consumer lag telemetry"],
-        "This is the six-camera throughput answer.");
+        RequiredProofs: ["all six cameras sustained", "no stdout transport", "bounded memory", "consumer lag telemetry", "unavoidable-copy ledger"],
+        "Use only when the device stack cannot write or decode into the Fensalir texture path directly.");
 
-    public static MimirCameraIngestConfiguration SharedTexture { get; } = NativeSpscRing with
+    public static MimirCameraIngestConfiguration FensalirTextureLease { get; } = NativeSpscRing with
     {
-        Id = "shared-gpu-texture",
-        Description = "Final copy-avoidance target: native capture provides importable GPU handles for Fensalir.",
-        Strategy = MimirCameraIngestStrategy.SharedGpuTexture,
-        Owner = "native capture + Fensalir",
-        RequiredProofs = ["Fensalir imports frames", "rendered pixels match source cadence", "handle lifetime is explicit"],
-        Notes = "Promote only when driver/API friction is paid down; Fensalir owns GPU lifetime."
+        Id = "fensalir-texture-lease",
+        Description = "Preferred render-input path: device/decode producer writes into a Fensalir-owned Texture2D lease.",
+        Strategy = MimirCameraIngestStrategy.FensalirTextureLease,
+        Owner = "native capture/decode producer + Fensalir",
+        RequiredProofs = ["producer receives Fensalir lease", "producer signals fence", "Fensalir waits before sampling", "copy count is zero or justified"],
+        Notes = "This is the hot path for decoded camera images. Imported foreign handles are fallback edges."
+    };
+
+    public static MimirCameraIngestConfiguration DeviceDirectTextureProducer { get; } = FensalirTextureLease with
+    {
+        Id = "device-direct-texture-producer",
+        Description = "Closest-to-zero-copy target: speak to the device stack directly and populate the Fensalir lease without middlemen.",
+        Strategy = MimirCameraIngestStrategy.DeviceDirectTextureProducer,
+        Owner = "device-specific native producer + Fensalir",
+        RequiredProofs = ["device API path identified", "no process bridge", "no convenience transcode", "GPU/system copy count measured", "cadence survives full camera set"],
+        Notes = "Backend choice is device-specific: KS/WinUSB raw sources may still land in system memory; GPU-decodable compressed sources should avoid CPU decode."
     };
 
     public static IReadOnlyList<MimirCameraIngestConfiguration> BuiltIn { get; } =
@@ -69,6 +80,7 @@ public static class MimirCameraIngestConfigurations
         CadenceProbe,
         ManagedWrapper,
         NativeSpscRing,
-        SharedTexture
+        FensalirTextureLease,
+        DeviceDirectTextureProducer
     ];
 }

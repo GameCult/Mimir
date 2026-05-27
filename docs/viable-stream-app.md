@@ -107,11 +107,14 @@ The first cut should be deliberately boring:
 - `MimirNativeIngestStreamSource` is the low-overhead push seam for native
   camera/audio adapters that already own buffers or handles.
 - `MimirVideoFrameDescriptor` carries video shape, pixel format, device
-  timestamp, stride, and optional native/GPU handle metadata. Leap stereo IR
-  should enter here through a native driver path.
+  timestamp, stride, resource key, producer fence value, and native/GPU handle
+  metadata. Leap stereo IR should enter here through a native driver path that
+  reports any unavoidable system-memory copy.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` are the
   driver-facing seam for polling/pushing frames from LeapUVC/libusb, LeapC image
-  APIs, Media Foundation, DirectShow, or a future GPU shared-texture capture.
+  APIs, Media Foundation, DirectShow, or GPU decode/capture paths. Drivers that
+  can produce render inputs should implement `IMimirFensalirTextureLeaseReceiver`
+  and populate Fensalir-owned texture leases directly.
 - `MimirProcessStreamSource` is a compatibility adapter for network or
   diagnostic command sources. It is not the six-camera local capture foundation.
 
@@ -129,10 +132,10 @@ environment variables:
 These create buffers immediately. Capture adapters still need to register
 `IMimirStreamSource` implementations to feed live samples into those buffers.
 
-For local cameras, prefer native adapters that push sample handles directly
-through `MimirNativeIngestStreamSource`. Process-backed FFmpeg ingest is allowed
-for remote SRT/diagnostic edges, but local six-camera ingest should stay close
-to the driver, GPU, and capture APIs.
+For local cameras, prefer native adapters that talk to the device stack directly
+and push only typed sample/resource handles through `MimirNativeIngestStreamSource`.
+Process-backed FFmpeg ingest is allowed for remote SRT/diagnostic edges, but
+local six-camera ingest should stay close to the device, GPU, and capture APIs.
 
 Leap should be treated as the timing-camera candidate only when the native
 adapter preserves device timestamps or captures a monotonic timestamp
