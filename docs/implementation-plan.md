@@ -163,13 +163,14 @@ a named invariant that the native runtime cannot protect yet.
   `Mimir Audio Stem`, which reads one named stem and submits it to OBS as an
   audio source, and `Mimir Program Texture`, which opens Fensalir's named D3D12
   program-output texture and feeds OBS through a GPU-to-GPU D3D12-to-D3D11
-  bridge texture. Fensalir also publishes a named D3D12 producer fence, and the
-  OBS source opens it before copying so the consumer is not reading blindly.
-  This avoids CPU readback and removes Spout2 as a required program-video
-  dependency, while preserving the explicit boundary cost that libobs is D3D11
-  on Windows. Fensalir and the OBS source can optionally agree on a bounded
-  publication ring using `FENSALIR_PROGRAM_OUTPUT_RING_COUNT`; OBS selects the
-  latest completed slot from the producer fence value. A later consumer
+  bridge texture. Fensalir also publishes a named D3D12 program-output fence,
+  and the OBS source opens it before copying so the consumer is not reading
+  blindly or depending on Fensalir's private frame fence. This avoids CPU
+  readback and removes Spout2 as a required program-video dependency, while
+  preserving the explicit boundary cost that libobs is D3D11 on Windows.
+  Fensalir and the OBS source can optionally agree on a bounded publication
+  ring using `FENSALIR_PROGRAM_OUTPUT_RING_COUNT`; OBS selects the latest
+  completed slot from the program-output fence value. A later consumer
   acknowledgement fence is still required to make producer/consumer overwrite
   races structurally impossible.
   `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template

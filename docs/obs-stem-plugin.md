@@ -38,11 +38,12 @@ texture, creates an OBS-readable legacy shared D3D11 texture, opens that same
 bridge texture from D3D12, and performs a GPU-to-GPU copy during OBS render
 before drawing the source. This avoids CPU readback and does not require
 Spout2. It is not pure zero-copy yet; the remaining copy is the
-D3D12-to-libobs-D3D11 boundary. Fensalir also publishes a named D3D12 fence;
-the OBS source opens it and observes the producer completion value before
-copying. This prevents blind read-before-producer-completion behavior. A later
-consumer acknowledgement fence is still required to make overwrite races
-structurally impossible when producer and consumer cadence diverge.
+D3D12-to-libobs-D3D11 boundary. Fensalir also publishes a named D3D12
+program-output fence; the OBS source opens it and observes publication
+completion before copying. This prevents blind read-before-producer-completion
+behavior without coupling OBS to Fensalir's private frame fence. A later consumer
+acknowledgement fence is still required to make overwrite races structurally
+impossible when producer and consumer cadence diverge.
 
 For OBS-only stress testing, Fensalir and the OBS source can agree on a bounded
 texture ring:
@@ -54,8 +55,8 @@ Texture ring slots: 3
 
 With a ring count above one, Fensalir publishes textures named
 `Global\MimirFensalirProgramTexture.0`, `.1`, and so on. The OBS source uses the
-producer fence value to copy the latest completed slot. Leave the ring count at
-`1` for EVE until the EVE relay speaks the same ring contract.
+program-output fence value to copy the latest completed slot. Leave the ring
+count at `1` for EVE until the EVE relay speaks the same ring contract.
 
 For a visible interop witness while the real Mimir scene is sparse, launch
 Mimir with:

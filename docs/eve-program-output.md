@@ -29,8 +29,8 @@ dotnet run --project .\src\Mimir.App\Mimir.App.csproj
 ```
 
 Fensalir creates a shareable D3D12 texture with that name, publishes a named
-producer fence, and copies the finished backbuffer into the texture during the
-present pass. `Mimir.EveRelay` opens that named texture, reads the completed
+program-output fence, and copies the finished backbuffer into the texture during
+the present pass. `Mimir.EveRelay` opens that named texture, reads the completed
 program frame, feeds a low-latency H.264 encoder, and sends complete Annex-B
 access units to EveCanvas over the existing `/stream` WebSocket. EveCanvas
 treats JPEG frames as the old VoidBot dashboard fallback only; Mimir dashboard

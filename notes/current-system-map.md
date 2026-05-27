@@ -325,11 +325,12 @@ and submits it through libobs audio, while `Mimir Program Texture` opens
 Fensalir's named shared D3D12 program-output texture and draws it through an
 OBS-readable shared D3D11 bridge texture. The video path is GPU-to-GPU and does
 not require Spout2 or CPU readback; the remaining copy is the explicit D3D12 to
-libobs-D3D11 boundary. Fensalir publishes `Global\MimirFensalirProgramFence`,
-and the OBS source opens that producer fence before copying. This prevents
-blind read-before-producer-completion. An optional texture ring is available
+libobs-D3D11 boundary. Fensalir publishes `Global\MimirFensalirProgramFence` as
+a program-output publication fence, and the OBS source opens that fence before
+copying. This prevents blind read-before-producer-completion without coupling
+OBS to Fensalir's private frame fence. An optional texture ring is available
 when Fensalir and OBS agree on `FENSALIR_PROGRAM_OUTPUT_RING_COUNT`; OBS selects
-the latest completed slot from the producer fence value. A later consumer
+the latest completed slot from the program-output fence value. A later consumer
 acknowledgement fence is still needed to make overwrite races structurally
 impossible. `scripts/build-obs-stem-plugin.ps1` stages the upstream
 OBS plugin-template SDK under `artifacts/obs-sdk/` and builds the plugin DLL
