@@ -74,6 +74,11 @@ if (args.Any(arg => string.Equals(arg, "--audio-actuator-bank-smoke", StringComp
     return RunAudioActuatorBankSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--audio-stem-publication-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunAudioStemPublicationSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--complex-contour-tracker-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunComplexContourTrackerSelfTest(
@@ -1878,6 +1883,36 @@ static int RunAudioActuatorBankSmoke()
         early.FaustControls.ContainsKey("source1/delay_samples") &&
         drained.Count == 1 &&
         drained[0].Commands.Count == frame.Commands.Count
+            ? 0
+            : 1;
+}
+
+static int RunAudioStemPublicationSmoke()
+{
+    var publication = new MimirObsStemPublicationState(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
+    publication.Consume(new AquariumAudioStemFrame(
+        MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+        [
+            new AquariumAudioStemChannel(0, "aligned_source_0", "Aligned source 0", "mic-0", [0.1f, 0.2f]),
+            new AquariumAudioStemChannel(1, "aligned_source_1", "Aligned source 1", "mic-1", [0.3f, 0.4f])
+        ],
+        FrameCount: 2,
+        SampleRate: 48_000,
+        Sequence: 9));
+
+    var snapshot = publication.Capture();
+    Console.WriteLine(
+        $"audio-stem-publication-smoke profile={snapshot.ConfigurationId} ready={snapshot.ReadyStems.Count} missing={snapshot.MissingStemIds.Count} unconfigured={snapshot.UnconfiguredStemIds.Count} seq={snapshot.LatestSequence}");
+
+    return string.Equals(snapshot.ConfigurationId, MimirObsPublicationConfigurations.AlignmentActuatorStemBus.Id, StringComparison.Ordinal) &&
+        snapshot.ReadyStems.Count == 2 &&
+        snapshot.MissingStemIds.Count == MimirAlignmentActuatorProfile.SixSourceFaust.SourceCount - 2 &&
+        snapshot.UnconfiguredStemIds.Count == 0 &&
+        snapshot.ReadyStems.Any(stem =>
+            string.Equals(stem.StemId, "aligned_source_0", StringComparison.Ordinal) &&
+            string.Equals(stem.SourceId, "mic-0", StringComparison.Ordinal) &&
+            stem.Configured) &&
+        snapshot.LatestSequence == 9
             ? 0
             : 1;
 }

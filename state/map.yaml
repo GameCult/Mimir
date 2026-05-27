@@ -192,7 +192,10 @@ accepted_design:
     path. Fensalir now publishes processed DSP output lanes as
     `AquariumAudioStemFrame` records on an engine-owned audio stem bus, and
     Mimir declares deterministic aligned-source stem names with the actuator
-    program; OBS-facing stem publication is the remaining program-audio cut. The synthetic
+    program. Mimir now consumes that bus through `MimirObsStemPublicationState`,
+    validating ready/missing/unconfigured lanes against the alignment actuator
+    stem-bus profile without copying audio; actual OBS device/plugin routing is
+    the remaining program-audio cut. The synthetic
     codebook proof is `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`.
     `Mimir.BufferSmoke --render-chirp-bin-f32` plus

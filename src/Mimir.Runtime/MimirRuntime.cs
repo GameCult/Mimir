@@ -40,6 +40,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirFensalirFieldLowering fieldLowering;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly MimirAlignmentActuatorBank audioActuatorBank = new();
+    private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
     private readonly AquariumUiDocument ui;
     private readonly AquariumAudioDocument audio = new();
@@ -73,6 +74,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private (Vector3 Min, Vector3 Max) lastSpectrumAabb = (Vector3.Zero, Vector3.One);
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
+    private MimirObsStemPublicationSnapshot lastObsStemPublication = MimirObsStemPublicationSnapshot.Empty;
     private long spectrumHistorySequence;
     private long audioActuatorFrameSequence;
     private bool audioActuatorProgramQueued;
@@ -654,6 +656,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
         runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
         lastPollCount = synchronization.PollSources();
+        UpdateObsStemPublication();
         QueueCalibrationTimeline();
         UpdateAudioSpectra();
         UpdateAudioSynchronization();
@@ -1036,6 +1039,21 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             sequence));
     }
 
+    private void UpdateObsStemPublication()
+    {
+        var consumed = false;
+        foreach (var stemFrame in runtimeServices.AudioStems.DrainPublishedFrames())
+        {
+            obsStemPublication.Consume(stemFrame);
+            consumed = true;
+        }
+
+        if (consumed)
+        {
+            lastObsStemPublication = obsStemPublication.Capture();
+        }
+    }
+
     private void UpdateAudioSpectra()
     {
         if (runtimeSeconds < nextSpectrumSeconds)
@@ -1092,6 +1110,12 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         var states = synchronization.AudioSynchronizationStates;
         Console.WriteLine(
             $"mimir-sync-telemetry t={runtimeSeconds:0.00}s audioSync={audioSyncSettings.Mode} loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} analyzeMs={lastAudioSyncAnalysisMilliseconds:0.0} aligned={DescribeAlignedAudio()}");
+        if (lastObsStemPublication.ReadyStems.Count > 0 || lastObsStemPublication.MissingStemIds.Count > 0)
+        {
+            Console.WriteLine(
+                $"mimir-stem-telemetry profile={lastObsStemPublication.ConfigurationId} ready={lastObsStemPublication.ReadyStems.Count} missing={lastObsStemPublication.MissingStemIds.Count} unconfigured={lastObsStemPublication.UnconfiguredStemIds.Count} seq={lastObsStemPublication.LatestSequence}");
+        }
+
         Console.WriteLine($"mimir-sync-buffers {DescribeAudioBuffers()}");
         Console.WriteLine($"mimir-spectrum-frustum {DescribeSpectrumFrustum()}");
         foreach (var spectrum in lastAudioSpectra.OrderBy(snapshot => snapshot.SourceId, StringComparer.Ordinal))

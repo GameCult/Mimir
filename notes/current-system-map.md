@@ -315,8 +315,11 @@ path as channel authority. Fensalir can compile/host/process that persistent
 Faust graph now. The engine now publishes processed output lanes as
 `AquariumAudioStemFrame` records through `IAquariumAudioStemBus`, with Mimir's
 actuator program declaring deterministic aligned-source stem names. OBS-facing
-publication still has to consume those stems as separately mixable program
-audio.
+publication now has a first readiness surface:
+`MimirObsStemPublicationState` consumes those frames without copying audio and
+reports ready, missing, and unconfigured stems against the alignment actuator
+stem-bus profile. Actual device/plugin routing for OBS still has to consume the
+same validated stem stream as separately mixable program audio.
 
 ## Visual Fusion
 

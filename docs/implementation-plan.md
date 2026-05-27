@@ -154,8 +154,11 @@ a named invariant that the native runtime cannot protect yet.
   using the bank-assigned Faust `sourceN` slot as channel authority. Fensalir
   now publishes processed DSP output as `AquariumAudioStemFrame` records through
   an engine-owned `IAquariumAudioStemBus`, and Mimir declares deterministic
-  aligned-source stem names with the actuator program. OBS-facing publication is
-  still the next cut before those stems become separately mixable program
+  aligned-source stem names with the actuator program.
+  `MimirObsStemPublicationState` consumes the Fensalir stem bus without copying
+  audio and validates ready/missing/unconfigured lanes against the
+  alignment-actuator OBS stem profile. Actual OBS device/plugin routing remains
+  the next output cut before those stems become separately mixable program
   outputs.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the

@@ -35,6 +35,82 @@ public sealed record MimirObsPublicationConfiguration(
     double TargetPresentationDelaySeconds,
     bool DiagnosticOnly);
 
+public sealed record MimirObsPublishedAudioStem(
+    string StemId,
+    string DisplayName,
+    string SourceId,
+    int ChannelIndex,
+    int FrameCount,
+    int SampleRate,
+    long Sequence,
+    bool Configured);
+
+public sealed record MimirObsStemPublicationSnapshot(
+    string ConfigurationId,
+    MimirObsAudioPublicationKind AudioKind,
+    IReadOnlyList<MimirObsPublishedAudioStem> ReadyStems,
+    IReadOnlyList<string> MissingStemIds,
+    IReadOnlyList<string> UnconfiguredStemIds,
+    long LatestSequence)
+{
+    public static MimirObsStemPublicationSnapshot Empty { get; } = new(
+        "",
+        MimirObsAudioPublicationKind.FaustStemBus,
+        [],
+        [],
+        [],
+        0);
+}
+
+public sealed class MimirObsStemPublicationState(MimirObsPublicationConfiguration configuration)
+{
+    private readonly Dictionary<string, MimirObsPublishedAudioStem> latestByStemId = new(StringComparer.Ordinal);
+
+    public void Consume(Aquarium.Engine.Audio.AquariumAudioStemFrame frame)
+    {
+        var configured = configuration.AudioStems.ToDictionary(stem => stem.Id, StringComparer.Ordinal);
+        foreach (var channel in frame.Channels)
+        {
+            var isConfigured = configured.TryGetValue(channel.StemId, out var configuredStem);
+            latestByStemId[channel.StemId] = new MimirObsPublishedAudioStem(
+                channel.StemId,
+                isConfigured ? configuredStem!.DisplayName : channel.DisplayName,
+                channel.SourceId,
+                channel.ChannelIndex,
+                frame.FrameCount,
+                frame.SampleRate,
+                frame.Sequence,
+                isConfigured);
+        }
+    }
+
+    public MimirObsStemPublicationSnapshot Capture()
+    {
+        var configuredIds = configuration.AudioStems
+            .Select(stem => stem.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var ready = latestByStemId.Values
+            .OrderBy(stem => stem.StemId, StringComparer.Ordinal)
+            .ToArray();
+        var missing = configuration.AudioStems
+            .Where(stem => !latestByStemId.ContainsKey(stem.Id))
+            .Select(stem => stem.Id)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var unconfigured = latestByStemId.Keys
+            .Where(stemId => !configuredIds.Contains(stemId))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        return new MimirObsStemPublicationSnapshot(
+            configuration.Id,
+            configuration.AudioKind,
+            ready,
+            missing,
+            unconfigured,
+            ready.Length == 0 ? 0 : ready.Max(stem => stem.Sequence));
+    }
+}
+
 public static class MimirObsPublicationConfigurations
 {
     public static IReadOnlyList<MimirObsAudioStem> ProgramStems { get; } =
@@ -48,6 +124,17 @@ public static class MimirObsPublicationConfigurations
         new("spatial_bed", "Spatial bed", 4, UserMixable: true, CarriesTimingWitness: false, "Encoded volumetric ambience or ambisonic fold.")
     ];
 
+    public static IReadOnlyList<MimirObsAudioStem> AlignmentSourceStems { get; } =
+        Enumerable.Range(0, MimirAlignmentActuatorProfile.SixSourceFaust.SourceCount)
+            .Select(index => new MimirObsAudioStem(
+                $"aligned_source_{index}",
+                $"Aligned source {index}",
+                1,
+                UserMixable: true,
+                CarriesTimingWitness: false,
+                "Post-actuator source lane before final separation/spatial mixing."))
+            .ToArray();
+
     public static MimirObsPublicationConfiguration NativeProgram { get; } = new(
         "native-program-spout-faust",
         "Production target: Fensalir publishes synchronized video, Faust publishes aligned stems.",
@@ -55,6 +142,16 @@ public static class MimirObsPublicationConfigurations
         "Mimir Point Cloud",
         MimirObsAudioPublicationKind.FaustStemBus,
         ProgramStems,
+        TargetPresentationDelaySeconds: 5.0,
+        DiagnosticOnly: false);
+
+    public static MimirObsPublicationConfiguration AlignmentActuatorStemBus { get; } = new(
+        "alignment-actuator-stem-bus",
+        "Program-stage Faust stem bus: aligned source lanes before final mix/separation.",
+        MimirObsVideoPublicationKind.Spout2,
+        "Mimir Point Cloud",
+        MimirObsAudioPublicationKind.FaustStemBus,
+        AlignmentSourceStems,
         TargetPresentationDelaySeconds: 5.0,
         DiagnosticOnly: false);
 
@@ -87,6 +184,7 @@ public static class MimirObsPublicationConfigurations
     public static IReadOnlyList<MimirObsPublicationConfiguration> BuiltIn { get; } =
     [
         NativeProgram,
+        AlignmentActuatorStemBus,
         TextureInteropProgram,
         EveNativeProgram,
         DiagnosticSrtBridge
