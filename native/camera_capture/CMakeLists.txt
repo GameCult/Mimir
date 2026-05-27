@@ -54,3 +54,17 @@ target_compile_definitions(mimir_ps3eye_capture PRIVATE
     NOMINMAX)
 target_include_directories(mimir_ps3eye_capture PRIVATE ${PS3EYE_ROOT}/src)
 target_link_libraries(mimir_ps3eye_capture PRIVATE mimir_ps3eye_vendor)
+
+add_library(mimir_mf_gpu_capture SHARED
+    mimir_mf_gpu_capture.cpp)
+target_compile_features(mimir_mf_gpu_capture PRIVATE cxx_std_20)
+target_compile_definitions(mimir_mf_gpu_capture PRIVATE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX)
+target_link_libraries(mimir_mf_gpu_capture PRIVATE
+    d3d11
+    dxgi
+    mf
+    mfplat
+    mfreadwrite
+    mfuuid)

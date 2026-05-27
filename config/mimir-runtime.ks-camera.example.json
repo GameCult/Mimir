@@ -58,6 +58,21 @@
       "queueDepth": 8
     },
     {
+      "sourceId": "kiyo-pro-mf-gpu",
+      "displayName": "Kiyo Pro MF GPU decode",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": false,
+      "adapter": "mf-gpu",
+      "command": "../native/camera_capture/build/Release/mimir_mf_gpu_capture.dll",
+      "pathNeedle": "vid_1532&pid_0e05",
+      "width": 1920,
+      "height": 1080,
+      "inputFormat": "MJPG",
+      "outputFormat": "RGB32",
+      "minimumFramesPerSecond": 25.0
+    },
+    {
       "sourceId": "kiyo-yuy2",
       "displayName": "Kiyo YUY2",
       "kind": "Video",

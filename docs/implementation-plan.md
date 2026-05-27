@@ -215,6 +215,15 @@ a named invariant that the native runtime cannot protect yet.
   Current direct-driver smokes prove real-frame upload for LeapUVC 640x240
   YUY2, both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular
   Kiyo 640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
+  `MimirMediaFoundationGpuVideoCaptureDriver` is the first compressed camera
+  path: `native/camera_capture/mimir_mf_gpu_capture.dll` uses Media Foundation
+  SourceReader with a D3D11 device manager, selects MJPG/H264 camera modes,
+  decodes on the GPU, copies the decoded GPU surface into a shared BGRA D3D11
+  texture, and publishes only a `shared-d3d11-texture` handle. Live payload
+  bytes stay empty. Kiyo Pro 1920x1080 MJPG->RGB32 and H264->RGB32 smokes both
+  produced GPU handles and valid Fensalir camera resources. NV12 sharing was
+  rejected by D3D11 in this path, so planar NV12 remains future plane-aware
+  interop or GPU bridge-copy work.
   Fensalir can still resolve imported shared `Texture2D` resources by native
   D3D12 handle and accepts Mimir video format names.
   `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split,

@@ -336,7 +336,15 @@ accepted_design:
     Fresh direct-driver smokes uploaded real frames for LeapUVC 640x240 YUY2,
     PS3 Eye 0/1 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular Kiyo
     640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open; compressed
-    MJPG/H264 remain device/GPU decode producer work.
+    Kiyo Pro MJPG/H264 now have a first GPU-resident producer:
+    `MimirMediaFoundationGpuVideoCaptureDriver` uses
+    `native/camera_capture/mimir_mf_gpu_capture.dll` to run Media Foundation
+    SourceReader with a D3D11 device manager, decode MJPG/H264 on the GPU, copy
+    the decoded GPU surface into a shared BGRA D3D11 texture, and publish a
+    `shared-d3d11-texture` handle with zero live CPU payload bytes. Kiyo Pro
+    1920x1080 MJPG->RGB32 and H264->RGB32 smokes passed. Direct shared NV12
+    texture creation failed in D3D11, so NV12 remains future plane-aware interop
+    or GPU bridge-copy work.
     `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
     engine-owned lease path. Camera image claims currently defer until Fensalir

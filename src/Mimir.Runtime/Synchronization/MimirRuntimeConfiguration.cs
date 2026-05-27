@@ -192,6 +192,28 @@ public sealed class MimirRuntimeConfiguration
                 static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
         }
 
+        if (string.Equals(stream.Adapter, "mf-gpu", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(stream.Adapter, "media-foundation-gpu", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("The Mimir Media Foundation GPU source requires Windows.");
+            }
+
+            return new MimirStreamSourceFactory(descriptor, () => new MimirVideoCaptureDriverSource(
+                descriptor,
+                new MimirMediaFoundationGpuVideoCaptureDriver(new MimirMediaFoundationGpuVideoCaptureDriverOptions(
+                    ResolveCommand(stream.Command, configDirectory),
+                    stream.SourceId,
+                    stream.PathNeedle,
+                    stream.Width,
+                    stream.Height,
+                    stream.InputFormat,
+                    stream.OutputFormat,
+                    stream.MinimumFramesPerSecond)),
+                static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
+        }
+
         if (string.Equals(stream.Adapter, "frame-events", StringComparison.OrdinalIgnoreCase)
             || string.Equals(stream.Adapter, "json-lines", StringComparison.OrdinalIgnoreCase))
         {
@@ -367,6 +389,10 @@ public sealed class MimirStreamConfig
     public int Height { get; set; }
 
     public string PixelFormat { get; set; } = "";
+
+    public string InputFormat { get; set; } = "";
+
+    public string OutputFormat { get; set; } = "Nv12";
 
     public double MinimumFramesPerSecond { get; set; }
 

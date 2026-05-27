@@ -123,6 +123,11 @@ if (args.Any(arg => string.Equals(arg, "--ps3eye-driver-smoke", StringComparison
     return RunPs3EyeDriverSmoke(args);
 }
 
+if (args.Any(arg => string.Equals(arg, "--mf-gpu-driver-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMfGpuDriverSmoke(args);
+}
+
 if (args.Any(arg => string.Equals(arg, "--mimir-spectrum-upload-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMimirSpectrumUploadSmoke();
@@ -924,6 +929,67 @@ static int RunPs3EyeDriverSmoke(string[] args)
     }
 
     Console.WriteLine($"ps3eye-driver-smoke timeout source={sourceId} camera={cameraIndex} {width}x{height}@{fps}");
+    return 1;
+}
+
+static int RunMfGpuDriverSmoke(string[] args)
+{
+    var library = ParseStringOption(args, "--native-library", Path.GetFullPath("native/camera_capture/build/Release/mimir_mf_gpu_capture.dll"));
+    var sourceId = ParseStringOption(args, "--source-id", "kiyo-pro-mf-gpu");
+    var pathNeedle = ParseStringOption(args, "--path-needle", "vid_1532&pid_0e05");
+    var width = ParseIntOption(args, "--width", 1920);
+    var height = ParseIntOption(args, "--height", 1080);
+    var inputFormat = ParseStringOption(args, "--input-format", "MJPG");
+    var outputFormat = ParseStringOption(args, "--output-format", "NV12");
+    var minFps = ParseDoubleOption(args, "--min-fps", 25.0);
+    var timeoutMs = ParseIntOption(args, "--timeout-ms", 3000);
+
+    using var driver = new MimirMediaFoundationGpuVideoCaptureDriver(new MimirMediaFoundationGpuVideoCaptureDriverOptions(
+        library,
+        sourceId,
+        pathNeedle,
+        width,
+        height,
+        inputFormat,
+        outputFormat,
+        minFps));
+    using var source = new MimirVideoCaptureDriverSource(
+        new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        driver,
+        static () => StopwatchTicksToNs(Stopwatch.GetTimestamp()));
+
+    var deadline = Stopwatch.GetTimestamp() + (long)(timeoutMs / 1000.0 * Stopwatch.Frequency);
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        if (!source.TryRead(out var sample))
+        {
+            Thread.Sleep(1);
+            continue;
+        }
+
+        var frame = sample.VideoFrame;
+        var buffer = new MimirRollingStreamBuffer(
+            new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+            TimeSpan.FromSeconds(5));
+        buffer.Append(sample);
+        var evidence = new MimirFensalirFieldLowering().BuildCameraObservationFrame([buffer]);
+        var validation = AquariumFieldEvidenceValidator.Validate(evidence);
+        Console.WriteLine(
+            $"mf-gpu-driver-smoke source={sample.SourceId} {frame?.Width}x{frame?.Height} format={frame?.PixelFormat} liveBytes={sample.ByteLength} handle=0x{frame?.NativeHandle:x} kind={frame?.NativeHandleKind} resources={evidence.Resources.Count} errors={validation.HasErrors}");
+        return frame != null &&
+            frame.Width == width &&
+            frame.Height == height &&
+            frame.NativeHandle != 0 &&
+            frame.NativeHandleKind == "shared-d3d11-texture" &&
+            sample.ByteLength == 0 &&
+            evidence.Resources.Count == 1 &&
+            evidence.Resources[0].Residency == AquariumFieldResourceResidency.SharedGpu &&
+            !validation.HasErrors
+            ? 0
+            : 1;
+    }
+
+    Console.WriteLine($"mf-gpu-driver-smoke timeout source={sourceId} pathNeedle={pathNeedle} {width}x{height} {inputFormat}->{outputFormat}");
     return 1;
 }
 

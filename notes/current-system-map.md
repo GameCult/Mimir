@@ -355,6 +355,14 @@ WinUSB/libusb capture, emitting Bayer8 frames through the common upload lane.
 Driver smokes have pulled and uploaded real frames for LeapUVC 640x240 YUY2,
 both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular Kiyo
 640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
+`MimirMediaFoundationGpuVideoCaptureDriver` plus
+`native/camera_capture/mimir_mf_gpu_capture.dll` is the compressed camera path:
+Media Foundation SourceReader runs with a D3D11 device manager, decodes MJPG or
+H264 camera frames on the GPU, copies the decoded GPU surface into a shared BGRA
+D3D11 texture, and publishes a `shared-d3d11-texture` handle with no live CPU
+payload bytes. Kiyo Pro 1920x1080 MJPG->RGB32 and H264->RGB32 smokes both
+produced valid GPU handles/resources. Direct NV12 shared texture creation
+failed in D3D11, so NV12 needs plane-aware interop or a GPU bridge-copy cut.
 Metadata-only cadence frames do not create camera surface intents or fake
 payload requests. The old direct `AquariumGpuSensorFrame` bridge proof has been
 removed from Mimir's active proof path. Camera image claims currently defer

@@ -63,8 +63,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Fresh driver smokes pulled and uploaded real frames for LeapUVC 640x240 YUY2,
   both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular Kiyo
   640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
-  Compressed MJPG/H264 still need a device/GPU decode producer, not this raw
-  upload lane.
+  Compressed Kiyo Pro MJPG/H264 now have a first GPU-resident path:
+  `MimirMediaFoundationGpuVideoCaptureDriver` uses
+  `native/camera_capture/mimir_mf_gpu_capture.dll` to decode through Media
+  Foundation with a D3D11 device manager, copy into a shared BGRA D3D11 texture,
+  and publish `shared-d3d11-texture` with zero live CPU payload bytes.
+  1920x1080 MJPG->RGB32 and H264->RGB32 smokes passed. Direct shared NV12
+  texture creation failed, so NV12 remains future plane-aware interop or
+  GPU bridge-copy work.
   Foreign shared texture handles are import edges, not the primary hot path.
 - The current Mimir/Fensalir rendering teardown map is
   [[docs/fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild
