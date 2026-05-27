@@ -32,10 +32,21 @@ Shared D3D12 texture name: Global\MimirFensalirProgramTexture
 ```
 
 OBS/libobs is D3D11 internally on Windows, so this source opens the named D3D12
-texture, creates an OBS-readable shared D3D11 texture, and performs a GPU-to-GPU
-copy during OBS render before drawing the source. This avoids CPU readback and
-does not require Spout2. It is not pure zero-copy yet; the remaining copy is the
+texture, creates an OBS-readable legacy shared D3D11 texture, opens that same
+bridge texture from D3D12, and performs a GPU-to-GPU copy during OBS render
+before drawing the source. This avoids CPU readback and does not require
+Spout2. It is not pure zero-copy yet; the remaining copy is the
 D3D12-to-libobs-D3D11 boundary.
+
+For a visible interop witness while the real Mimir scene is sparse, launch
+Mimir with:
+
+```text
+MIMIR_OBS_PROOF_VISUAL=1
+```
+
+That enables a small bright SDF/starfield proof visual. It is a debug witness,
+not production scene policy.
 
 ### Audio
 

@@ -248,7 +248,7 @@ static bool create_obs_bridge_texture(MimirProgramTextureSource *ctx)
     desc.SampleDesc.Count = 1;
     desc.Usage = D3D11_USAGE_DEFAULT;
     desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
     HRESULT hr = ctx->d3d11_device->CreateTexture2D(&desc, nullptr, &ctx->bridge_texture_d3d11);
     if (FAILED(hr)) {
@@ -256,32 +256,28 @@ static bool create_obs_bridge_texture(MimirProgramTextureSource *ctx)
         return false;
     }
 
-    ComPtr<IDXGIResource1> dxgi_resource;
-    hr = ctx->bridge_texture_d3d11.As(&dxgi_resource);
+    ComPtr<IDXGIResource> legacy_resource;
+    hr = ctx->bridge_texture_d3d11.As(&legacy_resource);
     if (FAILED(hr)) {
-        blog(LOG_WARNING, "Mimir OBS program texture: bridge texture is not IDXGIResource1: 0x%08lx", static_cast<unsigned long>(hr));
+        blog(LOG_WARNING, "Mimir OBS program texture: bridge texture is not IDXGIResource: 0x%08lx", static_cast<unsigned long>(hr));
         return false;
     }
 
-    hr = dxgi_resource->CreateSharedHandle(
-        nullptr,
-        DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE,
-        nullptr,
-        &ctx->bridge_shared_handle);
-    if (FAILED(hr)) {
-        blog(LOG_WARNING, "Mimir OBS program texture: CreateSharedHandle bridge failed: 0x%08lx", static_cast<unsigned long>(hr));
+    hr = legacy_resource->GetSharedHandle(&ctx->bridge_shared_handle);
+    if (FAILED(hr) || !ctx->bridge_shared_handle) {
+        blog(LOG_WARNING, "Mimir OBS program texture: GetSharedHandle bridge failed: 0x%08lx", static_cast<unsigned long>(hr));
         return false;
     }
 
     hr = ctx->d3d12_device->OpenSharedHandle(ctx->bridge_shared_handle, IID_PPV_ARGS(&ctx->bridge_texture_d3d12));
     if (FAILED(hr)) {
-        blog(LOG_WARNING, "Mimir OBS program texture: D3D12 open bridge handle failed: 0x%08lx", static_cast<unsigned long>(hr));
+        blog(LOG_WARNING, "Mimir OBS program texture: D3D12 open legacy bridge handle failed: 0x%08lx", static_cast<unsigned long>(hr));
         return false;
     }
 
-    ctx->obs_texture = gs_texture_open_nt_shared(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ctx->bridge_shared_handle)));
+    ctx->obs_texture = gs_texture_open_shared(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ctx->bridge_shared_handle)));
     if (!ctx->obs_texture) {
-        blog(LOG_WARNING, "Mimir OBS program texture: OBS failed to open bridge shared texture");
+        blog(LOG_WARNING, "Mimir OBS program texture: OBS failed to open legacy bridge shared texture");
         return false;
     }
 

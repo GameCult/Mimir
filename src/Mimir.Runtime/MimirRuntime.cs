@@ -51,6 +51,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly float spectrumUpdateIntervalSeconds;
     private readonly int spectrumTubeSubdivisions;
     private readonly int spectrumSourceLaneCapacity;
+    private readonly bool obsProofVisualEnabled;
     private readonly float calibrationGain;
     private readonly float watermarkGain;
     private readonly bool syntheticSpectrumPreview;
@@ -128,6 +129,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         spectrumUpdateIntervalSeconds = ParseSpectrumUpdateIntervalSeconds();
         spectrumTubeSubdivisions = ParseSpectrumTubeSubdivisions();
         spectrumSourceLaneCapacity = ParseSpectrumSourceLaneCapacity();
+        obsProofVisualEnabled = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_OBS_PROOF_VISUAL"));
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
         syntheticSpectrumPreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW"));
@@ -188,11 +190,39 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             new AquariumSceneState
             {
                 TraceHeightFieldSurface = false,
-                UseStarfieldBackground = false,
+                UseStarfieldBackground = obsProofVisualEnabled,
+                SdfObjects = obsProofVisualEnabled ? BuildObsProofSdfObjects(runtimeSeconds) : [],
+                SdfLights = obsProofVisualEnabled ? BuildObsProofSdfLights(runtimeSeconds) : [],
                 FieldEvidenceFrame = fieldEvidenceFrame,
                 BufferFieldFrame = AquariumBufferFieldFrame.Empty,
                 SplineFrame = AquariumSplineFrame.Empty,
             });
+    }
+
+    private static AquariumSdfObject[] BuildObsProofSdfObjects(float timeSeconds)
+    {
+        var center = new Vector3(MathF.Sin(timeSeconds * 0.8f) * 1.2f, 0.25f, 0.0f);
+        return
+        [
+            new AquariumSdfObject(
+                new Vector4(center, 1.2f),
+                new Vector4(center, 0.0f),
+                new Vector4(1.0f, timeSeconds, 0.0f, 0.0f))
+        ];
+    }
+
+    private static AquariumSdfLight[] BuildObsProofSdfLights(float timeSeconds)
+    {
+        var lightOrbit = new Vector3(MathF.Cos(timeSeconds) * 2.0f, 1.8f, MathF.Sin(timeSeconds) * 2.0f);
+        return
+        [
+            new AquariumSdfLight(
+                new Vector4(lightOrbit, 3.0f),
+                new Vector4(4.0f, 0.9f, 0.2f, 10.0f)),
+            new AquariumSdfLight(
+                new Vector4(-1.8f, 1.0f, 2.5f, 2.0f),
+                new Vector4(0.1f, 1.4f, 3.6f, 10.0f))
+        ];
     }
 
     private AquariumFieldEvidenceFrame BuildFieldEvidenceFrame()
