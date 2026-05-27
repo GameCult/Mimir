@@ -4,6 +4,7 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFe
 {
     private readonly IMimirVideoCaptureDriver driver;
     private readonly MimirNativeIngestStreamSource nativeSource;
+    private MimirFensalirTextureLeaseClient? textureLeaseClient;
 
     public MimirVideoCaptureDriverSource(
         MimirStreamDescriptor descriptor,
@@ -25,8 +26,11 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFe
 
     public Func<long> ReadArrivalNs { get; }
 
+    public int LastUploadedCopyCount { get; private set; }
+
     public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
     {
+        textureLeaseClient = client;
         if (driver is IMimirFensalirTextureLeaseReceiver receiver)
         {
             receiver.AttachTextureLeaseClient(client);
@@ -43,6 +47,16 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFe
         if (!driver.TryCapture(out var frame, out var data))
         {
             return false;
+        }
+
+        if (!data.IsEmpty && !string.IsNullOrWhiteSpace(frame.ResourceKey))
+        {
+            if (textureLeaseClient?.UploadCpuFrame(frame, data) == true)
+            {
+                frame = frame with { UnavoidableCopyCount = frame.UnavoidableCopyCount + 1 };
+                LastUploadedCopyCount = frame.UnavoidableCopyCount;
+                data = default;
+            }
         }
 
         nativeSource.PushVideoFrame(frame, ReadArrivalNs(), data);

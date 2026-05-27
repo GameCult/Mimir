@@ -68,6 +68,27 @@ public sealed class MimirFensalirTextureLeaseClient(IAquariumFieldResourceBroker
     public bool Commit(string resourceKey, ulong version, ulong producerFenceValue) =>
         broker.CommitLeaseVersion(resourceKey, version, producerFenceValue);
 
+    public bool UploadCpuFrame(MimirVideoFrameDescriptor frame, ReadOnlyMemory<byte> data)
+    {
+        if (string.IsNullOrWhiteSpace(frame.ResourceKey) ||
+            frame.Width <= 0 ||
+            frame.Height <= 0 ||
+            frame.StrideBytes <= 0 ||
+            data.IsEmpty)
+        {
+            return false;
+        }
+
+        return broker.UploadTexture2D(new AquariumTexture2DUpload(
+            frame.ResourceKey,
+            frame.Width,
+            frame.Height,
+            FormatForPixelFormat(frame.PixelFormat),
+            frame.StrideBytes,
+            data,
+            frame.ProducerFenceValue));
+    }
+
     public static string ResourceKeyForSource(string sourceId)
     {
         var normalized = sourceId.Trim().ToLowerInvariant().Replace('\\', '/');
@@ -78,7 +99,9 @@ public sealed class MimirFensalirTextureLeaseClient(IAquariumFieldResourceBroker
         pixelFormat switch
         {
             MimirVideoPixelFormat.Gray8 or MimirVideoPixelFormat.R8 => "R8Unorm",
+            MimirVideoPixelFormat.Bayer8 => "R8Unorm",
             MimirVideoPixelFormat.Rg8 or MimirVideoPixelFormat.LeapStereoIr => "R8G8_UNorm",
+            MimirVideoPixelFormat.Yuy2 => "YUY2",
             MimirVideoPixelFormat.Bgra8 => "Bgra8",
             MimirVideoPixelFormat.Nv12 => "Nv12",
             _ => "Rgba8Unorm",

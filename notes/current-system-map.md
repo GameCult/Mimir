@@ -339,6 +339,11 @@ request the destination texture before emitting a frame descriptor.
 Each camera backend must use the closest-to-device path available and expose
 its unavoidable copy count. Managed/process wrappers are diagnostic bring-up
 surfaces, not the production camera hot path.
+For raw single-plane system-memory frames, `MimirVideoCaptureDriverSource`
+performs the one declared CPU-to-GPU upload into the Fensalir lease, drops the
+managed payload from the live sample, and increments `UnavoidableCopyCount`.
+NV12 CPU upload is rejected until Fensalir owns a real planar upload path;
+device/GPU NV12 producers should write the leased texture directly.
 Metadata-only cadence frames do not create camera surface intents or fake
 payload requests. The old direct `AquariumGpuSensorFrame` bridge proof has been
 removed from Mimir's active proof path. Camera image claims currently defer

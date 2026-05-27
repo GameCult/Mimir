@@ -757,17 +757,19 @@ static int RunFensalirTextureLeaseSmoke()
     }
 
     var receiverDriver = new FakeTextureLeaseVideoDriver();
+    var receiverSource = new MimirVideoCaptureDriverSource(
+        new MimirStreamDescriptor("driver-camera", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        receiverDriver,
+        static () => 0);
     using (var runtime = new MimirRuntime(
         new AquariumRuntimeOptions(Headless: true, CultCachePath: null),
         new MimirSynchronizationSettings(),
-        [
-            new MimirVideoCaptureDriverSource(
-                new MimirStreamDescriptor("driver-camera", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
-                receiverDriver,
-                static () => 0)
-        ]))
+        [receiverSource]))
     {
         runtime.AttachServices(new AquariumRuntimeServices(broker));
+        runtime.OnSceneReady();
+        runtime.Update(0.016f, new InputState());
+        _ = runtime.Frame;
     }
 
     var buffer = new MimirRollingStreamBuffer(
@@ -790,10 +792,12 @@ static int RunFensalirTextureLeaseSmoke()
     var expectedResourceKey = MimirFensalirTextureLeaseClient.ResourceKeyForSource("kiyo-pro-rgb");
 
     Console.WriteLine(
-        $"fensalir-texture-lease-smoke leased={lease.IsValid} committed={broker.CommittedFenceValue > 0} driverClient={receiverDriver.HasClient} resources={frame.Resources.Count} claims={frame.Claims.Count} errors={validation.HasErrors}");
+        $"fensalir-texture-lease-smoke leased={lease.IsValid} committed={broker.CommittedFenceValue > 0} driverClient={receiverDriver.HasClient} uploaded={broker.UploadedResourceKey} copies={receiverSource.LastUploadedCopyCount} resources={frame.Resources.Count} claims={frame.Claims.Count} errors={validation.HasErrors}");
 
     return lease.IsValid &&
         receiverDriver.HasClient &&
+        receiverSource.LastUploadedCopyCount == 1 &&
+        broker.UploadedResourceKey == MimirFensalirTextureLeaseClient.ResourceKeyForSource("driver-camera") &&
         broker.CommittedResourceKey == expectedResourceKey &&
         broker.CommittedVersion == 0 &&
         broker.CommittedFenceValue == 41 &&
@@ -6049,6 +6053,8 @@ sealed class FakeFieldResourceBroker : IAquariumFieldResourceBroker
 
     public ulong CommittedFenceValue { get; private set; }
 
+    public string UploadedResourceKey { get; private set; } = "";
+
     public AquariumFieldResourceLease LeaseTexture2D(AquariumTexture2DLeaseRequest request)
     {
         var declaration = new AquariumFieldResourceDeclaration(
@@ -6082,6 +6088,12 @@ sealed class FakeFieldResourceBroker : IAquariumFieldResourceBroker
         CommittedFenceValue = producerFenceValue;
         return true;
     }
+
+    public bool UploadTexture2D(AquariumTexture2DUpload upload)
+    {
+        UploadedResourceKey = upload.ResourceKey;
+        return upload.IsValid;
+    }
 }
 
 sealed class FakeTextureLeaseVideoDriver : IMimirVideoCaptureDriver, IMimirFensalirTextureLeaseReceiver
@@ -6090,13 +6102,38 @@ sealed class FakeTextureLeaseVideoDriver : IMimirVideoCaptureDriver, IMimirFensa
 
     public bool HasClient { get; private set; }
 
+    private MimirFensalirTextureLeaseClient? client;
+    private bool emitted;
+
     public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
     {
+        this.client = client;
         HasClient = client != null;
     }
 
     public bool TryCapture(out MimirVideoFrameDescriptor frame, out ReadOnlyMemory<byte> data)
     {
+        if (!emitted &&
+            client != null &&
+            client.TryLeaseTexture2D(new MimirFensalirTextureLeaseRequest(
+                "driver-camera",
+                2,
+                2,
+                MimirVideoPixelFormat.Bgra8,
+                8,
+                DeviceTimestampNs: 2_000_000_000L,
+                Version: 1), out var lease))
+        {
+            emitted = true;
+            frame = lease.Frame;
+            data = new byte[]
+            {
+                0, 0, 0, 255, 255, 255, 255, 255,
+                255, 0, 0, 255, 0, 255, 0, 255,
+            };
+            return true;
+        }
+
         frame = default!;
         data = default;
         return false;

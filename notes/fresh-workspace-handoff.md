@@ -51,6 +51,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   that implement `IMimirFensalirTextureLeaseReceiver`.
   Camera backends must use the closest-to-device path available and report
   unavoidable copies; process or managed convenience layers are diagnostics.
+  Raw single-plane CPU-origin frames can use the explicit broker upload lane,
+  which increments `UnavoidableCopyCount` and clears live managed payload bytes
+  after upload. NV12 CPU upload is rejected until Fensalir owns planar copy;
+  device/GPU NV12 producers should write the leased texture directly.
   Foreign shared texture handles are import edges, not the primary hot path.
 - The current Mimir/Fensalir rendering teardown map is
   [[docs/fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild

@@ -317,6 +317,12 @@ accepted_design:
     Camera backends must use the closest-to-device path available and report
     unavoidable copies; process or managed convenience layers are diagnostics,
     not production camera hot-path owners.
+    Raw single-plane system-memory frames use the explicit fallback upload lane:
+    `MimirVideoCaptureDriverSource` uploads the bytes into the Fensalir lease,
+    drops the managed payload from the live sample, and increments
+    `UnavoidableCopyCount`. NV12 CPU upload is rejected until Fensalir has a
+    real planar upload path; device/GPU NV12 producers should write the leased
+    texture directly.
     `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
     engine-owned lease path. Camera image claims currently defer until Fensalir

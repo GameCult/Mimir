@@ -24,4 +24,5 @@ public sealed record MimirVideoFrameDescriptor(
     ulong NativeHandle = 0,
     string NativeHandleKind = "",
     string ResourceKey = "",
-    ulong ProducerFenceValue = 0);
+    ulong ProducerFenceValue = 0,
+    int UnavoidableCopyCount = 0);

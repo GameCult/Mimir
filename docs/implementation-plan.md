@@ -192,6 +192,12 @@ a named invariant that the native runtime cannot protect yet.
   `MimirVideoCaptureDriverSource` forwards the lease client to drivers that
   implement `IMimirFensalirTextureLeaseReceiver`, so native/direct camera
   drivers can allocate their Fensalir destination texture before capture/decode.
+  If a raw single-plane device path must return CPU bytes,
+  `MimirVideoCaptureDriverSource` uploads them directly into the leased texture
+  through the broker, clears the live managed payload, and increments
+  `UnavoidableCopyCount`. NV12 CPU upload is rejected until the engine owns a
+  real planar copy path; GPU/native producers should write the shared texture
+  themselves and stay at zero copies.
   Metadata-only cadence frames remain observations with empty payload handles;
   they do not become fake render requests. The old direct
   `AquariumGpuSensorFrame` builder has been removed from Mimir's proof path.
