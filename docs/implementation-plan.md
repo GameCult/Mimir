@@ -157,9 +157,11 @@ a named invariant that the native runtime cannot protect yet.
   aligned-source stem names with the actuator program.
   `MimirObsStemPublicationState` consumes the Fensalir stem bus without copying
   audio and validates ready/missing/unconfigured lanes against the
-  alignment-actuator OBS stem profile. Actual OBS device/plugin routing remains
-  the next output cut before those stems become separately mixable program
-  outputs.
+  alignment-actuator OBS stem profile. `MimirObsStemSharedMemoryPublisher` now
+  publishes those validated stems into a fixed Windows shared-memory ABI, and
+  `native/obs_stem_source` is the first OBS source plugin that reads one named
+  stem and submits it to OBS as an audio source. Local plugin compilation still
+  needs an OBS/libobs SDK installation.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

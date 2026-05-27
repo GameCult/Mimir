@@ -41,6 +41,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly MimirAlignmentActuatorBank audioActuatorBank = new();
     private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
+    private readonly MimirObsStemSharedMemoryPublisher? obsStemPublisher;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
     private readonly AquariumUiDocument ui;
     private readonly AquariumAudioDocument audio = new();
@@ -130,6 +131,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
         syntheticSpectrumPreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW"));
+        obsStemPublisher = CreateObsStemPublisher();
         complexContourWitness = settings.Audio.EnableComplexContourRuntime
             ? new MimirBioacousticContestantRenderer(
                 MimirBioacousticContestants.BuiltIn.FirstOrDefault(profile =>
@@ -689,6 +691,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
     public void Dispose()
     {
+        obsStemPublisher?.Dispose();
         synchronization.Dispose();
     }
 
@@ -1051,6 +1054,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         if (consumed)
         {
             lastObsStemPublication = obsStemPublication.Capture();
+            obsStemPublisher?.Publish(lastObsStemPublication);
         }
     }
 
@@ -1167,6 +1171,27 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_SYNC_TELEMETRY_SECONDS"), out var seconds)
             ? Math.Clamp(seconds, 0.0f, 60.0f)
             : 0.0f;
+    }
+
+    private static MimirObsStemSharedMemoryPublisher? CreateObsStemPublisher()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        var mapName = Environment.GetEnvironmentVariable("MIMIR_OBS_STEM_MAP");
+        try
+        {
+            return new MimirObsStemSharedMemoryPublisher(string.IsNullOrWhiteSpace(mapName)
+                ? MimirObsStemSharedMemoryPublisher.DefaultMapName
+                : mapName);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Mimir OBS stem shared-memory publisher disabled: {ex.Message}");
+            return null;
+        }
     }
 
     private static string? ResolveRuntimeAssetPath(string relativePath)

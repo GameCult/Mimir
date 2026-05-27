@@ -43,7 +43,8 @@ public sealed record MimirObsPublishedAudioStem(
     int FrameCount,
     int SampleRate,
     long Sequence,
-    bool Configured);
+    bool Configured,
+    float[] Samples);
 
 public sealed record MimirObsStemPublicationSnapshot(
     string ConfigurationId,
@@ -80,7 +81,8 @@ public sealed class MimirObsStemPublicationState(MimirObsPublicationConfiguratio
                 frame.FrameCount,
                 frame.SampleRate,
                 frame.Sequence,
-                isConfigured);
+                isConfigured,
+                channel.Samples);
         }
     }
 

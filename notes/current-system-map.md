@@ -318,8 +318,11 @@ actuator program declaring deterministic aligned-source stem names. OBS-facing
 publication now has a first readiness surface:
 `MimirObsStemPublicationState` consumes those frames without copying audio and
 reports ready, missing, and unconfigured stems against the alignment actuator
-stem-bus profile. Actual device/plugin routing for OBS still has to consume the
-same validated stem stream as separately mixable program audio.
+stem-bus profile. `MimirObsStemSharedMemoryPublisher` writes the validated stem
+frames into `Local\MimirObsStemBus`, and `native/obs_stem_source` is the first
+OBS source plugin: one OBS source reads one named stem from that map and submits
+it through libobs audio. Building it locally still requires an OBS/libobs SDK
+that provides `libobsConfig.cmake`.
 
 ## Visual Fusion
 

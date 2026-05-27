@@ -79,6 +79,11 @@ if (args.Any(arg => string.Equals(arg, "--audio-stem-publication-smoke", StringC
     return RunAudioStemPublicationSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--obs-stem-shared-memory-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunObsStemSharedMemorySmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--complex-contour-tracker-self-test", StringComparison.OrdinalIgnoreCase)))
 {
     return RunComplexContourTrackerSelfTest(
@@ -1913,6 +1918,49 @@ static int RunAudioStemPublicationSmoke()
             string.Equals(stem.SourceId, "mic-0", StringComparison.Ordinal) &&
             stem.Configured) &&
         snapshot.LatestSequence == 9
+            ? 0
+            : 1;
+}
+
+static int RunObsStemSharedMemorySmoke()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        Console.WriteLine("obs-stem-shared-memory-smoke skipped=non-windows");
+        return 0;
+    }
+
+    var mapName = $"Local\\MimirObsStemBusSmoke{Environment.ProcessId}";
+    var publication = new MimirObsStemPublicationState(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
+    publication.Consume(new AquariumAudioStemFrame(
+        MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+        [new AquariumAudioStemChannel(0, "aligned_source_0", "Aligned source 0", "mic-0", [0.125f, -0.25f, 0.5f])],
+        FrameCount: 3,
+        SampleRate: 48_000,
+        Sequence: 11));
+
+    using var publisher = new MimirObsStemSharedMemoryPublisher(mapName);
+    publisher.Publish(publication.Capture());
+    using var file = System.IO.MemoryMappedFiles.MemoryMappedFile.OpenExisting(mapName, System.IO.MemoryMappedFiles.MemoryMappedFileRights.Read);
+    using var view = file.CreateViewAccessor(0, MimirObsStemSharedMemoryPublisher.MapBytes, System.IO.MemoryMappedFiles.MemoryMappedFileAccess.Read);
+    var magic = view.ReadUInt64(0);
+    var generation = view.ReadUInt32(12);
+    var stemCount = view.ReadInt32(16);
+    var sampleRate = view.ReadInt32(64 + 8);
+    var frameCount = view.ReadInt32(64 + 12);
+    var sampleOffset = view.ReadInt32(64 + 16);
+    var firstSample = view.ReadSingle(sampleOffset);
+
+    Console.WriteLine(
+        $"obs-stem-shared-memory-smoke stems={stemCount} generation={generation} sampleRate={sampleRate} frames={frameCount} first={firstSample:0.000}");
+
+    return magic == 0x4D545352494D494DUL &&
+        generation > 0 &&
+        (generation & 1u) == 0 &&
+        stemCount == 1 &&
+        sampleRate == 48_000 &&
+        frameCount == 3 &&
+        Math.Abs(firstSample - 0.125f) < 0.0001f
             ? 0
             : 1;
 }
