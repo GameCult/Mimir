@@ -163,11 +163,14 @@ a named invariant that the native runtime cannot protect yet.
   `Mimir Audio Stem`, which reads one named stem and submits it to OBS as an
   audio source, and `Mimir Program Texture`, which opens Fensalir's named D3D12
   program-output texture and feeds OBS through a GPU-to-GPU D3D12-to-D3D11
-  bridge texture. This avoids CPU readback and removes Spout2 as a required
-  program-video dependency, while preserving the explicit boundary cost that
-  libobs is D3D11 on Windows. `scripts/build-obs-stem-plugin.ps1` stages the
-  upstream OBS plugin template SDK under `artifacts/obs-sdk/` and builds the
-  plugin DLL locally.
+  bridge texture. Fensalir also publishes a named D3D12 producer fence, and the
+  OBS source opens it before copying so the consumer is not reading blindly.
+  This avoids CPU readback and removes Spout2 as a required program-video
+  dependency, while preserving the explicit boundary cost that libobs is D3D11
+  on Windows. A later publication ring is still required to make
+  producer/consumer overwrite races structurally impossible.
+  `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
+  SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

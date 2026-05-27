@@ -19,9 +19,11 @@ namespace {
 struct MimirProgramTextureSource {
     obs_source_t *source = nullptr;
     std::string texture_name = "Global\\MimirFensalirProgramTexture";
+    std::string fence_name = "Global\\MimirFensalirProgramFence";
     uint32_t width = 0;
     uint32_t height = 0;
     uint64_t fence_value = 0;
+    uint64_t last_producer_fence_value = 0;
     uint64_t next_retry_ns = 0;
     uint64_t next_failure_log_ns = 0;
     HANDLE bridge_shared_handle = nullptr;
@@ -32,6 +34,7 @@ struct MimirProgramTextureSource {
     ComPtr<ID3D12CommandAllocator> command_allocator;
     ComPtr<ID3D12GraphicsCommandList> command_list;
     ComPtr<ID3D12Fence> fence;
+    ComPtr<ID3D12Fence> producer_fence;
     ComPtr<ID3D12Resource> source_texture;
     ComPtr<ID3D12Resource> bridge_texture_d3d12;
     ComPtr<ID3D11Device> d3d11_device;
@@ -91,6 +94,7 @@ static void release_bridge(MimirProgramTextureSource *ctx)
     ctx->bridge_texture_d3d11.Reset();
     ctx->source_texture.Reset();
     ctx->fence.Reset();
+    ctx->producer_fence.Reset();
     ctx->command_list.Reset();
     ctx->command_allocator.Reset();
     ctx->command_queue.Reset();
@@ -100,6 +104,7 @@ static void release_bridge(MimirProgramTextureSource *ctx)
     ctx->width = 0;
     ctx->height = 0;
     ctx->fence_value = 0;
+    ctx->last_producer_fence_value = 0;
 
     if (ctx->bridge_shared_handle) {
         CloseHandle(ctx->bridge_shared_handle);
@@ -237,6 +242,53 @@ static bool open_source_texture(MimirProgramTextureSource *ctx)
     return ctx->width > 0 && ctx->height > 0;
 }
 
+static void open_producer_fence(MimirProgramTextureSource *ctx)
+{
+    const auto wide_name = utf8_to_wide(ctx->fence_name);
+    if (wide_name.empty()) {
+        return;
+    }
+
+    HANDLE fence_handle = nullptr;
+    HRESULT hr = ctx->d3d12_device->OpenSharedHandleByName(wide_name.c_str(), GENERIC_ALL, &fence_handle);
+    if (FAILED(hr)) {
+        log_retry_failure(ctx, "OpenSharedHandleByName producer fence failed", hr);
+        return;
+    }
+
+    hr = ctx->d3d12_device->OpenSharedHandle(fence_handle, IID_PPV_ARGS(&ctx->producer_fence));
+    CloseHandle(fence_handle);
+    if (FAILED(hr)) {
+        log_retry_failure(ctx, "OpenSharedHandle producer fence failed", hr);
+        return;
+    }
+
+    ctx->last_producer_fence_value = ctx->producer_fence->GetCompletedValue();
+    blog(LOG_INFO,
+         "Mimir OBS program texture producer fence opened %s value=%llu",
+         ctx->fence_name.c_str(),
+         static_cast<unsigned long long>(ctx->last_producer_fence_value));
+}
+
+static bool wait_for_producer(MimirProgramTextureSource *ctx)
+{
+    if (!ctx->producer_fence) {
+        return true;
+    }
+
+    const uint64_t completed = ctx->producer_fence->GetCompletedValue();
+    if (completed == UINT64_MAX) {
+        blog(LOG_WARNING, "Mimir OBS program texture: producer fence reported device removal");
+        return false;
+    }
+
+    if (completed > ctx->last_producer_fence_value) {
+        ctx->last_producer_fence_value = completed;
+    }
+
+    return true;
+}
+
 static bool create_obs_bridge_texture(MimirProgramTextureSource *ctx)
 {
     D3D11_TEXTURE2D_DESC desc = {};
@@ -303,6 +355,8 @@ static bool ensure_bridge(MimirProgramTextureSource *ctx)
         return false;
     }
 
+    open_producer_fence(ctx);
+
     blog(LOG_INFO, "Mimir OBS program texture source opened %s (%ux%u)",
          ctx->texture_name.c_str(),
          ctx->width,
@@ -314,6 +368,10 @@ static bool copy_source_to_bridge(MimirProgramTextureSource *ctx)
 {
     HRESULT hr = ctx->command_allocator->Reset();
     if (FAILED(hr)) {
+        return false;
+    }
+
+    if (!wait_for_producer(ctx)) {
         return false;
     }
 
@@ -359,6 +417,7 @@ static void mimir_program_texture_update(void *data, obs_data_t *settings)
 {
     auto *ctx = static_cast<MimirProgramTextureSource *>(data);
     ctx->texture_name = obs_string(settings, "texture_name", "Global\\MimirFensalirProgramTexture");
+    ctx->fence_name = obs_string(settings, "fence_name", "Global\\MimirFensalirProgramFence");
     release_bridge(ctx);
 }
 
@@ -394,12 +453,14 @@ static uint32_t mimir_program_texture_height(void *data)
 static void mimir_program_texture_defaults(obs_data_t *settings)
 {
     obs_data_set_default_string(settings, "texture_name", "Global\\MimirFensalirProgramTexture");
+    obs_data_set_default_string(settings, "fence_name", "Global\\MimirFensalirProgramFence");
 }
 
 static obs_properties_t *mimir_program_texture_properties(void *)
 {
     obs_properties_t *props = obs_properties_create();
     obs_properties_add_text(props, "texture_name", "Shared D3D12 texture name", OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "fence_name", "Shared D3D12 fence name", OBS_TEXT_DEFAULT);
     return props;
 }
 

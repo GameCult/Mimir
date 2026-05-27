@@ -25,6 +25,7 @@ public sealed record MimirEveProgramOutputConfiguration(
 public static class MimirEveProgramOutputConfigurations
 {
     public const string DefaultSharedTextureName = "Global\\MimirFensalirProgramTexture";
+    public const string DefaultSharedFenceName = "Global\\MimirFensalirProgramFence";
 
     public static MimirEveProgramOutputConfiguration NativeSharedTexture { get; } = new(
         "eve-native-d3d12-hardware-stream",
@@ -41,7 +42,8 @@ public static class MimirEveProgramOutputConfigurations
         RequiredEnvironment:
         [
             "FENSALIR_PROGRAM_OUTPUT_D3D12=1",
-            $"FENSALIR_PROGRAM_OUTPUT_NAME={DefaultSharedTextureName}"
+            $"FENSALIR_PROGRAM_OUTPUT_NAME={DefaultSharedTextureName}",
+            $"FENSALIR_PROGRAM_OUTPUT_FENCE_NAME={DefaultSharedFenceName}"
         ],
         "EVE owns decode/composite only. It does not own layout, DOM, timing authority, or Chromium compatibility.");
 

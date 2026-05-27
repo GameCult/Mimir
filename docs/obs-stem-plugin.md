@@ -29,6 +29,7 @@ Texture` video source. Set:
 
 ```text
 Shared D3D12 texture name: Global\MimirFensalirProgramTexture
+Shared D3D12 fence name: Global\MimirFensalirProgramFence
 ```
 
 OBS/libobs is D3D11 internally on Windows, so this source opens the named D3D12
@@ -36,7 +37,11 @@ texture, creates an OBS-readable legacy shared D3D11 texture, opens that same
 bridge texture from D3D12, and performs a GPU-to-GPU copy during OBS render
 before drawing the source. This avoids CPU readback and does not require
 Spout2. It is not pure zero-copy yet; the remaining copy is the
-D3D12-to-libobs-D3D11 boundary.
+D3D12-to-libobs-D3D11 boundary. Fensalir also publishes a named D3D12 fence;
+the OBS source opens it and observes the producer completion value before
+copying. This prevents blind read-before-producer-completion behavior. A later
+multi-texture publication ring is still the clean way to make overwrite races
+structurally impossible when producer and consumer cadence diverge.
 
 For a visible interop witness while the real Mimir scene is sparse, launch
 Mimir with:

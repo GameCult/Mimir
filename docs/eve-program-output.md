@@ -23,16 +23,18 @@ Set these before launching the Mimir app:
 ```powershell
 $env:FENSALIR_PROGRAM_OUTPUT_D3D12 = "1"
 $env:FENSALIR_PROGRAM_OUTPUT_NAME = "Global\MimirFensalirProgramTexture"
+$env:FENSALIR_PROGRAM_OUTPUT_FENCE_NAME = "Global\MimirFensalirProgramFence"
 dotnet run --project .\src\Mimir.App\Mimir.App.csproj
 ```
 
-Fensalir creates a shareable D3D12 texture with that name and copies the finished
-backbuffer into it during the present pass. `Mimir.EveRelay` opens that named
-texture, reads the completed program frame, feeds a low-latency H.264 encoder,
-and sends complete Annex-B access units to EveCanvas over the existing
-`/stream` WebSocket. EveCanvas treats JPEG frames as the old VoidBot dashboard
-fallback only; Mimir dashboard streaming is `h264-annexb` and displays through a
-native `AVSampleBufferDisplayLayer` so the iPad owns hardware decode/composite.
+Fensalir creates a shareable D3D12 texture with that name, publishes a named
+producer fence, and copies the finished backbuffer into the texture during the
+present pass. `Mimir.EveRelay` opens that named texture, reads the completed
+program frame, feeds a low-latency H.264 encoder, and sends complete Annex-B
+access units to EveCanvas over the existing `/stream` WebSocket. EveCanvas
+treats JPEG frames as the old VoidBot dashboard fallback only; Mimir dashboard
+streaming is `h264-annexb` and displays through a native
+`AVSampleBufferDisplayLayer` so the iPad owns hardware decode/composite.
 
 `scripts/start-eve-dashboard-stream.ps1` starts the Mimir/Fensalir app with the
 shared-texture output enabled, starts the H.264 relay, verifies the `eve` SSH

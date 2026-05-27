@@ -325,9 +325,12 @@ and submits it through libobs audio, while `Mimir Program Texture` opens
 Fensalir's named shared D3D12 program-output texture and draws it through an
 OBS-readable shared D3D11 bridge texture. The video path is GPU-to-GPU and does
 not require Spout2 or CPU readback; the remaining copy is the explicit D3D12 to
-libobs-D3D11 boundary. `scripts/build-obs-stem-plugin.ps1` stages the upstream
-OBS plugin-template SDK under `artifacts/obs-sdk/` and builds the plugin DLL
-locally.
+libobs-D3D11 boundary. Fensalir publishes `Global\MimirFensalirProgramFence`,
+and the OBS source opens that producer fence before copying. This prevents
+blind read-before-producer-completion; a later publication ring is still needed
+to make overwrite races structurally impossible. `scripts/build-obs-stem-plugin.ps1`
+stages the upstream OBS plugin-template SDK under `artifacts/obs-sdk/` and
+builds the plugin DLL locally.
 
 ## Visual Fusion
 
