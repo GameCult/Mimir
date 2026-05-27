@@ -955,7 +955,13 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             profile.Id,
             "mimir_alignment_actuator",
             File.ReadAllText(path),
-            unchecked((int)File.GetLastWriteTimeUtc(path).Ticks)));
+            unchecked((int)File.GetLastWriteTimeUtc(path).Ticks),
+            OutputStems: Enumerable.Range(0, profile.SourceCount)
+                .Select(index => new AquariumStreamingDspOutputStem(
+                    index,
+                    $"aligned_source_{index}",
+                    $"Aligned source {index}"))
+                .ToArray()));
         audioActuatorProgramQueued = true;
     }
 

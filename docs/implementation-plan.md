@@ -151,9 +151,12 @@ a named invariant that the native runtime cannot protect yet.
   `AquariumStreamingDspProgram`, so Fensalir has both the persistent Faust DSP
   graph and the matching controls. The runtime now also queues sample-bearing
   `AquariumStreamingAudioBlock` lanes from the latest actuator source buffers,
-  using the bank-assigned Faust `sourceN` slot as channel authority. Durable
-  stem routing/publication is still the next cut before aligned audio becomes a
-  separately mixable program output.
+  using the bank-assigned Faust `sourceN` slot as channel authority. Fensalir
+  now publishes processed DSP output as `AquariumAudioStemFrame` records through
+  an engine-owned `IAquariumAudioStemBus`, and Mimir declares deterministic
+  aligned-source stem names with the actuator program. OBS-facing publication is
+  still the next cut before those stems become separately mixable program
+  outputs.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

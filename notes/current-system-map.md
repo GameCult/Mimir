@@ -312,8 +312,11 @@ control frame, declares `faust/mimir_alignment_actuator.dsp` as an
 Mimir also queues sample-bearing `AquariumStreamingAudioBlock` lanes from the
 latest actuator source buffers, using the bank-assigned Faust `sourceN` control
 path as channel authority. Fensalir can compile/host/process that persistent
-Faust graph now; durable stem routing and OBS-facing publication still have to
-turn processed output lanes into separately mixable program audio.
+Faust graph now. The engine now publishes processed output lanes as
+`AquariumAudioStemFrame` records through `IAquariumAudioStemBus`, with Mimir's
+actuator program declaring deterministic aligned-source stem names. OBS-facing
+publication still has to consume those stems as separately mixable program
+audio.
 
 ## Visual Fusion
 
