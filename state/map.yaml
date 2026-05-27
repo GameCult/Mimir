@@ -352,8 +352,9 @@ accepted_design:
     or GPU bridge-copy work.
     `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
-    engine-owned lease path. Camera image claims currently defer until Fensalir
-    has a selected visual fusion/feature extraction lowering for camera textures. Fensalir now owns the first in-process
+    engine-owned lease path. Camera image claims stay debug-view-only for now;
+    production visual fusion/feature extraction lowerings are deferred until
+    the renderer and audio work are fixed. Fensalir now owns the first in-process
     D3D12 field resource registry: declared shared structured/curve buffers
     import/alias GPU-resident resources by handle, while Fensalir-owned
     resources allocate GPU slots only when Fensalir is the producer.
