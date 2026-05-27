@@ -296,6 +296,13 @@ channel model loaded. This proves the contour/channel-model path survives a
 fresh DAC/speaker/room/mic/ADC pass, but low physical confidence means the next
 cut is stronger direct-path confidence and independently measured path truth,
 not a victory lap.
+A follow-up receipt,
+`calibration/bioacoustic/complex-contour-live-20260528-002313.md`, keeps the
+interface loopback proof healthy: `asio-ch2` to `asio-ch3` measured `-0.062 us`
+with `0.956` confidence and 257 direct hits. Physical inputs are not currently
+usable timing signals: `asio-ch0` and `asio-ch1` produced zero contour hits
+against 1480 reference hits, with very low RMS. The next physical proof is
+blocked on mic gain/routing/source placement before receiver logic changes.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000
