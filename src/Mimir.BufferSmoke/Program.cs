@@ -103,6 +103,11 @@ if (args.Any(arg => string.Equals(arg, "--fensalir-field-dsl-resource-smoke", St
     return RunFensalirFieldDslResourceSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--fensalir-camera-observation-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunFensalirCameraObservationSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--mimir-spectrum-upload-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMimirSpectrumUploadSmoke();
@@ -623,6 +628,92 @@ tubespline id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum conf
         plan.Packets[0].Backend == AquariumFieldBackendKind.TubeField &&
         plan.Packets[0].PayloadHandle == resource.ResourceKey &&
         plan.DeferredRequests.Count == 0
+            ? 0
+            : 1;
+}
+
+static int RunFensalirCameraObservationSmoke()
+{
+    var gpuBuffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor("kiyo-pro-rgb", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    gpuBuffer.Append(new MimirStreamSample(
+        "kiyo-pro-rgb",
+        MimirStreamKind.Video,
+        MimirStreamOrigin.LocalDevice,
+        TimestampNs: 1_000_000_000L,
+        ArrivalNs: 1_000_000_010L,
+        Sequence: 7,
+        PayloadHandle: 0,
+        ByteLength: 1920 * 1080 * 4,
+        Data: default,
+        VideoFrame: new MimirVideoFrameDescriptor(
+            1920,
+            1080,
+            MimirVideoPixelFormat.Bgra8,
+            1920 * 4,
+            1_000_000_000L,
+            NativeHandle: 0xCAFEul,
+            NativeHandleKind: "shared-d3d12-texture")));
+
+    var metadataOnlyBuffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor("json-cadence-witness", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    metadataOnlyBuffer.Append(new MimirStreamSample(
+        "json-cadence-witness",
+        MimirStreamKind.Video,
+        MimirStreamOrigin.LocalDevice,
+        TimestampNs: 1_000_000_050L,
+        ArrivalNs: 1_000_000_060L,
+        Sequence: 8,
+        PayloadHandle: 0,
+        ByteLength: 0,
+        Data: default,
+        VideoFrame: new MimirVideoFrameDescriptor(
+            640,
+            480,
+            MimirVideoPixelFormat.Gray8,
+            640,
+            1_000_000_050L)));
+
+    MimirRollingStreamBuffer[] buffers = [gpuBuffer, metadataOnlyBuffer];
+    var lowerer = new MimirFensalirFieldLowering();
+    var frame = lowerer.BuildCameraObservationFrame(buffers);
+    var validation = AquariumFieldEvidenceValidator.Validate(frame);
+    var plan = AquariumFieldLoweringPlanner.Plan(frame);
+    var requests = AquariumFieldEvidenceNormalizer.BuildLoweringRequests(frame);
+    var cameraResourceKey = "mimir:resource:shared-d3d12-texture:cafe";
+
+    Console.WriteLine(
+        $"fensalir-camera-observation-smoke domains={frame.Domains.Count} resources={frame.Resources.Count} claims={frame.Claims.Count} requests={requests.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
+
+    if (validation.HasErrors)
+    {
+        foreach (var issue in validation.Issues)
+        {
+            Console.Error.WriteLine($"camera-observation-issue {issue.Severity} {issue.Key}: {issue.Message}");
+        }
+    }
+
+    return !validation.HasErrors &&
+        frame.Resources.Count == 1 &&
+        frame.Resources[0].ResourceKey == cameraResourceKey &&
+        frame.Resources[0].Kind == AquariumFieldResourceKind.Texture2D &&
+        frame.Resources[0].Residency == AquariumFieldResourceResidency.SharedGpu &&
+        frame.Resources[0].Access == AquariumFieldShaderAccess.ShaderResource &&
+        frame.Resources[0].Format == nameof(MimirVideoPixelFormat.Bgra8) &&
+        frame.Resources[0].Width == 1920 &&
+        frame.Resources[0].Height == 1080 &&
+        frame.Resources[0].NativeHandle == new IntPtr(0xCAFE) &&
+        frame.Claims.Count == 3 &&
+        frame.Claims.Any(claim => claim.ClaimKey.StartsWith("observation:Video:LocalDevice:json-cadence-witness", StringComparison.Ordinal) &&
+            string.IsNullOrWhiteSpace(claim.PayloadHandle)) &&
+        frame.Claims.Any(claim => claim.ClaimKey.StartsWith("intent:Video:LocalDevice:kiyo-pro-rgb:surface", StringComparison.Ordinal) &&
+            claim.PayloadHandle == cameraResourceKey) &&
+        frame.Claims.All(claim => !string.Equals(claim.PayloadHandle, "latest-window", StringComparison.Ordinal)) &&
+        requests.Count == 3 &&
+        plan.Packets.Count == 0 &&
+        plan.DeferredRequests.Count == 3
             ? 0
             : 1;
 }
@@ -1604,6 +1695,7 @@ static int RunPerfectMachineProfileSmoke()
         ArrivalNs: 1_000_000_010L,
         Sequence: 1,
         PayloadHandle: 0,
+        ByteLength: 1920 * 1080 * 4,
         VideoFrame: new MimirVideoFrameDescriptor(
             1920,
             1080,
@@ -1613,7 +1705,8 @@ static int RunPerfectMachineProfileSmoke()
             NativeHandle: 42,
             NativeHandleKind: "shared-d3d12-texture")));
     var lowerer = new MimirFensalirFieldLowering();
-    var gpuFrame = lowerer.BuildGpuSensorFrame([videoBuffer]);
+    var cameraFieldFrame = lowerer.BuildCameraObservationFrame([videoBuffer]);
+    var cameraPlan = AquariumFieldLoweringPlanner.Plan(cameraFieldFrame);
     var acousticFrame = lowerer.BuildAcousticFieldFrame([
         new MimirAudioSynchronizationState(
             "loopback-scarlett-speakers",
@@ -1665,7 +1758,7 @@ static int RunPerfectMachineProfileSmoke()
     Console.WriteLine(
         $"perfect-machine-clock anchors={clock?.AnchorCount ?? 0} coverage={clock?.AnchorCoverage ?? 0:0.000} offset={clock?.SourceOffsetSamples ?? double.NaN:0.000} confidence={clock?.Confidence ?? 0:0.000}");
     Console.WriteLine(
-        $"perfect-machine-fensalir gpuCameras={gpuFrame.Cameras.Count} gpuTextures={gpuFrame.ExternalTextures.Count} acousticConstraints={acousticFrame.Constraints.Count} timingConfidence={acousticFrame.TimingConfidence:0.000}");
+        $"perfect-machine-fensalir cameraResources={cameraFieldFrame.Resources.Count} cameraClaims={cameraFieldFrame.Claims.Count} cameraPlanned={cameraPlan.Packets.Count} cameraDeferred={cameraPlan.DeferredRequests.Count} acousticConstraints={acousticFrame.Constraints.Count} timingConfidence={acousticFrame.TimingConfidence:0.000}");
     Console.WriteLine(
         $"perfect-machine-localization candidates={localizationGrid.Count} best=({localization?.PositionMeters.X ?? float.NaN:0.000},{localization?.PositionMeters.Y ?? float.NaN:0.000},{localization?.PositionMeters.Z ?? float.NaN:0.000}) score={localization?.Score ?? 0.0:0.000}");
     Console.WriteLine(
@@ -1695,7 +1788,10 @@ static int RunPerfectMachineProfileSmoke()
         codebook.Motifs.Length == MimirBioacousticTimeline.SymbolCount &&
         decoder.Configuration.TemplateAugmentations.Length > 0 &&
         actuator.FaustControls.Length >= 2 &&
-        gpuFrame.HasInput &&
+        cameraFieldFrame.Resources.Count == 1 &&
+        cameraFieldFrame.Claims.Count == 2 &&
+        cameraPlan.Packets.Count == 0 &&
+        cameraPlan.DeferredRequests.Count == 2 &&
         acousticFrame.HasInput &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
@@ -1913,6 +2009,7 @@ static int RunPerfectMachineLoweringBenchmark(int iterations)
             ArrivalNs: 1_000_000_050L,
             Sequence: 1,
             PayloadHandle: 0,
+            ByteLength: Math.Max(1, profile.PreferredWidth) * Math.Max(1, profile.PreferredHeight) * 4,
             VideoFrame: new MimirVideoFrameDescriptor(
                 Math.Max(1, profile.PreferredWidth),
                 Math.Max(1, profile.PreferredHeight),
@@ -1954,18 +2051,20 @@ static int RunPerfectMachineLoweringBenchmark(int iterations)
             1)
     };
     var lowerer = new MimirFensalirFieldLowering();
-    _ = lowerer.BuildGpuSensorFrame(buffers);
+    _ = lowerer.BuildCameraObservationFrame(buffers);
     _ = lowerer.BuildAcousticFieldFrame(states);
 
     var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
     var stamp = Stopwatch.GetTimestamp();
-    var cameras = 0;
+    var cameraResources = 0;
+    var cameraClaims = 0;
     var constraints = 0;
     for (var iteration = 0; iteration < iterations; iteration++)
     {
-        var gpuFrame = lowerer.BuildGpuSensorFrame(buffers);
+        var cameraFrame = lowerer.BuildCameraObservationFrame(buffers);
         var acousticFrame = lowerer.BuildAcousticFieldFrame(states);
-        cameras += gpuFrame.Cameras.Count;
+        cameraResources += cameraFrame.Resources.Count;
+        cameraClaims += cameraFrame.Claims.Count;
         constraints += acousticFrame.Constraints.Count;
     }
 
@@ -1974,8 +2073,8 @@ static int RunPerfectMachineLoweringBenchmark(int iterations)
     var perIterationUs = elapsed.TotalMilliseconds * 1000.0 / iterations;
     var allocatedPerIteration = allocatedBytes / (double)iterations;
     Console.WriteLine(
-        $"perfect-machine-lowering-benchmark iterations={iterations} camerasPer={cameras / (double)iterations:0.0} constraintsPer={constraints / (double)iterations:0.0} elapsedMs={elapsed.TotalMilliseconds:0.000} perIterationUs={perIterationUs:0.000} allocatedPerIterationBytes={allocatedPerIteration:0.0}");
-    return perIterationUs < 250.0 && allocatedPerIteration < 10_000.0
+        $"perfect-machine-lowering-benchmark iterations={iterations} cameraResourcesPer={cameraResources / (double)iterations:0.0} cameraClaimsPer={cameraClaims / (double)iterations:0.0} constraintsPer={constraints / (double)iterations:0.0} elapsedMs={elapsed.TotalMilliseconds:0.000} perIterationUs={perIterationUs:0.000} allocatedPerIterationBytes={allocatedPerIteration:0.0}");
+    return perIterationUs < 250.0 && allocatedPerIteration < 64_000.0
         ? 0
         : 1;
 }

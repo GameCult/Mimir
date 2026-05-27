@@ -87,53 +87,31 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         };
     }
 
-    public AquariumGpuSensorFrame BuildGpuSensorFrame(IEnumerable<MimirRollingStreamBuffer> buffers)
+    public AquariumFieldEvidenceFrame BuildCameraObservationFrame(IEnumerable<MimirRollingStreamBuffer> buffers)
     {
-        var capacity = buffers.TryGetNonEnumeratedCount(out var count) ? count : 0;
-        var textures = new List<AquariumExternalGpuTexture>(capacity);
-        var cameras = new List<AquariumGpuSensorCamera>(capacity);
-        foreach (var buffer in buffers)
+        var videoBuffers = buffers
+            .Where(static buffer => buffer.Descriptor.Kind == MimirStreamKind.Video)
+            .ToArray();
+        var windows = new List<MimirRollingStreamWindow>(videoBuffers.Length);
+        var observations = new List<MimirObservation>(videoBuffers.Length);
+        MimirFensalirBridgeMapper.MapWindows(videoBuffers, windows);
+        MimirFensalirBridgeMapper.MapLatestObservations(videoBuffers, observations);
+
+        var observationsByWindow = observations.ToDictionary(static observation => observation.WindowId, StringComparer.Ordinal);
+        var intents = new List<MimirSurfaceIntent>(windows.Count);
+        foreach (var window in windows)
         {
-            if (buffer.Descriptor.Kind != MimirStreamKind.Video || buffer.Latest?.VideoFrame is not { } frame)
+            if (window.Status != MimirBridgeWindowStatus.Live ||
+                !window.Payload.HasResource ||
+                !observationsByWindow.TryGetValue(window.WindowId, out var observation))
             {
                 continue;
             }
 
-            var firstTexture = textures.Count;
-            if (frame.NativeHandle != 0)
-            {
-                textures.Add(new AquariumExternalGpuTexture(
-                    default,
-                    new IntPtr(unchecked((long)frame.NativeHandle)),
-                    frame.Width,
-                    frame.Height,
-                    ToFensalirPixelFormat(frame.PixelFormat),
-                    frame.DeviceTimestampNs,
-                    SharedHandleName: frame.NativeHandleKind));
-            }
-
-            cameras.Add(new AquariumGpuSensorCamera(
-                buffer.Descriptor.SourceId,
-                ToFensalirSensorKind(buffer.Descriptor.SourceId, frame.PixelFormat),
-                Matrix4x4.Identity,
-                Matrix4x4.Identity,
-                Vector4.Zero,
-                Vector4.Zero,
-                Vector4.Zero,
-                frame.Width,
-                frame.Height,
-                firstTexture,
-                textures.Count - firstTexture,
-                frame.DeviceTimestampNs));
+            intents.Add(MimirFensalirBridgeMapper.MapDefaultSurfaceIntent(window, observation));
         }
 
-        return new AquariumGpuSensorFrame
-        {
-            Cameras = cameras,
-            ExternalTextures = textures,
-            AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
-            PresentationDelaySeconds = (float)options.PresentationDelaySeconds
-        };
+        return BuildFieldEvidenceFrame(windows, observations, [], intents);
     }
 
     public AquariumAcousticFieldFrame BuildAcousticFieldFrame(IEnumerable<MimirAudioSynchronizationState> states)
@@ -184,31 +162,6 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             PresentationDelaySeconds = (float)options.PresentationDelaySeconds
         };
     }
-
-    private static AquariumGpuSensorKind ToFensalirSensorKind(string sourceId, MimirVideoPixelFormat pixelFormat)
-    {
-        if (pixelFormat == MimirVideoPixelFormat.LeapStereoIr || sourceId.Contains("leap", StringComparison.OrdinalIgnoreCase))
-        {
-            return AquariumGpuSensorKind.LeapPackedMap;
-        }
-
-        if (sourceId.Contains("eye", StringComparison.OrdinalIgnoreCase))
-        {
-            return AquariumGpuSensorKind.HighRateTracker;
-        }
-
-        return AquariumGpuSensorKind.RgbCamera;
-    }
-
-    private static AquariumGpuSensorPixelFormat ToFensalirPixelFormat(MimirVideoPixelFormat pixelFormat) =>
-        pixelFormat switch
-        {
-            MimirVideoPixelFormat.Gray8 or MimirVideoPixelFormat.R8 or MimirVideoPixelFormat.Bayer8 => AquariumGpuSensorPixelFormat.R8Unorm,
-            MimirVideoPixelFormat.Rg8 => AquariumGpuSensorPixelFormat.Rg8Unorm,
-            MimirVideoPixelFormat.Bgra8 => AquariumGpuSensorPixelFormat.Bgra8Unorm,
-            MimirVideoPixelFormat.LeapStereoIr => AquariumGpuSensorPixelFormat.LeapPackedMap,
-            _ => AquariumGpuSensorPixelFormat.Unknown
-        };
 
     private static void AddDomain(
         ICollection<AquariumFieldDomain> domains,

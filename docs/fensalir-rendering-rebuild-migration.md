@@ -24,16 +24,8 @@ drivers / ASIO / network feeds
 -> OBS
 ```
 
-But the current debug-spectrum path still exposes the pressure leak:
-
-```text
-ASIO spectrum history
--> AquariumSplineFrame
--> direct Fensalir spline tube debug surface
-```
-
-That path is allowed as a deterministic diagnostic. It is not yet the full
-Perfect Machine. The production shape is:
+The old direct debug-spectrum pressure leak has been cut. Current spectrum
+debug output is already in the production-shaped bridge:
 
 ```text
 rolling buffer slice + source identity + calibration + surface intent
@@ -93,8 +85,9 @@ Derived state:
 
 - spectrum lines, debug views, screenshots, OBS bridge endpoints, FFmpeg/SRT
   helpers, and Eve dashboard feeds are views or diagnostics.
-- The old direct spline-spectrum dashboard is silent. FieldEvidence TubeField
-  owns the spectrum surface path; screenshots and logs remain diagnostics.
+- The old direct spline-spectrum dashboard and old direct GPU sensor frame
+  bridge are silent. FieldEvidence owns spectrum and camera observation
+  publication; screenshots and logs remain diagnostics.
 
 Forbidden writers:
 
@@ -200,6 +193,11 @@ Current proof surface:
 - `Mimir.BufferSmoke --fensalir-field-dsl-resource-smoke` uses Fensalir's field
   evidence DSL to bind the declared resource directly and produce one planned
   `TubeField` packet with no deferred requests.
+- `Mimir.BufferSmoke --fensalir-camera-observation-smoke` maps one
+  GPU-backed video frame and one metadata-only cadence witness into field
+  evidence. Only the shared D3D12 video handle becomes a declared `Texture2D`
+  resource and camera surface intent; the metadata-only frame remains
+  observation evidence with no render payload.
 
 Fensalir now owns the first D3D12 resource resolver cut below this contract:
 shared structured/curve buffers import/alias GPU-resident resources by handle,
@@ -250,6 +248,13 @@ can distinguish source-lane claims. Mimir exposes
 `MIMIR_SPECTRUM_SOURCE_LANES` as the source-lane capacity lever and
 `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` as the geometry cost lever for responding to
 Fensalir's requested/dispatched/truncated/invalid TubeField budget report.
+Camera descriptors now follow the same evidence/resource boundary:
+`MimirFensalirFieldLowering.BuildCameraObservationFrame` lowers latest video
+buffers into observation claims and declares GPU-backed frames as shared
+`Texture2D` resources. Metadata-only/process-cadence frames do not create
+surface intents, so a missing payload cannot become a fake `latest-window`
+render request. Camera image claims currently defer because Fensalir has not
+selected a visual-fusion/render lowering for camera textures yet.
 
 ### 3. Calibration Constraint
 
@@ -374,9 +379,12 @@ Lower native camera descriptors into observation surfaces:
 
 Acceptance:
 
-- at least one local camera stream appears as Fensalir sensor observations;
-- missing frames are absence, not zero-valued evidence;
-- Fensalir owns any feature extraction result.
+- implemented bridge proof: GPU-backed video descriptors become declared
+  shared `Texture2D` resources plus camera observation/surface claims;
+- metadata-only cadence descriptors remain observation evidence and do not
+  become render payloads;
+- no selected camera-image lowering exists yet, so Fensalir defers those claims
+  until visual fusion/feature extraction owns them.
 
 ### Phase 4: Audio Field Observation Bridge
 

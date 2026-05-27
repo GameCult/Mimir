@@ -326,11 +326,19 @@ shader lowering. Mimir-declared rendering buffers are Fensalir GPU resources in
 the same runtime; native/shared handle metadata is an import edge, not a
 separate authority regime. Rendering-relevant buffers move to GPU residency as
 early as possible and stay there; CPU readback/tessellation is diagnostic only.
+Camera descriptors now enter this bridge too: latest video buffers lower into
+FieldEvidence camera observations, GPU/native handles declare shared
+`Texture2D` resources, and metadata-only cadence frames do not create camera
+surface intents or fake payload requests. The old direct `AquariumGpuSensorFrame`
+bridge proof has been removed from Mimir's active proof path. Camera image
+claims currently defer until Fensalir owns a selected visual-fusion lowering for
+camera textures.
 The current smokes prove planning, not visible packet rendering:
 `--fensalir-field-evidence-smoke` now produces one planned resource-backed
 `TubeField` packet from Mimir's spectrum intent, and
 `--fensalir-field-dsl-resource-smoke` proves the Fensalir DSL can bind the same
-kind of declared resource directly. Fensalir now has the first D3D12 resolver
+kind of declared resource directly. `--fensalir-camera-observation-smoke`
+proves the camera observation/resource split. Fensalir now has the first D3D12 resolver
 cut for structured/curve buffers: it imports shared GPU buffers by handle and
 allocates engine-owned GPU slots only for Fensalir-produced resources. The DSL
 can describe a 2D rolling float buffer as Catmull-Rom XY tubes with modulo
@@ -341,8 +349,9 @@ textures allocate shader-readable GPU textures, and mesh packages own
 `Mesh.Vertices`/`Mesh.Indices` GPU buffer shape under one resource key. The DSL
 can plan generic resource-backed claims over those declarations. The next
 blocker is no longer resolver ownership; it is selected render lowerings that
-consume mesh/page/volume resources as geometry, height/SDF/material pages, or
-density/extinction/SDF3D domains. Mesh layout authority is split by source:
+consume camera/feature textures, mesh/page/volume resources as geometry,
+height/SDF/material pages, or density/extinction/SDF3D domains. Mesh layout
+authority is split by source:
 imported/user meshes use the standard `PositionNormalUvColor` layout, and
 generated meshes can be `PipelinePrivate` so each lowering owns the bytes it
 emits and consumes. TubeField is the first concrete generated-mesh consumer:

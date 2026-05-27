@@ -204,6 +204,11 @@ public sealed class MimirRuntime : IAquariumRuntime
                 continue;
             }
 
+            if (!window.Payload.HasResource)
+            {
+                continue;
+            }
+
             intents.Add(BuildSurfaceIntent(window, observation));
         }
 

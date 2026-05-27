@@ -174,6 +174,14 @@ a named invariant that the native runtime cannot protect yet.
   `Mimir.BufferSmoke --fensalir-field-dsl-resource-smoke` proves Fensalir's DSL
   evidence compiler can bind a declared resource and produce one planned
   `TubeField` packet with no deferred requests.
+- `MimirFensalirFieldLowering.BuildCameraObservationFrame` is the current
+  camera bridge proof. It lowers latest video buffers into FieldEvidence
+  observation claims, declares GPU/native video payloads as shared `Texture2D`
+  resources, and creates camera surface intent only when a resource exists.
+  Metadata-only cadence frames remain observations with empty payload handles;
+  they do not become fake render requests. The old direct
+  `AquariumGpuSensorFrame` builder has been removed from Mimir's proof path.
+  `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split.
 - Fensalir now owns the first in-process D3D12 field resource resolver cut:
   shared structured/curve buffer resources import/alias GPU-resident handles,
   and Fensalir-owned resources allocate GPU slots only when Fensalir is the
@@ -300,8 +308,8 @@ a named invariant that the native runtime cannot protect yet.
   proof, `--perfect-machine-manifest` to export the module manifest for
   tooling/UI/remote witness use, and `--perfect-machine-lowering-benchmark` to
   measure the Mimir-to-Fensalir lowering path. The current six-camera/two-audio
-  synthetic lowering benchmark runs at roughly 2.5 us per iteration with about
-  2.3 KB allocated per iteration.
+  synthetic lowering benchmark now measures FieldEvidence camera/resource
+  lowering rather than the retired direct GPU sensor DTO path.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live
@@ -359,11 +367,11 @@ a named invariant that the native runtime cannot protect yet.
    volume textures, and mesh packages, and the evidence DSL can plan generic
    resource-backed claims against those resources. The next engine cuts are
    selected render lowerings that consume those resources as mesh geometry,
-   height/SDF/material pages, and density/extinction/SDF3D volumes. The generic
-   imported mesh ABI is no longer the blocker; TubeField now occupies the first
-   generated-mesh lowering lane. The next renderer decisions are how to expose
-   additional generated mesh producers and which page/volume/material lowering
-   should follow.
+   camera/feature textures, height/SDF/material pages, and
+   density/extinction/SDF3D volumes. The generic imported mesh ABI is no longer
+   the blocker; TubeField now occupies the first generated-mesh lowering lane.
+   The next renderer decisions are how to expose additional generated mesh
+   producers and which camera/page/volume/material lowering should follow.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver
