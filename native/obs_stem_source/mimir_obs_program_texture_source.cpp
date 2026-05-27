@@ -23,6 +23,7 @@ struct MimirProgramTextureSource {
     uint32_t height = 0;
     uint64_t fence_value = 0;
     uint64_t next_retry_ns = 0;
+    uint64_t next_failure_log_ns = 0;
     HANDLE bridge_shared_handle = nullptr;
     HANDLE fence_event = nullptr;
     gs_texture_t *obs_texture = nullptr;
@@ -37,6 +38,21 @@ struct MimirProgramTextureSource {
     ComPtr<ID3D11DeviceContext> d3d11_context;
     ComPtr<ID3D11Texture2D> bridge_texture_d3d11;
 };
+
+static void log_retry_failure(MimirProgramTextureSource *ctx, const char *message, HRESULT hr = S_OK)
+{
+    const uint64_t now = os_gettime_ns();
+    if (now < ctx->next_failure_log_ns) {
+        return;
+    }
+
+    ctx->next_failure_log_ns = now + 2000000000ULL;
+    if (FAILED(hr)) {
+        blog(LOG_WARNING, "Mimir OBS program texture: %s: 0x%08lx", message, static_cast<unsigned long>(hr));
+    } else {
+        blog(LOG_WARNING, "Mimir OBS program texture: %s", message);
+    }
+}
 
 static std::wstring utf8_to_wide(const std::string &value)
 {
@@ -192,27 +208,27 @@ static bool open_source_texture(MimirProgramTextureSource *ctx)
 {
     const auto wide_name = utf8_to_wide(ctx->texture_name);
     if (wide_name.empty()) {
+        log_retry_failure(ctx, "shared texture name is empty or invalid UTF-8");
         return false;
     }
 
     HANDLE source_handle = nullptr;
-    HRESULT hr = ctx->d3d12_device->OpenSharedHandleByName(wide_name.c_str(), GENERIC_READ, &source_handle);
+    HRESULT hr = ctx->d3d12_device->OpenSharedHandleByName(wide_name.c_str(), GENERIC_ALL, &source_handle);
     if (FAILED(hr)) {
+        log_retry_failure(ctx, "OpenSharedHandleByName failed", hr);
         return false;
     }
 
     hr = ctx->d3d12_device->OpenSharedHandle(source_handle, IID_PPV_ARGS(&ctx->source_texture));
     CloseHandle(source_handle);
     if (FAILED(hr)) {
-        blog(LOG_WARNING, "Mimir OBS program texture: OpenSharedHandle failed: 0x%08lx", static_cast<unsigned long>(hr));
+        log_retry_failure(ctx, "OpenSharedHandle failed", hr);
         return false;
     }
 
     const D3D12_RESOURCE_DESC desc = ctx->source_texture->GetDesc();
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) {
-        blog(LOG_WARNING, "Mimir OBS program texture: expected BGRA8 Texture2D, got dimension=%u format=%u",
-             static_cast<unsigned>(desc.Dimension),
-             static_cast<unsigned>(desc.Format));
+        log_retry_failure(ctx, "expected BGRA8 D3D12 Texture2D");
         return false;
     }
 
