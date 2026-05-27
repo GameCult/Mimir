@@ -146,8 +146,11 @@ a named invariant that the native runtime cannot protect yet.
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis. The same cadence now publishes the
   latest actuator command frame for telemetry/readout and queues it into
-  `AquariumAudioDocument` as an audio control frame; Faust/native DSP still
-  owns actual sample movement.
+  `AquariumAudioDocument` as an audio control frame. Mimir also declares the
+  `faust/mimir_alignment_actuator.dsp` program as an
+  `AquariumStreamingDspProgram`, so Fensalir has both the persistent Faust DSP
+  graph and the matching controls. Device I/O/stem routing is still the next
+  cut before live samples are actually aligned.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

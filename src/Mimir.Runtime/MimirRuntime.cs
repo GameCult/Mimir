@@ -74,6 +74,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private long spectrumHistorySequence;
     private long audioActuatorFrameSequence;
+    private bool audioActuatorProgramQueued;
     private readonly Queue<MimirSpectrumHistoryFrame> spectrumHistory = new();
     private AquariumRuntimeServices runtimeServices = AquariumRuntimeServices.Empty;
     private MimirActuatorFrame lastAudioActuatorFrame = MimirActuatorFrame.Empty;
@@ -667,6 +668,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
         sceneReady = true;
         StartConfiguredSources();
+        QueueAudioActuatorProgram();
         nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
         nextSpectrumSeconds = runtimeSeconds;
         Console.WriteLine($"Mimir Fensalir scene ready at {runtimeSeconds:0.000}s; runtime audio tests and spectra enabled.");
@@ -915,6 +917,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             return;
         }
 
+        QueueAudioActuatorProgram();
         audio.EnqueueControlFrame(new AquariumAudioControlFrame(
             MimirAlignmentActuatorProfile.SixSourceFaust.Id,
             frame.ReferenceSourceId,
@@ -929,6 +932,29 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 .ToArray(),
             frame.TruncatedSourceCount,
             ++audioActuatorFrameSequence));
+    }
+
+    private void QueueAudioActuatorProgram()
+    {
+        if (audioActuatorProgramQueued)
+        {
+            return;
+        }
+
+        var profile = MimirAlignmentActuatorProfile.SixSourceFaust;
+        var path = ResolveRuntimeAssetPath(profile.FaustDspPath);
+        if (path == null)
+        {
+            Console.WriteLine($"Mimir audio actuator DSP not queued; `{profile.FaustDspPath}` was not found.");
+            return;
+        }
+
+        audio.EnqueueStreamingDspProgram(new AquariumStreamingDspProgram(
+            profile.Id,
+            "mimir_alignment_actuator",
+            File.ReadAllText(path),
+            unchecked((int)File.GetLastWriteTimeUtc(path).Ticks)));
+        audioActuatorProgramQueued = true;
     }
 
     private void UpdateAudioSpectra()
@@ -1038,6 +1064,28 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         return float.TryParse(Environment.GetEnvironmentVariable("MIMIR_SYNC_TELEMETRY_SECONDS"), out var seconds)
             ? Math.Clamp(seconds, 0.0f, 60.0f)
             : 0.0f;
+    }
+
+    private static string? ResolveRuntimeAssetPath(string relativePath)
+    {
+        if (File.Exists(relativePath))
+        {
+            return Path.GetFullPath(relativePath);
+        }
+
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            var candidate = Path.Combine(current, relativePath);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = Directory.GetParent(current)?.FullName;
+        }
+
+        return null;
     }
 
     private static float ParseAudioSyncIntervalSeconds()
