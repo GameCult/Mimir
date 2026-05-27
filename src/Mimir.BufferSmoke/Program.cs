@@ -678,6 +678,7 @@ static int RunMimirSpectrumUploadSmoke()
         const int expectedHistoryCount = 3;
         const int expectedHistoryCapacity = 40;
         const int expectedSubdivisions = 2;
+        const int expectedRollingOffset = (expectedHistoryCapacity - (expectedHistoryCount - 1)) * expectedSourceLaneCapacity;
         var plannedTubePackets = plan.Packets
             .Where(packet =>
                 packet.Backend == AquariumFieldBackendKind.TubeField &&
@@ -714,6 +715,7 @@ static int RunMimirSpectrumUploadSmoke()
                 item.ColumnCount == expectedHistoryCount &&
                 item.ColumnStride == expectedSourceLaneCapacity &&
                 item.RollingModulo == resource.Height &&
+                item.RollingOffset == expectedRollingOffset &&
                 item.CatmullRomSubdivisions == expectedSubdivisions &&
                 Math.Abs(item.ColumnStep.Z - 0.1f) < 0.0001f &&
                 string.Equals(item.RampResourceKey, ramp.ResourceKey, StringComparison.Ordinal) &&

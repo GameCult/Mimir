@@ -391,8 +391,10 @@ its own age trail at `z = age * 0.1`. The resource advertises fixed history and
 source-lane capacities, so content updates and source topology changes do not
 resize the GPU buffer while the rolling trail fills. `MIMIR_SPECTRUM_SOURCE_LANES`
 sets the fixed lane budget; surplus sources are truncated and reported in the
-runtime UI. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` is the runtime cost lever for
-lowering Catmull-Rom subdivision count when Fensalir reports TubeField
+runtime UI. Physical history slots are now addressed as a ring with
+`RollingOffset`, so logical age no longer requires moving every column before
+shader sampling. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` is the runtime cost lever
+for lowering Catmull-Rom subdivision count when Fensalir reports TubeField
 truncation.
 
 ## Known Risks

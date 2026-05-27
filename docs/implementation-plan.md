@@ -154,7 +154,9 @@ a named invariant that the native runtime cannot protect yet.
   topology changes do not resize the GPU buffer while the trail fills.
   `MIMIR_SPECTRUM_SOURCE_LANES` sets the lane capacity; surplus sources are
   truncated and reported in the runtime UI. Lowerings use that fixed capacity
-  as `ColumnStride`, and `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the
+  as `ColumnStride`. Physical history slots are addressed as a ring with
+  `RollingOffset`, so logical age no longer requires reshuffling every column
+  before shader sampling. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the
   requested Catmull-Rom subdivision count so Fensalir's overflow report has a
   direct cost lever.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`

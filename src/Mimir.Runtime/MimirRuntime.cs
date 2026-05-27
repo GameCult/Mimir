@@ -278,9 +278,12 @@ public sealed class MimirRuntime : IAquariumRuntime
         var sourceCount = sourceIds.Length;
         var activeColumnCount = checked(sourceCount * historyCount);
         var resourceColumnCapacity = checked(spectrumSourceLaneCapacity * SpectrumHistoryWindowCount);
+        var newestHistorySlot = PositiveModulo(-historyFrames[0].Sequence, SpectrumHistoryWindowCount);
+        var rollingOffset = checked(newestHistorySlot * spectrumSourceLaneCapacity);
         var samples = new float[width * resourceColumnCapacity];
         for (var historyIndex = 0; historyIndex < historyFrames.Length; historyIndex++)
         {
+            var historySlot = PositiveModulo(-historyFrames[historyIndex].Sequence, SpectrumHistoryWindowCount);
             foreach (var spectrum in historyFrames[historyIndex].Spectra)
             {
                 if (!sourceIndexById.TryGetValue(spectrum.SourceId, out var sourceIndex))
@@ -288,7 +291,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                     continue;
                 }
 
-                var physicalColumn = historyIndex * spectrumSourceLaneCapacity + sourceIndex;
+                var physicalColumn = historySlot * spectrumSourceLaneCapacity + sourceIndex;
                 WriteNormalizedSpectrum(spectrum, samples.AsSpan(physicalColumn * width, width));
             }
         }
@@ -378,7 +381,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 ColumnCount: historyCount,
                 ColumnStride: spectrumSourceLaneCapacity,
                 RollingModulo: resourceColumnCapacity,
-                RollingOffset: 0,
+                RollingOffset: rollingOffset,
                 Origin: new Vector3(-5.0f, sourceIndex * SpectrumChannelSeparation, 0.0f),
                 AxisStep: new Vector3(axisStepX, 0.0f, 0.0f),
                 ColumnStep: new Vector3(0.0f, 0.0f, SpectrumWindowDepthSeparation),
@@ -449,6 +452,12 @@ public sealed class MimirRuntime : IAquariumRuntime
         {
             destination[index] = (float)Math.Clamp((bands[index] - floor) / span, 0.0, 1.0);
         }
+    }
+
+    private static int PositiveModulo(long value, int modulo)
+    {
+        var remainder = value % modulo;
+        return (int)(remainder < 0 ? remainder + modulo : remainder);
     }
 
     private static Vector3 SpectrumCameraPosition(
