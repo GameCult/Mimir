@@ -73,6 +73,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private long spectrumHistorySequence;
+    private long audioActuatorFrameSequence;
     private readonly Queue<MimirSpectrumHistoryFrame> spectrumHistory = new();
     private AquariumRuntimeServices runtimeServices = AquariumRuntimeServices.Empty;
     private MimirActuatorFrame lastAudioActuatorFrame = MimirActuatorFrame.Empty;
@@ -903,7 +904,31 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         lastAudioActuatorFrame = audioActuatorBank.Update(
             synchronization.AudioSynchronizationStates,
             audioSyncUpdateIntervalSeconds);
+        PublishAudioActuatorFrame(lastAudioActuatorFrame);
         nextAudioSyncSeconds = runtimeSeconds + audioSyncUpdateIntervalSeconds;
+    }
+
+    private void PublishAudioActuatorFrame(MimirActuatorFrame frame)
+    {
+        if (frame.Commands.Count == 0)
+        {
+            return;
+        }
+
+        audio.EnqueueControlFrame(new AquariumAudioControlFrame(
+            MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+            frame.ReferenceSourceId,
+            frame.ReferenceHoldbackSamples,
+            frame.Commands
+                .Select(command => new AquariumAudioControlCommand(
+                    command.SourceId,
+                    command.TargetDelaySamples,
+                    command.ResampleRatio,
+                    command.Confidence,
+                    command.FaustControls))
+                .ToArray(),
+            frame.TruncatedSourceCount,
+            ++audioActuatorFrameSequence));
     }
 
     private void UpdateAudioSpectra()

@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Aquarium.Engine;
+using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using GameCult.Caching;
@@ -1847,10 +1848,26 @@ static int RunAudioActuatorBankSmoke()
     var early = frame.Commands.First(command => string.Equals(command.SourceId, "mic-1-early", StringComparison.Ordinal));
     var late = frame.Commands.First(command => string.Equals(command.SourceId, "mic-0-late", StringComparison.Ordinal));
     var mid = frame.Commands.First(command => string.Equals(command.SourceId, "mic-2-mid", StringComparison.Ordinal));
+    var audio = new AquariumAudioDocument();
+    audio.EnqueueControlFrame(new AquariumAudioControlFrame(
+        MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+        frame.ReferenceSourceId,
+        frame.ReferenceHoldbackSamples,
+        frame.Commands
+            .Select(command => new AquariumAudioControlCommand(
+                command.SourceId,
+                command.TargetDelaySamples,
+                command.ResampleRatio,
+                command.Confidence,
+                command.FaustControls))
+            .ToArray(),
+        frame.TruncatedSourceCount,
+        Sequence: 1));
+    var drained = audio.DrainControlFrames();
 
     Console.WriteLine(
         $"audio-actuator-bank-smoke reference={frame.ReferenceSourceId} referenceHoldback={frame.ReferenceHoldbackSamples:0.000} commands={frame.Commands.Count} truncated={frame.TruncatedSourceCount} " +
-        $"lateDelay={late.TargetDelaySamples:0.000} midDelay={mid.TargetDelaySamples:0.000} earlyDelay={early.TargetDelaySamples:0.000} ratio={early.ResampleRatio:0.000000000}");
+        $"lateDelay={late.TargetDelaySamples:0.000} midDelay={mid.TargetDelaySamples:0.000} earlyDelay={early.TargetDelaySamples:0.000} ratio={early.ResampleRatio:0.000000000} audioFrames={drained.Count}");
 
     return string.Equals(frame.ReferenceSourceId, "loopback-scarlett-speakers", StringComparison.Ordinal) &&
         Math.Abs(frame.ReferenceHoldbackSamples - 120.0) < 0.001 &&
@@ -1858,7 +1875,9 @@ static int RunAudioActuatorBankSmoke()
         frame.TruncatedSourceCount == 1 &&
         late.TargetDelaySamples <= mid.TargetDelaySamples &&
         mid.TargetDelaySamples < early.TargetDelaySamples &&
-        early.FaustControls.ContainsKey("source1/delay_samples")
+        early.FaustControls.ContainsKey("source1/delay_samples") &&
+        drained.Count == 1 &&
+        drained[0].Commands.Count == frame.Commands.Count
             ? 0
             : 1;
 }

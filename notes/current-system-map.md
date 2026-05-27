@@ -306,7 +306,8 @@ runtime command owner above that Faust surface: it converts smoothed sync states
 into nonnegative holdback commands, keeps source-to-`sourceN` slots stable,
 reports overflow beyond the six-source profile, and exposes the reference
 holdback separately. `MimirRuntime` updates that command frame on the sync
-analysis cadence and telemetry can print the current DSP targets. This is
+analysis cadence, queues it into `AquariumAudioDocument` as an engine audio
+control frame, and telemetry can print the current DSP targets. This is
 control-plane publication only; Faust/native DSP still has to be wired as the
 hot sample mover.
 

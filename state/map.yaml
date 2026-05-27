@@ -182,9 +182,10 @@ accepted_design:
     actuator surface for six channels of bounded fractional delay/gain.
     `MimirAlignmentActuatorBank` now converts runtime sync states into explicit
     nonnegative Faust holdback commands with stable source slots, a separate
-    reference holdback, and overflow reporting; this publishes DSP control
-    targets but does not move live samples until the Faust/native hot path is
-    wired. The synthetic
+    reference holdback, and overflow reporting, then queues those commands into
+    `AquariumAudioDocument` as engine audio control frames; this publishes DSP
+    control targets but does not move live samples until the Faust/native hot
+    path is wired. The synthetic
     codebook proof is `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`.
     `Mimir.BufferSmoke --render-chirp-bin-f32` plus

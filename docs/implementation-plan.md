@@ -145,7 +145,8 @@ a named invariant that the native runtime cannot protect yet.
   service and can emit live sync telemetry with
   `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry read cached reports/states;
   they do not run synchronization analysis. The same cadence now publishes the
-  latest actuator command frame for telemetry/readout; Faust/native DSP still
+  latest actuator command frame for telemetry/readout and queues it into
+  `AquariumAudioDocument` as an audio control frame; Faust/native DSP still
   owns actual sample movement.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
