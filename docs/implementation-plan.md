@@ -201,6 +201,13 @@ a named invariant that the native runtime cannot protect yet.
   Metadata-only cadence frames remain observations with empty payload handles;
   they do not become fake render requests. The old direct
   `AquariumGpuSensorFrame` builder has been removed from Mimir's proof path.
+  The first production-shaped camera driver is `MimirKsVideoCaptureDriver`,
+  backed by `native/camera_capture/mimir_camera_capture.dll`: it opens a
+  Kernel Streaming capture pin in process, queues uncompressed UVC frame reads,
+  returns `MimirVideoFrameDescriptor` samples through `IMimirVideoCaptureDriver`,
+  and lets `MimirVideoCaptureDriverSource` upload those raw frames into
+  Fensalir texture leases. MJPG/H264 remain outside this lane; they need a
+  device/GPU decode producer rather than a CPU convenience detour.
   Fensalir can still resolve imported shared `Texture2D` resources by native
   D3D12 handle and accepts Mimir video format names.
   `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split,

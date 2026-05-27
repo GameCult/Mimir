@@ -323,6 +323,12 @@ accepted_design:
     `UnavoidableCopyCount`. NV12 CPU upload is rejected until Fensalir has a
     real planar upload path; device/GPU NV12 producers should write the leased
     texture directly.
+    `MimirKsVideoCaptureDriver` plus
+    `native/camera_capture/mimir_camera_capture.dll` is the first
+    production-shaped KS/UVC direct camera path: it opens a Kernel Streaming pin
+    in process, queues uncompressed UVC frames, and feeds the same driver source
+    and Fensalir lease upload path. MJPG/H264 remain future device/GPU decode
+    producer work.
     `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
     engine-owned lease path. Camera image claims currently defer until Fensalir

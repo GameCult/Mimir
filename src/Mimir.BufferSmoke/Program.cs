@@ -113,6 +113,11 @@ if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringC
     return RunFensalirTextureLeaseSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--ks-camera-driver-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunKsCameraDriverSmoke(args);
+}
+
 if (args.Any(arg => string.Equals(arg, "--mimir-spectrum-upload-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMimirSpectrumUploadSmoke();
@@ -792,7 +797,7 @@ static int RunFensalirTextureLeaseSmoke()
     var expectedResourceKey = MimirFensalirTextureLeaseClient.ResourceKeyForSource("kiyo-pro-rgb");
 
     Console.WriteLine(
-        $"fensalir-texture-lease-smoke leased={lease.IsValid} committed={broker.CommittedFenceValue > 0} driverClient={receiverDriver.HasClient} uploaded={broker.UploadedResourceKey} copies={receiverSource.LastUploadedCopyCount} resources={frame.Resources.Count} claims={frame.Claims.Count} errors={validation.HasErrors}");
+        $"fensalir-texture-lease-smoke leased={lease.IsValid} committed={broker.CommittedFenceValue > 0} driverClient={receiverDriver.HasClient} uploaded={broker.UploadedResourceKey} uploadedBytes={receiverSource.LastUploadedByteLength} copies={receiverSource.LastUploadedCopyCount} resources={frame.Resources.Count} claims={frame.Claims.Count} errors={validation.HasErrors}");
 
     return lease.IsValid &&
         receiverDriver.HasClient &&
@@ -812,6 +817,63 @@ static int RunFensalirTextureLeaseSmoke()
         !validation.HasErrors
             ? 0
             : 1;
+}
+
+static int RunKsCameraDriverSmoke(string[] args)
+{
+    var library = ParseStringOption(args, "--native-library", Path.GetFullPath("native/camera_capture/build/Release/mimir_camera_capture.dll"));
+    var sourceId = ParseStringOption(args, "--source-id", "leap-stereo-ir");
+    var pathNeedle = ParseStringOption(args, "--path-needle", "vid_f182&pid_0003&mi_00");
+    var width = ParseIntOption(args, "--width", 640);
+    var height = ParseIntOption(args, "--height", 240);
+    var fourCc = ParseStringOption(args, "--fourcc", "YUY2");
+    var minFps = ParseDoubleOption(args, "--min-fps", 100.0);
+    var timeoutMs = ParseIntOption(args, "--timeout-ms", 3000);
+
+    var broker = new FakeFieldResourceBroker();
+    using var driver = new MimirKsVideoCaptureDriver(new MimirKsVideoCaptureDriverOptions(
+        library,
+        sourceId,
+        pathNeedle,
+        width,
+        height,
+        fourCc,
+        minFps));
+    using var source = new MimirVideoCaptureDriverSource(
+        new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        driver,
+        static () => StopwatchTicksToNs(Stopwatch.GetTimestamp()));
+    source.AttachTextureLeaseClient(new MimirFensalirTextureLeaseClient(broker));
+
+    var deadline = Stopwatch.GetTimestamp() + (long)(timeoutMs / 1000.0 * Stopwatch.Frequency);
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        if (!source.TryRead(out var sample))
+        {
+            Thread.Sleep(1);
+            continue;
+        }
+
+        var frame = sample.VideoFrame;
+        Console.WriteLine(
+            $"ks-camera-driver-smoke source={sample.SourceId} {frame?.Width}x{frame?.Height} format={frame?.PixelFormat} liveBytes={sample.ByteLength} uploadedBytes={source.LastUploadedByteLength} uploaded={broker.UploadedResourceKey} copies={source.LastUploadedCopyCount}");
+        return frame != null &&
+            frame.Width == width &&
+            frame.Height == height &&
+            source.LastUploadedByteLength > 0 &&
+            source.LastUploadedCopyCount == 1 &&
+            broker.UploadedResourceKey == MimirFensalirTextureLeaseClient.ResourceKeyForSource(sourceId)
+            ? 0
+            : 1;
+    }
+
+    Console.WriteLine($"ks-camera-driver-smoke timeout source={sourceId} pathNeedle={pathNeedle} {width}x{height} {fourCc}");
+    return 1;
+}
+
+static long StopwatchTicksToNs(long ticks)
+{
+    return checked((long)(ticks * (1_000_000_000.0 / Stopwatch.Frequency)));
 }
 
 static int RunMimirSpectrumUploadSmoke()

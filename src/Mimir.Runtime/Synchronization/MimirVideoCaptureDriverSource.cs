@@ -28,6 +28,8 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFe
 
     public int LastUploadedCopyCount { get; private set; }
 
+    public int LastUploadedByteLength { get; private set; }
+
     public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
     {
         textureLeaseClient = client;
@@ -55,6 +57,7 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFe
             {
                 frame = frame with { UnavoidableCopyCount = frame.UnavoidableCopyCount + 1 };
                 LastUploadedCopyCount = frame.UnavoidableCopyCount;
+                LastUploadedByteLength = data.Length;
                 data = default;
             }
         }

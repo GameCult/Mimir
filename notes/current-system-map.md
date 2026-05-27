@@ -344,6 +344,11 @@ performs the one declared CPU-to-GPU upload into the Fensalir lease, drops the
 managed payload from the live sample, and increments `UnavoidableCopyCount`.
 NV12 CPU upload is rejected until Fensalir owns a real planar upload path;
 device/GPU NV12 producers should write the leased texture directly.
+`MimirKsVideoCaptureDriver` plus `native/camera_capture/mimir_camera_capture.dll`
+is the first production-shaped KS/UVC driver: it opens a Kernel Streaming pin
+in process, queues uncompressed UVC frames, and feeds the same
+`IMimirVideoCaptureDriver` source path. MJPG/H264 still need a device/GPU
+decode producer; the KS driver rejects compressed capture formats.
 Metadata-only cadence frames do not create camera surface intents or fake
 payload requests. The old direct `AquariumGpuSensorFrame` bridge proof has been
 removed from Mimir's active proof path. Camera image claims currently defer

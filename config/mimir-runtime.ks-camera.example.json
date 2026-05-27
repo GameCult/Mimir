@@ -1,0 +1,20 @@
+{
+  "bufferSeconds": 5.0,
+  "streams": [
+    {
+      "sourceId": "leap-stereo-ir",
+      "displayName": "LeapUVC stereo IR",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ks-camera",
+      "command": "../native/camera_capture/build/Release/mimir_camera_capture.dll",
+      "pathNeedle": "vid_f182&pid_0003&mi_00",
+      "width": 640,
+      "height": 240,
+      "pixelFormat": "YUY2",
+      "minimumFramesPerSecond": 100.0,
+      "queueDepth": 8
+    }
+  ]
+}

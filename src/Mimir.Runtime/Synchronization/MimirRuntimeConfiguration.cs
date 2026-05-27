@@ -150,6 +150,28 @@ public sealed class MimirRuntimeConfiguration
 #pragma warning restore CA1416
         }
 
+        if (string.Equals(stream.Adapter, "ks-camera", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(stream.Adapter, "uvc-direct", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("The Mimir KS camera source requires Windows.");
+            }
+
+            return new MimirStreamSourceFactory(descriptor, () => new MimirVideoCaptureDriverSource(
+                descriptor,
+                new MimirKsVideoCaptureDriver(new MimirKsVideoCaptureDriverOptions(
+                    ResolveCommand(stream.Command, configDirectory),
+                    stream.SourceId,
+                    stream.PathNeedle,
+                    stream.Width,
+                    stream.Height,
+                    stream.PixelFormat,
+                    stream.MinimumFramesPerSecond,
+                    stream.QueueDepth)),
+                static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
+        }
+
         if (string.Equals(stream.Adapter, "frame-events", StringComparison.OrdinalIgnoreCase)
             || string.Equals(stream.Adapter, "json-lines", StringComparison.OrdinalIgnoreCase))
         {
@@ -196,6 +218,11 @@ public sealed class MimirRuntimeConfiguration
         }
 
         return Path.GetFullPath(Path.Combine(configDirectory, command));
+    }
+
+    private static long StopwatchTicksToNs(long ticks)
+    {
+        return checked((long)(ticks * (1_000_000_000.0 / System.Diagnostics.Stopwatch.Frequency)));
     }
 
     private static MimirStreamKind ParseKind(string value)
@@ -271,6 +298,11 @@ public sealed class MimirAudioSyncConfig
         };
     }
 
+    private static long StopwatchTicksToNs(long ticks)
+    {
+        return checked((long)(ticks * (1_000_000_000.0 / System.Diagnostics.Stopwatch.Frequency)));
+    }
+
     private static string ResolveConfigPath(string path, string? configDirectory)
     {
         var trimmed = path.Trim();
@@ -307,6 +339,18 @@ public sealed class MimirStreamConfig
     public int SampleRate { get; set; } = 192_000;
 
     public string DriverClsid { get; set; } = "";
+
+    public string PathNeedle { get; set; } = "";
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public string PixelFormat { get; set; } = "";
+
+    public double MinimumFramesPerSecond { get; set; }
+
+    public int QueueDepth { get; set; } = 8;
 
     public string DisplayNameForSource(string sourceId)
     {

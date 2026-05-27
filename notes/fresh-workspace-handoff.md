@@ -55,6 +55,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   which increments `UnavoidableCopyCount` and clears live managed payload bytes
   after upload. NV12 CPU upload is rejected until Fensalir owns planar copy;
   device/GPU NV12 producers should write the leased texture directly.
+  The first direct KS/UVC driver is `MimirKsVideoCaptureDriver` backed by
+  `native/camera_capture/mimir_camera_capture.dll`; the example config
+  `config/mimir-runtime.ks-camera.example.json` targets LeapUVC 640x240 YUY2.
+  Compressed MJPG/H264 still need a device/GPU decode producer, not this raw
+  upload lane.
   Foreign shared texture handles are import edges, not the primary hot path.
 - The current Mimir/Fensalir rendering teardown map is
   [[docs/fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild
