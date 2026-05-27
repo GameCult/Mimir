@@ -321,8 +321,9 @@ reports ready, missing, and unconfigured stems against the alignment actuator
 stem-bus profile. `MimirObsStemSharedMemoryPublisher` writes the validated stem
 frames into `Local\MimirObsStemBus`, and `native/obs_stem_source` is the first
 OBS source plugin: one OBS source reads one named stem from that map and submits
-it through libobs audio. Building it locally still requires an OBS/libobs SDK
-that provides `libobsConfig.cmake`.
+it through libobs audio. `scripts/build-obs-stem-plugin.ps1` stages the
+upstream OBS plugin-template SDK under `artifacts/obs-sdk/` and builds the
+plugin DLL locally.
 
 ## Visual Fusion
 

@@ -28,18 +28,23 @@ source lanes.
 
 ## Build
 
-The plugin requires an OBS/libobs development package that provides
-`libobsConfig.cmake`.
-
 ```powershell
-cmake -S .\native\obs_stem_source -B .\native\obs_stem_source\build -Dlibobs_DIR=<path-to-libobs-cmake>
-cmake --build .\native\obs_stem_source\build --config Release
+.\scripts\build-obs-stem-plugin.ps1
 ```
 
-This workstation currently does not have the libobs SDK installed, so CMake
-configuration stops at `find_package(libobs)`. The managed shared-memory
-publisher is still verified by:
+The script stages `obsproject/obs-plugintemplate` under `artifacts/obs-sdk/`,
+lets the upstream template fetch/build the matching OBS/libobs development
+surface, then builds `native/obs_stem_source` against that SDK. The staged SDK
+and native build products are local artifacts, not repository state.
+
+The managed shared-memory publisher is verified by:
 
 ```powershell
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --obs-stem-shared-memory-smoke
+```
+
+The local native plugin build currently succeeds and emits:
+
+```text
+native\obs_stem_source\build\Release\mimir_obs_stem_source.dll
 ```

@@ -198,8 +198,9 @@ accepted_design:
     writes validated stems into the `Local\MimirObsStemBus` Windows
     shared-memory ABI, and `native/obs_stem_source` is the first OBS source
     plugin that reads one named stem from that map and submits it as libobs
-    audio. Local native plugin compilation still needs an OBS/libobs SDK that
-    provides `libobsConfig.cmake`. The synthetic
+    audio. `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin
+    template SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
+    The synthetic
     codebook proof is `dotnet run --project
     .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`.
     `Mimir.BufferSmoke --render-chirp-bin-f32` plus

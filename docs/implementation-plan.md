@@ -160,8 +160,9 @@ a named invariant that the native runtime cannot protect yet.
   alignment-actuator OBS stem profile. `MimirObsStemSharedMemoryPublisher` now
   publishes those validated stems into a fixed Windows shared-memory ABI, and
   `native/obs_stem_source` is the first OBS source plugin that reads one named
-  stem and submits it to OBS as an audio source. Local plugin compilation still
-  needs an OBS/libobs SDK installation.
+  stem and submits it to OBS as an audio source. `scripts/build-obs-stem-plugin.ps1`
+  stages the upstream OBS plugin template SDK under `artifacts/obs-sdk/` and
+  builds the plugin DLL locally.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a
