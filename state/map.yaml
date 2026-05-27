@@ -373,8 +373,11 @@ accepted_design:
     `z = age * 0.1`. Physical history slots are addressed as a ring with
     `RollingOffset`, so logical age no longer requires moving every column in
     the upload matrix before shader sampling. Mimir emits one Float32 resource
-    upload per sampled history slot with an explicit element offset instead of
-    uploading the full fixed-capacity backing buffer every frame.
+    upload for the newest spectrum ring slot with an explicit element offset
+    instead of uploading the full fixed-capacity backing buffer every frame.
+    Fensalir owns rolling-slot validity and clamps TubeField dispatch so invalid
+    older slots are not sampled after renderer allocation, reset, or partial
+    update.
     `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the Mimir-requested Catmull-Rom
     subdivisions so Fensalir's TubeField truncation report has a direct cost
     lever.

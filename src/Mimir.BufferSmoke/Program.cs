@@ -693,13 +693,13 @@ static int RunMimirSpectrumUploadSmoke()
             !validation.HasErrors &&
             !frame.Scene.SplineFrame.HasInput &&
             !frame.Scene.BufferFieldFrame.HasInput &&
-            matchingUploads.Length == expectedHistoryCount &&
+            matchingUploads.Length == 1 &&
             matchingResources.Length == 1 &&
             matchingRamps.Length == 1 &&
             matchingLowerings.Length == 4 &&
             matchingClaims.Length == matchingLowerings.Length &&
             matchingUploads.All(upload => upload.Version == resource.Version) &&
-            matchingUploads.Sum(upload => upload.Float32Data.Count) == lowering.Width * expectedSourceLaneCapacity * expectedHistoryCount &&
+            matchingUploads.Sum(upload => upload.Float32Data.Count) == lowering.Width * expectedSourceLaneCapacity &&
             matchingUploads.All(upload =>
                 upload.Float32Data.Count == lowering.Width * expectedSourceLaneCapacity &&
                 upload.ElementOffset >= 0 &&
@@ -707,9 +707,7 @@ static int RunMimirSpectrumUploadSmoke()
             matchingUploads.Select(upload => upload.ElementOffset).Order().SequenceEqual(
                 new[]
                 {
-                    0,
                     lowering.Width * expectedSourceLaneCapacity * (expectedHistoryCapacity - 2),
-                    lowering.Width * expectedSourceLaneCapacity * (expectedHistoryCapacity - 1),
                 }.Order()) &&
             resource.Kind == AquariumFieldResourceKind.StructuredBuffer &&
             resource.Residency == AquariumFieldResourceResidency.GpuResident &&

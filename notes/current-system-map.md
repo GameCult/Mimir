@@ -393,11 +393,13 @@ resize the GPU buffer while the rolling trail fills. `MIMIR_SPECTRUM_SOURCE_LANE
 sets the fixed lane budget; surplus sources are truncated and reported in the
 runtime UI. Physical history slots are now addressed as a ring with
 `RollingOffset`, so logical age no longer requires moving every column before
-shader sampling. Mimir emits one Float32 resource upload per sampled history
-slot with an explicit element offset instead of uploading the full
-fixed-capacity backing buffer every frame. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS`
-is the runtime cost lever for lowering Catmull-Rom subdivision count when
-Fensalir reports TubeField truncation.
+shader sampling. Mimir emits one Float32 resource upload for the newest
+spectrum ring slot with an explicit element offset instead of uploading the
+full fixed-capacity backing buffer every frame. Fensalir owns rolling-slot
+validity and clamps TubeField dispatch so invalid older slots are not sampled
+after renderer allocation, reset, or partial update.
+`MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` is the runtime cost lever for lowering
+Catmull-Rom subdivision count when Fensalir reports TubeField truncation.
 
 ## Known Risks
 

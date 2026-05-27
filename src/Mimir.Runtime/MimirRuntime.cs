@@ -280,8 +280,8 @@ public sealed class MimirRuntime : IAquariumRuntime
         var resourceColumnCapacity = checked(spectrumSourceLaneCapacity * SpectrumHistoryWindowCount);
         var newestHistorySlot = PositiveModulo(-historyFrames[0].Sequence, SpectrumHistoryWindowCount);
         var rollingOffset = checked(newestHistorySlot * spectrumSourceLaneCapacity);
-        var resourceUploads = new List<AquariumFieldResourceUpload>(historyFrames.Length);
-        for (var historyIndex = 0; historyIndex < historyFrames.Length; historyIndex++)
+        var resourceUploads = new List<AquariumFieldResourceUpload>(1);
+        for (var historyIndex = 0; historyIndex < Math.Min(1, historyFrames.Length); historyIndex++)
         {
             var historySlot = PositiveModulo(-historyFrames[historyIndex].Sequence, SpectrumHistoryWindowCount);
             var uploadColumnOffset = checked(historySlot * spectrumSourceLaneCapacity);
