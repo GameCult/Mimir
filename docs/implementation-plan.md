@@ -149,12 +149,14 @@ a named invariant that the native runtime cannot protect yet.
   ramp PNG as a GPU-resident Texture2D resource and binds it by resource key.
   The uploaded spectrum resource is a rolling column matrix now: physical
   columns are flattened `(history age, source lane)` pairs, and Mimir emits one
-  Tube claim/lowering per source with `ColumnStride=sourceCount` so each lane
-  traverses its own age trail at `z = age * 0.1`. The resource uses a fixed
-  history-column capacity so frame-to-frame content versions do not resize the
-  GPU buffer while the history fills. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS`
-  controls the Mimir-requested Catmull-Rom subdivision count so Fensalir's
-  overflow report has a direct cost lever.
+  Tube claim/lowering per active source. The resource uses fixed history and
+  source-lane capacities, so frame-to-frame content versions and source
+  topology changes do not resize the GPU buffer while the trail fills.
+  `MIMIR_SPECTRUM_SOURCE_LANES` sets the lane capacity; surplus sources are
+  truncated and reported in the runtime UI. Lowerings use that fixed capacity
+  as `ColumnStride`, and `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the
+  requested Catmull-Rom subdivision count so Fensalir's overflow report has a
+  direct cost lever.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer

@@ -387,9 +387,11 @@ blackbody ramp as a Texture2D field resource and binds the TubeField material by
 resource key. Runtime spectrum columns now represent `(history age, source
 lane)` pairs rather than only the latest spectra; Mimir emits one TubeField
 claim/lowering per source, each striding through the shared resource to render
-its own age trail at `z = age * 0.1`. The resource advertises a fixed history
-capacity, so content updates do not resize the GPU buffer while the rolling
-trail fills. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` is the runtime cost lever for
+its own age trail at `z = age * 0.1`. The resource advertises fixed history and
+source-lane capacities, so content updates and source topology changes do not
+resize the GPU buffer while the rolling trail fills. `MIMIR_SPECTRUM_SOURCE_LANES`
+sets the fixed lane budget; surplus sources are truncated and reported in the
+runtime UI. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` is the runtime cost lever for
 lowering Catmull-Rom subdivision count when Fensalir reports TubeField
 truncation.
 

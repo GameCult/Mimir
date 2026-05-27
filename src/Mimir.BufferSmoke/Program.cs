@@ -631,8 +631,10 @@ static int RunMimirSpectrumUploadSmoke()
 {
     var previousSyntheticPreview = Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW");
     var previousTubeSubdivisions = Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS");
+    var previousSourceLanes = Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_SOURCE_LANES");
     Environment.SetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW", "1");
     Environment.SetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS", "2");
+    Environment.SetEnvironmentVariable("MIMIR_SPECTRUM_SOURCE_LANES", "8");
     try
     {
         var settings = new MimirSynchronizationSettings
@@ -672,7 +674,7 @@ static int RunMimirSpectrumUploadSmoke()
         var lowering = matchingLowerings.FirstOrDefault();
         var validation = AquariumFieldEvidenceValidator.Validate(field);
         var plan = AquariumFieldLoweringPlanner.Plan(field);
-        const int expectedSourceCount = 4;
+        const int expectedSourceLaneCapacity = 8;
         const int expectedHistoryCount = 3;
         const int expectedHistoryCapacity = 40;
         const int expectedSubdivisions = 2;
@@ -706,11 +708,11 @@ static int RunMimirSpectrumUploadSmoke()
             ramp.Access == AquariumFieldShaderAccess.ShaderResource &&
             string.Equals(ramp.Format, "Rgba8Unorm", StringComparison.OrdinalIgnoreCase) &&
             string.Equals(ramp.SourceUri, @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png", StringComparison.OrdinalIgnoreCase) &&
-            resource.Height == expectedSourceCount * expectedHistoryCapacity &&
+            resource.Height == expectedSourceLaneCapacity * expectedHistoryCapacity &&
             lowering.Width * resource.Height == upload.Float32Data.Count &&
             matchingLowerings.All(item =>
                 item.ColumnCount == expectedHistoryCount &&
-                item.ColumnStride == expectedSourceCount &&
+                item.ColumnStride == expectedSourceLaneCapacity &&
                 item.RollingModulo == resource.Height &&
                 item.CatmullRomSubdivisions == expectedSubdivisions &&
                 Math.Abs(item.ColumnStep.Z - 0.1f) < 0.0001f &&
@@ -726,6 +728,7 @@ static int RunMimirSpectrumUploadSmoke()
     {
         Environment.SetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW", previousSyntheticPreview);
         Environment.SetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS", previousTubeSubdivisions);
+        Environment.SetEnvironmentVariable("MIMIR_SPECTRUM_SOURCE_LANES", previousSourceLanes);
     }
 }
 

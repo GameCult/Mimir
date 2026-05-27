@@ -31,6 +31,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float SpectrumCameraFitPadding = 1.12f;
     private const float SpectrumFrustumMinimumNear = 0.01f;
     private const float SpectrumSplineTubePadding = 0.18f;
+    private const int DefaultSpectrumSourceLaneCapacity = 8;
     private const string SpectrumFieldResourceKey = "mimir:resource:spectrum:field-upload";
     private const string SpectrumRampResourceKey = "aquarium:resource:ramp:blackbody";
     private const string SpectrumRampTexturePath = @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png";
@@ -45,6 +46,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private readonly float audioSyncUpdateIntervalSeconds;
     private readonly float spectrumUpdateIntervalSeconds;
     private readonly int spectrumTubeSubdivisions;
+    private readonly int spectrumSourceLaneCapacity;
     private readonly float calibrationGain;
     private readonly float watermarkGain;
     private readonly bool syntheticSpectrumPreview;
@@ -60,6 +62,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private double lastAudioSyncAnalysisMilliseconds;
     private double lastSpectrumAnalysisMilliseconds;
     private double lastPassiveSynchronizationConfidence;
+    private int lastDroppedSpectrumSourceLaneCount;
     private float spectrumCameraDistanceMultiplier = SpectrumCameraDefaultDistanceMultiplier;
     private float spectrumCameraAngleDegrees = SpectrumCameraDefaultAngleDegrees;
     private AquariumCameraFrustum lastSpectrumFrustum = AquariumCameraFrustum.Default;
@@ -115,6 +118,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
         spectrumUpdateIntervalSeconds = ParseSpectrumUpdateIntervalSeconds();
         spectrumTubeSubdivisions = ParseSpectrumTubeSubdivisions();
+        spectrumSourceLaneCapacity = ParseSpectrumSourceLaneCapacity();
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
         syntheticSpectrumPreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW"));
@@ -244,18 +248,23 @@ public sealed class MimirRuntime : IAquariumRuntime
         var historyFrames = spectrumHistory.Count > 0
             ? spectrumHistory.Reverse().ToArray()
             : [new MimirSpectrumHistoryFrame(spectrumHistorySequence, runtimeSeconds, spectra)];
-        var sourceIds = historyFrames
+        var allSourceIds = historyFrames
             .SelectMany(static history => history.Spectra)
             .Where(static spectrum => spectrum.BandDecibels.Count >= 2)
             .Select(static spectrum => spectrum.SourceId)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static sourceId => sourceId, StringComparer.Ordinal)
             .ToArray();
+        var sourceIds = allSourceIds
+            .Take(spectrumSourceLaneCapacity)
+            .ToArray();
         if (sourceIds.Length == 0)
         {
+            lastDroppedSpectrumSourceLaneCount = 0;
             return frame;
         }
 
+        lastDroppedSpectrumSourceLaneCount = allSourceIds.Length - sourceIds.Length;
         var sourceIndexById = sourceIds
             .Select((sourceId, index) => (sourceId, index))
             .ToDictionary(static item => item.sourceId, static item => item.index, StringComparer.Ordinal);
@@ -268,7 +277,7 @@ public sealed class MimirRuntime : IAquariumRuntime
         var historyCount = historyFrames.Length;
         var sourceCount = sourceIds.Length;
         var activeColumnCount = checked(sourceCount * historyCount);
-        var resourceColumnCapacity = checked(sourceCount * SpectrumHistoryWindowCount);
+        var resourceColumnCapacity = checked(spectrumSourceLaneCapacity * SpectrumHistoryWindowCount);
         var samples = new float[width * resourceColumnCapacity];
         for (var historyIndex = 0; historyIndex < historyFrames.Length; historyIndex++)
         {
@@ -279,7 +288,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                     continue;
                 }
 
-                var physicalColumn = historyIndex * sourceCount + sourceIndex;
+                var physicalColumn = historyIndex * spectrumSourceLaneCapacity + sourceIndex;
                 WriteNormalizedSpectrum(spectrum, samples.AsSpan(physicalColumn * width, width));
             }
         }
@@ -367,7 +376,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                 StrideBytes: sizeof(float),
                 FirstColumn: sourceIndex,
                 ColumnCount: historyCount,
-                ColumnStride: sourceCount,
+                ColumnStride: spectrumSourceLaneCapacity,
                 RollingModulo: resourceColumnCapacity,
                 RollingOffset: 0,
                 Origin: new Vector3(-5.0f, sourceIndex * SpectrumChannelSeparation, 0.0f),
@@ -672,7 +681,13 @@ public sealed class MimirRuntime : IAquariumRuntime
                 panel.Readout("Frustum", DescribeSpectrumFrustum);
                 panel.Readout(
                     "Tube budget",
-                    () => $"{spectrumHistory.Count} age columns x {lastAudioSpectra.Count} lanes x {spectrumTubeSubdivisions} subdivisions",
+                    () =>
+                    {
+                        var dropped = lastDroppedSpectrumSourceLaneCount > 0
+                            ? $" dropped={lastDroppedSpectrumSourceLaneCount}"
+                            : "";
+                        return $"{spectrumHistory.Count}/{SpectrumHistoryWindowCount} age columns x {Math.Min(lastAudioSpectra.Count, spectrumSourceLaneCapacity)}/{spectrumSourceLaneCapacity} lanes x {spectrumTubeSubdivisions} subdivisions{dropped}";
+                    },
                     "Current Mimir-side TubeField subdivision cost before Fensalir applies its fixed geometry budget.");
                 panel.TextBox(
                     "Spectra",
@@ -973,6 +988,13 @@ public sealed class MimirRuntime : IAquariumRuntime
         return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_TUBE_SUBDIVISIONS"), out var value)
             ? Math.Clamp(value, 1, 16)
             : 4;
+    }
+
+    private static int ParseSpectrumSourceLaneCapacity()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("MIMIR_SPECTRUM_SOURCE_LANES"), out var value)
+            ? Math.Clamp(value, 1, 32)
+            : DefaultSpectrumSourceLaneCapacity;
     }
 
     private static bool IsTruthy(string? value) =>

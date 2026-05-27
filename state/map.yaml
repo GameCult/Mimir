@@ -363,14 +363,16 @@ accepted_design:
     GPU-resident Texture2D field resource and binds the TubeField material by
     `RampResourceKey`.
     Runtime spectrum columns now represent flattened `(history age, source
-    lane)` pairs. Mimir emits one TubeField claim/lowering per source, each
-    using `ColumnStride=sourceCount` through the shared Float32 resource so the
-    generated geometry renders a true age trail at `z = age * 0.1`. The
-    spectrum resource advertises a fixed history capacity so frame content
-    versions do not resize the GPU buffer while the rolling trail fills.
-    `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the Mimir-requested Catmull-Rom
-    subdivisions so Fensalir's TubeField truncation report has a direct cost
-    lever.
+    lane)` pairs. Mimir emits one TubeField claim/lowering per active source.
+    The spectrum resource advertises fixed history and source-lane capacities
+    so frame content versions and source topology changes do not resize the GPU
+    buffer while the rolling trail fills. `MIMIR_SPECTRUM_SOURCE_LANES` sets
+    the lane capacity; surplus sources are truncated and reported in the
+    runtime UI. Lowerings use that capacity as `ColumnStride` through the
+    shared Float32 resource so each active lane renders a true age trail at
+    `z = age * 0.1`. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the
+    Mimir-requested Catmull-Rom subdivisions so Fensalir's TubeField
+    truncation report has a direct cost lever.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
