@@ -85,17 +85,22 @@ Mimir Audio Stem
 
 ## Install
 
-For a standard Windows OBS install:
+For the standard OBS plugin search path:
 
 ```powershell
 .\scripts\install-obs-mimir-plugin.ps1
 ```
 
-For a portable OBS tree:
+By default this writes:
+
+```text
+C:\ProgramData\obs-studio\plugins\mimir_obs_stem_source\bin\64bit\mimir_obs_stem_source.dll
+```
+
+For a portable OBS tree or direct OBS installation root:
 
 ```powershell
 .\scripts\install-obs-mimir-plugin.ps1 -ObsRoot D:\Tools\obs-studio
 ```
 
-The script copies the built DLL into `obs-plugins\64bit`. It does not create
-scene items or alter OBS profiles.
+The script does not create scene items or alter OBS profiles.

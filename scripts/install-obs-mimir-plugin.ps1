@@ -1,5 +1,6 @@
 param(
     [string]$ObsRoot = "",
+    [string]$PluginRoot = "",
     [string]$Configuration = "Release",
     [switch]$SkipBuild,
     [switch]$WhatIf
@@ -9,18 +10,22 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-if ([string]::IsNullOrWhiteSpace($ObsRoot)) {
-    if ($env:OBS_STUDIO_ROOT) {
-        $ObsRoot = $env:OBS_STUDIO_ROOT
-    } elseif (Test-Path "C:\Program Files\obs-studio") {
-        $ObsRoot = "C:\Program Files\obs-studio"
-    } else {
-        throw "OBS root was not found. Pass -ObsRoot or set OBS_STUDIO_ROOT."
+$pluginDll = Join-Path $repoRoot "native\obs_stem_source\build\$Configuration\mimir_obs_stem_source.dll"
+
+if (-not [string]::IsNullOrWhiteSpace($ObsRoot)) {
+    $targetDir = Join-Path $ObsRoot "obs-plugins\64bit"
+} else {
+    if ([string]::IsNullOrWhiteSpace($PluginRoot)) {
+        if ($env:OBS_PLUGIN_ROOT) {
+            $PluginRoot = $env:OBS_PLUGIN_ROOT
+        } else {
+            $PluginRoot = Join-Path $env:ALLUSERSPROFILE "obs-studio\plugins"
+        }
     }
+
+    $targetDir = Join-Path $PluginRoot "mimir_obs_stem_source\bin\64bit"
 }
 
-$pluginDll = Join-Path $repoRoot "native\obs_stem_source\build\$Configuration\mimir_obs_stem_source.dll"
-$targetDir = Join-Path $ObsRoot "obs-plugins\64bit"
 $targetDll = Join-Path $targetDir "mimir_obs_stem_source.dll"
 
 if (-not $SkipBuild) {
