@@ -280,10 +280,12 @@ public sealed class MimirRuntime : IAquariumRuntime
         var resourceColumnCapacity = checked(spectrumSourceLaneCapacity * SpectrumHistoryWindowCount);
         var newestHistorySlot = PositiveModulo(-historyFrames[0].Sequence, SpectrumHistoryWindowCount);
         var rollingOffset = checked(newestHistorySlot * spectrumSourceLaneCapacity);
-        var samples = new float[width * resourceColumnCapacity];
+        var resourceUploads = new List<AquariumFieldResourceUpload>(historyFrames.Length);
         for (var historyIndex = 0; historyIndex < historyFrames.Length; historyIndex++)
         {
             var historySlot = PositiveModulo(-historyFrames[historyIndex].Sequence, SpectrumHistoryWindowCount);
+            var uploadColumnOffset = checked(historySlot * spectrumSourceLaneCapacity);
+            var samples = new float[width * spectrumSourceLaneCapacity];
             foreach (var spectrum in historyFrames[historyIndex].Spectra)
             {
                 if (!sourceIndexById.TryGetValue(spectrum.SourceId, out var sourceIndex))
@@ -291,9 +293,16 @@ public sealed class MimirRuntime : IAquariumRuntime
                     continue;
                 }
 
-                var physicalColumn = historySlot * spectrumSourceLaneCapacity + sourceIndex;
-                WriteNormalizedSpectrum(spectrum, samples.AsSpan(physicalColumn * width, width));
+                WriteNormalizedSpectrum(spectrum, samples.AsSpan(sourceIndex * width, width));
             }
+
+            resourceUploads.Add(new AquariumFieldResourceUpload
+            {
+                ResourceKey = SpectrumFieldResourceKey,
+                Version = unchecked((ulong)Math.Max(0, spectrumHistorySequence)),
+                ElementOffset = checked(uploadColumnOffset * width),
+                Float32Data = samples,
+            });
         }
 
         const string domainKey = "mimir:domain:spectrum:field-upload";
@@ -323,7 +332,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             Format: "Float32",
             Width: width,
             Height: resourceColumnCapacity,
-            DepthOrCount: samples.Length,
+            DepthOrCount: checked(width * resourceColumnCapacity),
             StrideBytes: sizeof(float),
             ValidFromNs: 0,
             ValidUntilNs: 0,
@@ -422,12 +431,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             ResourceUploads =
             [
                 .. frame.ResourceUploads,
-                new AquariumFieldResourceUpload
-                {
-                    ResourceKey = SpectrumFieldResourceKey,
-                    Version = version,
-                    Float32Data = samples,
-                },
+                .. resourceUploads,
             ],
             TubeSplineLowerings = [.. frame.TubeSplineLowerings, .. lowerings],
             AccumulationWindowSeconds = frame.AccumulationWindowSeconds,

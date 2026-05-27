@@ -156,9 +156,11 @@ a named invariant that the native runtime cannot protect yet.
   truncated and reported in the runtime UI. Lowerings use that fixed capacity
   as `ColumnStride`. Physical history slots are addressed as a ring with
   `RollingOffset`, so logical age no longer requires reshuffling every column
-  before shader sampling. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` controls the
-  requested Catmull-Rom subdivision count so Fensalir's overflow report has a
-  direct cost lever.
+  before shader sampling. Mimir emits one Float32 resource upload per sampled
+  history slot with an explicit element offset, rather than uploading the full
+  fixed-capacity backing buffer every frame. `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS`
+  controls the requested Catmull-Rom subdivision count so Fensalir's overflow
+  report has a direct cost lever.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer

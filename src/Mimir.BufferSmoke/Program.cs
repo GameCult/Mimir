@@ -655,8 +655,9 @@ static int RunMimirSpectrumUploadSmoke()
 
         var frame = runtime.Frame;
         var field = frame.Scene.FieldEvidenceFrame;
-        var upload = field.ResourceUploads.SingleOrDefault(upload =>
-            string.Equals(upload.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal));
+        var matchingUploads = field.ResourceUploads
+            .Where(upload => string.Equals(upload.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
+            .ToArray();
         var matchingResources = field.Resources
             .Where(resource => string.Equals(resource.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
             .ToArray();
@@ -686,19 +687,30 @@ static int RunMimirSpectrumUploadSmoke()
             .ToArray();
 
         Console.WriteLine(
-            $"mimir-spectrum-upload-smoke resources={field.Resources.Count} uploads={field.ResourceUploads.Count} claims={field.Claims.Count} tubeLowerings={field.TubeSplineLowerings.Count} planned={plan.Packets.Count} errors={validation.HasErrors} legacySplines={frame.Scene.SplineFrame.Splines.Count} bufferFields={frame.Scene.BufferFieldFrame.SplineTubeFields.Count + frame.Scene.BufferFieldFrame.TextureSplineFields.Count} uploadFloats={upload?.Float32Data.Count ?? 0}");
+            $"mimir-spectrum-upload-smoke resources={field.Resources.Count} uploads={field.ResourceUploads.Count} claims={field.Claims.Count} tubeLowerings={field.TubeSplineLowerings.Count} planned={plan.Packets.Count} errors={validation.HasErrors} legacySplines={frame.Scene.SplineFrame.Splines.Count} bufferFields={frame.Scene.BufferFieldFrame.SplineTubeFields.Count + frame.Scene.BufferFieldFrame.TextureSplineFields.Count} uploadFloats={matchingUploads.Sum(upload => upload.Float32Data.Count)}");
 
         return
             !validation.HasErrors &&
             !frame.Scene.SplineFrame.HasInput &&
             !frame.Scene.BufferFieldFrame.HasInput &&
-            upload is not null &&
+            matchingUploads.Length == expectedHistoryCount &&
             matchingResources.Length == 1 &&
             matchingRamps.Length == 1 &&
             matchingLowerings.Length == 4 &&
             matchingClaims.Length == matchingLowerings.Length &&
-            upload.Version == resource.Version &&
-            upload.Float32Data.Count == resource.DepthOrCount &&
+            matchingUploads.All(upload => upload.Version == resource.Version) &&
+            matchingUploads.Sum(upload => upload.Float32Data.Count) == lowering.Width * expectedSourceLaneCapacity * expectedHistoryCount &&
+            matchingUploads.All(upload =>
+                upload.Float32Data.Count == lowering.Width * expectedSourceLaneCapacity &&
+                upload.ElementOffset >= 0 &&
+                upload.ElementOffset + upload.Float32Data.Count <= resource.DepthOrCount) &&
+            matchingUploads.Select(upload => upload.ElementOffset).Order().SequenceEqual(
+                new[]
+                {
+                    0,
+                    lowering.Width * expectedSourceLaneCapacity * (expectedHistoryCapacity - 2),
+                    lowering.Width * expectedSourceLaneCapacity * (expectedHistoryCapacity - 1),
+                }.Order()) &&
             resource.Kind == AquariumFieldResourceKind.StructuredBuffer &&
             resource.Residency == AquariumFieldResourceResidency.GpuResident &&
             resource.Access == AquariumFieldShaderAccess.ShaderResource &&
@@ -710,7 +722,6 @@ static int RunMimirSpectrumUploadSmoke()
             string.Equals(ramp.Format, "Rgba8Unorm", StringComparison.OrdinalIgnoreCase) &&
             string.Equals(ramp.SourceUri, @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png", StringComparison.OrdinalIgnoreCase) &&
             resource.Height == expectedSourceLaneCapacity * expectedHistoryCapacity &&
-            lowering.Width * resource.Height == upload.Float32Data.Count &&
             matchingLowerings.All(item =>
                 item.ColumnCount == expectedHistoryCount &&
                 item.ColumnStride == expectedSourceLaneCapacity &&
