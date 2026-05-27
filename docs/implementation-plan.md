@@ -187,6 +187,9 @@ a named invariant that the native runtime cannot protect yet.
   Fensalir for a keyed D3D12 texture/fence lease before decoded camera frames
   are written. `MimirRuntime` accepts `AquariumRuntimeServices` and commits
   producer fence values for leased video payloads before Fensalir samples them.
+  `MimirVideoCaptureDriverSource` forwards the lease client to drivers that
+  implement `IMimirFensalirTextureLeaseReceiver`, so native/direct camera
+  drivers can allocate their Fensalir destination texture before capture/decode.
   Metadata-only cadence frames remain observations with empty payload handles;
   they do not become fake render requests. The old direct
   `AquariumGpuSensorFrame` builder has been removed from Mimir's proof path.

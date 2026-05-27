@@ -312,7 +312,9 @@ accepted_design:
     asks the engine field resource broker for a keyed Texture2D lease, writes
     decoded frames into the returned shared D3D12 texture, signals the returned
     producer fence, and commits that fence value before the resource key reaches
-    shader sampling. `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
+    shader sampling. `MimirVideoCaptureDriverSource` forwards that lease client
+    to direct camera drivers that implement `IMimirFensalirTextureLeaseReceiver`.
+    `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
     engine-owned lease path. Camera image claims currently defer until Fensalir
     has a selected visual fusion/feature extraction lowering for camera textures. Fensalir now owns the first in-process

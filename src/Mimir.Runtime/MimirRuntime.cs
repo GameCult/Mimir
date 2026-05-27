@@ -149,6 +149,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     public void AttachServices(AquariumRuntimeServices services)
     {
         runtimeServices = services;
+        synchronization.AttachTextureLeaseClient(new MimirFensalirTextureLeaseClient(services.FieldResources));
     }
 
     private AquariumFrame CreateFrame()

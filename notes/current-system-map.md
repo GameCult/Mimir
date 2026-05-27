@@ -333,6 +333,9 @@ camera/decode producer writes that shared texture and signals the producer
 fence, then Mimir carries the same resource key through FieldEvidence. Fensalir
 waits on committed producer fence values before resolving shader reads. Shared
 foreign texture handles remain an import edge, not the primary camera authority.
+`MimirVideoCaptureDriverSource` propagates the lease client to drivers that
+implement `IMimirFensalirTextureLeaseReceiver`, so direct camera drivers can
+request the destination texture before emitting a frame descriptor.
 Metadata-only cadence frames do not create camera surface intents or fake
 payload requests. The old direct `AquariumGpuSensorFrame` bridge proof has been
 removed from Mimir's active proof path. Camera image claims currently defer

@@ -47,6 +47,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   are rendering inputs: Mimir asks the engine broker for a keyed D3D12
   Texture2D/fence lease, writes decoded frames into that texture, commits the
   producer fence value, and lowers the same resource key through FieldEvidence.
+  `MimirVideoCaptureDriverSource` forwards that lease client to direct drivers
+  that implement `IMimirFensalirTextureLeaseReceiver`.
   Foreign shared texture handles are import edges, not the primary hot path.
 - The current Mimir/Fensalir rendering teardown map is
   [[docs/fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild

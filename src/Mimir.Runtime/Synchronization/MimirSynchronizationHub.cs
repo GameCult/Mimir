@@ -9,6 +9,7 @@ public sealed class MimirSynchronizationHub : IDisposable
     private readonly Dictionary<string, MimirAudioSynchronizationReport> audioSynchronizationReports = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MimirAudioSynchronizationReport> complexContourReports = new(StringComparer.Ordinal);
     private readonly MimirChirpBinCalibrationModel? chirpBinCalibrationModel;
+    private MimirFensalirTextureLeaseClient? textureLeaseClient;
     private ulong ingestedSamples;
     private int nextAudioSynchronizationCandidate;
 
@@ -63,6 +64,23 @@ public sealed class MimirSynchronizationHub : IDisposable
         if (source.ExposesDescriptorBuffer)
         {
             Buffers.EnsureBuffer(source.Descriptor);
+        }
+
+        if (source is IMimirFensalirTextureLeaseReceiver receiver)
+        {
+            receiver.AttachTextureLeaseClient(textureLeaseClient);
+        }
+    }
+
+    public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
+    {
+        textureLeaseClient = client;
+        foreach (var source in sources)
+        {
+            if (source is IMimirFensalirTextureLeaseReceiver receiver)
+            {
+                receiver.AttachTextureLeaseClient(client);
+            }
         }
     }
 

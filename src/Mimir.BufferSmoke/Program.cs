@@ -756,6 +756,20 @@ static int RunFensalirTextureLeaseSmoke()
         _ = runtime.Frame;
     }
 
+    var receiverDriver = new FakeTextureLeaseVideoDriver();
+    using (var runtime = new MimirRuntime(
+        new AquariumRuntimeOptions(Headless: true, CultCachePath: null),
+        new MimirSynchronizationSettings(),
+        [
+            new MimirVideoCaptureDriverSource(
+                new MimirStreamDescriptor("driver-camera", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+                receiverDriver,
+                static () => 0)
+        ]))
+    {
+        runtime.AttachServices(new AquariumRuntimeServices(broker));
+    }
+
     var buffer = new MimirRollingStreamBuffer(
         new MimirStreamDescriptor("kiyo-pro-rgb", MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
         TimeSpan.FromSeconds(5));
@@ -776,9 +790,10 @@ static int RunFensalirTextureLeaseSmoke()
     var expectedResourceKey = MimirFensalirTextureLeaseClient.ResourceKeyForSource("kiyo-pro-rgb");
 
     Console.WriteLine(
-        $"fensalir-texture-lease-smoke leased={lease.IsValid} committed={broker.CommittedFenceValue > 0} resources={frame.Resources.Count} claims={frame.Claims.Count} errors={validation.HasErrors}");
+        $"fensalir-texture-lease-smoke leased={lease.IsValid} committed={broker.CommittedFenceValue > 0} driverClient={receiverDriver.HasClient} resources={frame.Resources.Count} claims={frame.Claims.Count} errors={validation.HasErrors}");
 
     return lease.IsValid &&
+        receiverDriver.HasClient &&
         broker.CommittedResourceKey == expectedResourceKey &&
         broker.CommittedVersion == 0 &&
         broker.CommittedFenceValue == 41 &&
@@ -6066,5 +6081,28 @@ sealed class FakeFieldResourceBroker : IAquariumFieldResourceBroker
         CommittedVersion = version;
         CommittedFenceValue = producerFenceValue;
         return true;
+    }
+}
+
+sealed class FakeTextureLeaseVideoDriver : IMimirVideoCaptureDriver, IMimirFensalirTextureLeaseReceiver
+{
+    public string DriverName => "fake-texture-lease-driver";
+
+    public bool HasClient { get; private set; }
+
+    public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
+    {
+        HasClient = client != null;
+    }
+
+    public bool TryCapture(out MimirVideoFrameDescriptor frame, out ReadOnlyMemory<byte> data)
+    {
+        frame = default!;
+        data = default;
+        return false;
+    }
+
+    public void Dispose()
+    {
     }
 }

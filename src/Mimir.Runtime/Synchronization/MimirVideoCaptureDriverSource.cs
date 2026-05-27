@@ -1,6 +1,6 @@
 namespace Mimir.Runtime.Synchronization;
 
-public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource
+public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFensalirTextureLeaseReceiver
 {
     private readonly IMimirVideoCaptureDriver driver;
     private readonly MimirNativeIngestStreamSource nativeSource;
@@ -24,6 +24,14 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource
     public MimirStreamDescriptor Descriptor { get; }
 
     public Func<long> ReadArrivalNs { get; }
+
+    public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
+    {
+        if (driver is IMimirFensalirTextureLeaseReceiver receiver)
+        {
+            receiver.AttachTextureLeaseClient(client);
+        }
+    }
 
     public bool TryRead(out MimirStreamSample sample)
     {
