@@ -232,17 +232,24 @@ Mimir also uploads normalized spectral frames as Float32 data into a
 Fensalir-owned structured buffer resource, so the TubeField path consumes live
 GPU buffer contents rather than an empty declaration. The runtime-level receipt
 is `Mimir.BufferSmoke --mimir-spectrum-upload-smoke`: it boots Mimir's frame
-path, advances spectrum analysis, and verifies one Float32 upload, one planned
-TubeField packet, a resource-bound local blackbody ramp Texture2D, and no live
-legacy spline/buffer-field dashboard input. The runtime resource is no longer a
-latest-frame row dump: it is a rolling column matrix where physical columns are
-flattened `(history age, source lane)` pairs. Mimir emits one TubeField claim
-per source lane, using `ColumnStride=sourceCount` and `ColumnStep.z=0.1` so
-each source renders its own age trail from newest to older samples. The
-resource declaration keeps a fixed history capacity; new frames update content
-version and upload data, but they do not grow the GPU buffer as the trail fills.
-Mimir exposes `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` as the first cost lever for
-responding to Fensalir's requested/dispatched/truncated TubeField budget report.
+path, advances spectrum analysis, and verifies one newest-slot Float32 upload,
+planned TubeField packets, a resource-bound local blackbody ramp Texture2D, and
+no live legacy spline/buffer-field dashboard input. The runtime resource is no
+longer a latest-frame row dump: it is a rolling column matrix where physical
+columns are flattened `(history age, source lane)` pairs under fixed history
+and source-lane capacities. Mimir emits one TubeField claim per active source
+lane; lowerings use the fixed lane capacity as `ColumnStride`,
+`ColumnStep.z=0.1`, and `RollingOffset` so each source renders its own age
+trail from newest to older samples without reshuffling the GPU buffer. New
+frames upload only the newest ring slot with an explicit element offset.
+Fensalir owns structured-buffer slot validity and clamps TubeField dispatch so
+invalid older slots do not reach shader sampling after allocation, reset, or
+partial update. TubeField metadata now carries stable claim-derived field ids
+inside the TubeField family range, so temporal/reprojection/reservoir consumers
+can distinguish source-lane claims. Mimir exposes
+`MIMIR_SPECTRUM_SOURCE_LANES` as the source-lane capacity lever and
+`MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` as the geometry cost lever for responding to
+Fensalir's requested/dispatched/truncated/invalid TubeField budget report.
 
 ### 3. Calibration Constraint
 
