@@ -21,7 +21,7 @@ public sealed class MimirRuntime : IAquariumRuntime
     private const float DefaultSpectrumUpdateIntervalSeconds = 0.2f;
     private const int SpectrumHistoryWindowCount = 40;
     private const float SpectrumChannelSeparation = 1.75f;
-    private const float SpectrumWindowDepthSeparation = 0.18f;
+    private const float SpectrumWindowDepthSeparation = 0.1f;
     private const float SpectrumWidth = 12.0f;
     private const float SpectrumAmplitudeHeight = 1.1f;
     private const float SpectrumCameraDefaultDistanceMultiplier = 10.0f;
@@ -239,21 +239,57 @@ public sealed class MimirRuntime : IAquariumRuntime
             return frame;
         }
 
-        var width = Math.Max(2, spectra.Max(static spectrum => spectrum.BandDecibels.Count));
-        var height = spectra.Length;
-        var samples = new float[width * height];
-        for (var row = 0; row < spectra.Length; row++)
+        var historyFrames = spectrumHistory.Count > 0
+            ? spectrumHistory.Reverse().ToArray()
+            : [new MimirSpectrumHistoryFrame(spectrumHistorySequence, runtimeSeconds, spectra)];
+        var sourceIds = historyFrames
+            .SelectMany(static history => history.Spectra)
+            .Where(static spectrum => spectrum.BandDecibels.Count >= 2)
+            .Select(static spectrum => spectrum.SourceId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static sourceId => sourceId, StringComparer.Ordinal)
+            .ToArray();
+        if (sourceIds.Length == 0)
         {
-            WriteNormalizedSpectrum(spectra[row], samples.AsSpan(row * width, width));
+            return frame;
+        }
+
+        var sourceIndexById = sourceIds
+            .Select((sourceId, index) => (sourceId, index))
+            .ToDictionary(static item => item.sourceId, static item => item.index, StringComparer.Ordinal);
+        var width = Math.Max(2, historyFrames
+            .SelectMany(static history => history.Spectra)
+            .Where(static spectrum => spectrum.BandDecibels.Count >= 2)
+            .Select(static spectrum => spectrum.BandDecibels.Count)
+            .DefaultIfEmpty(2)
+            .Max());
+        var historyCount = historyFrames.Length;
+        var sourceCount = sourceIds.Length;
+        var activeColumnCount = checked(sourceCount * historyCount);
+        var resourceColumnCapacity = checked(sourceCount * SpectrumHistoryWindowCount);
+        var samples = new float[width * resourceColumnCapacity];
+        for (var historyIndex = 0; historyIndex < historyFrames.Length; historyIndex++)
+        {
+            foreach (var spectrum in historyFrames[historyIndex].Spectra)
+            {
+                if (!sourceIndexById.TryGetValue(spectrum.SourceId, out var sourceIndex))
+                {
+                    continue;
+                }
+
+                var physicalColumn = historyIndex * sourceCount + sourceIndex;
+                WriteNormalizedSpectrum(spectrum, samples.AsSpan(physicalColumn * width, width));
+            }
         }
 
         const string domainKey = "mimir:domain:spectrum:field-upload";
-        const string claimKey = "intent:mimir:spectrum:field-upload";
         var version = unchecked((ulong)Math.Max(0, spectrumHistorySequence));
         var confidence = (float)Math.Clamp(spectra.Average(static spectrum => spectrum.Rms > 0.0 ? 1.0 : 0.65), 0.0, 1.0);
+        var maxY = Math.Max(0, sourceCount - 1) * SpectrumChannelSeparation + SpectrumAmplitudeHeight;
+        var maxZ = Math.Max(0, SpectrumHistoryWindowCount - 1) * SpectrumWindowDepthSeparation;
         var support = new AquariumFieldSupport(
-            Center: Vector3.Zero,
-            Radius: new Vector3(5.0f, SpectrumAmplitudeHeight, Math.Max(0.1f, height * 0.1f)),
+            Center: new Vector3(0.0f, maxY * 0.5f, maxZ * 0.5f),
+            Radius: new Vector3(5.0f, Math.Max(SpectrumAmplitudeHeight, maxY), Math.Max(0.1f, maxZ)),
             LocalFrame: Matrix4x4.Identity,
             ConservativeRadius: 5.0f,
             ProjectedError: 0.0f,
@@ -263,7 +299,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             AquariumFieldProposalKind.DebugIntent,
             SourcePdf: 1.0f,
             TargetContribution: confidence,
-            RepresentedCandidateCount: height,
+            RepresentedCandidateCount: activeColumnCount,
             Seed: 0x5EC7_0001u);
         var resource = new AquariumFieldResourceDeclaration(
             ResourceKey: SpectrumFieldResourceKey,
@@ -272,7 +308,7 @@ public sealed class MimirRuntime : IAquariumRuntime
             Access: AquariumFieldShaderAccess.ShaderResource,
             Format: "Float32",
             Width: width,
-            Height: height,
+            Height: resourceColumnCapacity,
             DepthOrCount: samples.Length,
             StrideBytes: sizeof(float),
             ValidFromNs: 0,
@@ -284,18 +320,70 @@ public sealed class MimirRuntime : IAquariumRuntime
             SpectrumRampResourceKey,
             SpectrumRampTexturePath,
             version: 1);
-        var claim = new AquariumFieldClaim(
-            ClaimKey: claimKey,
-            DomainKey: domainKey,
-            ProducerKey: "Mimir.Runtime",
-            Layer: AquariumFieldLayer.Form,
-            Encoding: AquariumFieldEncoding.Tube,
-            Support: support,
-            Proposal: proposal,
-            PayloadHandle: SpectrumFieldResourceKey,
-            ObservedTimeNs: 0,
-            Confidence: confidence);
         var axisStepX = width > 1 ? 10.0f / (width - 1) : 10.0f;
+        var claims = new List<AquariumFieldClaim>(sourceCount);
+        var candidates = new List<AquariumFieldCandidate>(sourceCount);
+        var lowerings = new List<AquariumFieldTubeSplineLowering>(sourceCount);
+        for (var sourceIndex = 0; sourceIndex < sourceIds.Length; sourceIndex++)
+        {
+            var sourceId = sourceIds[sourceIndex];
+            var claimKey = $"intent:mimir:spectrum:field-upload:{sourceId}";
+            var sourceSupport = support with
+            {
+                Center = new Vector3(0.0f, sourceIndex * SpectrumChannelSeparation + SpectrumAmplitudeHeight * 0.5f, maxZ * 0.5f),
+                Radius = new Vector3(5.0f, SpectrumAmplitudeHeight, Math.Max(0.1f, maxZ)),
+            };
+            var sourceProposal = proposal with
+            {
+                RepresentedCandidateCount = historyCount,
+                Seed = unchecked(proposal.Seed + (uint)sourceIndex),
+            };
+            claims.Add(new AquariumFieldClaim(
+                ClaimKey: claimKey,
+                DomainKey: domainKey,
+                ProducerKey: "Mimir.Runtime",
+                Layer: AquariumFieldLayer.Form,
+                Encoding: AquariumFieldEncoding.Tube,
+                Support: sourceSupport,
+                Proposal: sourceProposal,
+                PayloadHandle: SpectrumFieldResourceKey,
+                ObservedTimeNs: 0,
+                Confidence: confidence));
+            candidates.Add(new AquariumFieldCandidate(
+                $"{claimKey}:candidate",
+                claimKey,
+                AquariumFieldLayer.Form,
+                AquariumFieldEncoding.Tube,
+                sourceProposal,
+                AquariumFieldGuide.Valid(confidence, spectrumUpdateIntervalSeconds)));
+            lowerings.Add(new AquariumFieldTubeSplineLowering(
+                LoweringKey: $"tube-spline:mimir:spectrum:field-upload:{sourceId}",
+                ClaimKey: claimKey,
+                ResourceKey: SpectrumFieldResourceKey,
+                Width: width,
+                Height: resourceColumnCapacity,
+                StrideBytes: sizeof(float),
+                FirstColumn: sourceIndex,
+                ColumnCount: historyCount,
+                ColumnStride: sourceCount,
+                RollingModulo: resourceColumnCapacity,
+                RollingOffset: 0,
+                Origin: new Vector3(-5.0f, sourceIndex * SpectrumChannelSeparation, 0.0f),
+                AxisStep: new Vector3(axisStepX, 0.0f, 0.0f),
+                ColumnStep: new Vector3(0.0f, 0.0f, SpectrumWindowDepthSeparation),
+                AmplitudePower: 2.0f,
+                AmplitudeScale: SpectrumAmplitudeHeight,
+                NormalizeMin: 0.0f,
+                NormalizeMax: 1.0f,
+                BaseRadius: 0.012f,
+                RadiusScale: 0.030f,
+                Alpha: 0.92f,
+                Feather: 0.20f,
+                RampTexturePath: SpectrumRampTexturePath,
+                RampResourceKey: SpectrumRampResourceKey,
+                EmissionScale: 10.0f,
+                CatmullRomSubdivisions: 4).Normalized());
+        }
 
         return new AquariumFieldEvidenceFrame
         {
@@ -309,22 +397,12 @@ public sealed class MimirRuntime : IAquariumRuntime
                     Matrix4x4.Identity,
                     Matrix4x4.Identity,
                     new Vector3(-5.0f, 0.0f, 0.0f),
-                    new Vector3(5.0f, SpectrumAmplitudeHeight, Math.Max(0.1f, height * 0.1f)),
+                    new Vector3(5.0f, maxY, Math.Max(0.1f, maxZ)),
                     Vector3.Zero,
                     "Mimir.Runtime"),
             ],
-            Claims = [.. frame.Claims, claim],
-            Candidates =
-            [
-                .. frame.Candidates,
-                new AquariumFieldCandidate(
-                    $"{claimKey}:candidate",
-                    claimKey,
-                    AquariumFieldLayer.Form,
-                    AquariumFieldEncoding.Tube,
-                    proposal,
-                    AquariumFieldGuide.Valid(confidence, spectrumUpdateIntervalSeconds)),
-            ],
+            Claims = [.. frame.Claims, .. claims],
+            Candidates = [.. frame.Candidates, .. candidates],
             BackendPackets = frame.BackendPackets,
             Resources = [.. frame.Resources, resource, ramp],
             ResourceUploads =
@@ -337,37 +415,7 @@ public sealed class MimirRuntime : IAquariumRuntime
                     Float32Data = samples,
                 },
             ],
-            TubeSplineLowerings =
-            [
-                .. frame.TubeSplineLowerings,
-                new AquariumFieldTubeSplineLowering(
-                    LoweringKey: "tube-spline:mimir:spectrum:field-upload",
-                    ClaimKey: claimKey,
-                    ResourceKey: SpectrumFieldResourceKey,
-                    Width: width,
-                    Height: height,
-                    StrideBytes: sizeof(float),
-                    FirstColumn: 0,
-                    ColumnCount: height,
-                    ColumnStride: 1,
-                    RollingModulo: height,
-                    RollingOffset: 0,
-                    Origin: new Vector3(-5.0f, 0.0f, 0.0f),
-                    AxisStep: new Vector3(axisStepX, 0.0f, 0.0f),
-                    ColumnStep: new Vector3(0.0f, 0.0f, 0.1f),
-                    AmplitudePower: 2.0f,
-                    AmplitudeScale: SpectrumAmplitudeHeight,
-                    NormalizeMin: 0.0f,
-                    NormalizeMax: 1.0f,
-                    BaseRadius: 0.012f,
-                    RadiusScale: 0.030f,
-                    Alpha: 0.92f,
-                    Feather: 0.20f,
-                    RampTexturePath: SpectrumRampTexturePath,
-                    RampResourceKey: SpectrumRampResourceKey,
-                    EmissionScale: 10.0f,
-                    CatmullRomSubdivisions: 4).Normalized(),
-            ],
+            TubeSplineLowerings = [.. frame.TubeSplineLowerings, .. lowerings],
             AccumulationWindowSeconds = frame.AccumulationWindowSeconds,
             PresentationDelaySeconds = frame.PresentationDelaySeconds,
         };

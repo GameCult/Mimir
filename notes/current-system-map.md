@@ -384,7 +384,12 @@ it. `Mimir.BufferSmoke --mimir-spectrum-upload-smoke` verifies this through the
 actual `MimirRuntime` frame path and confirms the legacy direct spline and
 buffer-field dashboard inputs are empty. The same path declares the local
 blackbody ramp as a Texture2D field resource and binds the TubeField material by
-resource key.
+resource key. Runtime spectrum columns now represent `(history age, source
+lane)` pairs rather than only the latest spectra; Mimir emits one TubeField
+claim/lowering per source, each striding through the shared resource to render
+its own age trail at `z = age * 0.1`. The resource advertises a fixed history
+capacity, so content updates do not resize the GPU buffer while the rolling
+trail fills.
 
 ## Known Risks
 

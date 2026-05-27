@@ -644,7 +644,10 @@ static int RunMimirSpectrumUploadSmoke()
         };
         using var runtime = new MimirRuntime(new AquariumRuntimeOptions(Headless: true, CultCachePath: null), settings);
         runtime.OnSceneReady();
-        runtime.Update(0.0f, new InputState());
+        var input = new InputState();
+        runtime.Update(0.0f, input);
+        runtime.Update(0.2f, input);
+        runtime.Update(0.2f, input);
 
         var frame = runtime.Frame;
         var field = frame.Scene.FieldEvidenceFrame;
@@ -660,14 +663,21 @@ static int RunMimirSpectrumUploadSmoke()
             .Where(lowering => string.Equals(lowering.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
             .ToArray();
         var matchingClaims = field.Claims
-            .Where(claim => string.Equals(claim.ClaimKey, "intent:mimir:spectrum:field-upload", StringComparison.Ordinal))
+            .Where(claim => claim.ClaimKey.StartsWith("intent:mimir:spectrum:field-upload:", StringComparison.Ordinal))
             .ToArray();
         var resource = matchingResources.FirstOrDefault();
         var ramp = matchingRamps.FirstOrDefault();
         var lowering = matchingLowerings.FirstOrDefault();
-        var claim = matchingClaims.FirstOrDefault();
         var validation = AquariumFieldEvidenceValidator.Validate(field);
         var plan = AquariumFieldLoweringPlanner.Plan(field);
+        const int expectedSourceCount = 4;
+        const int expectedHistoryCount = 3;
+        const int expectedHistoryCapacity = 40;
+        var plannedTubePackets = plan.Packets
+            .Where(packet =>
+                packet.Backend == AquariumFieldBackendKind.TubeField &&
+                string.Equals(packet.PayloadHandle, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
+            .ToArray();
 
         Console.WriteLine(
             $"mimir-spectrum-upload-smoke resources={field.Resources.Count} uploads={field.ResourceUploads.Count} claims={field.Claims.Count} tubeLowerings={field.TubeSplineLowerings.Count} planned={plan.Packets.Count} errors={validation.HasErrors} legacySplines={frame.Scene.SplineFrame.Splines.Count} bufferFields={frame.Scene.BufferFieldFrame.SplineTubeFields.Count + frame.Scene.BufferFieldFrame.TextureSplineFields.Count} uploadFloats={upload?.Float32Data.Count ?? 0}");
@@ -679,8 +689,8 @@ static int RunMimirSpectrumUploadSmoke()
             upload is not null &&
             matchingResources.Length == 1 &&
             matchingRamps.Length == 1 &&
-            matchingLowerings.Length == 1 &&
-            matchingClaims.Length == 1 &&
+            matchingLowerings.Length == 4 &&
+            matchingClaims.Length == matchingLowerings.Length &&
             upload.Version == resource.Version &&
             upload.Float32Data.Count == resource.DepthOrCount &&
             resource.Kind == AquariumFieldResourceKind.StructuredBuffer &&
@@ -693,14 +703,18 @@ static int RunMimirSpectrumUploadSmoke()
             ramp.Access == AquariumFieldShaderAccess.ShaderResource &&
             string.Equals(ramp.Format, "Rgba8Unorm", StringComparison.OrdinalIgnoreCase) &&
             string.Equals(ramp.SourceUri, @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png", StringComparison.OrdinalIgnoreCase) &&
-            lowering.Width * lowering.Height == upload.Float32Data.Count &&
-            lowering.ClaimKey == claim.ClaimKey &&
-            string.Equals(lowering.RampResourceKey, ramp.ResourceKey, StringComparison.Ordinal) &&
-            claim.PayloadHandle == resource.ResourceKey &&
-            plan.Packets.Any(packet =>
-                packet.Backend == AquariumFieldBackendKind.TubeField &&
-                string.Equals(packet.ClaimKey, claim.ClaimKey, StringComparison.Ordinal) &&
-                string.Equals(packet.PayloadHandle, resource.ResourceKey, StringComparison.Ordinal))
+            resource.Height == expectedSourceCount * expectedHistoryCapacity &&
+            lowering.Width * resource.Height == upload.Float32Data.Count &&
+            matchingLowerings.All(item =>
+                item.ColumnCount == expectedHistoryCount &&
+                item.ColumnStride == expectedSourceCount &&
+                item.RollingModulo == resource.Height &&
+                Math.Abs(item.ColumnStep.Z - 0.1f) < 0.0001f &&
+                string.Equals(item.RampResourceKey, ramp.ResourceKey, StringComparison.Ordinal) &&
+                matchingClaims.Any(claim =>
+                    string.Equals(claim.ClaimKey, item.ClaimKey, StringComparison.Ordinal) &&
+                    string.Equals(claim.PayloadHandle, resource.ResourceKey, StringComparison.Ordinal))) &&
+            plannedTubePackets.Length == matchingLowerings.Length
                 ? 0
                 : 1;
     }

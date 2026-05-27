@@ -147,6 +147,12 @@ a named invariant that the native runtime cannot protect yet.
   resource upload plus planned TubeField packet while legacy spline and buffer
   field inputs stay empty. The same runtime path declares the local blackbody
   ramp PNG as a GPU-resident Texture2D resource and binds it by resource key.
+  The uploaded spectrum resource is a rolling column matrix now: physical
+  columns are flattened `(history age, source lane)` pairs, and Mimir emits one
+  Tube claim/lowering per source with `ColumnStride=sourceCount` so each lane
+  traverses its own age trail at `z = age * 0.1`. The resource uses a fixed
+  history-column capacity so frame-to-frame content versions do not resize the
+  GPU buffer while the history fills.
 - `MimirFensalirFieldLowering` now emits `AquariumFieldResourceDeclaration`
   rows for live native/GPU payload views. Observation claims reference
   `mimir:resource:*` keys, and Fensalir validation/planning can reject or defer

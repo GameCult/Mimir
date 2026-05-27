@@ -234,7 +234,13 @@ GPU buffer contents rather than an empty declaration. The runtime-level receipt
 is `Mimir.BufferSmoke --mimir-spectrum-upload-smoke`: it boots Mimir's frame
 path, advances spectrum analysis, and verifies one Float32 upload, one planned
 TubeField packet, a resource-bound local blackbody ramp Texture2D, and no live
-legacy spline/buffer-field dashboard input.
+legacy spline/buffer-field dashboard input. The runtime resource is no longer a
+latest-frame row dump: it is a rolling column matrix where physical columns are
+flattened `(history age, source lane)` pairs. Mimir emits one TubeField claim
+per source lane, using `ColumnStride=sourceCount` and `ColumnStep.z=0.1` so
+each source renders its own age trail from newest to older samples. The
+resource declaration keeps a fixed history capacity; new frames update content
+version and upload data, but they do not grow the GPU buffer as the trail fills.
 
 ### 3. Calibration Constraint
 

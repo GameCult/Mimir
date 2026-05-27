@@ -362,6 +362,12 @@ accepted_design:
     The runtime spectrum path also declares the local blackbody PNG as a
     GPU-resident Texture2D field resource and binds the TubeField material by
     `RampResourceKey`.
+    Runtime spectrum columns now represent flattened `(history age, source
+    lane)` pairs. Mimir emits one TubeField claim/lowering per source, each
+    using `ColumnStride=sourceCount` through the shared Float32 resource so the
+    generated geometry renders a true age trail at `z = age * 0.1`. The
+    spectrum resource advertises a fixed history capacity so frame content
+    versions do not resize the GPU buffer while the rolling trail fills.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
