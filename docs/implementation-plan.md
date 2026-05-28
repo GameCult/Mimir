@@ -267,8 +267,10 @@ a named invariant that the native runtime cannot protect yet.
 - Mimir's active proof path no longer uses the direct
   `AquariumAcousticFieldFrame` builder either. Sync states lower into
   FieldEvidence calibration constraints through `MapCalibrationConstraints`,
-  and `--perfect-machine-profile-smoke` / `--perfect-machine-lowering-benchmark`
-  now measure the same claim/defer path rather than a parallel acoustic packet.
+  and Fensalir selects audio-path `Phase` and `Confidence` claims as
+  `DebugOverlay` backend packets. `--perfect-machine-profile-smoke` now proves
+  the acoustic constraint is planned through FieldEvidence instead of deferred
+  through a parallel acoustic packet.
 - Fensalir now owns the first in-process D3D12 field resource resolver cut:
   shared structured/curve buffer resources import/alias GPU-resident handles,
   and Fensalir-owned resources allocate GPU slots only when Fensalir is the

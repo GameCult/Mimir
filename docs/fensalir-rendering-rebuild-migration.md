@@ -407,8 +407,12 @@ Acceptance:
   constraints instead of direct `AquariumAcousticFieldFrame` packets;
 - Fensalir can inspect acoustic confidence and constraints without receiving
   raw PCM as production truth;
-- no selected acoustic visualization/fusion lowering exists yet, so those
-  claims defer until Fensalir owns that lowering;
+- selected bridge lowering now exists for audio-path `Phase` and `Confidence`
+  claims: Fensalir plans those constraints as `DebugOverlay` backend packets so
+  calibration timing/path evidence is visible through the FieldEvidence
+  authority instead of a parallel acoustic frame;
+- acoustic source candidates, confidence volumes, and cross-modal fusion remain
+  Phase 5 work;
 - Faust/native DSP remains the actuator for sample movement.
 
 ### Phase 5: Sensor Fusion Claims

@@ -2234,8 +2234,8 @@ static int RunPerfectMachineProfileSmoke()
         cameraPlan.Packets.Count == 0 &&
         cameraPlan.DeferredRequests.Count == 2 &&
         acousticFieldEvidence.Claims.Count == 1 &&
-        acousticPlan.Packets.Count == 0 &&
-        acousticPlan.DeferredRequests.Count == 1 &&
+        acousticPlan.Packets.Count == 1 &&
+        acousticPlan.DeferredRequests.Count == 0 &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&

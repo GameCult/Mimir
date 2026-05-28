@@ -458,8 +458,11 @@ Mimir's typed surface-intent lowering now emits the matching TubeSpline
 lowering for audio spectrum/waveform Tube claims.
 Mimir's active proof path also no longer uses the direct
 `AquariumAcousticFieldFrame` builder: sync states lower into FieldEvidence
-calibration constraints and remain deferred until Fensalir owns a selected
-acoustic visualization/fusion lowering.
+calibration constraints. Fensalir now selects audio-path `Phase` and
+`Confidence` claims as `DebugOverlay` backend packets, so calibration
+timing/path evidence can be inspected through the same FieldEvidence authority
+while true acoustic source candidates and confidence volumes remain later
+fusion work.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

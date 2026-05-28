@@ -495,8 +495,10 @@ accepted_design:
     subdivisions so Fensalir's TubeField truncation report has a direct cost
     lever. Mimir's active proof path no longer uses the direct
     `AquariumAcousticFieldFrame` builder: sync states lower into FieldEvidence
-    calibration constraints and remain deferred until Fensalir owns a selected
-    acoustic visualization/fusion lowering.
+    calibration constraints. Fensalir now selects AudioPath Phase/Confidence
+    claims as DebugOverlay backend packets, so acoustic calibration evidence is
+    planned and inspectable through the FieldEvidence authority. Acoustic source
+    candidates and confidence volumes remain Phase 5 fusion work.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module
