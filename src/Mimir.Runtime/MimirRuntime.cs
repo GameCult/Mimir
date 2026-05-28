@@ -55,6 +55,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly float calibrationGain;
     private readonly float watermarkGain;
     private readonly bool syntheticSpectrumPreview;
+    private readonly bool syntheticSingleTubePreview;
     private readonly MimirBioacousticContestantRenderer? complexContourWitness;
     private int lastPollCount;
     private float runtimeSeconds;
@@ -133,6 +134,16 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
         syntheticSpectrumPreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW"));
+        syntheticSingleTubePreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SINGLE_TUBE_PREVIEW"));
+        if (syntheticSingleTubePreview)
+        {
+            GraphicsSettings = new GraphicsSettings(
+                RenderDebugMode: 0,
+                SceneExposure: 1.0f,
+                BloomIntensity: 0.075f,
+                BloomVeilIntensity: 0.0f);
+        }
+
         obsStemPublisher = CreateObsStemPublisher();
         complexContourWitness = settings.Audio.EnableComplexContourRuntime
             ? new MimirBioacousticContestantRenderer(
@@ -168,15 +179,21 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
         var fieldEvidenceFrame = BuildFieldEvidenceFrame();
         var windowCount = Math.Max(1, spectrumHistory.Count);
-        var (splineMin, splineMax) = SpectrumSplineAabb(channelCount, windowCount);
+        var (splineMin, splineMax) = syntheticSingleTubePreview
+            ? (new Vector3(-5.76643f, -1.0f, 0.0f), new Vector3(5.76643f, 1.0f, 0.0f))
+            : SpectrumSplineAabb(channelCount, windowCount);
         var cameraTarget = (splineMin + splineMax) * 0.5f;
-        var cameraPosition = SpectrumCameraPosition(
-            channelCount,
-            windowCount,
-            cameraTarget,
-            spectrumCameraDistanceMultiplier,
-            spectrumCameraAngleDegrees);
-        var cameraFrustum = FitSpectrumCameraFrustum(splineMin, splineMax, cameraPosition, cameraTarget);
+        var cameraPosition = syntheticSingleTubePreview
+            ? new Vector3(0.0f, 0.0f, -18.367355f)
+            : SpectrumCameraPosition(
+                channelCount,
+                windowCount,
+                cameraTarget,
+                spectrumCameraDistanceMultiplier,
+                spectrumCameraAngleDegrees);
+        var cameraFrustum = syntheticSingleTubePreview
+            ? new AquariumCameraFrustum(-0.036f, 0.036f, -0.02025f, 0.02025f, 0.1f, 100.0f)
+            : FitSpectrumCameraFrustum(splineMin, splineMax, cameraPosition, cameraTarget);
         lastSpectrumFrustum = cameraFrustum;
         lastSpectrumCameraPosition = cameraPosition;
         lastSpectrumCameraTarget = cameraTarget;
@@ -190,6 +207,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             new AquariumSceneState
             {
                 TraceHeightFieldSurface = false,
+                UseStudioBackground = !syntheticSingleTubePreview,
                 UseStarfieldBackground = obsProofVisualEnabled,
                 SdfObjects = obsProofVisualEnabled ? BuildObsProofSdfObjects(runtimeSeconds) : [],
                 SdfLights = obsProofVisualEnabled ? BuildObsProofSdfLights(runtimeSeconds) : [],
@@ -346,7 +364,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             .Max());
         var historyCount = historyFrames.Length;
         var sourceCount = sourceIds.Length;
-        var activeColumnCount = checked(sourceCount * historyCount);
+        var renderedHistoryCount = syntheticSingleTubePreview ? 1 : historyCount;
+        var activeColumnCount = checked(sourceCount * renderedHistoryCount);
         var resourceColumnCapacity = checked(spectrumSourceLaneCapacity * SpectrumHistoryWindowCount);
         var newestHistorySlot = PositiveModulo(-historyFrames[0].Sequence, SpectrumHistoryWindowCount);
         var rollingOffset = checked(newestHistorySlot * spectrumSourceLaneCapacity);
@@ -413,7 +432,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             SpectrumRampResourceKey,
             SpectrumRampTexturePath,
             version: 1);
-        var axisStepX = width > 1 ? 10.0f / (width - 1) : 10.0f;
+        var axisLength = syntheticSingleTubePreview ? 11.53286f : 10.0f;
+        var axisStepX = width > 1 ? axisLength / (width - 1) : axisLength;
         var claims = new List<AquariumFieldClaim>(sourceCount);
         var candidates = new List<AquariumFieldCandidate>(sourceCount);
         var lowerings = new List<AquariumFieldTubeSplineLowering>(sourceCount);
@@ -428,7 +448,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             };
             var sourceProposal = proposal with
             {
-                RepresentedCandidateCount = historyCount,
+                RepresentedCandidateCount = renderedHistoryCount,
                 Seed = unchecked(proposal.Seed + (uint)sourceIndex),
             };
             claims.Add(new AquariumFieldClaim(
@@ -457,25 +477,27 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 Height: resourceColumnCapacity,
                 StrideBytes: sizeof(float),
                 FirstColumn: sourceIndex,
-                ColumnCount: historyCount,
+                ColumnCount: renderedHistoryCount,
                 ColumnStride: spectrumSourceLaneCapacity,
                 RollingModulo: resourceColumnCapacity,
                 RollingOffset: rollingOffset,
-                Origin: new Vector3(-5.0f, sourceIndex * SpectrumChannelSeparation, 0.0f),
+                Origin: syntheticSingleTubePreview
+                    ? new Vector3(-axisLength * 0.5f, 0.0f, 0.0f)
+                    : new Vector3(-5.0f, sourceIndex * SpectrumChannelSeparation, 0.0f),
                 AxisStep: new Vector3(axisStepX, 0.0f, 0.0f),
                 ColumnStep: new Vector3(0.0f, 0.0f, SpectrumWindowDepthSeparation),
                 AmplitudePower: 2.0f,
-                AmplitudeScale: SpectrumAmplitudeHeight,
+                AmplitudeScale: syntheticSingleTubePreview ? 0.0f : SpectrumAmplitudeHeight,
                 NormalizeMin: 0.0f,
                 NormalizeMax: 1.0f,
-                BaseRadius: 0.012f,
-                RadiusScale: 0.030f,
-                Alpha: 0.92f,
-                Feather: 0.20f,
+                BaseRadius: syntheticSingleTubePreview ? 1.0f : 0.012f,
+                RadiusScale: syntheticSingleTubePreview ? 0.0f : 0.030f,
+                Alpha: 1.0f,
+                Feather: syntheticSingleTubePreview ? 0.02f : 0.20f,
                 RampTexturePath: SpectrumRampTexturePath,
                 RampResourceKey: SpectrumRampResourceKey,
-                EmissionScale: 10.0f,
-                CatmullRomSubdivisions: spectrumTubeSubdivisions).Normalized());
+                EmissionScale: syntheticSingleTubePreview ? 16.0f : 10.0f,
+                CatmullRomSubdivisions: syntheticSingleTubePreview ? 1 : spectrumTubeSubdivisions).Normalized());
         }
 
         return new AquariumFieldEvidenceFrame
@@ -1097,7 +1119,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
         var stopwatch = Stopwatch.StartNew();
         lastAudioSpectra = spectrumAnalyzer.Analyze(synchronization.Buffers.Buffers, audioSyncSettings.ReferenceSourceId);
-        if (lastAudioSpectra.Count == 0 && syntheticSpectrumPreview)
+        if (lastAudioSpectra.Count == 0 && (syntheticSpectrumPreview || syntheticSingleTubePreview))
         {
             lastAudioSpectra = GenerateSyntheticSpectrumPreview(runtimeSeconds);
         }
@@ -1377,6 +1399,27 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
     private static IReadOnlyList<MimirAudioSpectrumSnapshot> GenerateSyntheticSpectrumPreview(float timeSeconds)
     {
+        if (IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SINGLE_TUBE_PREVIEW")))
+        {
+            const int singleTubeBandCount = 2;
+            var bands = Enumerable.Repeat(-40.0, singleTubeBandCount).ToArray();
+            return
+            [
+                new MimirAudioSpectrumSnapshot(
+                    "preview-tube",
+                    "Single Tube Proof",
+                    192000,
+                    8192,
+                    8192,
+                    0.24,
+                    0.56,
+                    -78.0,
+                    [],
+                    bands,
+                    (long)(timeSeconds * 1_000_000_000.0)),
+            ];
+        }
+
         const int bandCount = 48;
         var snapshots = new MimirAudioSpectrumSnapshot[4];
         for (var channel = 0; channel < snapshots.Length; channel++)
