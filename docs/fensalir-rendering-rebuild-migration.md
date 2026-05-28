@@ -437,18 +437,26 @@ Acceptance:
 
 ### Phase 6: Program Output Receipts
 
-Once field identity is coherent, wire final program output:
+Field identity now reaches the OBS-facing program boundary:
 
-- D3D12 shared texture or Spout for OBS/EVE surfaces;
-- separately controllable Faust/native DSP stems;
-- telemetry proving timing, evidence confidence, dropped/late observations, and
-  current selected cuts.
+- Fensalir publishes the completed program surface through named shared D3D12
+  textures and `Global\MimirFensalirProgramFence`;
+- `Mimir Program Texture` opens those textures in OBS and performs the explicit
+  D3D12-to-libobs-D3D11 GPU copy without CPU readback or Spout2;
+- optional texture rings and `Global\MimirObsProgramConsumerFence` prevent blind
+  producer/consumer reuse;
+- `Mimir Audio Stem` receives separately controllable Faust/native DSP stems
+  from `Local\MimirObsStemBus`;
+- telemetry and receipts record timing, evidence confidence, dropped/late
+  observations, and current selected cuts.
 
 Acceptance:
 
-- OBS sees final program surfaces/stems only;
+- OBS sees final program surfaces/stems through the Mimir OBS plugin;
 - raw feeds remain debug inputs, not synchronization truth;
-- a recorded receipt can explain how each visible surface was derived.
+- recorded receipts explain the stem path, installed OBS plugin, live program
+  texture proof, optional ring proof, dedicated producer fence proof, and
+  two-way consumer fence proof.
 
 ## Verification Matrix
 

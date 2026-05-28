@@ -277,6 +277,11 @@ a named invariant that the native runtime cannot protect yet.
   It also proves a synthetic multi-camera marker candidate using the same
   FieldEvidence authority: deterministic marker features plan as
   `DebugOverlay` packets while ambiguous raw camera features still defer.
+  Phase 6 program-output receipts are also structurally complete: Fensalir
+  publishes the final program surface through named shared D3D12 texture/fence
+  resources, the OBS plugin consumes that surface with an explicit D3D12-to-
+  libobs-D3D11 GPU copy, optional producer/consumer fences prevent blind ring
+  reuse, and audio stems cross through the fixed OBS stem shared-memory ABI.
 - Fensalir now owns the first in-process D3D12 field resource resolver cut:
   shared structured/curve buffer resources import/alias GPU-resident handles,
   and Fensalir-owned resources allocate GPU slots only when Fensalir is the

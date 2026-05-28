@@ -361,6 +361,11 @@ the latest completed slot from the program-output fence value. OBS can publish
 publication instead of reusing a ring slot OBS has not acknowledged.
 `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin-template SDK
 under `artifacts/obs-sdk/` and builds the plugin DLL locally.
+The rendering migration's program-output receipt phase is structurally
+complete: OBS consumes final Mimir/Fensalir surfaces and stems through the
+native plugin, raw feeds remain debug inputs, and the ledger records the live
+program texture, texture ring, dedicated producer fence, and consumer-fence
+proofs.
 
 ## Visual Fusion
 
