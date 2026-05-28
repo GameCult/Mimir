@@ -317,6 +317,14 @@ accepted_design:
       zero contour hits on both physical inputs, so the current physical mic
       proof is blocked on input signal/gain/routing/source placement before
       receiver logic changes.
+      After the mics were armed, `complex-contour-live-20260528-080604.md`
+      proved both physical inputs were alive but was routed to headphones by
+      mistake. The monitor-routed
+      `complex-contour-live-20260528-080727.md` is the first credible fresh
+      physical contour proof: loopback is -0.014 us at 0.971 confidence,
+      `asio-ch0` lands -0.410 us from its stored path seed at 0.524 confidence,
+      and `asio-ch1` lands -2.467 us at 0.363 confidence. Repeat captures are
+      needed before channel-model updates or actuator authority.
       `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
       current four-case replay receipt.
     Acoustic robustness remains open.

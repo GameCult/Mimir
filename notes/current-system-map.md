@@ -303,6 +303,14 @@ with `0.956` confidence and 257 direct hits. Physical inputs are not currently
 usable timing signals: `asio-ch0` and `asio-ch1` produced zero contour hits
 against 1480 reference hits, with very low RMS. The next physical proof is
 blocked on mic gain/routing/source placement before receiver logic changes.
+After arming both mics, `complex-contour-live-20260528-080604.md` showed both
+physical inputs were alive but was accidentally routed to headphones. The
+monitor-routed proof `complex-contour-live-20260528-080727.md` is the first
+credible fresh physical contour receipt: loopback is `-0.014 us` at 0.971
+confidence, `asio-ch0` lands `-0.410 us` from its stored path seed at 0.524
+confidence with 24 direct hits, and `asio-ch1` lands `-2.467 us` at 0.363
+confidence with 14 direct hits. Repeat captures are needed before updating the
+channel model or letting physical mic reports drive actuator authority.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000
