@@ -639,7 +639,7 @@ static int RunFensalirFieldDslResourceSmoke()
         NativeHandleKind: "native-ring");
     const string source = """
 resource id=spectrum key=mimir:resource:native-ring:1234
-texture2d id=blackbody key=aquarium:resource:ramp:blackbody path=D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png format=Rgba8Unorm
+texture2d id=blackbody key=aquarium:resource:ramp:blackbody path=E:\Projects\Aetheria\Assets\Resources\Gradients\blackbody.png format=Rgba8Unorm
 domain id=mimir:domain:spectrum kind=RollingBuffer min=0,0,0 max=192,1,5 owner=Mimir.Runtime
 tubespline id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum confidence=0.94 radius=0.02 support=0.02,0.02,5 width=192 height=1 stride=4 columns=1 ramp=blackbody
 """;
@@ -1109,7 +1109,7 @@ static int RunMimirSpectrumUploadSmoke()
             ramp.Residency == AquariumFieldResourceResidency.GpuResident &&
             ramp.Access == AquariumFieldShaderAccess.ShaderResource &&
             string.Equals(ramp.Format, "Rgba8Unorm", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(ramp.SourceUri, @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(ramp.SourceUri, @"E:\Projects\Aetheria\Assets\Resources\Gradients\blackbody.png", StringComparison.OrdinalIgnoreCase) &&
             resource.Height == expectedSourceLaneCapacity * expectedHistoryCapacity &&
             matchingLowerings.All(item =>
                 item.ColumnCount == expectedHistoryCount &&

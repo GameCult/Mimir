@@ -35,7 +35,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private const int DefaultSpectrumSourceLaneCapacity = 8;
     private const string SpectrumFieldResourceKey = "mimir:resource:spectrum:field-upload";
     private const string SpectrumRampResourceKey = "aquarium:resource:ramp:blackbody";
-    private const string SpectrumRampTexturePath = @"D:\WIP4\Projects\Aetheria\Assets\Resources\Ramps\blackbody.png";
+    private const string SpectrumRampTexturePath = @"E:\Projects\Aetheria\Assets\Resources\Gradients\blackbody.png";
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirFensalirFieldLowering fieldLowering;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
