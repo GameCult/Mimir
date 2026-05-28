@@ -463,7 +463,12 @@ accepted_design:
     TubeField writes stable field ids, real tube normals, coverage/confidence,
     and domain-validity guide data into the scene metadata/control/reservoir
     guide targets consumed by post resolve for spatiotemporal history
-    validation.
+    validation. TubeField render now binds the engine blue-noise texture,
+    jitters its tube-local SDF sample inside the proxy fragment shader, and
+    uses scene depth so opaque generated field geometry resolves by nearest
+    surface rather than draw order. The current visual still exposes generated
+    segment structure; it is the bounded generated-mesh/reservoir bridge, not
+    yet the final smooth tube marcher.
     The generated-mesh DrawIndexed indirect command signature is shared ABI now;
     TubeField only owns the argument buffer it emits. TubeField expansion is now
     gated by the selected backend packet plan, so lowering metadata cannot

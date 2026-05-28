@@ -321,7 +321,13 @@ a named invariant that the native runtime cannot protect yet.
   not expanded. TubeField now writes stable field ids, real tube normals,
   coverage/confidence, and domain-validity guide data into the same scene
   metadata/control/reservoir-guide targets that post resolve uses for
-  spatiotemporal history validation. Fensalir validation also rejects
+  spatiotemporal history validation. TubeField render now binds the engine
+  blue-noise texture and jitters its tube-local SDF sample inside the proxy
+  fragment shader, then lets the scene depth buffer resolve opaque generated
+  field geometry by nearest surface instead of draw order. The visual remains a
+  generated proxy bridge and still exposes segment structure; a smoother
+  tube-specific marcher is a later renderer-quality cut. Fensalir validation
+  also rejects
   TubeSpline lowering metadata
   whose claim is not Tube-encoded or whose resource differs from the claim
   payload. Mimir's typed surface-intent lowering now emits the matching

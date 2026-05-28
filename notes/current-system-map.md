@@ -505,6 +505,12 @@ data into a Fensalir-owned GPU structured buffer before TubeField compute reads
 it. TubeField writes stable field ids, real tube normals, coverage/confidence,
 and domain-validity guide data into the same scene metadata/control/reservoir
 guide targets consumed by post resolve for spatiotemporal history validation.
+TubeField render also binds the engine blue-noise texture, jitters the
+tube-local SDF sample in the proxy fragment shader, and uses scene depth so
+opaque field geometry resolves by nearest generated surface instead of draw
+order. The live image still exposes generated segment structure; this is the
+current bounded generated-mesh/reservoir bridge, not the final smooth tube
+marcher.
 `Mimir.BufferSmoke --mimir-spectrum-upload-smoke` verifies this through the
 actual `MimirRuntime` frame path and confirms the legacy direct spline and
 buffer-field dashboard inputs are empty. The same path declares the local

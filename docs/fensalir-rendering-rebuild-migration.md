@@ -245,7 +245,13 @@ Fensalir owns structured-buffer slot validity and clamps TubeField dispatch so
 invalid older slots do not reach shader sampling after allocation, reset, or
 partial update. TubeField metadata now carries stable claim-derived field ids
 inside the TubeField family range, so temporal/reprojection/reservoir consumers
-can distinguish source-lane claims. Mimir exposes
+can distinguish source-lane claims. TubeField render now binds the engine
+blue-noise texture and jitters the tube-local SDF sample inside the proxy
+fragment shader before writing coverage, normals, and reservoir guide data; the
+same pass also uses the scene depth buffer so opaque generated field geometry is
+resolved by nearest surface rather than submission order. The current generated
+proxy visual still exposes segment structure and is not yet the final smooth
+tube marcher. Mimir exposes
 `MIMIR_SPECTRUM_SOURCE_LANES` as the source-lane capacity lever and
 `MIMIR_SPECTRUM_TUBE_SUBDIVISIONS` as the geometry cost lever for responding to
 Fensalir's requested/dispatched/truncated/invalid TubeField budget report.
