@@ -460,6 +460,10 @@ accepted_design:
     TubeField now renders through the first explicit pipeline-private generated
     mesh binding: compute owns the private vertex/index/indirect layout, and
     render binds that generated mesh before applying TubeField material state.
+    TubeField writes stable field ids, real tube normals, coverage/confidence,
+    and domain-validity guide data into the scene metadata/control/reservoir
+    guide targets consumed by post resolve for spatiotemporal history
+    validation.
     The generated-mesh DrawIndexed indirect command signature is shared ABI now;
     TubeField only owns the argument buffer it emits. TubeField expansion is now
     gated by the selected backend packet plan, so lowering metadata cannot

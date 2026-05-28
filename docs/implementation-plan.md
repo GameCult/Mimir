@@ -318,7 +318,11 @@ a named invariant that the native runtime cannot protect yet.
   generated lowerings can reuse the same draw ABI with their own producer
   buffers and material bindings. TubeField dispatch now obeys the selected
   backend packet plan; unplanned `TubeSplineLowering` records are counted but
-  not expanded. Fensalir validation also rejects TubeSpline lowering metadata
+  not expanded. TubeField now writes stable field ids, real tube normals,
+  coverage/confidence, and domain-validity guide data into the same scene
+  metadata/control/reservoir-guide targets that post resolve uses for
+  spatiotemporal history validation. Fensalir validation also rejects
+  TubeSpline lowering metadata
   whose claim is not Tube-encoded or whose resource differs from the claim
   payload. Mimir's typed surface-intent lowering now emits the matching
   `AquariumFieldTubeSplineLowering` for audio spectrum/waveform Tube claims, so
