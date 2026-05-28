@@ -331,8 +331,10 @@ a named invariant that the native runtime cannot protect yet.
   spatiotemporal reconstruction. The shared field candidate inlet now keeps four
   fixed candidate slots per pixel, so TubeField and later producers compete
   through the same resolver-owned budget instead of naming a private winner.
-  Reservoir presentation history is now a ping-ponged structured buffer with
-  the same four rows per pixel, not a set of pixel-history MRTs.
+  Reservoir history update is now a shared Fensalir compute pass over a
+  ping-ponged structured buffer with the same four rows per pixel; it emits the
+  resolved HDR field texture that bloom and presentation consume. The
+  presentation shader is no longer a hidden history/TAA owner.
   TubeField render now binds the engine
   blue-noise texture and jitters its tube-local SDF sample inside the proxy
   fragment shader, then lets the scene depth buffer resolve opaque generated

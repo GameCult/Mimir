@@ -465,9 +465,11 @@ accepted_design:
     guide targets consumed by reservoir resolve for spatiotemporal
     reconstruction. The shared field candidate inlet now keeps four fixed slots
     per pixel, so producer-specific paths compete inside a resolver-owned budget
-    instead of choosing private winners. Reservoir presentation history is now a
-    ping-ponged structured buffer with the same four rows per pixel, not
-    pixel-history MRTs. TubeField render now binds the engine blue-noise texture,
+    instead of choosing private winners. Reservoir history update is now a
+    shared Fensalir compute pass over a ping-ponged structured buffer with the
+    same four rows per pixel; it emits the resolved HDR field texture that
+    bloom and presentation consume. The presentation shader is no longer a
+    hidden history/TAA owner. TubeField render now binds the engine blue-noise texture,
     jitters its tube-local SDF sample inside the proxy fragment shader, and
     uses scene depth so opaque generated field geometry resolves by nearest
     surface rather than draw order. The current visual still exposes generated

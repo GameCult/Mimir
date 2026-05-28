@@ -505,6 +505,10 @@ data into a Fensalir-owned GPU structured buffer before TubeField compute reads
 it. TubeField writes stable field ids, real tube normals, coverage/confidence,
 and domain-validity guide data into the same scene metadata/control/reservoir
 guide targets consumed by reservoir resolve for spatiotemporal reconstruction.
+Fensalir's shared reservoir history update now runs as a compute pass over
+four structured rows per pixel and emits the resolved HDR field texture for
+bloom/presentation, so the presentation shader is no longer a hidden history
+owner.
 TubeField render also binds the engine blue-noise texture, jitters the
 tube-local SDF sample in the proxy fragment shader, and uses scene depth so
 opaque field geometry resolves by nearest generated surface instead of draw
