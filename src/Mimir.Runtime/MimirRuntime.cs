@@ -493,7 +493,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 Feather: syntheticSingleTubePreview ? 0.02f : 0.20f,
                 RampTexturePath: SpectrumRampTexturePath,
                 RampResourceKey: SpectrumRampResourceKey,
-                EmissionScale: syntheticSingleTubePreview ? 16.0f : 10.0f,
+                EmissionScale: syntheticSingleTubePreview ? 16.0f : 40.0f,
                 CatmullRomSubdivisions: syntheticSingleTubePreview ? 1 : spectrumTubeSubdivisions).Normalized());
         }
 
