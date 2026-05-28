@@ -328,7 +328,10 @@ a named invariant that the native runtime cannot protect yet.
   not expanded. TubeField now writes stable field ids, real tube normals,
   coverage/confidence, and domain-validity guide data into the same scene
   metadata/control/reservoir-guide targets that reservoir resolve uses for
-  spatiotemporal reconstruction. TubeField render now binds the engine
+  spatiotemporal reconstruction. The shared field candidate inlet now keeps four
+  fixed candidate slots per pixel, so TubeField and later producers compete
+  through the same resolver-owned budget instead of naming a private winner.
+  TubeField render now binds the engine
   blue-noise texture and jitters its tube-local SDF sample inside the proxy
   fragment shader, then lets the scene depth buffer resolve opaque generated
   field geometry by nearest surface instead of draw order. The visual remains a
