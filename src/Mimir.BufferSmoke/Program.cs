@@ -2176,6 +2176,22 @@ static int RunPerfectMachineProfileSmoke()
         [
             new MimirPairDelayObservation("mic-left", "mic-right", 0.0, 0.95)
         ]);
+    var acousticSourceFrame = lowerer.BuildAcousticSourceCandidateFrame(
+        localization is null
+            ? []
+            :
+            [
+                new MimirAcousticSourceFieldCandidate(
+                    "synthetic-speaker",
+                    "synthetic-tdoa-calibration",
+                    "synthetic-audio-source",
+                    "mimir-srp-phat-grid",
+                    localization.PositionMeters,
+                    MimirAcousticLocalizationConfigurations.SrpPhatGrid.TargetPositionUncertaintyMeters,
+                    localization.Score,
+                    1_000_000_000L)
+            ]);
+    var acousticSourcePlan = AquariumFieldLoweringPlanner.Plan(acousticSourceFrame);
     var authority = new MimirAuthorityPolicyEvaluator().Evaluate(new MimirAuthorityEvaluationInput(
         "raven-scarlett-witness",
         new HashSet<string>(["known-node", "matching-codebook", "clock-fit-confidence", "response-profile"], StringComparer.Ordinal),
@@ -2201,7 +2217,7 @@ static int RunPerfectMachineProfileSmoke()
     Console.WriteLine(
         $"perfect-machine-fensalir cameraResources={cameraFieldFrame.Resources.Count} cameraClaims={cameraFieldFrame.Claims.Count} cameraPlanned={cameraPlan.Packets.Count} cameraDeferred={cameraPlan.DeferredRequests.Count} acousticClaims={acousticFieldEvidence.Claims.Count} acousticPlanned={acousticPlan.Packets.Count} acousticDeferred={acousticPlan.DeferredRequests.Count}");
     Console.WriteLine(
-        $"perfect-machine-localization candidates={localizationGrid.Count} best=({localization?.PositionMeters.X ?? float.NaN:0.000},{localization?.PositionMeters.Y ?? float.NaN:0.000},{localization?.PositionMeters.Z ?? float.NaN:0.000}) score={localization?.Score ?? 0.0:0.000}");
+        $"perfect-machine-localization candidates={localizationGrid.Count} best=({localization?.PositionMeters.X ?? float.NaN:0.000},{localization?.PositionMeters.Y ?? float.NaN:0.000},{localization?.PositionMeters.Z ?? float.NaN:0.000}) score={localization?.Score ?? 0.0:0.000} sourceClaims={acousticSourceFrame.Claims.Count} sourcePlanned={acousticSourcePlan.Packets.Count} sourceDeferred={acousticSourcePlan.DeferredRequests.Count}");
     Console.WriteLine(
         $"perfect-machine-authority appliesTo=raven-scarlett-witness decision={authority.Decision} rule={authority.RuleId}");
     Console.WriteLine(
@@ -2236,6 +2252,11 @@ static int RunPerfectMachineProfileSmoke()
         acousticFieldEvidence.Claims.Count == 1 &&
         acousticPlan.Packets.Count == 1 &&
         acousticPlan.DeferredRequests.Count == 0 &&
+        acousticSourceFrame.Claims.Count == 1 &&
+        acousticSourcePlan.Packets.Count == 1 &&
+        acousticSourcePlan.DeferredRequests.Count == 0 &&
+        acousticSourceFrame.Claims[0].ClaimKey.Contains("synthetic-tdoa-calibration", StringComparison.Ordinal) &&
+        acousticSourceFrame.Claims[0].ClaimKey.Contains("synthetic-audio-source", StringComparison.Ordinal) &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&

@@ -140,6 +140,16 @@ public sealed record MimirCalibrationConstraint(
     string UsableBandMask,
     double Confidence);
 
+public sealed record MimirAcousticSourceFieldCandidate(
+    string CandidateKey,
+    string CalibrationId,
+    string SourceId,
+    string ProducerKey,
+    System.Numerics.Vector3 PositionMeters,
+    double RadiusMeters,
+    double Confidence,
+    long ObservedTimeNs);
+
 public readonly record struct MimirSurfaceAxes(
     string X,
     string Y,

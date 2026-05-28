@@ -498,7 +498,12 @@ accepted_design:
     calibration constraints. Fensalir now selects AudioPath Phase/Confidence
     claims as DebugOverlay backend packets, so acoustic calibration evidence is
     planned and inspectable through the FieldEvidence authority. Acoustic source
-    candidates and confidence volumes remain Phase 5 fusion work.
+    candidates and confidence volumes remain Phase 5 fusion work. The first
+    synthetic acoustic source candidate proof now lowers an SRP/PHAT-style
+    localization result with calibration/source identity and a world-space
+    confidence envelope, and Fensalir plans it as a FieldEvidence DebugOverlay
+    packet. Live room geometry still needs an explicit measured coordinate
+    frame before those candidates become runtime truth.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

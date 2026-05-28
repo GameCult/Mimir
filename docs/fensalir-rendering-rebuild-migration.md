@@ -427,7 +427,11 @@ Let Fensalir fuse Mimir observations into field claims:
 Acceptance:
 
 - one synthetic multi-camera marker creates a stable world-space claim;
-- one synthetic audio source creates a localizable confidence field;
+- implemented synthetic audio source proof: Mimir lowers an SRP/PHAT-style
+  source candidate with calibration/source identity and a world-space confidence
+  envelope, and Fensalir plans it as a `DebugOverlay` FieldEvidence packet;
+- next remaining acceptance item: one synthetic multi-camera marker creates a
+  stable world-space claim;
 - claims can be inspected by source observation and calibration id.
 
 ### Phase 6: Program Output Receipts

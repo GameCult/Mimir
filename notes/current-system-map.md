@@ -462,7 +462,12 @@ calibration constraints. Fensalir now selects audio-path `Phase` and
 `Confidence` claims as `DebugOverlay` backend packets, so calibration
 timing/path evidence can be inspected through the same FieldEvidence authority
 while true acoustic source candidates and confidence volumes remain later
-fusion work.
+fusion work. The first synthetic acoustic source candidate proof now exists:
+Mimir lowers an SRP/PHAT-style localized source with calibration/source
+identity and a world-space confidence envelope, and Fensalir plans it as a
+FieldEvidence `DebugOverlay` packet. Live room geometry must still come from an
+explicit measured coordinate frame, not inferred from the recent two-distance
+monitor notes.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

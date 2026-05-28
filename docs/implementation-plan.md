@@ -270,7 +270,10 @@ a named invariant that the native runtime cannot protect yet.
   and Fensalir selects audio-path `Phase` and `Confidence` claims as
   `DebugOverlay` backend packets. `--perfect-machine-profile-smoke` now proves
   the acoustic constraint is planned through FieldEvidence instead of deferred
-  through a parallel acoustic packet.
+  through a parallel acoustic packet. The same smoke now also proves the first
+  Phase 5 synthetic audio-source candidate: an SRP/PHAT-style localization
+  result is lowered with calibration/source identity and a world-space
+  confidence envelope, then planned as a FieldEvidence `DebugOverlay` packet.
 - Fensalir now owns the first in-process D3D12 field resource resolver cut:
   shared structured/curve buffer resources import/alias GPU-resident handles,
   and Fensalir-owned resources allocate GPU slots only when Fensalir is the

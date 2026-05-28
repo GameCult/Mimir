@@ -114,6 +114,39 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         return BuildFieldEvidenceFrame(windows, observations, [], intents);
     }
 
+    public AquariumFieldEvidenceFrame BuildAcousticSourceCandidateFrame(
+        IEnumerable<MimirAcousticSourceFieldCandidate> sourceCandidates)
+    {
+        var domains = new List<AquariumFieldDomain>();
+        var claims = new List<AquariumFieldClaim>();
+        var candidates = new List<AquariumFieldCandidate>();
+        var seenDomains = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var sourceCandidate in sourceCandidates)
+        {
+            if (string.IsNullOrWhiteSpace(sourceCandidate.CandidateKey))
+            {
+                continue;
+            }
+
+            var domain = DomainForAcousticSourceCandidate(sourceCandidate);
+            AddDomain(domains, seenDomains, domain);
+
+            var claim = ClaimForAcousticSourceCandidate(sourceCandidate, domain.DomainKey);
+            claims.Add(claim);
+            candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+        }
+
+        return new AquariumFieldEvidenceFrame
+        {
+            Domains = domains,
+            Claims = claims,
+            Candidates = candidates,
+            AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
+            PresentationDelaySeconds = (float)options.PresentationDelaySeconds
+        };
+    }
+
     private static void AddDomain(
         ICollection<AquariumFieldDomain> domains,
         ISet<string> seenDomains,
@@ -254,6 +287,23 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Vector3.Zero,
             "Mimir.Runtime");
 
+    private static AquariumFieldDomain DomainForAcousticSourceCandidate(MimirAcousticSourceFieldCandidate candidate)
+    {
+        var radius = Math.Max(0.01f, (float)candidate.RadiusMeters);
+        var center = candidate.PositionMeters;
+        var boundsRadius = new Vector3(radius);
+        return new AquariumFieldDomain(
+            DomainKeyForAcousticSourceCandidate(candidate),
+            "",
+            AquariumFieldDomainKind.AudioPath,
+            Matrix4x4.Identity,
+            Matrix4x4.Identity,
+            center - boundsRadius,
+            center + boundsRadius,
+            Vector3.Zero,
+            "Mimir.Runtime");
+    }
+
     private static AquariumFieldDomain DomainForSurfaceIntent(MimirSurfaceIntent intent) =>
         new(
             DomainKeyForSurfaceIntent(intent.IntentKey),
@@ -309,6 +359,31 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Proposal: proposal,
             PayloadHandle: constraint.UsableBandMask,
             ObservedTimeNs: 0,
+            Confidence: confidence);
+    }
+
+    private AquariumFieldClaim ClaimForAcousticSourceCandidate(
+        MimirAcousticSourceFieldCandidate sourceCandidate,
+        string domainKey)
+    {
+        var confidence = Clamp01((float)sourceCandidate.Confidence);
+        var proposal = new AquariumFieldProposalPolicy(
+            AquariumFieldProposalKind.CalibrationConstraint,
+            SourcePdf: 1.0f,
+            TargetContribution: confidence,
+            RepresentedCandidateCount: 1,
+            Seed: StableSeed(sourceCandidate.CandidateKey));
+
+        return new AquariumFieldClaim(
+            ClaimKey: $"acoustic-source:{sourceCandidate.CalibrationId}:{sourceCandidate.SourceId}:{sourceCandidate.CandidateKey}",
+            DomainKey: domainKey,
+            ProducerKey: sourceCandidate.ProducerKey,
+            Layer: AquariumFieldLayer.Form,
+            Encoding: AquariumFieldEncoding.Confidence,
+            Support: SupportForAcousticSourceCandidate(sourceCandidate),
+            Proposal: proposal,
+            PayloadHandle: sourceCandidate.CalibrationId,
+            ObservedTimeNs: sourceCandidate.ObservedTimeNs,
             Confidence: confidence);
     }
 
@@ -425,6 +500,19 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             ProjectedError: uncertaintySeconds,
             Curvature: 0.0f,
             TemporalUncertainty: uncertaintySeconds);
+    }
+
+    private AquariumFieldSupport SupportForAcousticSourceCandidate(MimirAcousticSourceFieldCandidate sourceCandidate)
+    {
+        var radius = Math.Max(options.DefaultSupportRadius, (float)sourceCandidate.RadiusMeters);
+        return new AquariumFieldSupport(
+            Center: sourceCandidate.PositionMeters,
+            Radius: new Vector3(radius),
+            LocalFrame: Matrix4x4.Identity,
+            ConservativeRadius: radius,
+            ProjectedError: radius,
+            Curvature: 0.0f,
+            TemporalUncertainty: 0.0f);
     }
 
     private AquariumFieldSupport SupportForSurfaceIntent(MimirSurfaceIntent intent)
@@ -589,6 +677,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
     private static string DomainKeyForObservation(string observationKey) => $"mimir:observation:{observationKey}";
 
     private static string DomainKeyForCalibrationConstraint(string constraintKey) => $"mimir:calibration:{constraintKey}";
+
+    private static string DomainKeyForAcousticSourceCandidate(MimirAcousticSourceFieldCandidate candidate) =>
+        $"mimir:acoustic-source:{candidate.CalibrationId}:{candidate.SourceId}:{candidate.CandidateKey}";
 
     private static string DomainKeyForSurfaceIntent(string intentKey) => $"mimir:intent:{intentKey}";
 
