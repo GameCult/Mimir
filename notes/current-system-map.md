@@ -309,8 +309,11 @@ monitor-routed proof `complex-contour-live-20260528-080727.md` is the first
 credible fresh physical contour receipt: loopback is `-0.014 us` at 0.971
 confidence, `asio-ch0` lands `-0.410 us` from its stored path seed at 0.524
 confidence with 24 direct hits, and `asio-ch1` lands `-2.467 us` at 0.363
-confidence with 14 direct hits. Repeat captures are needed before updating the
-channel model or letting physical mic reports drive actuator authority.
+confidence with 14 direct hits. User-provided physical mapping: `asio-ch0` is
+the shotgun, about 1.5 m from the right monitor and 3.0 m from the left;
+`asio-ch1` is the cardioid, about 0.5 m from the left monitor and 1.5 m from
+the right. Repeat captures are needed before updating the channel model or
+letting physical mic reports drive actuator authority.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

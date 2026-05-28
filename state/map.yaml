@@ -323,8 +323,11 @@ accepted_design:
       `complex-contour-live-20260528-080727.md` is the first credible fresh
       physical contour proof: loopback is -0.014 us at 0.971 confidence,
       `asio-ch0` lands -0.410 us from its stored path seed at 0.524 confidence,
-      and `asio-ch1` lands -2.467 us at 0.363 confidence. Repeat captures are
-      needed before channel-model updates or actuator authority.
+      and `asio-ch1` lands -2.467 us at 0.363 confidence. Physical mapping:
+      `asio-ch0` is the shotgun, about 1.5 m from the right monitor and 3.0 m
+      from the left; `asio-ch1` is the cardioid, about 0.5 m from the left
+      monitor and 1.5 m from the right. Repeat captures are needed before
+      channel-model updates or actuator authority.
       `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
       current four-case replay receipt.
     Acoustic robustness remains open.

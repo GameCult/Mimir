@@ -10,6 +10,9 @@
 - Capture seconds: `4.2`
 - Output routing: monitors
 - Inputs: `Input 1`, `Input 2`, `Loopback 1`, `Loopback 2`
+- Physical mapping:
+  - `asio-ch0` / Input 1: shotgun, about 1.5 m from right monitor and 3.0 m from left monitor
+  - `asio-ch1` / Input 2: cardioid, about 0.5 m from left monitor and 1.5 m from right monitor
 - Loopback reference: `asio-ch2` / Loopback 1
 - Playback gain: `1.0`
 - Captured frames: `806656`
@@ -39,9 +42,13 @@ physical channels have stronger RMS and the path estimates improve.
 ## Interpretation
 
 This is the first credible fresh physical complex-contour proof after arming
-both microphones and routing output to monitors. `asio-ch0` lands within
-`0.410 us` of the stored path seed with moderate confidence. `asio-ch1` also
-locks, but weaker. The next useful cut is repeated monitor-routed captures to
+both microphones and routing output to monitors. `asio-ch0` is the shotgun and
+lands within `0.410 us` of the stored path seed with moderate confidence.
+Its measured absolute delay is consistent with a nearest-monitor path on the
+order of the right-monitor distance. `asio-ch1` is the cardioid and also locks,
+but weaker; its measured absolute delay should be interpreted against the
+actual stereo monitor routing and room path, not as a naked source-to-mic
+distance yet. The next useful cut is repeated monitor-routed captures to
 separate stable direct-path truth from one-run fit luck, then either update the
 channel model or add runtime signal-presence gating before actuator authority
 consumes physical mic reports.
