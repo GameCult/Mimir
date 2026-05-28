@@ -125,6 +125,7 @@ struct CaptureState
     std::vector<unsigned long long> sweepSamples;
     std::vector<float>* playbackSamples = nullptr;
     double playbackGain = 1.0;
+    long playbackOutputChannel = -1;
     std::vector<float>* recordedInput = nullptr;
     unsigned long long recordFrames = 0;
     unsigned long long sweepFrame = 0;
@@ -320,6 +321,11 @@ void processOutput(long doubleBufferIndex)
 
         for (size_t channel = 0; channel < g_capture.outputBuffers->size(); ++channel)
         {
+            if (g_capture.playbackOutputChannel >= 0 && static_cast<long>(channel) != g_capture.playbackOutputChannel)
+            {
+                continue;
+            }
+
             auto& buffer = (*g_capture.outputBuffers)[channel];
             auto& info = (*g_capture.outputChannels)[channel];
             auto* raw = static_cast<unsigned char*>(buffer.buffers[doubleBufferIndex]);
@@ -498,6 +504,12 @@ double doubleOption(int argc, char** argv, const char* name, double fallback)
     return raw ? std::atof(raw) : fallback;
 }
 
+long longOption(int argc, char** argv, const char* name, long fallback)
+{
+    const char* raw = option(argc, argv, name, nullptr);
+    return raw ? std::atol(raw) : fallback;
+}
+
 bool hasArg(int argc, char** argv, const char* name)
 {
     for (int index = 1; index < argc; ++index)
@@ -576,6 +588,7 @@ int main(int argc, char** argv)
     const char* playFloat32MonoPath = option(argc, argv, "--play-f32-mono", nullptr);
     const char* recordFloat32InterleavedPath = option(argc, argv, "--record-f32-interleaved", nullptr);
     const auto playGain = doubleOption(argc, argv, "--play-gain", 1.0);
+    const auto playOutputChannel = longOption(argc, argv, "--play-output-channel", -1);
     const auto sweepGain = doubleOption(argc, argv, "--sweep-gain", 0.03);
     const auto sweepToneSeconds = doubleOption(argc, argv, "--sweep-tone-seconds", 0.55);
     const auto sweepGapSeconds = doubleOption(argc, argv, "--sweep-gap-seconds", 0.20);
@@ -731,7 +744,7 @@ int main(int argc, char** argv)
             playbackSamples.resize(static_cast<size_t>(byteCount) / sizeof(float));
             input.read(reinterpret_cast<char*>(playbackSamples.data()), static_cast<std::streamsize>(playbackSamples.size() * sizeof(float)));
         }
-        std::printf("asio playback-f32-mono: path=%s samples=%zu gain=%.5f\n", playFloat32MonoPath, playbackSamples.size(), playGain);
+        std::printf("asio playback-f32-mono: path=%s samples=%zu gain=%.5f outputChannel=%ld\n", playFloat32MonoPath, playbackSamples.size(), playGain, playOutputChannel);
     }
 
     if (captureSeconds > 0.0 || monitorSweep || !playbackSamples.empty() || emitJsonBlocks)
@@ -820,6 +833,7 @@ int main(int argc, char** argv)
         g_capture.sweepGain = sweepGain;
         g_capture.playbackSamples = playbackSamples.empty() ? nullptr : &playbackSamples;
         g_capture.playbackGain = playGain;
+        g_capture.playbackOutputChannel = playOutputChannel;
         g_capture.emitJsonBlocks = emitJsonBlocks;
         g_capture.sweepFrame = 0;
         g_capture.sweepEnergy.assign(sweepFrequencies.size() * static_cast<size_t>(inputs), 0.0);

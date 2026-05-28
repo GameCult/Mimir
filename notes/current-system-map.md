@@ -314,6 +314,13 @@ the shotgun, about 1.5 m from the right monitor and 3.0 m from the left;
 `asio-ch1` is the cardioid, about 0.5 m from the left monitor and 1.5 m from
 the right. Repeat captures are needed before updating the channel model or
 letting physical mic reports drive actuator authority.
+`complex-contour-monitor-split-20260528-081813.md` adds
+`--play-output-channel` to the ASIO probe and captures output 0 and output 1
+separately. Loopback proves the ASIO output buffers are distinct, but physical
+mic delays are nearly identical across outputs: shotgun differs by about
+20.885 us and cardioid by about 24.789 us. That does not match the declared
+left/right monitor geometry, so the downstream monitor path is probably
+summing, mirroring, or otherwise not isolating the physical speakers.
 The first actuator proof now exists: `faust/mimir_alignment_actuator.dsp` owns
 six channels of bounded fractional delay/gain controls for Faust/native DSP,
 and `Mimir.BufferSmoke --bioacoustic-actuator-self-test --sample-rate 48000

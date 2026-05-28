@@ -328,6 +328,13 @@ accepted_design:
       from the left; `asio-ch1` is the cardioid, about 0.5 m from the left
       monitor and 1.5 m from the right. Repeat captures are needed before
       channel-model updates or actuator authority.
+      `complex-contour-monitor-split-20260528-081813.md` added ASIO
+      `--play-output-channel` and captured output 0/output 1 separately.
+      Loopback channels prove the ASIO output buffers are distinct, but
+      physical mic delays differ by only about 20.885 us for the shotgun and
+      24.789 us for the cardioid across outputs. This does not match the
+      declared monitor geometry; verify downstream monitor routing/isolation
+      before learning left/right acoustic paths.
       `calibration/bioacoustic/complex-contour-replay-panel.json` persists the
       current four-case replay receipt.
     Acoustic robustness remains open.
