@@ -34,8 +34,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private const float SpectrumSplineTubePadding = 0.18f;
     private const int DefaultSpectrumSourceLaneCapacity = 8;
     private const string SpectrumFieldResourceKey = "mimir:resource:spectrum:field-upload";
-    private const string SpectrumRampResourceKey = "aquarium:resource:ramp:blackbody";
-    private const string SpectrumRampTexturePath = @"E:\Projects\Aetheria\Assets\Resources\Gradients\blackbody.png";
+    private const string SpectrumRampResourceKey = AquariumBuiltInFieldResources.BlackbodyRampResourceKey;
+    private static readonly string SpectrumRampTexturePath = AquariumBuiltInFieldResources.ResolveBlackbodyRampPath();
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirFensalirFieldLowering fieldLowering;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
@@ -428,10 +428,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             Version: version,
             NativeHandle: IntPtr.Zero,
             NativeHandleKind: "fensalir-owned-spectrum-upload");
-        var ramp = AquariumFieldResourceDeclaration.LocalTexture2D(
-            SpectrumRampResourceKey,
-            SpectrumRampTexturePath,
-            version: 1);
+        var ramp = AquariumBuiltInFieldResources.BlackbodyRamp(version: 1);
         var axisLength = syntheticSingleTubePreview ? 11.53286f : 10.0f;
         var axisStepX = width > 1 ? axisLength / (width - 1) : axisLength;
         var claims = new List<AquariumFieldClaim>(sourceCount);

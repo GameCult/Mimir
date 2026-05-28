@@ -637,9 +637,10 @@ static int RunFensalirFieldDslResourceSmoke()
         Version: 42,
         NativeHandle: new IntPtr(0x1234),
         NativeHandleKind: "native-ring");
-    const string source = """
+    var blackbodyRampPath = AquariumBuiltInFieldResources.ResolveBlackbodyRampPath();
+    var source = $"""
 resource id=spectrum key=mimir:resource:native-ring:1234
-texture2d id=blackbody key=aquarium:resource:ramp:blackbody path=E:\Projects\Aetheria\Assets\Resources\Gradients\blackbody.png format=Rgba8Unorm
+texture2d id=blackbody key={AquariumBuiltInFieldResources.BlackbodyRampResourceKey} path={blackbodyRampPath} format=Rgba8Unorm
 domain id=mimir:domain:spectrum kind=RollingBuffer min=0,0,0 max=192,1,5 owner=Mimir.Runtime
 tubespline id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum confidence=0.94 radius=0.02 support=0.02,0.02,5 width=192 height=1 stride=4 columns=1 ramp=blackbody
 """;
@@ -659,7 +660,7 @@ tubespline id=spectrum-trail resource=spectrum domain=mimir:domain:spectrum conf
         frame.Resources.Count == 2 &&
         frame.Claims.Count == 1 &&
         frame.TubeSplineLowerings.Count == 1 &&
-        frame.TubeSplineLowerings[0].RampResourceKey == "aquarium:resource:ramp:blackbody" &&
+        frame.TubeSplineLowerings[0].RampResourceKey == AquariumBuiltInFieldResources.BlackbodyRampResourceKey &&
         plan.Packets.Count == 1 &&
         plan.Packets[0].Backend == AquariumFieldBackendKind.TubeField &&
         plan.Packets[0].PayloadHandle == resource.ResourceKey &&
@@ -1053,7 +1054,7 @@ static int RunMimirSpectrumUploadSmoke()
             .Where(resource => string.Equals(resource.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
             .ToArray();
         var matchingRamps = field.Resources
-            .Where(resource => string.Equals(resource.ResourceKey, "aquarium:resource:ramp:blackbody", StringComparison.Ordinal))
+            .Where(resource => string.Equals(resource.ResourceKey, AquariumBuiltInFieldResources.BlackbodyRampResourceKey, StringComparison.Ordinal))
             .ToArray();
         var matchingLowerings = field.TubeSplineLowerings
             .Where(lowering => string.Equals(lowering.ResourceKey, "mimir:resource:spectrum:field-upload", StringComparison.Ordinal))
@@ -1109,7 +1110,7 @@ static int RunMimirSpectrumUploadSmoke()
             ramp.Residency == AquariumFieldResourceResidency.GpuResident &&
             ramp.Access == AquariumFieldShaderAccess.ShaderResource &&
             string.Equals(ramp.Format, "Rgba8Unorm", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(ramp.SourceUri, @"E:\Projects\Aetheria\Assets\Resources\Gradients\blackbody.png", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(ramp.SourceUri, AquariumBuiltInFieldResources.ResolveBlackbodyRampPath(), StringComparison.OrdinalIgnoreCase) &&
             resource.Height == expectedSourceLaneCapacity * expectedHistoryCapacity &&
             matchingLowerings.All(item =>
                 item.ColumnCount == expectedHistoryCount &&
