@@ -25,7 +25,14 @@ field/evidence machine. Mimir must submit synchronized buffers, constraints,
 surface intent, and calibration evidence; Fensalir lowers them into claims with
 travel/depth, metadata, control, and reservoir-guide lanes. Any path that only
 paints pixels is a fallback/debug draw and must not be mistaken for the
-spatiotemporal machine.
+spatiotemporal machine. The shared Fensalir spatiotemporal reservoir is the
+organ that owns temporally reused field presentation; TubeField is only the
+current rolling-buffer tube claim/candidate producer feeding that organ.
+Because Fensalir often samples visible field candidates directly rather than
+lighting samples after a known primary hit, claim producers may need
+deterministic local visibility generation before reservoir reuse. Reservoir
+resolve owns temporal antialiasing and reconstruction; TAA is not a separate
+hidden owner of field identity.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
@@ -320,8 +327,8 @@ a named invariant that the native runtime cannot protect yet.
   backend packet plan; unplanned `TubeSplineLowering` records are counted but
   not expanded. TubeField now writes stable field ids, real tube normals,
   coverage/confidence, and domain-validity guide data into the same scene
-  metadata/control/reservoir-guide targets that post resolve uses for
-  spatiotemporal history validation. TubeField render now binds the engine
+  metadata/control/reservoir-guide targets that reservoir resolve uses for
+  spatiotemporal reconstruction. TubeField render now binds the engine
   blue-noise texture and jitters its tube-local SDF sample inside the proxy
   fragment shader, then lets the scene depth buffer resolve opaque generated
   field geometry by nearest surface instead of draw order. The visual remains a

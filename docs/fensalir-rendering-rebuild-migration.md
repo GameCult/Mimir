@@ -30,6 +30,7 @@ debug output is already in the production-shaped bridge:
 ```text
 rolling buffer slice + source identity + calibration + surface intent
 -> Fensalir field claim
+-> TubeField candidate producer, if that is the selected claim family
 -> selected lowering under budget
 -> evidence lanes and temporal guide
 -> presentation
@@ -39,6 +40,21 @@ Mimir must not send "draw these lines" as a production order. It should say
 "this rolling buffer slice is a spectrum field with stable axes, identities,
 support, and material intent." Fensalir then chooses direct tube SDF, mesh,
 field splats, or another lowering.
+
+The shared Fensalir spatiotemporal reservoir remains the rendering organ.
+TubeField is only the current claim/candidate producer for rolling-buffer
+spectrum surfaces. It may own tube-specific resource binding, Catmull-Rom
+evaluation, SDF/proxy geometry, and material sampling, but it must not become a
+private renderer or final composition authority.
+
+This is an intentional divergence from pure ReSTIR. Fensalir is not only
+resampling lighting after a known primary surface; it is often sampling the
+visible field candidate itself. TubeField therefore has to generate local
+primary tube-visibility candidates before reservoir reuse. The shared reservoir
+owns the temporal-antialiasing-shaped decision about which field candidate persists into
+presentation. There is no separate TAA owner in the target architecture:
+reservoir resolve reconstructs smooth presentation directly from selected field
+evidence instead of repairing unstable pixels after the fact.
 
 ## Invariants
 
@@ -52,7 +68,8 @@ field splats, or another lowering.
   spatialization, and stems.
 - OBS owns broadcast composition only.
 - Render packets are cached lowerings. They are not scene truth.
-- TAA may validate pixel history. It does not own source identity.
+- Reservoir resolve owns temporal antialiasing and reconstruction. TAA is not a
+  separate source-identity or presentation-history authority.
 - Networked phones and Raven may publish local observations and decoded timing
   state. They do not become independent clock authorities.
 
@@ -473,7 +490,7 @@ Acceptance:
 | Direct debug path | Can be disabled without changing runtime timing state. |
 | Observation bridge | Produces typed evidence without device reads or rendering. |
 | Fensalir lowering swap | Direct tube vs future splat/mesh lowering preserves claim ids. |
-| TAA guide | Pixel history follows evidence validity, not producer folklore. |
+| Reservoir guide | Presentation history follows evidence validity, not producer folklore. |
 | OBS output | OBS receives final program surfaces, not raw clock chaos. |
 
 ## Research And Maps

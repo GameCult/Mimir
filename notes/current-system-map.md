@@ -504,7 +504,7 @@ a handle: Mimir uploads the current spectral amplitudes as row-major Float32
 data into a Fensalir-owned GPU structured buffer before TubeField compute reads
 it. TubeField writes stable field ids, real tube normals, coverage/confidence,
 and domain-validity guide data into the same scene metadata/control/reservoir
-guide targets consumed by post resolve for spatiotemporal history validation.
+guide targets consumed by reservoir resolve for spatiotemporal reconstruction.
 TubeField render also binds the engine blue-noise texture, jitters the
 tube-local SDF sample in the proxy fragment shader, and uses scene depth so
 opaque field geometry resolves by nearest generated surface instead of draw
