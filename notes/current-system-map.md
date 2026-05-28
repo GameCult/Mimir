@@ -467,7 +467,10 @@ Mimir lowers an SRP/PHAT-style localized source with calibration/source
 identity and a world-space confidence envelope, and Fensalir plans it as a
 FieldEvidence `DebugOverlay` packet. Live room geometry must still come from an
 explicit measured coordinate frame, not inferred from the recent two-distance
-monitor notes.
+monitor notes. Phase 5's synthetic marker proof now exists too: Mimir lowers a
+deterministic multi-camera marker candidate with calibration/marker identity and
+world-space support, and Fensalir plans it as `DebugOverlay` evidence while
+ambiguous raw camera features still defer.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

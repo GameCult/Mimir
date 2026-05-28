@@ -503,7 +503,10 @@ accepted_design:
     localization result with calibration/source identity and a world-space
     confidence envelope, and Fensalir plans it as a FieldEvidence DebugOverlay
     packet. Live room geometry still needs an explicit measured coordinate
-    frame before those candidates become runtime truth.
+    frame before those candidates become runtime truth. Phase 5's synthetic
+    marker proof now lowers a deterministic multi-camera marker candidate with
+    calibration/marker identity and world-space support, and Fensalir plans it
+    as DebugOverlay evidence while ambiguous raw camera features still defer.
   - `config/perfect-machine.example.json` declares live owners, sensors,
     reservoir views, and runtime policy.
   - `src/Mimir.Runtime/Synchronization` now includes the Perfect Machine module

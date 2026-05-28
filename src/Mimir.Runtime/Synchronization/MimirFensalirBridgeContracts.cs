@@ -150,6 +150,17 @@ public sealed record MimirAcousticSourceFieldCandidate(
     double Confidence,
     long ObservedTimeNs);
 
+public sealed record MimirVisualMarkerFieldCandidate(
+    string CandidateKey,
+    string CalibrationId,
+    string MarkerId,
+    string ProducerKey,
+    IReadOnlyList<string> SourceObservationKeys,
+    System.Numerics.Vector3 PositionMeters,
+    double RadiusMeters,
+    double Confidence,
+    long ObservedTimeNs);
+
 public readonly record struct MimirSurfaceAxes(
     string X,
     string Y,

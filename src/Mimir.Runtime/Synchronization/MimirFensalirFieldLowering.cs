@@ -147,6 +147,39 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         };
     }
 
+    public AquariumFieldEvidenceFrame BuildVisualMarkerCandidateFrame(
+        IEnumerable<MimirVisualMarkerFieldCandidate> markerCandidates)
+    {
+        var domains = new List<AquariumFieldDomain>();
+        var claims = new List<AquariumFieldClaim>();
+        var candidates = new List<AquariumFieldCandidate>();
+        var seenDomains = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var markerCandidate in markerCandidates)
+        {
+            if (string.IsNullOrWhiteSpace(markerCandidate.CandidateKey))
+            {
+                continue;
+            }
+
+            var domain = DomainForVisualMarkerCandidate(markerCandidate);
+            AddDomain(domains, seenDomains, domain);
+
+            var claim = ClaimForVisualMarkerCandidate(markerCandidate, domain.DomainKey);
+            claims.Add(claim);
+            candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+        }
+
+        return new AquariumFieldEvidenceFrame
+        {
+            Domains = domains,
+            Claims = claims,
+            Candidates = candidates,
+            AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
+            PresentationDelaySeconds = (float)options.PresentationDelaySeconds
+        };
+    }
+
     private static void AddDomain(
         ICollection<AquariumFieldDomain> domains,
         ISet<string> seenDomains,
@@ -304,6 +337,23 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             "Mimir.Runtime");
     }
 
+    private static AquariumFieldDomain DomainForVisualMarkerCandidate(MimirVisualMarkerFieldCandidate candidate)
+    {
+        var radius = Math.Max(0.001f, (float)candidate.RadiusMeters);
+        var center = candidate.PositionMeters;
+        var boundsRadius = new Vector3(radius);
+        return new AquariumFieldDomain(
+            DomainKeyForVisualMarkerCandidate(candidate),
+            "",
+            AquariumFieldDomainKind.CameraSensor,
+            Matrix4x4.Identity,
+            Matrix4x4.Identity,
+            center - boundsRadius,
+            center + boundsRadius,
+            Vector3.Zero,
+            "Mimir.Runtime");
+    }
+
     private static AquariumFieldDomain DomainForSurfaceIntent(MimirSurfaceIntent intent) =>
         new(
             DomainKeyForSurfaceIntent(intent.IntentKey),
@@ -384,6 +434,31 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Proposal: proposal,
             PayloadHandle: sourceCandidate.CalibrationId,
             ObservedTimeNs: sourceCandidate.ObservedTimeNs,
+            Confidence: confidence);
+    }
+
+    private AquariumFieldClaim ClaimForVisualMarkerCandidate(
+        MimirVisualMarkerFieldCandidate markerCandidate,
+        string domainKey)
+    {
+        var confidence = Clamp01((float)markerCandidate.Confidence);
+        var proposal = new AquariumFieldProposalPolicy(
+            AquariumFieldProposalKind.DeterministicStructural,
+            SourcePdf: 1.0f,
+            TargetContribution: confidence,
+            RepresentedCandidateCount: Math.Max(1, markerCandidate.SourceObservationKeys.Count),
+            Seed: StableSeed(markerCandidate.CandidateKey));
+
+        return new AquariumFieldClaim(
+            ClaimKey: $"visual-marker:{markerCandidate.CalibrationId}:{markerCandidate.MarkerId}:{markerCandidate.CandidateKey}",
+            DomainKey: domainKey,
+            ProducerKey: markerCandidate.ProducerKey,
+            Layer: AquariumFieldLayer.Form,
+            Encoding: AquariumFieldEncoding.Feature,
+            Support: SupportForVisualMarkerCandidate(markerCandidate),
+            Proposal: proposal,
+            PayloadHandle: markerCandidate.CalibrationId,
+            ObservedTimeNs: markerCandidate.ObservedTimeNs,
             Confidence: confidence);
     }
 
@@ -507,6 +582,19 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         var radius = Math.Max(options.DefaultSupportRadius, (float)sourceCandidate.RadiusMeters);
         return new AquariumFieldSupport(
             Center: sourceCandidate.PositionMeters,
+            Radius: new Vector3(radius),
+            LocalFrame: Matrix4x4.Identity,
+            ConservativeRadius: radius,
+            ProjectedError: radius,
+            Curvature: 0.0f,
+            TemporalUncertainty: 0.0f);
+    }
+
+    private AquariumFieldSupport SupportForVisualMarkerCandidate(MimirVisualMarkerFieldCandidate markerCandidate)
+    {
+        var radius = Math.Max(options.DefaultSupportRadius, (float)markerCandidate.RadiusMeters);
+        return new AquariumFieldSupport(
+            Center: markerCandidate.PositionMeters,
             Radius: new Vector3(radius),
             LocalFrame: Matrix4x4.Identity,
             ConservativeRadius: radius,
@@ -680,6 +768,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
 
     private static string DomainKeyForAcousticSourceCandidate(MimirAcousticSourceFieldCandidate candidate) =>
         $"mimir:acoustic-source:{candidate.CalibrationId}:{candidate.SourceId}:{candidate.CandidateKey}";
+
+    private static string DomainKeyForVisualMarkerCandidate(MimirVisualMarkerFieldCandidate candidate) =>
+        $"mimir:visual-marker:{candidate.CalibrationId}:{candidate.MarkerId}:{candidate.CandidateKey}";
 
     private static string DomainKeyForSurfaceIntent(string intentKey) => $"mimir:intent:{intentKey}";
 

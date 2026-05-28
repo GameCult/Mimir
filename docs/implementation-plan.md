@@ -274,6 +274,9 @@ a named invariant that the native runtime cannot protect yet.
   Phase 5 synthetic audio-source candidate: an SRP/PHAT-style localization
   result is lowered with calibration/source identity and a world-space
   confidence envelope, then planned as a FieldEvidence `DebugOverlay` packet.
+  It also proves a synthetic multi-camera marker candidate using the same
+  FieldEvidence authority: deterministic marker features plan as
+  `DebugOverlay` packets while ambiguous raw camera features still defer.
 - Fensalir now owns the first in-process D3D12 field resource resolver cut:
   shared structured/curve buffer resources import/alias GPU-resident handles,
   and Fensalir-owned resources allocate GPU slots only when Fensalir is the
