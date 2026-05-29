@@ -703,14 +703,21 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
 
     private static AquariumFieldResourceDeclaration DisparityResourceForStereoDepthCandidate(
         MimirStereoDepthFieldCandidate depthCandidate) =>
-        AquariumFieldResourceDeclaration.SurfacePage(
-            depthCandidate.DisparityResourceKey,
-            Math.Max(1, depthCandidate.Width),
-            Math.Max(1, depthCandidate.Height),
-            format: "R16Float",
-            version: checked((ulong)Math.Max(0L, depthCandidate.ObservedTimeNs)),
-            validFromNs: depthCandidate.ObservedTimeNs,
-            validUntilNs: depthCandidate.ObservedTimeNs);
+        new(
+            ResourceKey: depthCandidate.DisparityResourceKey,
+            Kind: AquariumFieldResourceKind.SurfacePage,
+            Residency: AquariumFieldResourceResidency.GpuResident,
+            Access: AquariumFieldShaderAccess.UnorderedAccess,
+            Format: "R16Float",
+            Width: Math.Max(1, depthCandidate.Width),
+            Height: Math.Max(1, depthCandidate.Height),
+            DepthOrCount: 1,
+            StrideBytes: 2,
+            ValidFromNs: depthCandidate.ObservedTimeNs,
+            ValidUntilNs: depthCandidate.ObservedTimeNs,
+            Version: checked((ulong)Math.Max(0L, depthCandidate.ObservedTimeNs)),
+            NativeHandle: IntPtr.Zero,
+            NativeHandleKind: "fensalir-stereo-depth-disparity");
 
     private static AquariumFieldResourceDeclaration ConfidenceResourceForStereoDepthCandidate(
         MimirStereoDepthFieldCandidate depthCandidate)

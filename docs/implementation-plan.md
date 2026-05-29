@@ -43,9 +43,10 @@ monocular model demos are provenance only. The live owner is Fensalir D3D12
 compute over Mimir-declared texture resources and calibration state.
 The first contract slice now exists in `MimirStereoDepthConfigurations` and
 `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`: a calibrated
-stereo pair profile emits a GPU-resident R16F disparity `SurfacePage`, an R8
-confidence texture, and a Height FieldEvidence claim planned to the
-`SurfacePage` backend. This is the socket for the kernel, not the kernel.
+stereo pair profile emits a GPU-resident compute-writable R16F disparity
+`SurfacePage`, an R8 confidence texture, and a Height FieldEvidence claim
+planned to the `SurfacePage` backend. This is the socket for the kernel, not
+the kernel.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
@@ -215,6 +216,17 @@ a named invariant that the native runtime cannot protect yet.
   with preset paths and strength; until the renderer grows LUT texture sampling,
   preset exposure and bloom are mapped into existing `GraphicsSettings`.
   `Mimir.BufferSmoke --presentation-control-smoke` proves the state owner.
+- `MimirSceneEditorState` owns the new Mimir-window editor graph. It is not the
+  OBS program output: it owns editor camera, selected node, sensor-feed panels,
+  SDF text-panel nodes, model placeholders, visibility, locks, transforms, reset
+  commands, and grab/rotate/resize gizmo intent. `MimirRuntime` renders derived
+  spline outlines and handle markers from that state, and the `Mimir Editor`
+  panel exposes hierarchy, visibility, transform, creation, and reset controls.
+  See [[scene-editor-control-surface|Mimir Scene Editor Control Surface]].
+  `Mimir.BufferSmoke --scene-editor-smoke` proves the graph/control/gizmo owner
+  path. World SDF text glyph rendering, ASSIMP-style mesh import/upload, and
+  pixel-accurate gizmo hit-testing remain Fensalir renderer cuts rather than
+  Mimir-side fake outputs.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

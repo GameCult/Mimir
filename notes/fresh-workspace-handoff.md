@@ -43,6 +43,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `native/reservoir` owns the lower shared-edge typed-handle invariant for
   Fensalir/Faust binding work.
 - Fensalir owns production GPU fusion, UI, and Spout2 publication.
+- `MimirSceneEditorState` owns the current Mimir-window editor graph, not the
+  OBS program output: editor camera, source/text/model nodes, visibility,
+  transforms, reset controls, and grab/rotate/resize gizmo intent. The
+  `Mimir Editor` panel and derived spline/handle geometry are live now; world
+  SDF text glyphs, ASSIMP-style mesh import/upload, and clickable gizmo
+  hit-testing are still Fensalir renderer cuts. See
+  [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]] and
+  smoke with `--scene-editor-smoke`.
 - Live camera image buffers should use Fensalir-owned texture leases when they
   are rendering inputs: Mimir asks the engine broker for a keyed D3D12
   Texture2D/fence lease, writes decoded frames into that texture, commits the
@@ -86,8 +94,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   The first code contract is in `MimirStereoDepthConfigurations` and
   `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`; run
   `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --stereo-depth-contract-smoke`
-  to verify the synthetic R16F disparity `SurfacePage` FieldEvidence socket.
-  This proves the lane shape, not the SGM kernel.
+  to verify the synthetic compute-writable R16F disparity `SurfacePage`
+  FieldEvidence socket. This proves the lane shape, not the SGM kernel.
 - Fensalir also owns the EVE-facing dashboard pixels through
   `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
   texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas

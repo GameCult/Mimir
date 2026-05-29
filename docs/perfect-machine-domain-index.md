@@ -179,8 +179,9 @@ Likely shape:
 - Current contract proof:
   `Mimir.BufferSmoke --stereo-depth-contract-smoke` validates the profile and
   FieldEvidence socket. The synthetic Leap stereo pair produces an R16F
-  disparity `SurfacePage`, an R8 confidence `Texture2D`, one Height claim, and
-  one planned `SurfacePage` packet. It is not yet a live compute kernel.
+  compute-writable disparity `SurfacePage`, an R8 confidence `Texture2D`, one
+  Height claim, and one planned `SurfacePage` packet. It is not yet a live
+  compute kernel.
 - Native reservoir preserves rolling evidence.
 - Fusion emits surface/material/render claims.
 - Program video publishes via Spout2.

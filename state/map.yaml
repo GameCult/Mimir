@@ -60,9 +60,9 @@ invariants:
   - The first stereo-depth contract is code-visible:
     `MimirStereoDepthConfigurations` names the libSGM-provenance D3D12 SGM
     profile, and `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`
-    lowers synthetic rectified stereo depth into an R16F disparity SurfacePage,
-    R8 confidence Texture2D, and Height FieldEvidence claim. The actual SGM
-    HLSL/D3D12 kernel is still future work.
+    lowers synthetic rectified stereo depth into a compute-writable R16F
+    disparity SurfacePage, R8 confidence Texture2D, and Height FieldEvidence
+    claim. The actual SGM HLSL/D3D12 kernel is still future work.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before
@@ -243,6 +243,15 @@ accepted_design:
     Faust streaming DSP path. LUT presets are typed postprocess state; exposure
     and bloom map into current Fensalir `GraphicsSettings`, while actual LUT
     texture sampling remains the named renderer hook.
+    `MimirSceneEditorState` owns the separate Mimir-window editor graph:
+    editor camera, scene nodes, selected node, visibility/locks, 2D-plane
+    transforms, reset affordances, and grab/rotate/resize gizmo mode. Rolling
+    video buffers derive sensor-feed panel nodes, while SDF text and model
+    import controls create editor graph nodes. `MimirRuntime` renders derived
+    outlines/handles through the Fensalir frame and exposes the `Mimir Editor`
+    hierarchy/transform panel. This is not OBS program output. World SDF glyph
+    rendering, ASSIMP-style mesh decoding/upload, and pixel-accurate gizmo
+    hit-testing remain Fensalir renderer cuts.
     `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
     SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
     The synthetic

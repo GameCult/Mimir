@@ -382,6 +382,16 @@ filter production surface intents before Fensalir composition; audio controls
 modify Faust gain controls and sample gain before Fensalir streaming DSP. LUT
 presets are typed postprocess state, with exposure/bloom currently mapped into
 `GraphicsSettings` and LUT texture sampling left as the next renderer hook.
+`MimirSceneEditorState` is now the separate Mimir-window editor owner. It owns
+the editor camera, dynamic scene nodes, selected node, visibility/lock state,
+2D-plane transforms, reset commands, and grab/rotate/resize gizmo mode. Rolling
+video buffers derive sensor-feed panel nodes; SDF text panels and model import
+requests create editor graph nodes. `MimirRuntime` presents that editor through
+the Fensalir camera plus derived spline outlines, selection handles, and the
+`Mimir Editor` hierarchy/transform panel. This editor is not the OBS program
+output. World SDF glyph rendering, ASSIMP-style mesh decoding/upload, and
+pixel-accurate gizmo hit-testing are explicit Fensalir renderer cuts, mapped in
+[[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].
 
 ## Visual Fusion
 
@@ -399,9 +409,9 @@ research references only.
 The first live contract exists: `MimirStereoDepthConfigurations` names the
 libSGM-provenance D3D12 SGM profile, and
 `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame` lowers a synthetic
-rectified stereo result into GPU-resident disparity/confidence resources plus a
-Height FieldEvidence claim planned as a `SurfacePage` packet. The kernel itself
-is still future work.
+rectified stereo result into a GPU-resident compute-writable disparity
+SurfacePage, confidence texture, and Height FieldEvidence claim planned as a
+`SurfacePage` packet. The kernel itself is still future work.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

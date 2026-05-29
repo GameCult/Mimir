@@ -2266,7 +2266,7 @@ static int RunStereoDepthContractSmoke()
     Console.WriteLine(
         $"stereo-depth-field resources={frame.Resources.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
     Console.WriteLine(
-        $"stereo-depth-output disparity={disparity.ResourceKey} kind={disparity.Kind} format={disparity.Format} confidence={confidence.ResourceKey} confidenceFormat={confidence.Format} backend={(plan.Packets.Count > 0 ? plan.Packets[0].Backend : AquariumFieldBackendKind.Unknown)}");
+        $"stereo-depth-output disparity={disparity.ResourceKey} kind={disparity.Kind} access={disparity.Access} format={disparity.Format} confidence={confidence.ResourceKey} confidenceFormat={confidence.Format} backend={(plan.Packets.Count > 0 ? plan.Packets[0].Backend : AquariumFieldBackendKind.Unknown)}");
 
     return !validation.HasErrors &&
         !profile.LiveDependency &&
@@ -2278,6 +2278,7 @@ static int RunStereoDepthContractSmoke()
         frame.Resources.Count == 2 &&
         disparity.Kind == AquariumFieldResourceKind.SurfacePage &&
         disparity.Residency == AquariumFieldResourceResidency.GpuResident &&
+        disparity.Access == AquariumFieldShaderAccess.UnorderedAccess &&
         disparity.Format == "R16Float" &&
         confidence.Kind == AquariumFieldResourceKind.Texture2D &&
         confidence.Format == "R8_UNorm" &&
