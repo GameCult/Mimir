@@ -84,6 +84,11 @@ if (args.Any(arg => string.Equals(arg, "--presentation-control-smoke", StringCom
     return RunPresentationControlSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--scene-editor-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunSceneEditorSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--audio-stem-publication-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunAudioStemPublicationSmoke();
@@ -1976,6 +1981,59 @@ static int RunPresentationControlSmoke()
         controls.AudioGain("asio-ch0") == 0.0f &&
         string.Equals(controls.Postprocess.PresetId, "soft-film", StringComparison.Ordinal) &&
         Math.Abs(controls.Postprocess.LutStrength - 0.65f) < 0.001f
+            ? 0
+            : 1;
+}
+
+static int RunSceneEditorSmoke()
+{
+    var editor = new MimirSceneEditorState();
+    var camera = NewVideoBuffer("camera-main", MimirStreamOrigin.LocalDevice, 1_000_000_000, 1280, 720, MimirVideoPixelFormat.Bgra8, 1);
+    var display = NewVideoBuffer("raven-display", MimirStreamOrigin.Network, 1_000_000_000, 1920, 1080, MimirVideoPixelFormat.Bgra8, 2, "raven-sync");
+    editor.SyncSensorFeeds([camera, display]);
+
+    var displayNode = editor.Nodes.First(node => string.Equals(node.SourceId, "raven-display", StringComparison.Ordinal));
+    editor.SelectNode(displayNode.Id);
+    editor.SetSelectedVisible(false);
+    editor.SetSelectedVisible(true);
+    editor.SetSelectedX(1.25f);
+    editor.SetSelectedY(-0.5f);
+    editor.SetSelectedRotation(0.75f);
+    editor.SetSelectedScaleX(3.0f);
+    editor.ResetSelectedTransform();
+
+    var input = new InputState();
+    input.SetMousePosition(new Vector2(100.0f, 100.0f));
+    input.SetMouseButton(MouseButton.Left, true);
+    editor.UpdateInput(0.016f, input);
+    input.BeginFrame();
+    input.SetMousePosition(new Vector2(130.0f, 82.0f));
+    editor.UpdateInput(0.016f, input);
+
+    editor.PendingText = "Signal";
+    editor.AddSdfTextPanel();
+    editor.PendingModelPath = "assets/models/raven-stage.glb";
+    editor.ImportModelPlaceholder();
+
+    var hierarchy = editor.DescribeHierarchy();
+    var splineFrame = editor.BuildEditorSplineFrame();
+    var handles = editor.BuildEditorSdfObjects();
+    var hasDisplay = hierarchy.Contains("raven-display", StringComparison.Ordinal);
+    var hasText = editor.Nodes.Any(node => node.Kind == MimirSceneEditorNodeKind.SdfTextPanel && string.Equals(node.Text, "Signal", StringComparison.Ordinal));
+    var hasModel = editor.Nodes.Any(node => node.Kind == MimirSceneEditorNodeKind.Model && string.Equals(node.ModelPath, "assets/models/raven-stage.glb", StringComparison.Ordinal));
+    var reset = Math.Abs(displayNode.Transform.Position.X - displayNode.DefaultTransform.Position.X) > 0.001f;
+
+    Console.WriteLine(
+        $"scene-editor-smoke nodes={editor.Nodes.Count} feeds={editor.Nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)} " +
+        $"splines={splineFrame.Splines.Count} handles={handles.Count} selected={editor.SelectedNode?.DisplayName} hasDisplay={hasDisplay} hasText={hasText} hasModel={hasModel} movedAfterReset={reset}");
+
+    return editor.Nodes.Count >= 5 &&
+        hasDisplay &&
+        hasText &&
+        hasModel &&
+        reset &&
+        splineFrame.HasInput &&
+        handles.Count == 4
             ? 0
             : 1;
 }

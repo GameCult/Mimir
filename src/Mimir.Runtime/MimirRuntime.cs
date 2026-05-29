@@ -41,6 +41,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly MimirAlignmentActuatorBank audioActuatorBank = new();
     private readonly MimirPresentationControlState presentationControls = new();
+    private readonly MimirSceneEditorState sceneEditor = new();
     private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
     private readonly MimirObsStemSharedMemoryPublisher? obsStemPublisher;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
@@ -144,7 +145,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 BloomIntensity: 0.075f,
                 BloomVeilIntensity: 0.0f,
                 FieldReservoirMode: GraphicsSettings.FieldReservoirModeNativeDomain,
-                FieldReservoirScale: 0.5f);
+                FieldReservoirScale: 0.5f,
+                FieldReservoirSpatialReuseBudget: GraphicsSettings.Default.FieldReservoirSpatialReuseBudget);
         }
 
         obsStemPublisher = CreateObsStemPublisher();
@@ -182,25 +184,43 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
         var fieldEvidenceFrame = BuildFieldEvidenceFrame();
+        var editorSplineFrame = sceneEditor.Enabled
+            ? sceneEditor.BuildEditorSplineFrame()
+            : AquariumSplineFrame.Empty;
+        var editorSdfObjects = sceneEditor.Enabled
+            ? sceneEditor.BuildEditorSdfObjects()
+            : [];
+        var editorSdfLights = sceneEditor.Enabled
+            ? sceneEditor.BuildEditorSdfLights()
+            : [];
         var windowCount = Math.Max(1, spectrumHistory.Count);
         var (splineMin, splineMax) = syntheticSingleTubePreview
             ? (new Vector3(-5.76643f, -1.0f, 0.0f), new Vector3(5.76643f, 1.0f, 0.0f))
             : SpectrumSplineAabb(channelCount, windowCount);
-        var cameraTarget = (splineMin + splineMax) * 0.5f;
-        var cameraPosition = syntheticSingleTubePreview
+        var spectrumCameraTarget = (splineMin + splineMax) * 0.5f;
+        var spectrumCameraPosition = syntheticSingleTubePreview
             ? new Vector3(0.0f, 0.0f, -18.367355f)
             : SpectrumCameraPosition(
                 channelCount,
                 windowCount,
-                cameraTarget,
+                spectrumCameraTarget,
                 spectrumCameraDistanceMultiplier,
                 spectrumCameraAngleDegrees);
-        var cameraFrustum = syntheticSingleTubePreview
+        var spectrumCameraFrustum = syntheticSingleTubePreview
             ? new AquariumCameraFrustum(-0.036f, 0.036f, -0.02025f, 0.02025f, 0.1f, 100.0f)
-            : FitSpectrumCameraFrustum(splineMin, splineMax, cameraPosition, cameraTarget);
-        lastSpectrumFrustum = cameraFrustum;
-        lastSpectrumCameraPosition = cameraPosition;
-        lastSpectrumCameraTarget = cameraTarget;
+            : FitSpectrumCameraFrustum(splineMin, splineMax, spectrumCameraPosition, spectrumCameraTarget);
+        var cameraTarget = sceneEditor.Enabled
+            ? sceneEditor.CameraTarget
+            : spectrumCameraTarget;
+        var cameraPosition = sceneEditor.Enabled
+            ? sceneEditor.CameraPosition
+            : spectrumCameraPosition;
+        var cameraFrustum = sceneEditor.Enabled
+            ? sceneEditor.CameraFrustum
+            : spectrumCameraFrustum;
+        lastSpectrumFrustum = spectrumCameraFrustum;
+        lastSpectrumCameraPosition = spectrumCameraPosition;
+        lastSpectrumCameraTarget = spectrumCameraTarget;
         lastSpectrumAabb = (splineMin, splineMax);
         return new AquariumFrame(
             new ViewFrame(Vector2.Zero, 24.0f) { Frustum = cameraFrustum },
@@ -213,13 +233,27 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 TraceHeightFieldSurface = false,
                 UseStudioBackground = !syntheticSingleTubePreview,
                 UseStarfieldBackground = obsProofVisualEnabled,
-                SdfObjects = obsProofVisualEnabled ? BuildObsProofSdfObjects(runtimeSeconds) : [],
-                SdfLights = obsProofVisualEnabled ? BuildObsProofSdfLights(runtimeSeconds) : [],
+                SdfObjects = MergeSdfObjects(
+                    obsProofVisualEnabled ? BuildObsProofSdfObjects(runtimeSeconds) : [],
+                    editorSdfObjects),
+                SdfLights = MergeSdfLights(
+                    obsProofVisualEnabled ? BuildObsProofSdfLights(runtimeSeconds) : [],
+                    editorSdfLights),
                 FieldEvidenceFrame = fieldEvidenceFrame,
                 BufferFieldFrame = AquariumBufferFieldFrame.Empty,
-                SplineFrame = AquariumSplineFrame.Empty,
+                SplineFrame = editorSplineFrame,
             });
     }
+
+    private static IReadOnlyList<AquariumSdfObject> MergeSdfObjects(
+        IReadOnlyList<AquariumSdfObject> first,
+        IReadOnlyList<AquariumSdfObject> second) =>
+        first.Count == 0 ? second : second.Count == 0 ? first : first.Concat(second).ToArray();
+
+    private static IReadOnlyList<AquariumSdfLight> MergeSdfLights(
+        IReadOnlyList<AquariumSdfLight> first,
+        IReadOnlyList<AquariumSdfLight> second) =>
+        first.Count == 0 ? second : second.Count == 0 ? first : first.Concat(second).ToArray();
 
     private static AquariumSdfObject[] BuildObsProofSdfObjects(float timeSeconds)
     {
@@ -726,6 +760,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
         lastPollCount = synchronization.PollSources();
         presentationControls.SyncFromBuffers(synchronization.Buffers.Buffers);
+        sceneEditor.SyncSensorFeeds(synchronization.Buffers.Buffers);
+        sceneEditor.UpdateInput(deltaSeconds, input);
         ApplyPresentationPostprocess();
         UpdateObsStemPublication();
         QueueCalibrationTimeline();
@@ -829,6 +865,39 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     presentationControls.RefreshPostprocess();
                 }, 0.0f, 1.0f, "0.00");
                 panel.Readout("Post", DescribePostprocess);
+            })
+            .Panel("Mimir Editor", 18.0f, 508.0f, 430.0f, fadeWhenMouseDistant: true, panel =>
+            {
+                panel.Section("Scene Graph");
+                panel.Toggle("Editor View", () => sceneEditor.Enabled, value => sceneEditor.Enabled = value, "The Mimir window shows the editor camera and gizmos. This is not the OBS program output.");
+                panel.TreeItem("Scene", 0, true, () => sceneEditor.IsExpanded("scene"), value => sceneEditor.SetExpanded("scene", value), () => false, () => { }, "editor root");
+                panel.TreeItem("Editor Camera", 1, false, () => false, _ => { }, () => sceneEditor.SelectedNodeId == "editor-camera", () => sceneEditor.SelectNode("editor-camera"), "view camera", isVisible: () => sceneEditor.IsExpanded("scene"));
+                panel.TreeItem("Sensor Feeds", 1, true, () => sceneEditor.IsExpanded("feeds"), value => sceneEditor.SetExpanded("feeds", value), () => false, () => { }, "video panels", isVisible: () => sceneEditor.IsExpanded("scene"));
+                panel.TreeItem("SDF Text", 1, true, () => sceneEditor.IsExpanded("text"), value => sceneEditor.SetExpanded("text", value), () => false, () => { }, "text panels", isVisible: () => sceneEditor.IsExpanded("scene"));
+                panel.TreeItem("Models", 1, true, () => sceneEditor.IsExpanded("models"), value => sceneEditor.SetExpanded("models", value), () => false, () => { }, "import placeholders", isVisible: () => sceneEditor.IsExpanded("scene"));
+                panel.TextBox("Hierarchy", sceneEditor.DescribeHierarchy, _ => { }, lines: 9, acceptsReturn: false, monospace: true);
+                panel.Button("Previous", sceneEditor.SelectPrevious);
+                panel.Button("Next", sceneEditor.SelectNext);
+                panel.Readout("Selected", sceneEditor.DescribeSelection);
+                panel.Toggle("Visible", () => sceneEditor.SelectedNode?.Visible ?? false, sceneEditor.SetSelectedVisible);
+                panel.Toggle("Locked", () => sceneEditor.SelectedNode?.Locked ?? false, sceneEditor.SetSelectedLocked);
+                panel.Button("Reset Transform", sceneEditor.ResetSelectedTransform);
+                panel.Button("Reset Camera", sceneEditor.ResetCamera);
+
+                panel.Section("Gizmo");
+                panel.Options("Mode", () => (int)sceneEditor.GizmoMode, value => sceneEditor.GizmoMode = (MimirSceneEditorGizmoMode)value, SceneEditorGizmoOptions(), "1 translate, 2 rotate, 3 resize. Left-drag applies the active gizmo to the selected node.");
+                panel.Slider("X", () => sceneEditor.SelectedNode?.Transform.Position.X ?? 0.0f, sceneEditor.SetSelectedX, -12.0f, 12.0f, "0.00");
+                panel.Slider("Y", () => sceneEditor.SelectedNode?.Transform.Position.Y ?? 0.0f, sceneEditor.SetSelectedY, -8.0f, 8.0f, "0.00");
+                panel.Slider("Z", () => sceneEditor.SelectedNode?.Transform.Position.Z ?? 0.0f, sceneEditor.SetSelectedZ, -8.0f, 8.0f, "0.00");
+                panel.Slider("Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
+                panel.Slider("Scale X", () => sceneEditor.SelectedNode?.Transform.Scale.X ?? 1.0f, sceneEditor.SetSelectedScaleX, 0.05f, 8.0f, "0.00");
+                panel.Slider("Scale Y", () => sceneEditor.SelectedNode?.Transform.Scale.Y ?? 1.0f, sceneEditor.SetSelectedScaleY, 0.05f, 8.0f, "0.00");
+
+                panel.Section("Create");
+                panel.TextBox("Text", () => sceneEditor.PendingText, value => sceneEditor.PendingText = value, lines: 2, acceptsReturn: true);
+                panel.Button("Add SDF Text", sceneEditor.AddSdfTextPanel, "Creates a scene-owned text panel. Fensalir still needs a world SDF text renderer before glyphs are drawn in the scene.");
+                panel.TextBox("Model Path", () => sceneEditor.PendingModelPath, value => sceneEditor.PendingModelPath = value, lines: 1, acceptsReturn: false);
+                panel.Button("Import Model", sceneEditor.ImportModelPlaceholder, "Creates a model node now. Mesh decoding and draw resource ownership are the pending Fensalir/ASSIMP cut.");
             })
             .Panel("Mimir Sync", 392.0f, 82.0f, 390.0f, fadeWhenMouseDistant: true, panel =>
             {
@@ -1057,6 +1126,13 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         presentationControls.LutPresets
             .Select((preset, index) => new AquariumUiOption(index, preset.DisplayName))
             .ToArray();
+
+    private static IReadOnlyList<AquariumUiOption> SceneEditorGizmoOptions() =>
+    [
+        new AquariumUiOption((int)MimirSceneEditorGizmoMode.Translate, "Grab"),
+        new AquariumUiOption((int)MimirSceneEditorGizmoMode.Rotate, "Rotate"),
+        new AquariumUiOption((int)MimirSceneEditorGizmoMode.Scale, "Resize"),
+    ];
 
     private string DescribeProgramVideo()
     {
