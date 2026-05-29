@@ -509,12 +509,12 @@ Fensalir's shared reservoir history update now runs as a compute pass over
 four structured rows per pixel and emits the resolved HDR field texture for
 bloom/presentation, so the presentation shader is no longer a hidden history
 owner.
-TubeField render also binds the engine blue-noise texture, jitters the
-tube-local SDF sample in the proxy fragment shader, and uses scene depth so
-opaque field geometry resolves by nearest generated surface instead of draw
-order. The live image still exposes generated segment structure; this is the
-current bounded generated-mesh/reservoir bridge, not the final smooth tube
-marcher.
+TubeField now feeds the shared reservoir from GPU-resident rolling-buffer
+column packets instead of generated segment packets. Fensalir emits one column
+packet per logical spectrum history/source column, bins those columns into
+screen tiles, and evaluates Catmull-Rom tube SDF/material samples directly from
+the source buffer during the ReSTIR passes. Generated mesh draw args are zeroed
+for the live path and remain only a diagnostic reference.
 `Mimir.BufferSmoke --mimir-spectrum-upload-smoke` verifies this through the
 actual `MimirRuntime` frame path and confirms the legacy direct spline and
 buffer-field dashboard inputs are empty. The same path declares the local

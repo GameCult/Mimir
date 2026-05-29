@@ -335,12 +335,12 @@ a named invariant that the native runtime cannot protect yet.
   ping-ponged structured buffer with the same four rows per pixel; it emits the
   resolved HDR field texture that bloom and presentation consume. The
   presentation shader is no longer a hidden history/TAA owner.
-  TubeField render now binds the engine
-  blue-noise texture and jitters its tube-local SDF sample inside the proxy
-  fragment shader, then lets the scene depth buffer resolve opaque generated
-  field geometry by nearest surface instead of draw order. The visual remains a
-  generated proxy bridge and still exposes segment structure; a smoother
-  tube-specific marcher is a later renderer-quality cut. Fensalir validation
+  TubeField now feeds the shared reservoir from rolling-buffer column packets
+  instead of generated segment packets: expansion emits one GPU-resident column
+  record per logical history/source column, ReSTIR tile binning admits those
+  columns, and candidate evaluation samples the Catmull-Rom tube SDF/material
+  directly from the source buffer. Generated mesh draw args are zeroed for the
+  live path and remain only a diagnostic reference. Fensalir validation
   also rejects
   TubeSpline lowering metadata
   whose claim is not Tube-encoded or whose resource differs from the claim

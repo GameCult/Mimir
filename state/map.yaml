@@ -469,12 +469,13 @@ accepted_design:
     shared Fensalir compute pass over a ping-ponged structured buffer with the
     same four rows per pixel; it emits the resolved HDR field texture that
     bloom and presentation consume. The presentation shader is no longer a
-    hidden history/TAA owner. TubeField render now binds the engine blue-noise texture,
-    jitters its tube-local SDF sample inside the proxy fragment shader, and
-    uses scene depth so opaque generated field geometry resolves by nearest
-    surface rather than draw order. The current visual still exposes generated
-    segment structure; it is the bounded generated-mesh/reservoir bridge, not
-    yet the final smooth tube marcher.
+    hidden history/TAA owner. TubeField reservoir input has moved from
+    generated segment packets to rolling-buffer column packets: expansion emits
+    one GPU-resident column record per logical history/source column, tile
+    binning admits those columns, and ReSTIR candidate evaluation samples the
+    Catmull-Rom tube SDF/material directly from the source buffer. Generated
+    mesh draw args are zeroed for the live path and remain only a diagnostic
+    reference.
     The generated-mesh DrawIndexed indirect command signature is shared ABI now;
     TubeField only owns the argument buffer it emits. TubeField expansion is now
     gated by the selected backend packet plan, so lowering metadata cannot
