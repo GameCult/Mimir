@@ -57,6 +57,12 @@ invariants:
     disparity lane over synchronized rectified texture pairs and calibration
     state. CUDA, TensorRT, and monocular depth demos are provenance only, not
     live dependencies or geometry authority.
+  - The first stereo-depth contract is code-visible:
+    `MimirStereoDepthConfigurations` names the libSGM-provenance D3D12 SGM
+    profile, and `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`
+    lowers synthetic rectified stereo depth into an R16F disparity SurfacePage,
+    R8 confidence Texture2D, and Height FieldEvidence claim. The actual SGM
+    HLSL/D3D12 kernel is still future work.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

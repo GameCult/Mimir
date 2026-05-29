@@ -83,6 +83,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Provenance]]. `libSGM` is the current permissive north-star reference for a
   future Fensalir-owned D3D12 stereo SGM compute lane. Do not import CUDA or
   TensorRT as live depth authority.
+  The first code contract is in `MimirStereoDepthConfigurations` and
+  `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`; run
+  `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --stereo-depth-contract-smoke`
+  to verify the synthetic R16F disparity `SurfacePage` FieldEvidence socket.
+  This proves the lane shape, not the SGM kernel.
 - Fensalir also owns the EVE-facing dashboard pixels through
   `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
   texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas

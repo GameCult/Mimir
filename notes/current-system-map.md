@@ -396,6 +396,12 @@ current permissive north-star reference: Mimir/Fensalir should rebuild the SGM
 shape over synchronized rectified texture pairs, calibration state, typed GPU
 resources, and explicit fences. CUDA, TensorRT, and monocular depth demos remain
 research references only.
+The first live contract exists: `MimirStereoDepthConfigurations` names the
+libSGM-provenance D3D12 SGM profile, and
+`MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame` lowers a synthetic
+rectified stereo result into GPU-resident disparity/confidence resources plus a
+Height FieldEvidence claim planned as a `SurfacePage` packet. The kernel itself
+is still future work.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

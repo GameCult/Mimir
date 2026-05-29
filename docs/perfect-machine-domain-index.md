@@ -176,6 +176,11 @@ Likely shape:
   permissive SGM provenance, especially `libSGM`: rectified texture pairs plus
   calibration produce GPU-resident disparity/depth/confidence resources, which
   then lower into FieldEvidence claims.
+- Current contract proof:
+  `Mimir.BufferSmoke --stereo-depth-contract-smoke` validates the profile and
+  FieldEvidence socket. The synthetic Leap stereo pair produces an R16F
+  disparity `SurfacePage`, an R8 confidence `Texture2D`, one Height claim, and
+  one planned `SurfacePage` packet. It is not yet a live compute kernel.
 - Native reservoir preserves rolling evidence.
 - Fusion emits surface/material/render claims.
 - Program video publishes via Spout2.
@@ -265,7 +270,8 @@ Six optical sensors with high-rate Eyes and Leap IR mean:
 4. Fractional delay/SRO actuator proof.
 5. Direct Leap/PS3/Kiyo runtime drivers.
 6. D3D12 stereo disparity/depth compute lane, with `libSGM` as provenance and
-   Fensalir as live owner.
+   Fensalir as live owner. Contract/profile smoke exists; implement the HLSL
+   cost-volume, aggregation, winner/subpixel, and confidence passes next.
 7. Native reservoir integration with Fensalir/Faust.
 8. Raven/phone receiver codebook/schedule local decode.
 9. GPU visual fusion and Spout2 program video.

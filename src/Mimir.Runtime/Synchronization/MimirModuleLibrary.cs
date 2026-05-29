@@ -81,6 +81,12 @@ public static class MimirModuleLibrary
             MimirCameraIngestConfigurations.BuiltIn.Select(profile => profile.Id).ToArray(),
             ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --perfect-machine-profile-smoke"]),
         new(
+            "stereo-depth",
+            "Fensalir D3D12 compute",
+            "SGM-shaped stereo disparity/depth profiles. libSGM is provenance for the first D3D12 lane, not a CUDA dependency.",
+            MimirStereoDepthConfigurations.BuiltIn.Select(profile => profile.Id).ToArray(),
+            ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --stereo-depth-contract-smoke"]),
+        new(
             "reservoir-strategies",
             "Mimir.Runtime + native/reservoir + Fensalir",
             "Managed, native, and GPU-resident reservoir configurations with explicit retention owners.",

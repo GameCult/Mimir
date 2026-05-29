@@ -14,6 +14,7 @@ public enum MimirVisualFusionModel
 {
     TimestampedFramesOnly,
     SparseFeatureTracks,
+    StereoSgmDepth,
     VisualConstrainedAudioField,
     TemporalGaussianClaims,
     FullHybridEvidenceField
@@ -58,6 +59,15 @@ public static class MimirVisualFusionConfigurations
         PublishesSpout: false,
         UsesAudioConstraints: false);
 
+    public static MimirVisualFusionConfiguration StereoSgmDepth { get; } = new(
+        "stereo-sgm-depth",
+        "Rectified synchronized stereo texture pairs lower through a Fensalir-owned D3D12 SGM depth lane.",
+        MimirVisualFusionModel.StereoSgmDepth,
+        CreateDefaultSensors(),
+        RequiresFensalirD3D12: true,
+        PublishesSpout: false,
+        UsesAudioConstraints: false);
+
     public static MimirVisualFusionConfiguration AudioConstrainedField { get; } = new(
         "audio-constrained-field",
         "Visual feature tracks constrain acoustic source hypotheses before Fensalir stabilizes field claims.",
@@ -80,6 +90,7 @@ public static class MimirVisualFusionConfigurations
     [
         CadenceProof,
         TrackingFusion,
+        StereoSgmDepth,
         AudioConstrainedField,
         FullHybridEvidence
     ];

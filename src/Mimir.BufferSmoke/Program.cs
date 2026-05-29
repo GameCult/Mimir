@@ -139,6 +139,11 @@ if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringC
     return RunFensalirTextureLeaseSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--stereo-depth-contract-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunStereoDepthContractSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--ks-camera-driver-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunKsCameraDriverSmoke(args);
@@ -2218,12 +2223,81 @@ static MimirRollingStreamBuffer BuildSyntheticAudioBuffer(string sourceId, int s
     return buffer;
 }
 
+static AquariumFieldEvidenceFrame BuildSyntheticStereoDepthFrame(MimirFensalirFieldLowering lowerer)
+{
+    var profile = MimirStereoDepthConfigurations.D3D12SgmLibSgmProvenance;
+    return lowerer.BuildStereoDepthCandidateFrame(
+        [
+            new MimirStereoDepthFieldCandidate(
+                CandidateKey: "synthetic-leap-plane",
+                CalibrationId: "synthetic-rectified-leap-calibration",
+                CameraPairId: "leap-stereo-ir",
+                ProducerKey: profile.Id,
+                ProfileId: profile.Id,
+                LeftObservationKey: "leap-left-ir:1",
+                RightObservationKey: "leap-right-ir:1",
+                LeftResourceKey: "mimir:resource:texture2d:leap-left-ir",
+                RightResourceKey: "mimir:resource:texture2d:leap-right-ir",
+                DisparityResourceKey: "mimir:resource:stereo-depth:leap-disparity-r16f",
+                ConfidenceResourceKey: "mimir:resource:stereo-depth:leap-confidence-r8",
+                Width: 640,
+                Height: 240,
+                DisparityLevels: profile.DisparityLevels,
+                AggregationPathCount: profile.AggregationPathCount,
+                MinDepthMeters: 0.20,
+                MaxDepthMeters: 4.0,
+                Confidence: 0.93,
+                ObservedTimeNs: 1_000_000_000L)
+        ]);
+}
+
+static int RunStereoDepthContractSmoke()
+{
+    var profile = MimirStereoDepthConfigurations.D3D12SgmLibSgmProvenance;
+    var frame = BuildSyntheticStereoDepthFrame(new MimirFensalirFieldLowering());
+    var validation = AquariumFieldEvidenceValidator.Validate(frame);
+    var plan = AquariumFieldLoweringPlanner.Plan(frame);
+    var claim = frame.Claims.FirstOrDefault();
+    var disparity = frame.Resources.FirstOrDefault(resource => resource.ResourceKey == "mimir:resource:stereo-depth:leap-disparity-r16f");
+    var confidence = frame.Resources.FirstOrDefault(resource => resource.ResourceKey == "mimir:resource:stereo-depth:leap-confidence-r8");
+
+    Console.WriteLine(
+        $"stereo-depth-contract profile={profile.Id} provenance={profile.Provenance} liveDependency={profile.LiveDependency} disparityLevels={profile.DisparityLevels} paths={profile.AggregationPathCount}");
+    Console.WriteLine(
+        $"stereo-depth-field resources={frame.Resources.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
+    Console.WriteLine(
+        $"stereo-depth-output disparity={disparity.ResourceKey} kind={disparity.Kind} format={disparity.Format} confidence={confidence.ResourceKey} confidenceFormat={confidence.Format} backend={(plan.Packets.Count > 0 ? plan.Packets[0].Backend : AquariumFieldBackendKind.Unknown)}");
+
+    return !validation.HasErrors &&
+        !profile.LiveDependency &&
+        profile.Algorithm == MimirStereoDepthAlgorithm.SemiGlobalMatching &&
+        profile.License == "Apache-2.0" &&
+        profile.RequiresRectifiedInputs &&
+        profile.RequiresCalibration &&
+        profile.NegativeChecks.Any(check => check.Contains("no CUDA", StringComparison.OrdinalIgnoreCase)) &&
+        frame.Resources.Count == 2 &&
+        disparity.Kind == AquariumFieldResourceKind.SurfacePage &&
+        disparity.Residency == AquariumFieldResourceResidency.GpuResident &&
+        disparity.Format == "R16Float" &&
+        confidence.Kind == AquariumFieldResourceKind.Texture2D &&
+        confidence.Format == "R8_UNorm" &&
+        claim.Encoding == AquariumFieldEncoding.Height &&
+        claim.PayloadHandle == disparity.ResourceKey &&
+        claim.ProducerKey == profile.Id &&
+        plan.Packets.Count == 1 &&
+        plan.Packets[0].Backend == AquariumFieldBackendKind.SurfacePage &&
+        plan.DeferredRequests.Count == 0
+            ? 0
+            : 1;
+}
+
 static int RunPerfectMachineProfileSmoke()
 {
     var profiles = MimirPerfectMachineProfiles.All;
     var calibrationPlans = MimirCalibrationSessionPlans.BuiltIn;
     var audioFields = MimirAudioFieldConfigurations.BuiltIn;
     var visualFields = MimirVisualFusionConfigurations.BuiltIn;
+    var stereoDepthProfiles = MimirStereoDepthConfigurations.BuiltIn;
     var computePlans = MimirComputeOffloadConfigurations.BuiltIn;
     var assemblyPlans = MimirMachineAssemblyPlans.BuiltIn;
     var captureProfiles = MimirNativeCaptureConfigurations.BuiltIn;
@@ -2353,6 +2427,8 @@ static int RunPerfectMachineProfileSmoke()
                 1_000_000_000L)
         ]);
     var visualMarkerPlan = AquariumFieldLoweringPlanner.Plan(visualMarkerFrame);
+    var stereoDepthFrame = BuildSyntheticStereoDepthFrame(lowerer);
+    var stereoDepthPlan = AquariumFieldLoweringPlanner.Plan(stereoDepthFrame);
     var authority = new MimirAuthorityPolicyEvaluator().Evaluate(new MimirAuthorityEvaluationInput(
         "raven-scarlett-witness",
         new HashSet<string>(["known-node", "matching-codebook", "clock-fit-confidence", "response-profile"], StringComparer.Ordinal),
@@ -2368,7 +2444,7 @@ static int RunPerfectMachineProfileSmoke()
         new HashSet<string>(StringComparer.Ordinal)));
 
     Console.WriteLine(
-        $"perfect-machine-profile-smoke profiles={profiles.Count} calibrationPlans={calibrationPlans.Count} audioFields={audioFields.Count} visualFields={visualFields.Count} computePlans={computePlans.Count} assemblyPlans={assemblyPlans.Count} captureProfiles={captureProfiles.Count} publications={publications.Count} languageProfiles={languageProfiles.Count} pathLearning={pathLearningProfiles.Count} localization={localizationProfiles.Count} benchmarkPanels={benchmarkPanels.Count} actuatorStrategies={actuatorStrategies.Count} cameraIngest={cameraIngestStrategies.Count} reservoirs={reservoirStrategies.Count} distributedWitnesses={distributedWitnesses.Count} networkTransports={networkTransports.Count} authorityPolicies={authorityPolicies.Count} modules={moduleCatalog.Count}");
+        $"perfect-machine-profile-smoke profiles={profiles.Count} calibrationPlans={calibrationPlans.Count} audioFields={audioFields.Count} visualFields={visualFields.Count} stereoDepth={stereoDepthProfiles.Count} computePlans={computePlans.Count} assemblyPlans={assemblyPlans.Count} captureProfiles={captureProfiles.Count} publications={publications.Count} languageProfiles={languageProfiles.Count} pathLearning={pathLearningProfiles.Count} localization={localizationProfiles.Count} benchmarkPanels={benchmarkPanels.Count} actuatorStrategies={actuatorStrategies.Count} cameraIngest={cameraIngestStrategies.Count} reservoirs={reservoirStrategies.Count} distributedWitnesses={distributedWitnesses.Count} networkTransports={networkTransports.Count} authorityPolicies={authorityPolicies.Count} modules={moduleCatalog.Count}");
     Console.WriteLine(
         $"perfect-machine-codebook id={codebook.CodebookId} motifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} augmentations={decoder.Configuration.TemplateAugmentations.Length}");
     Console.WriteLine(
@@ -2382,6 +2458,8 @@ static int RunPerfectMachineProfileSmoke()
     Console.WriteLine(
         $"perfect-machine-visual-marker claims={visualMarkerFrame.Claims.Count} planned={visualMarkerPlan.Packets.Count} deferred={visualMarkerPlan.DeferredRequests.Count}");
     Console.WriteLine(
+        $"perfect-machine-stereo-depth profiles={stereoDepthProfiles.Count} resources={stereoDepthFrame.Resources.Count} claims={stereoDepthFrame.Claims.Count} planned={stereoDepthPlan.Packets.Count} deferred={stereoDepthPlan.DeferredRequests.Count}");
+    Console.WriteLine(
         $"perfect-machine-authority appliesTo=raven-scarlett-witness decision={authority.Decision} rule={authority.RuleId}");
     Console.WriteLine(
         $"perfect-machine-transport payload=TypedTimingState status={transport.Status} selected={transport.Transport?.Id ?? "none"}");
@@ -2390,6 +2468,7 @@ static int RunPerfectMachineProfileSmoke()
         calibrationPlans.Count >= 3 &&
         audioFields.Count >= 4 &&
         visualFields.Count >= 4 &&
+        stereoDepthProfiles.Count >= 3 &&
         computePlans.Count >= 3 &&
         assemblyPlans.Count >= 4 &&
         captureProfiles.Count >= 8 &&
@@ -2425,6 +2504,12 @@ static int RunPerfectMachineProfileSmoke()
         visualMarkerPlan.DeferredRequests.Count == 0 &&
         visualMarkerFrame.Claims[0].ClaimKey.Contains("synthetic-camera-rig-calibration", StringComparison.Ordinal) &&
         visualMarkerFrame.Claims[0].ClaimKey.Contains("synthetic-marker-a", StringComparison.Ordinal) &&
+        stereoDepthFrame.Resources.Count == 2 &&
+        stereoDepthFrame.Claims.Count == 1 &&
+        stereoDepthPlan.Packets.Count == 1 &&
+        stereoDepthPlan.Packets[0].Backend == AquariumFieldBackendKind.SurfacePage &&
+        stereoDepthPlan.DeferredRequests.Count == 0 &&
+        stereoDepthProfiles.Any(profile => profile.Id == MimirStereoDepthConfigurations.D3D12SgmLibSgmProvenance.Id && !profile.LiveDependency) &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&

@@ -10,6 +10,7 @@ public enum MimirWorkloadKind
     FaustDsp,
     CameraCapture,
     VisualFeatureExtraction,
+    StereoDepthEstimation,
     VisualFusion,
     ObsPublication
 }
@@ -41,6 +42,7 @@ public static class MimirComputeOffloadConfigurations
             new(MimirWorkloadKind.FaustDsp, MimirComputeBackend.FaustNativeDsp, "Faust/native DSP", CanRunRemote: false, RequiresRealtime: true, "Alignment, separation, and spatial bed are audio-rate DSP."),
             new(MimirWorkloadKind.CameraCapture, MimirComputeBackend.NativeSimd, "native capture workers", CanRunRemote: true, RequiresRealtime: true, "Drivers own device reads and timestamps."),
             new(MimirWorkloadKind.VisualFeatureExtraction, MimirComputeBackend.D3D12Compute, "Fensalir", CanRunRemote: false, RequiresRealtime: true, "GPU owns dense feature work."),
+            new(MimirWorkloadKind.StereoDepthEstimation, MimirComputeBackend.D3D12Compute, "Fensalir", CanRunRemote: false, RequiresRealtime: true, "Calibrated stereo depth derives from synchronized texture resources and never from CPU readback."),
             new(MimirWorkloadKind.VisualFusion, MimirComputeBackend.D3D12Compute, "Fensalir", CanRunRemote: false, RequiresRealtime: true, "Fensalir owns temporal evidence field."),
             new(MimirWorkloadKind.ObsPublication, MimirComputeBackend.D3D12Compute, "OBS/Fensalir output", CanRunRemote: false, RequiresRealtime: true, "OBS receives program surfaces, not sync authority.")
         ]);
@@ -63,7 +65,8 @@ public static class MimirComputeOffloadConfigurations
             new(MimirWorkloadKind.BioacousticDecode, MimirComputeBackend.NativeSimd, "calibration worker", CanRunRemote: true, RequiresRealtime: false, "Large candidate batches can use native SIMD."),
             new(MimirWorkloadKind.PathCalibration, MimirComputeBackend.D3D12Compute, "calibration worker", CanRunRemote: true, RequiresRealtime: false, "GPU is useful when batches are large enough."),
             new(MimirWorkloadKind.ClockHypothesis, MimirComputeBackend.ManagedScalar, "calibration worker", CanRunRemote: true, RequiresRealtime: false, "Clock solve stays branchy and inspectable."),
-            new(MimirWorkloadKind.VisualFeatureExtraction, MimirComputeBackend.D3D12Compute, "Fensalir/calibration worker", CanRunRemote: true, RequiresRealtime: false, "Offline feature batches may run away from the render tick.")
+            new(MimirWorkloadKind.VisualFeatureExtraction, MimirComputeBackend.D3D12Compute, "Fensalir/calibration worker", CanRunRemote: true, RequiresRealtime: false, "Offline feature batches may run away from the render tick."),
+            new(MimirWorkloadKind.StereoDepthEstimation, MimirComputeBackend.D3D12Compute, "Fensalir/calibration worker", CanRunRemote: true, RequiresRealtime: false, "Stereo kernels can replay calibration captures, but their output remains derived evidence.")
         ]);
 
     public static IReadOnlyList<MimirComputeOffloadConfiguration> BuiltIn { get; } =

@@ -180,6 +180,45 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         };
     }
 
+    public AquariumFieldEvidenceFrame BuildStereoDepthCandidateFrame(
+        IEnumerable<MimirStereoDepthFieldCandidate> depthCandidates)
+    {
+        var domains = new List<AquariumFieldDomain>();
+        var claims = new List<AquariumFieldClaim>();
+        var candidates = new List<AquariumFieldCandidate>();
+        var resources = new List<AquariumFieldResourceDeclaration>();
+        var seenDomains = new HashSet<string>(StringComparer.Ordinal);
+        var seenResources = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var depthCandidate in depthCandidates)
+        {
+            if (string.IsNullOrWhiteSpace(depthCandidate.CandidateKey) ||
+                string.IsNullOrWhiteSpace(depthCandidate.DisparityResourceKey))
+            {
+                continue;
+            }
+
+            var domain = DomainForStereoDepthCandidate(depthCandidate);
+            AddDomain(domains, seenDomains, domain);
+            AddResource(resources, seenResources, DisparityResourceForStereoDepthCandidate(depthCandidate));
+            AddResource(resources, seenResources, ConfidenceResourceForStereoDepthCandidate(depthCandidate));
+
+            var claim = ClaimForStereoDepthCandidate(depthCandidate, domain.DomainKey);
+            claims.Add(claim);
+            candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+        }
+
+        return new AquariumFieldEvidenceFrame
+        {
+            Domains = domains,
+            Claims = claims,
+            Candidates = candidates,
+            Resources = resources,
+            AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
+            PresentationDelaySeconds = (float)options.PresentationDelaySeconds
+        };
+    }
+
     private static void AddDomain(
         ICollection<AquariumFieldDomain> domains,
         ISet<string> seenDomains,
@@ -354,6 +393,24 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             "Mimir.Runtime");
     }
 
+    private static AquariumFieldDomain DomainForStereoDepthCandidate(MimirStereoDepthFieldCandidate candidate)
+    {
+        var width = Math.Max(1, candidate.Width);
+        var height = Math.Max(1, candidate.Height);
+        var maxDepth = Math.Max(candidate.MinDepthMeters, candidate.MaxDepthMeters);
+        var depthExtent = Math.Max(0.001f, (float)maxDepth);
+        return new AquariumFieldDomain(
+            DomainKeyForStereoDepthCandidate(candidate),
+            "",
+            AquariumFieldDomainKind.Surface2D,
+            Matrix4x4.Identity,
+            Matrix4x4.Identity,
+            Vector3.Zero,
+            new Vector3(width, height, depthExtent),
+            Vector3.Zero,
+            "Fensalir D3D12 compute");
+    }
+
     private static AquariumFieldDomain DomainForSurfaceIntent(MimirSurfaceIntent intent) =>
         new(
             DomainKeyForSurfaceIntent(intent.IntentKey),
@@ -459,6 +516,32 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Proposal: proposal,
             PayloadHandle: markerCandidate.CalibrationId,
             ObservedTimeNs: markerCandidate.ObservedTimeNs,
+            Confidence: confidence);
+    }
+
+    private AquariumFieldClaim ClaimForStereoDepthCandidate(
+        MimirStereoDepthFieldCandidate depthCandidate,
+        string domainKey)
+    {
+        var confidence = Clamp01((float)depthCandidate.Confidence);
+        var represented = Math.Max(1, depthCandidate.Width * depthCandidate.Height);
+        var proposal = new AquariumFieldProposalPolicy(
+            AquariumFieldProposalKind.DeterministicStructural,
+            SourcePdf: 1.0f,
+            TargetContribution: confidence,
+            RepresentedCandidateCount: represented,
+            Seed: StableSeed(depthCandidate.CandidateKey));
+
+        return new AquariumFieldClaim(
+            ClaimKey: $"stereo-depth:{depthCandidate.CalibrationId}:{depthCandidate.CameraPairId}:{depthCandidate.CandidateKey}",
+            DomainKey: domainKey,
+            ProducerKey: depthCandidate.ProducerKey,
+            Layer: AquariumFieldLayer.Form,
+            Encoding: AquariumFieldEncoding.Height,
+            Support: SupportForStereoDepthCandidate(depthCandidate),
+            Proposal: proposal,
+            PayloadHandle: depthCandidate.DisparityResourceKey,
+            ObservedTimeNs: depthCandidate.ObservedTimeNs,
             Confidence: confidence);
     }
 
@@ -601,6 +684,57 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             ProjectedError: radius,
             Curvature: 0.0f,
             TemporalUncertainty: 0.0f);
+    }
+
+    private AquariumFieldSupport SupportForStereoDepthCandidate(MimirStereoDepthFieldCandidate depthCandidate)
+    {
+        var width = Math.Max(1.0f, depthCandidate.Width);
+        var height = Math.Max(1.0f, depthCandidate.Height);
+        var depthRange = Math.Max(0.001f, (float)(depthCandidate.MaxDepthMeters - depthCandidate.MinDepthMeters));
+        return new AquariumFieldSupport(
+            Center: new Vector3(width * 0.5f, height * 0.5f, depthRange * 0.5f),
+            Radius: new Vector3(width * 0.5f, height * 0.5f, depthRange * 0.5f),
+            LocalFrame: Matrix4x4.Identity,
+            ConservativeRadius: MathF.Max(width, height) * 0.5f,
+            ProjectedError: 1.0f / Math.Max(1, depthCandidate.DisparityLevels),
+            Curvature: 0.0f,
+            TemporalUncertainty: 0.0f);
+    }
+
+    private static AquariumFieldResourceDeclaration DisparityResourceForStereoDepthCandidate(
+        MimirStereoDepthFieldCandidate depthCandidate) =>
+        AquariumFieldResourceDeclaration.SurfacePage(
+            depthCandidate.DisparityResourceKey,
+            Math.Max(1, depthCandidate.Width),
+            Math.Max(1, depthCandidate.Height),
+            format: "R16Float",
+            version: checked((ulong)Math.Max(0L, depthCandidate.ObservedTimeNs)),
+            validFromNs: depthCandidate.ObservedTimeNs,
+            validUntilNs: depthCandidate.ObservedTimeNs);
+
+    private static AquariumFieldResourceDeclaration ConfidenceResourceForStereoDepthCandidate(
+        MimirStereoDepthFieldCandidate depthCandidate)
+    {
+        if (string.IsNullOrWhiteSpace(depthCandidate.ConfidenceResourceKey))
+        {
+            return default;
+        }
+
+        return new AquariumFieldResourceDeclaration(
+            ResourceKey: depthCandidate.ConfidenceResourceKey,
+            Kind: AquariumFieldResourceKind.Texture2D,
+            Residency: AquariumFieldResourceResidency.GpuResident,
+            Access: AquariumFieldShaderAccess.ShaderResource,
+            Format: "R8_UNorm",
+            Width: Math.Max(1, depthCandidate.Width),
+            Height: Math.Max(1, depthCandidate.Height),
+            DepthOrCount: 1,
+            StrideBytes: 1,
+            ValidFromNs: depthCandidate.ObservedTimeNs,
+            ValidUntilNs: depthCandidate.ObservedTimeNs,
+            Version: checked((ulong)Math.Max(0L, depthCandidate.ObservedTimeNs)),
+            NativeHandle: IntPtr.Zero,
+            NativeHandleKind: "fensalir-stereo-depth-confidence");
     }
 
     private AquariumFieldSupport SupportForSurfaceIntent(MimirSurfaceIntent intent)
@@ -771,6 +905,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
 
     private static string DomainKeyForVisualMarkerCandidate(MimirVisualMarkerFieldCandidate candidate) =>
         $"mimir:visual-marker:{candidate.CalibrationId}:{candidate.MarkerId}:{candidate.CandidateKey}";
+
+    private static string DomainKeyForStereoDepthCandidate(MimirStereoDepthFieldCandidate candidate) =>
+        $"mimir:stereo-depth:{candidate.CalibrationId}:{candidate.CameraPairId}:{candidate.CandidateKey}";
 
     private static string DomainKeyForSurfaceIntent(string intentKey) => $"mimir:intent:{intentKey}";
 

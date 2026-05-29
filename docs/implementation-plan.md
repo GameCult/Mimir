@@ -41,6 +41,11 @@ The research ledger is
 That note is not a dependency grant: CUDA implementations, TensorRT ports, and
 monocular model demos are provenance only. The live owner is Fensalir D3D12
 compute over Mimir-declared texture resources and calibration state.
+The first contract slice now exists in `MimirStereoDepthConfigurations` and
+`MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`: a calibrated
+stereo pair profile emits a GPU-resident R16F disparity `SurfacePage`, an R8
+confidence texture, and a Height FieldEvidence claim planned to the
+`SurfacePage` backend. This is the socket for the kernel, not the kernel.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
@@ -298,6 +303,11 @@ a named invariant that the native runtime cannot protect yet.
   D3D12 handle and accepts Mimir video format names.
   `Mimir.BufferSmoke --fensalir-camera-observation-smoke` verifies the split,
   and `--fensalir-texture-lease-smoke` verifies the engine-owned lease path.
+  `Mimir.BufferSmoke --stereo-depth-contract-smoke` verifies the next visual
+  socket: libSGM-provenance D3D12 SGM is represented as a non-dependency
+  profile, and synthetic rectified Leap stereo depth lowers to one planned
+  `SurfacePage` packet with no CUDA, CPU disparity image, or monocular metric
+  authority.
 - Mimir's active proof path no longer uses the direct
   `AquariumAcousticFieldFrame` builder either. Sync states lower into
   FieldEvidence calibration constraints through `MapCalibrationConstraints`,
@@ -527,7 +537,9 @@ a named invariant that the native runtime cannot protect yet.
    lane over rectified synchronized camera texture pairs, emitting
    GPU-resident disparity/depth/confidence resources and FieldEvidence claims.
    Keep `libSGM` as provenance for algorithm shape and benchmark pressure, not
-   as imported CUDA authority.
+   as imported CUDA authority. The typed contract and smoke exist; the next cut
+   is the actual HLSL/D3D12 cost-volume and SGM aggregation kernel behind that
+   contract.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver
