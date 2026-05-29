@@ -414,8 +414,10 @@ left/right input textures, then emitting a GPU-resident compute-writable
 disparity SurfacePage, confidence texture, Height FieldEvidence claim, and
 `AquariumFieldStereoDepthLowering` sidecar. The lowering sidecar is the dispatch contract: it binds the
 libSGM-provenance profile, calibration id, camera pair, inputs, disparity
-output, disparity levels, aggregation paths, and depth range. The kernel itself
-is still future work. Fensalir's D3D12 renderer now counts stereo-depth
+output, min disparity, disparity levels, aggregation paths, census radius,
+P1/P2 smoothness penalties, and depth range. The current D3D12 SGM profile
+publishes min disparity 0, 128 disparities, four paths, census radius 2, P1 8,
+and P2 96. The kernel itself is still future work. Fensalir's D3D12 renderer now counts stereo-depth
 lowerings as dispatch-ready only when the Height claim is planned and the
 left/right input textures plus UAV disparity `SurfacePage` resolve through its
 field resource registry; it logs that readiness separately from the absent

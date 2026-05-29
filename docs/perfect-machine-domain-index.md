@@ -181,7 +181,8 @@ Likely shape:
   FieldEvidence socket. The synthetic Leap stereo pair uses caller-declared
   shader-readable left/right texture declarations, an R16F compute-writable disparity
   `SurfacePage`, an R8 confidence `Texture2D`, one Height claim, one
-  `AquariumFieldStereoDepthLowering` sidecar, and one planned `SurfacePage`
+  `AquariumFieldStereoDepthLowering` sidecar with min disparity 0, 128
+  disparities, four paths, census radius 2, P1 8, and P2 96, and one planned `SurfacePage`
   packet. It is not yet a live compute kernel.
 - Native reservoir preserves rolling evidence.
 - Fusion emits surface/material/render claims.

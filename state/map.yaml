@@ -64,7 +64,10 @@ invariants:
     then lowers synthetic rectified stereo depth into a compute-writable R16F
     disparity SurfacePage, R8 confidence Texture2D, a Height FieldEvidence claim, and an
     `AquariumFieldStereoDepthLowering` sidecar tying profile, calibration,
-    camera pair, inputs, disparity output, and depth range together. The actual
+    camera pair, inputs, disparity output, SGM constants, and depth range
+    together. The current libSGM-provenance D3D12 SGM profile publishes min
+    disparity 0, 128 disparities, four aggregation paths, census radius 2, P1
+    8, and P2 96. The actual
     SGM HLSL/D3D12 kernel is still future work. Fensalir now reports
     stereo-depth dispatch readiness only after the planned claim and all input/
     output resources resolve, without writing placeholder depth.

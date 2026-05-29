@@ -28,6 +28,10 @@ public sealed record MimirStereoDepthKernelProfile(
     bool RequiresCalibration,
     string[] RequiredInputResources,
     string[] OutputResources,
+    int MinDisparity,
+    int CensusRadius,
+    double SmoothnessPenaltySmall,
+    double SmoothnessPenaltyLarge,
     string[] NegativeChecks);
 
 public sealed record MimirStereoDepthFieldCandidate(
@@ -44,8 +48,12 @@ public sealed record MimirStereoDepthFieldCandidate(
     string ConfidenceResourceKey,
     int Width,
     int Height,
+    int MinDisparity,
     int DisparityLevels,
     int AggregationPathCount,
+    int CensusRadius,
+    double SmoothnessPenaltySmall,
+    double SmoothnessPenaltyLarge,
     double MinDepthMeters,
     double MaxDepthMeters,
     double Confidence,
@@ -67,6 +75,10 @@ public static class MimirStereoDepthConfigurations
         RequiresCalibration: true,
         RequiredInputResources: ["left Texture2D", "right Texture2D", "stereo calibration"],
         OutputResources: ["R16Float disparity SurfacePage", "R8_UNorm confidence Texture2D"],
+        MinDisparity: 0,
+        CensusRadius: 2,
+        SmoothnessPenaltySmall: 8.0,
+        SmoothnessPenaltyLarge: 96.0,
         NegativeChecks:
         [
             "no CUDA runtime dependency",
@@ -89,6 +101,10 @@ public static class MimirStereoDepthConfigurations
         RequiresCalibration: true,
         RequiredInputResources: ["left Texture2D", "right Texture2D", "model weights"],
         OutputResources: ["learned disparity/depth reference"],
+        MinDisparity: 0,
+        CensusRadius: 0,
+        SmoothnessPenaltySmall: 0.0,
+        SmoothnessPenaltyLarge: 0.0,
         NegativeChecks: ["does not own live geometry", "does not introduce model runtime before D3D12 SGM socket exists"]);
 
     public static MimirStereoDepthKernelProfile DepthAnythingSmallReference { get; } = new(
@@ -105,6 +121,10 @@ public static class MimirStereoDepthConfigurations
         RequiresCalibration: false,
         RequiredInputResources: ["single camera Texture2D", "model weights"],
         OutputResources: ["relative depth reference"],
+        MinDisparity: 0,
+        CensusRadius: 0,
+        SmoothnessPenaltySmall: 0.0,
+        SmoothnessPenaltyLarge: 0.0,
         NegativeChecks: ["does not own metric scene geometry", "does not bypass calibrated stereo"]);
 
     public static IReadOnlyList<MimirStereoDepthKernelProfile> BuiltIn { get; } =

@@ -48,7 +48,9 @@ textures, emits a GPU-resident compute-writable R16F disparity `SurfacePage`,
 an R8 confidence texture, a Height FieldEvidence claim planned to the
 `SurfacePage` backend, and an `AquariumFieldStereoDepthLowering` sidecar tying
 profile, calibration, camera pair, inputs, disparity output, disparity
-settings, and depth range together. This is the socket for the kernel, not the
+settings, SGM constants, and depth range together. The libSGM-provenance profile
+currently publishes min disparity 0, 128 disparities, four aggregation paths,
+census radius 2, P1 8, and P2 96. This is the socket for the kernel, not the
 kernel. Fensalir's renderer now reports whether those lowerings are
 dispatch-ready after planning/resource resolution, without writing placeholder
 depth values.

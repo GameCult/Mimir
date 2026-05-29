@@ -2300,8 +2300,12 @@ static AquariumFieldEvidenceFrame BuildSyntheticStereoDepthFrame(MimirFensalirFi
                 ConfidenceResourceKey: "mimir:resource:stereo-depth:leap-confidence-r8",
                 Width: 640,
                 Height: 240,
+                MinDisparity: profile.MinDisparity,
                 DisparityLevels: profile.DisparityLevels,
                 AggregationPathCount: profile.AggregationPathCount,
+                CensusRadius: profile.CensusRadius,
+                SmoothnessPenaltySmall: profile.SmoothnessPenaltySmall,
+                SmoothnessPenaltyLarge: profile.SmoothnessPenaltyLarge,
                 MinDepthMeters: 0.20,
                 MaxDepthMeters: 4.0,
                 Confidence: 0.93,
@@ -2353,7 +2357,7 @@ static int RunStereoDepthContractSmoke()
     var confidence = frame.Resources.FirstOrDefault(resource => resource.ResourceKey == "mimir:resource:stereo-depth:leap-confidence-r8");
 
     Console.WriteLine(
-        $"stereo-depth-contract profile={profile.Id} provenance={profile.Provenance} liveDependency={profile.LiveDependency} disparityLevels={profile.DisparityLevels} paths={profile.AggregationPathCount}");
+        $"stereo-depth-contract profile={profile.Id} provenance={profile.Provenance} liveDependency={profile.LiveDependency} minDisparity={profile.MinDisparity} disparityLevels={profile.DisparityLevels} paths={profile.AggregationPathCount} censusRadius={profile.CensusRadius} p1={profile.SmoothnessPenaltySmall:0.###} p2={profile.SmoothnessPenaltyLarge:0.###}");
     Console.WriteLine(
         $"stereo-depth-field resources={frame.Resources.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
     Console.WriteLine(
@@ -2369,6 +2373,10 @@ static int RunStereoDepthContractSmoke()
         frame.Resources.Count == 4 &&
         frame.StereoDepthLowerings.Count == 1 &&
         stereoLowering.ProfileKey == profile.Id &&
+        stereoLowering.MinDisparity == profile.MinDisparity &&
+        stereoLowering.CensusRadius == profile.CensusRadius &&
+        Math.Abs(stereoLowering.SmoothnessPenaltySmall - profile.SmoothnessPenaltySmall) < 0.001 &&
+        Math.Abs(stereoLowering.SmoothnessPenaltyLarge - profile.SmoothnessPenaltyLarge) < 0.001 &&
         stereoLowering.LeftResourceKey == "mimir:resource:texture2d:leap-left-ir" &&
         stereoLowering.RightResourceKey == "mimir:resource:texture2d:leap-right-ir" &&
         stereoLowering.DisparityResourceKey == disparity.ResourceKey &&

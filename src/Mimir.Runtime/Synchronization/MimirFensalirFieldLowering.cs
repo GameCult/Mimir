@@ -768,8 +768,12 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             ConfidenceResourceKey: depthCandidate.ConfidenceResourceKey,
             Width: Math.Max(1, depthCandidate.Width),
             Height: Math.Max(1, depthCandidate.Height),
+            MinDisparity: Math.Max(0, depthCandidate.MinDisparity),
             DisparityLevels: Math.Max(1, depthCandidate.DisparityLevels),
             AggregationPathCount: Math.Max(1, depthCandidate.AggregationPathCount),
+            CensusRadius: Math.Max(1, depthCandidate.CensusRadius),
+            SmoothnessPenaltySmall: (float)depthCandidate.SmoothnessPenaltySmall,
+            SmoothnessPenaltyLarge: (float)depthCandidate.SmoothnessPenaltyLarge,
             MinDepthMeters: (float)depthCandidate.MinDepthMeters,
             MaxDepthMeters: (float)depthCandidate.MaxDepthMeters);
 
