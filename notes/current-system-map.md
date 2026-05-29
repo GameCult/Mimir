@@ -415,7 +415,11 @@ disparity SurfacePage, confidence texture, Height FieldEvidence claim, and
 `AquariumFieldStereoDepthLowering` sidecar. The lowering sidecar is the dispatch contract: it binds the
 libSGM-provenance profile, calibration id, camera pair, inputs, disparity
 output, disparity levels, aggregation paths, and depth range. The kernel itself
-is still future work.
+is still future work. Fensalir's D3D12 renderer now counts stereo-depth
+lowerings as dispatch-ready only when the Height claim is planned and the
+left/right input textures plus UAV disparity `SurfacePage` resolve through its
+field resource registry; it logs that readiness separately from the absent
+kernel.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

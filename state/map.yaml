@@ -65,7 +65,9 @@ invariants:
     disparity SurfacePage, R8 confidence Texture2D, a Height FieldEvidence claim, and an
     `AquariumFieldStereoDepthLowering` sidecar tying profile, calibration,
     camera pair, inputs, disparity output, and depth range together. The actual
-    SGM HLSL/D3D12 kernel is still future work.
+    SGM HLSL/D3D12 kernel is still future work. Fensalir now reports
+    stereo-depth dispatch readiness only after the planned claim and all input/
+    output resources resolve, without writing placeholder depth.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

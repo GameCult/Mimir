@@ -49,7 +49,9 @@ an R8 confidence texture, a Height FieldEvidence claim planned to the
 `SurfacePage` backend, and an `AquariumFieldStereoDepthLowering` sidecar tying
 profile, calibration, camera pair, inputs, disparity output, disparity
 settings, and depth range together. This is the socket for the kernel, not the
-kernel.
+kernel. Fensalir's renderer now reports whether those lowerings are
+dispatch-ready after planning/resource resolution, without writing placeholder
+depth values.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
