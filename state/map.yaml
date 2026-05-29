@@ -230,6 +230,13 @@ accepted_design:
     shared `clockDomainId`; the Raven path uses audio evidence routed into
     Scarlett to earn a `raven-sync` correction for Raven display frames.
     Network arrival timestamps remain metadata only.
+    `MimirPresentationControlState` owns program-control intent for Fensalir:
+    video feed visibility/solo/opacity/layer order, audio mute/solo/gain, and
+    global LUT preset selection. The `Mimir Program` panel filters video
+    production surface intents and applies audio mix gain before/inside the
+    Faust streaming DSP path. LUT presets are typed postprocess state; exposure
+    and bloom map into current Fensalir `GraphicsSettings`, while actual LUT
+    texture sampling remains the named renderer hook.
     `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
     SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
     The synthetic

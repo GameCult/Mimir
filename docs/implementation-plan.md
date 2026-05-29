@@ -201,6 +201,15 @@ a named invariant that the native runtime cannot protect yet.
   The display feed remains derived evidence, not an independent timing owner.
   `Mimir.BufferSmoke --synchronized-buffer-planner-smoke` proves the aligned
   local-camera, Raven-display, loopback, and mic buffer shape.
+- `MimirPresentationControlState` owns operator intent for the Fensalir program
+  surface: video feed visibility/solo/opacity/layer order, audio mute/solo/gain,
+  and global LUT preset selection. The `Mimir Program` UI panel is deliberately
+  compact and fadeable. Video choices filter production surface intents before
+  Fensalir composition; audio choices modify Faust gain controls and the samples
+  sent through Fensalir streaming DSP. LUT presets are typed postprocess state
+  with preset paths and strength; until the renderer grows LUT texture sampling,
+  preset exposure and bloom are mapped into existing `GraphicsSettings`.
+  `Mimir.BufferSmoke --presentation-control-smoke` proves the state owner.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

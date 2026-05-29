@@ -79,6 +79,11 @@ if (args.Any(arg => string.Equals(arg, "--synchronized-buffer-planner-smoke", St
     return RunSynchronizedBufferPlannerSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--presentation-control-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunPresentationControlSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--audio-stem-publication-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunAudioStemPublicationSmoke();
@@ -1931,6 +1936,41 @@ static int RunSynchronizedBufferPlannerSmoke()
         micSlice.TimingOffsetNs == -10_000_000 &&
         micSlice.Status == MimirSynchronizedSliceStatus.Ready &&
         cameraSlice.Status != MimirSynchronizedSliceStatus.Missing
+            ? 0
+            : 1;
+}
+
+static int RunPresentationControlSmoke()
+{
+    var controls = new MimirPresentationControlState();
+    var camera = NewVideoBuffer("camera-main", MimirStreamOrigin.LocalDevice, 1_000_000_000, 1280, 720, MimirVideoPixelFormat.Bgra8, 1);
+    var display = NewVideoBuffer("raven-display", MimirStreamOrigin.Network, 1_000_000_000, 1920, 1080, MimirVideoPixelFormat.Bgra8, 2, "raven-sync");
+    var mic = NewAudioBlockBuffer("asio-ch0", 1_000_000_000, 48_000, 480, 3);
+    var loopback = NewAudioBlockBuffer("asio-ch2", 1_000_000_000, 48_000, 480, 4);
+    controls.SyncFromBuffers([camera, display, mic, loopback]);
+
+    controls.SelectedVideoIndex = 1;
+    controls.SelectedVideo!.Solo = true;
+    controls.SelectedVideo.Opacity = 0.42f;
+    controls.SelectedAudioIndex = 0;
+    controls.SelectedAudio!.Muted = true;
+    controls.SelectLutPreset(2);
+    controls.LutStrength = 0.65f;
+    controls.RefreshPostprocess();
+
+    Console.WriteLine(
+        $"presentation-control-smoke video={controls.VideoFeeds.Count} audio={controls.AudioFeeds.Count} " +
+        $"cameraIncluded={controls.IncludesVideo("camera-main")} displayIncluded={controls.IncludesVideo("raven-display")} displayOpacity={controls.VideoOpacity("raven-display"):0.00} " +
+        $"micGain={controls.AudioGain("asio-ch0"):0.00} lut={controls.Postprocess.PresetId} strength={controls.Postprocess.LutStrength:0.00}");
+
+    return controls.VideoFeeds.Count == 2 &&
+        controls.AudioFeeds.Count == 2 &&
+        !controls.IncludesVideo("camera-main") &&
+        controls.IncludesVideo("raven-display") &&
+        Math.Abs(controls.VideoOpacity("raven-display") - 0.42f) < 0.001f &&
+        controls.AudioGain("asio-ch0") == 0.0f &&
+        string.Equals(controls.Postprocess.PresetId, "soft-film", StringComparison.Ordinal) &&
+        Math.Abs(controls.Postprocess.LutStrength - 0.65f) < 0.001f
             ? 0
             : 1;
 }

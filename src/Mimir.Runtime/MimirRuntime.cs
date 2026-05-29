@@ -40,6 +40,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirFensalirFieldLowering fieldLowering;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly MimirAlignmentActuatorBank audioActuatorBank = new();
+    private readonly MimirPresentationControlState presentationControls = new();
     private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
     private readonly MimirObsStemSharedMemoryPublisher? obsStemPublisher;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
@@ -141,7 +142,9 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 RenderDebugMode: 0,
                 SceneExposure: 1.0f,
                 BloomIntensity: 0.075f,
-                BloomVeilIntensity: 0.0f);
+                BloomVeilIntensity: 0.0f,
+                FieldReservoirMode: GraphicsSettings.FieldReservoirModeNativeDomain,
+                FieldReservoirScale: 0.5f);
         }
 
         obsStemPublisher = CreateObsStemPublisher();
@@ -151,6 +154,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     string.Equals(profile.Id, settings.Audio.BioacousticWitnessProfileId, StringComparison.OrdinalIgnoreCase))
                 ?? MimirBioacousticContestants.CanaryPacketTrill)
             : null;
+        presentationControls.SyncFromBuffers(synchronization.Buffers.Buffers);
         nextAudioSyncSeconds = audioSyncUpdateIntervalSeconds;
         nextTelemetrySeconds = telemetryIntervalSeconds;
         ui = CreateUi();
@@ -274,7 +278,12 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 continue;
             }
 
-            intents.Add(BuildSurfaceIntent(window, observation));
+            if (!presentationControls.IncludesVideo(window.StreamId))
+            {
+                continue;
+            }
+
+            intents.Add(BuildSurfaceIntent(window, observation, presentationControls.VideoOpacity(window.StreamId)));
         }
 
         var frame = fieldLowering.BuildFieldEvidenceFrame(windows, observations, constraints, intents);
@@ -299,7 +308,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
     }
 
-    private static MimirSurfaceIntent BuildSurfaceIntent(MimirRollingStreamWindow window, MimirObservation observation)
+    private static MimirSurfaceIntent BuildSurfaceIntent(MimirRollingStreamWindow window, MimirObservation observation, float opacity = 1.0f)
     {
         if (window.SourceKind == MimirStreamKind.Audio)
         {
@@ -314,7 +323,15 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 Purpose: MimirSurfaceIntentPurpose.Debug);
         }
 
-        return MimirFensalirBridgeMapper.MapDefaultSurfaceIntent(window, observation);
+        return new MimirSurfaceIntent(
+            IntentKey: $"{window.WindowId}:surface",
+            SourceObservationKeys: [observation.ObservationKey],
+            Domain: MimirSurfaceDomain.CameraImage,
+            Axes: new MimirSurfaceAxes("image-x", "image-y", "time-age", "stream"),
+            SupportPolicy: new MimirSurfaceSupportPolicy("program-composite", 0.0, window.Duration.TotalSeconds),
+            MaterialGraph: new MimirSurfaceMaterialIntent("program-video", "source-evidence", Math.Clamp(opacity, 0.0f, 1.0f)),
+            UpdateBudget: new MimirSurfaceUpdateBudget(0.0, 1, Math.Max(0, window.Payload.ByteLength)),
+            Purpose: MimirSurfaceIntentPurpose.Production);
     }
 
     private AquariumFieldEvidenceFrame AddSpectrumFieldEvidence(AquariumFieldEvidenceFrame frame)
@@ -690,6 +707,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     public void RegisterStreamSource(IMimirStreamSource source)
     {
         synchronization.AddSource(source);
+        presentationControls.SyncFromBuffers(synchronization.Buffers.Buffers);
     }
 
     public void Start()
@@ -707,6 +725,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
         runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
         lastPollCount = synchronization.PollSources();
+        presentationControls.SyncFromBuffers(synchronization.Buffers.Buffers);
+        ApplyPresentationPostprocess();
         UpdateObsStemPublication();
         QueueCalibrationTimeline();
         UpdateAudioSpectra();
@@ -747,7 +767,70 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private AquariumUiDocument CreateUi()
     {
         return new AquariumUiDocument()
-            .Panel("Mimir Sync", 18.0f, 82.0f, 390.0f, panel =>
+            .Panel("Mimir Program", 18.0f, 82.0f, 360.0f, fadeWhenMouseDistant: true, panel =>
+            {
+                panel.Section("Video");
+                panel.Options("Feed", () => presentationControls.SelectedVideoIndex, value => presentationControls.SelectedVideoIndex = value, VideoFeedOptions(), "Selects the video feed edited by the controls below.");
+                panel.Toggle("Visible", () => presentationControls.SelectedVideo?.Enabled ?? false, value =>
+                {
+                    if (presentationControls.SelectedVideo is { } feed)
+                    {
+                        feed.Enabled = value;
+                    }
+                });
+                panel.Toggle("Solo", () => presentationControls.SelectedVideo?.Solo ?? false, value =>
+                {
+                    if (presentationControls.SelectedVideo is { } feed)
+                    {
+                        feed.Solo = value;
+                    }
+                });
+                panel.Slider("Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 0.0f, value =>
+                {
+                    if (presentationControls.SelectedVideo is { } feed)
+                    {
+                        feed.Opacity = Math.Clamp(value, 0.0f, 1.0f);
+                    }
+                }, 0.0f, 1.0f, "0.00");
+                panel.Button("Layer Up", () => presentationControls.MoveSelectedVideo(-1));
+                panel.Button("Layer Down", () => presentationControls.MoveSelectedVideo(1));
+                panel.Readout("Composite", DescribeProgramVideo);
+
+                panel.Section("Audio");
+                panel.Options("Stem", () => presentationControls.SelectedAudioIndex, value => presentationControls.SelectedAudioIndex = value, AudioFeedOptions(), "Selects the audio lane edited by the controls below.");
+                panel.Toggle("Mute", () => presentationControls.SelectedAudio?.Muted ?? false, value =>
+                {
+                    if (presentationControls.SelectedAudio is { } feed)
+                    {
+                        feed.Muted = value;
+                    }
+                });
+                panel.Toggle("Solo Stem", () => presentationControls.SelectedAudio?.Solo ?? false, value =>
+                {
+                    if (presentationControls.SelectedAudio is { } feed)
+                    {
+                        feed.Solo = value;
+                    }
+                });
+                panel.Slider("Gain", () => presentationControls.SelectedAudio?.Gain ?? 0.0f, value =>
+                {
+                    if (presentationControls.SelectedAudio is { } feed)
+                    {
+                        feed.Gain = Math.Clamp(value, 0.0f, 2.0f);
+                    }
+                }, 0.0f, 2.0f, "0.00");
+                panel.Readout("Mix", DescribeProgramAudio);
+
+                panel.Section("Color");
+                panel.Options("LUT", () => presentationControls.SelectedLutPresetIndex, presentationControls.SelectLutPreset, LutPresetOptions(), "Global color lookup table preset for the Fensalir post pass.");
+                panel.Slider("LUT Strength", () => presentationControls.LutStrength, value =>
+                {
+                    presentationControls.LutStrength = Math.Clamp(value, 0.0f, 1.0f);
+                    presentationControls.RefreshPostprocess();
+                }, 0.0f, 1.0f, "0.00");
+                panel.Readout("Post", DescribePostprocess);
+            })
+            .Panel("Mimir Sync", 392.0f, 82.0f, 390.0f, fadeWhenMouseDistant: true, panel =>
             {
                 panel.Section("Rolling Buffers");
                 panel.Readout("Window", () => $"{synchronization.Settings.BufferDuration.TotalSeconds:0.###}s");
@@ -815,6 +898,18 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         app.Features.DirectWriteOverlay();
         app.Debug.View("Scene", scene.Color);
         return app.Plan;
+    }
+
+    private void ApplyPresentationPostprocess()
+    {
+        presentationControls.RefreshPostprocess();
+        var post = presentationControls.Postprocess;
+        GraphicsSettings = GraphicsSettings with
+        {
+            SceneExposure = Math.Clamp(post.Exposure, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure),
+            BloomIntensity = Math.Clamp(post.BloomIntensity, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity),
+            BloomVeilIntensity = Math.Clamp(post.BloomVeilIntensity, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity),
+        };
     }
 
     private void QueueCalibrationTimeline()
@@ -942,6 +1037,61 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         return string.Join(" | ", synchronization.Buffers.Buffers.Select(DescribeBuffer));
     }
 
+    private IReadOnlyList<AquariumUiOption> VideoFeedOptions()
+    {
+        var feeds = presentationControls.VideoFeeds;
+        return feeds.Count == 0
+            ? [new AquariumUiOption(0, "No video")]
+            : feeds.Select((feed, index) => new AquariumUiOption(index, $"{feed.Layer + 1}. {feed.DisplayName}")).ToArray();
+    }
+
+    private IReadOnlyList<AquariumUiOption> AudioFeedOptions()
+    {
+        var feeds = presentationControls.AudioFeeds;
+        return feeds.Count == 0
+            ? [new AquariumUiOption(0, "No audio")]
+            : feeds.Select((feed, index) => new AquariumUiOption(index, feed.DisplayName)).ToArray();
+    }
+
+    private IReadOnlyList<AquariumUiOption> LutPresetOptions() =>
+        presentationControls.LutPresets
+            .Select((preset, index) => new AquariumUiOption(index, preset.DisplayName))
+            .ToArray();
+
+    private string DescribeProgramVideo()
+    {
+        var feeds = presentationControls.VideoFeeds;
+        if (feeds.Count == 0)
+        {
+            return "no video buffers";
+        }
+
+        var active = feeds
+            .Where(feed => presentationControls.IncludesVideo(feed.SourceId))
+            .Select(feed => $"{feed.Layer + 1}:{feed.SourceId}@{feed.Opacity:0.00}");
+        return string.Join(" | ", active.DefaultIfEmpty("black"));
+    }
+
+    private string DescribeProgramAudio()
+    {
+        var feeds = presentationControls.AudioFeeds;
+        if (feeds.Count == 0)
+        {
+            return "no audio buffers";
+        }
+
+        var active = feeds
+            .Select(feed => $"{feed.SourceId}:{presentationControls.AudioGain(feed.SourceId):0.00}")
+            .ToArray();
+        return string.Join(" | ", active);
+    }
+
+    private string DescribePostprocess()
+    {
+        var post = presentationControls.Postprocess;
+        return $"{post.PresetName} strength={post.LutStrength:0.00} exp={post.Exposure:0.000} contrast={post.Contrast:0.00} sat={post.Saturation:0.00} lut={post.LutPath}";
+    }
+
     private void UpdateAudioSynchronization()
     {
         if (runtimeSeconds < nextAudioSyncSeconds)
@@ -984,7 +1134,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     command.TargetDelaySamples,
                     command.ResampleRatio,
                     command.Confidence,
-                    command.FaustControls))
+                    ApplyPresentationGain(command)))
                 .ToArray(),
             frame.TruncatedSourceCount,
             ++audioActuatorFrameSequence));
@@ -1053,7 +1203,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 continue;
             }
 
-            var samples = ExtractMonoAudioBlock(latest, block);
+            var samples = ApplyGain(ExtractMonoAudioBlock(latest, block), presentationControls.AudioGain(commands[index].SourceId));
             if (samples.Length == 0)
             {
                 continue;
@@ -1089,6 +1239,18 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             frameCount,
             sampleRate,
             sequence));
+    }
+
+    private IReadOnlyDictionary<string, float> ApplyPresentationGain(MimirActuatorCommand command)
+    {
+        var gain = presentationControls.AudioGain(command.SourceId);
+        var controls = new Dictionary<string, float>(command.FaustControls, StringComparer.Ordinal);
+        foreach (var key in controls.Keys.Where(key => key.EndsWith("/gain", StringComparison.Ordinal)).ToArray())
+        {
+            controls[key] = Math.Clamp(controls[key] * gain, 0.0f, 2.0f);
+        }
+
+        return controls;
     }
 
     private void UpdateObsStemPublication()
@@ -1293,6 +1455,23 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             }
 
             output[frame] = Math.Clamp(sum / block.Channels, -1.0f, 1.0f);
+        }
+
+        return output;
+    }
+
+    private static float[] ApplyGain(float[] samples, float gain)
+    {
+        var safeGain = Math.Clamp(gain, 0.0f, 2.0f);
+        if (samples.Length == 0 || Math.Abs(safeGain - 1.0f) < 0.0001f)
+        {
+            return samples;
+        }
+
+        var output = new float[samples.Length];
+        for (var index = 0; index < samples.Length; index++)
+        {
+            output[index] = Math.Clamp(samples[index] * safeGain, -1.0f, 1.0f);
         }
 
         return output;

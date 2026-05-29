@@ -374,6 +374,14 @@ shape is explicit: Raven controls both display pixels and an audio timing signal
 routed into Scarlett, so Scarlett-decoded Raven audio evidence can earn a
 `raven-sync` correction that is applied to the `raven-display` buffer. Network
 arrival timestamps remain metadata, not timing authority.
+`MimirPresentationControlState` now owns the Fensalir program-control intent:
+video feed visibility/solo/opacity/layer order, audio mute/solo/gain, and
+global LUT preset selection. The `Mimir Program` panel exposes those controls
+without giving OBS or bridge endpoints composition authority. Video controls
+filter production surface intents before Fensalir composition; audio controls
+modify Faust gain controls and sample gain before Fensalir streaming DSP. LUT
+presets are typed postprocess state, with exposure/bloom currently mapped into
+`GraphicsSettings` and LUT texture sampling left as the next renderer hook.
 
 ## Visual Fusion
 
