@@ -34,6 +34,14 @@ deterministic local visibility generation before reservoir reuse. Reservoir
 resolve owns temporal antialiasing and reconstruction; TAA is not a separate
 hidden owner of field identity.
 
+The first depth-compute target should be a D3D12 stereo disparity lane modeled
+on permissive SGM provenance, with `libSGM` as the current north-star reference.
+The research ledger is
+[[research/d3d12-stereo-depth-provenance-2026-05-29|D3D12 Stereo Depth Provenance]].
+That note is not a dependency grant: CUDA implementations, TensorRT ports, and
+monocular model demos are provenance only. The live owner is Fensalir D3D12
+compute over Mimir-declared texture resources and calibration state.
+
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
 surfaces should stay broad. Aquarium-style heightfields should be quadtree
@@ -506,6 +514,11 @@ a named invariant that the native runtime cannot protect yet.
    the blocker; TubeField now occupies the first generated-mesh lowering lane.
    The next renderer decisions are how to expose additional generated mesh
    producers and which camera/page/volume/material lowering should follow.
+   The first depth-specific cut should be a Fensalir-owned D3D12 stereo SGM
+   lane over rectified synchronized camera texture pairs, emitting
+   GPU-resident disparity/depth/confidence resources and FieldEvidence claims.
+   Keep `libSGM` as provenance for algorithm shape and benchmark pressure, not
+   as imported CUDA authority.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver

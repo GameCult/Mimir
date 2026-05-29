@@ -30,6 +30,10 @@ Read this with:
 - [[fensalir-rendering-rebuild-migration|Fensalir Rendering Rebuild Migration]]
   for the current teardown/rebuild plan that keeps Mimir on physical evidence
   and pushes field rendering authority into Fensalir's evidence machine.
+- [[research/d3d12-stereo-depth-provenance-2026-05-29|D3D12 Stereo Depth Provenance]]
+  for the current fast GPU depth search. `libSGM` is the permissive north-star
+  reference for a future Fensalir-owned D3D12 compute stereo disparity lane;
+  CUDA/TensorRT projects remain provenance, not live dependencies.
 - [[research/perfect-machine-study-2026-05-23/calibration-session-spec|Calibration Session Spec]]
   for the planned physical-path calibration command.
 - [[perfect-machine-module-library|Perfect Machine Module Library]] for the
@@ -168,6 +172,10 @@ Likely shape:
 
 - Native capture pushes typed frame handles and timestamps.
 - Fensalir extracts features/depth/optical flow on GPU.
+- Stereo depth starts as a Fensalir-owned D3D12 compute lane modeled on
+  permissive SGM provenance, especially `libSGM`: rectified texture pairs plus
+  calibration produce GPU-resident disparity/depth/confidence resources, which
+  then lower into FieldEvidence claims.
 - Native reservoir preserves rolling evidence.
 - Fusion emits surface/material/render claims.
 - Program video publishes via Spout2.
@@ -176,6 +184,8 @@ Pressure:
 
 - Do not build a CPU image pipeline because it is easy to inspect. Six cameras
   make that path collapse into a pile of excuses.
+- Do not import CUDA or TensorRT as live depth authority. External depth
+  projects may guide kernel shape, benchmarks, and failure probes only.
 
 ## Hot Loop Budget
 
@@ -254,6 +264,8 @@ Six optical sensors with high-rate Eyes and Leap IR mean:
 3. Reduced alphabet/high-order codebook physical proof.
 4. Fractional delay/SRO actuator proof.
 5. Direct Leap/PS3/Kiyo runtime drivers.
-6. Native reservoir integration with Fensalir/Faust.
-7. Raven/phone receiver codebook/schedule local decode.
-8. GPU visual fusion and Spout2 program video.
+6. D3D12 stereo disparity/depth compute lane, with `libSGM` as provenance and
+   Fensalir as live owner.
+7. Native reservoir integration with Fensalir/Faust.
+8. Raven/phone receiver codebook/schedule local decode.
+9. GPU visual fusion and Spout2 program video.

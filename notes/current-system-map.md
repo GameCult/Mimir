@@ -381,6 +381,14 @@ Visual fusion belongs in Fensalir over current reservoir claims. Native capture
 workers provide frames; Fensalir owns feature extraction, matching, material
 fitting, render budgeting, and publication.
 
+Fast stereo depth is now mapped as a future Fensalir D3D12 compute lane, not an
+external library dependency. The provenance note
+`research/d3d12-stereo-depth-provenance-2026-05-29.md` records `libSGM` as the
+current permissive north-star reference: Mimir/Fensalir should rebuild the SGM
+shape over synchronized rectified texture pairs, calibration state, typed GPU
+resources, and explicit fences. CUDA, TensorRT, and monocular depth demos remain
+research references only.
+
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.
 Mimir submits evidence, buffers, constraints, and surface intent; Fensalir

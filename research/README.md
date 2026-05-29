@@ -11,10 +11,17 @@ Use it to shape native implementation decisions:
 
 - direct camera and audio drivers;
 - pinned/native buffers;
-- GPU feature extraction, flow, matching, and fusion;
+- GPU feature extraction, flow, matching, depth, and fusion;
 - Fensalir D3D12 compute/render paths;
 - Faust/native DSP;
 - OBS-facing program outputs.
+
+Visual/GPU research entry points:
+
+- [[d3d12-stereo-depth-provenance-2026-05-29|D3D12 Stereo Depth Provenance]]:
+  libSGM is the current permissive north-star reference for a future
+  Fensalir-owned D3D12 compute stereo-disparity lane. External CUDA/TensorRT
+  projects are provenance only, not runtime authority.
 
 Audio timing research entry points:
 

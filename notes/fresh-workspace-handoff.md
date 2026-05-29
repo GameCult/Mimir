@@ -78,6 +78,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   physical observations, calibration constraints, and surface intent; Fensalir
   turns those into field claims, selected lowerings, reusable evidence,
   temporal guide lanes, and presentation.
+- Fast depth provenance now lives at
+  [[research/d3d12-stereo-depth-provenance-2026-05-29|D3D12 Stereo Depth
+  Provenance]]. `libSGM` is the current permissive north-star reference for a
+  future Fensalir-owned D3D12 stereo SGM compute lane. Do not import CUDA or
+  TensorRT as live depth authority.
 - Fensalir also owns the EVE-facing dashboard pixels through
   `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
   texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas

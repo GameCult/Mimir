@@ -51,6 +51,12 @@ invariants:
   - Mimir publishes physical observations, calibration constraints, and surface
     intent. Fensalir owns field claims, selected lowerings, evidence reservoirs,
     temporal guide lanes, and program presentation.
+  - Fast stereo depth belongs to Fensalir's D3D12 compute/resource authority.
+    `research/d3d12-stereo-depth-provenance-2026-05-29.md` records libSGM as
+    the permissive north-star reference for a future SGM-shaped stereo
+    disparity lane over synchronized rectified texture pairs and calibration
+    state. CUDA, TensorRT, and monocular depth demos are provenance only, not
+    live dependencies or geometry authority.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before
