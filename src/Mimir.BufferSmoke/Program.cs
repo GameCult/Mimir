@@ -74,6 +74,11 @@ if (args.Any(arg => string.Equals(arg, "--audio-actuator-bank-smoke", StringComp
     return RunAudioActuatorBankSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--synchronized-buffer-planner-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunSynchronizedBufferPlannerSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--audio-stem-publication-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunAudioStemPublicationSmoke();
@@ -1893,6 +1898,43 @@ static int RunAudioActuatorBankSmoke()
             : 1;
 }
 
+static int RunSynchronizedBufferPlannerSmoke()
+{
+    const long t0 = 1_000_000_000;
+    const int sampleRate = 48_000;
+    var duration = TimeSpan.FromSeconds(5);
+    var camera = NewVideoBuffer("local-camera-0", MimirStreamOrigin.LocalDevice, t0, 640, 480, MimirVideoPixelFormat.Bgra8, 1);
+    var display = NewVideoBuffer("raven-display", MimirStreamOrigin.Network, t0 + 10_000_000, 1920, 1080, MimirVideoPixelFormat.Bgra8, 7, "raven-sync");
+    var reference = NewAudioBlockBuffer("loopback-scarlett-speakers", t0, sampleRate, 480, 2);
+    var delayedMic = NewAudioBlockBuffer("asio-ch0", t0 + 480 * 1_000_000_000L / sampleRate, sampleRate, 480, 3);
+    var state = NewSyncState("asio-ch0", 1920.0, 0.92);
+
+    var frame = new MimirSynchronizedBufferPlanner().BuildFrame(
+        [camera, display, reference, delayedMic],
+        TimeSpan.Zero,
+        [
+            .. MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates([state]),
+            new MimirSourceTimingCorrection("raven-audio-sync", "raven-sync", -10_000_000, 0.88, "scarlett-raven-audio")
+        ]);
+    var cameraSlice = frame.Slices.First(slice => string.Equals(slice.SourceId, "local-camera-0", StringComparison.Ordinal));
+    var displaySlice = frame.Slices.First(slice => string.Equals(slice.SourceId, "raven-display", StringComparison.Ordinal));
+    var micSlice = frame.Slices.First(slice => string.Equals(slice.SourceId, "asio-ch0", StringComparison.Ordinal));
+    Console.WriteLine(
+        $"synchronized-buffer-planner-smoke presentationNs={frame.PresentationTimeNs} slices={frame.Slices.Count} complete={frame.IsComplete} " +
+        $"camera={cameraSlice.Status} display={displaySlice.Status} displayOrigin={displaySlice.Origin} displayOffsetNs={displaySlice.TimingOffsetNs} micOffsetNs={micSlice.TimingOffsetNs} micStatus={micSlice.Status}");
+
+    return frame.Slices.Count == 4 &&
+        frame.IsComplete &&
+        displaySlice.Origin == MimirStreamOrigin.Network &&
+        displaySlice.Kind == MimirStreamKind.Video &&
+        displaySlice.TimingOffsetNs == -10_000_000 &&
+        micSlice.TimingOffsetNs == -10_000_000 &&
+        micSlice.Status == MimirSynchronizedSliceStatus.Ready &&
+        cameraSlice.Status != MimirSynchronizedSliceStatus.Missing
+            ? 0
+            : 1;
+}
+
 static int RunAudioStemPublicationSmoke()
 {
     var publication = new MimirObsStemPublicationState(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
@@ -1980,6 +2022,70 @@ static MimirAudioSynchronizationState NewSyncState(string sourceId, double delay
         1_000_000_000L,
         10,
         10);
+
+static MimirRollingStreamBuffer NewVideoBuffer(
+    string sourceId,
+    MimirStreamOrigin origin,
+    long timestampNs,
+    int width,
+    int height,
+    MimirVideoPixelFormat pixelFormat,
+    ulong sequence,
+    string clockDomainId = "")
+{
+    var descriptor = new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, origin, ClockDomainId: clockDomainId);
+    var buffer = new MimirRollingStreamBuffer(descriptor, TimeSpan.FromSeconds(5));
+    var stride = pixelFormat == MimirVideoPixelFormat.Bgra8
+        ? width * 4
+        : width;
+    buffer.Append(new MimirStreamSample(
+        sourceId,
+        MimirStreamKind.Video,
+        origin,
+        timestampNs,
+        timestampNs,
+        sequence,
+        PayloadHandle: sequence,
+        ByteLength: stride * height,
+        VideoFrame: new MimirVideoFrameDescriptor(
+            width,
+            height,
+            pixelFormat,
+            stride,
+            timestampNs,
+            NativeHandle: sequence,
+            NativeHandleKind: "test-shared-texture")));
+    return buffer;
+}
+
+static MimirRollingStreamBuffer NewAudioBlockBuffer(
+    string sourceId,
+    long timestampNs,
+    int sampleRate,
+    int frameCount,
+    ulong sequence)
+{
+    var descriptor = new MimirStreamDescriptor(sourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice);
+    var buffer = new MimirRollingStreamBuffer(descriptor, TimeSpan.FromSeconds(5));
+    var bytes = new byte[frameCount * sizeof(float)];
+    buffer.Append(new MimirStreamSample(
+        sourceId,
+        MimirStreamKind.Audio,
+        MimirStreamOrigin.LocalDevice,
+        timestampNs,
+        timestampNs,
+        sequence,
+        PayloadHandle: 0,
+        ByteLength: bytes.Length,
+        Data: bytes,
+        AudioBlock: new MimirAudioBlockDescriptor(
+            sampleRate,
+            1,
+            MimirAudioSampleFormat.Float32,
+            frameCount,
+            timestampNs)));
+    return buffer;
+}
 
 static int RunComplexContourTrackerSelfTest(int sampleRate, double delaySamples, double reflectionDelaySamples)
 {

@@ -102,7 +102,8 @@ public sealed class MimirRuntimeConfiguration
             ParseKind(stream.Kind),
             ParseOrigin(stream.Origin),
             stream.Enabled,
-            stream.DisplayName);
+            stream.DisplayName,
+            stream.ClockDomainId);
     }
 
     private static IEnumerable<MimirStreamDescriptor> ToDescriptors(MimirStreamConfig stream)
@@ -120,7 +121,8 @@ public sealed class MimirRuntimeConfiguration
                 ParseKind(stream.Kind),
                 ParseOrigin(stream.Origin),
                 stream.Enabled,
-                stream.DisplayNameForSource(sourceId));
+                stream.DisplayNameForSource(sourceId),
+                stream.ClockDomainId);
         }
     }
 
@@ -359,6 +361,8 @@ public sealed class MimirStreamConfig
     public string SourceId { get; set; } = "";
 
     public string DisplayName { get; set; } = "";
+
+    public string ClockDomainId { get; set; } = "";
 
     public string Kind { get; set; } = "Video";
 

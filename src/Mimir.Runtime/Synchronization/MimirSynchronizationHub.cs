@@ -57,6 +57,16 @@ public sealed class MimirSynchronizationHub : IDisposable
 
     public bool ComplexContourRuntimeEnabled => complexContourSynchronization != null;
 
+    public MimirSynchronizedBufferFrame BuildSynchronizedBufferFrame(TimeSpan? presentationDelay = null)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var delay = presentationDelay ?? TimeSpan.FromTicks(Settings.BufferDuration.Ticks / 2);
+        return new MimirSynchronizedBufferPlanner().BuildFrame(
+            Buffers.Buffers,
+            delay,
+            MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates(audioSynchronizationState.States));
+    }
+
     public void AddSource(IMimirStreamSource source)
     {
         ObjectDisposedException.ThrowIf(disposed, this);

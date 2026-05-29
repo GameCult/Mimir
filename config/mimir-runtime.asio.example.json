@@ -31,6 +31,23 @@
         "asio-ch2": "Focusrite Loopback 1",
         "asio-ch3": "Focusrite Loopback 2"
       }
+    },
+    {
+      "sourceId": "raven-display",
+      "displayName": "Raven network display",
+      "clockDomainId": "raven-sync",
+      "kind": "Video",
+      "origin": "Network",
+      "enabled": false,
+      "adapter": "frame-events",
+      "command": "../native/probes/raven_display_capture_receiver/build/Release/raven_display_capture_receiver.exe",
+      "arguments": [
+        "--emit-json-frames",
+        "--source-id",
+        "raven-display",
+        "--clock-domain",
+        "raven-sync"
+      ]
     }
   ]
 }

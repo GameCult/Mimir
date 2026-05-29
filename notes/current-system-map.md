@@ -366,6 +366,14 @@ complete: OBS consumes final Mimir/Fensalir surfaces and stems through the
 native plugin, raw feeds remain debug inputs, and the ledger records the live
 program texture, texture ring, dedicated producer fence, and consumer-fence
 proofs.
+`MimirSynchronizedBufferPlanner` is now the low-level aligned-buffer primitive:
+it picks one canonical presentation time inside the retained rolling window and
+returns per-stream slices for cameras, network display feeds, and audio. Timing
+corrections may target either one source or a shared `clockDomainId`. The Raven
+shape is explicit: Raven controls both display pixels and an audio timing signal
+routed into Scarlett, so Scarlett-decoded Raven audio evidence can earn a
+`raven-sync` correction that is applied to the `raven-display` buffer. Network
+arrival timestamps remain metadata, not timing authority.
 
 ## Visual Fusion
 

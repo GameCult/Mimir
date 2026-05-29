@@ -183,6 +183,16 @@ a named invariant that the native runtime cannot protect yet.
   instead of reusing a ring slot OBS has not acknowledged.
   `scripts/build-obs-stem-plugin.ps1` stages the upstream OBS plugin template
   SDK under `artifacts/obs-sdk/` and builds the plugin DLL locally.
+- `MimirSynchronizedBufferPlanner` now builds one aligned presentation frame
+  from the live rolling buffers. It chooses a canonical presentation time inside
+  the shared retained window, applies source or clock-domain timing corrections,
+  and returns per-stream slices for cameras, network display feeds, and audio
+  blocks. This is the low-level Raven display/audio shape: Raven display frames
+  can be tagged with `clockDomainId: raven-sync`, while a Raven audio timing
+  signal routed into Scarlett earns the correction for that shared clock domain.
+  The display feed remains derived evidence, not an independent timing owner.
+  `Mimir.BufferSmoke --synchronized-buffer-planner-smoke` proves the aligned
+  local-camera, Raven-display, loopback, and mic buffer shape.
 - `MimirRuntime` no longer submits the legacy direct `AquariumSplineFrame`
   spectrum dashboard. Live spectrum visualization authority is the
   `AquariumFieldEvidenceFrame`: Mimir declares the rolling resource, emits a

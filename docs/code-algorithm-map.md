@@ -51,6 +51,9 @@ reflection taps.
 - The five-second default buffer is compute budget, not accidental delay.
 - Loopback/reference audio is timing authority; network feeds are producers, not
   clock authorities.
+- `MimirSynchronizedBufferPlanner` owns aligned readout from retained buffers:
+  it chooses one canonical presentation time and applies source or
+  `clockDomainId` corrections before Fensalir/Faust consume slices.
 - UI and telemetry read cached sync state; they do not run analysis.
 - Native capture owns hardware calls. Runtime owns sample identity and buffer
   placement.
