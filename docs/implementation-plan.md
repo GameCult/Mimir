@@ -43,10 +43,13 @@ monocular model demos are provenance only. The live owner is Fensalir D3D12
 compute over Mimir-declared texture resources and calibration state.
 The first contract slice now exists in `MimirStereoDepthConfigurations` and
 `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`: a calibrated
-stereo pair profile emits a GPU-resident compute-writable R16F disparity
-`SurfacePage`, an R8 confidence texture, and a Height FieldEvidence claim
-planned to the `SurfacePage` backend. This is the socket for the kernel, not
-the kernel.
+stereo pair profile references caller-declared shader-readable left/right input
+textures, emits a GPU-resident compute-writable R16F disparity `SurfacePage`,
+an R8 confidence texture, a Height FieldEvidence claim planned to the
+`SurfacePage` backend, and an `AquariumFieldStereoDepthLowering` sidecar tying
+profile, calibration, camera pair, inputs, disparity output, disparity
+settings, and depth range together. This is the socket for the kernel, not the
+kernel.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
@@ -317,9 +320,10 @@ a named invariant that the native runtime cannot protect yet.
   and `--fensalir-texture-lease-smoke` verifies the engine-owned lease path.
   `Mimir.BufferSmoke --stereo-depth-contract-smoke` verifies the next visual
   socket: libSGM-provenance D3D12 SGM is represented as a non-dependency
-  profile, and synthetic rectified Leap stereo depth lowers to one planned
-  `SurfacePage` packet with no CUDA, CPU disparity image, or monocular metric
-  authority.
+  profile, and synthetic rectified Leap stereo depth lowers through
+  caller-declared left/right input textures, one stereo-depth lowering sidecar,
+  and one planned `SurfacePage` packet with no CUDA, CPU disparity image, or
+  monocular metric authority.
 - Mimir's active proof path no longer uses the direct
   `AquariumAcousticFieldFrame` builder either. Sync states lower into
   FieldEvidence calibration constraints through `MapCalibrationConstraints`,

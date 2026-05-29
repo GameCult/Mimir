@@ -2306,6 +2306,38 @@ static AquariumFieldEvidenceFrame BuildSyntheticStereoDepthFrame(MimirFensalirFi
                 MaxDepthMeters: 4.0,
                 Confidence: 0.93,
                 ObservedTimeNs: 1_000_000_000L)
+        ],
+        [
+            new AquariumFieldResourceDeclaration(
+                ResourceKey: "mimir:resource:texture2d:leap-left-ir",
+                Kind: AquariumFieldResourceKind.Texture2D,
+                Residency: AquariumFieldResourceResidency.SharedGpu,
+                Access: AquariumFieldShaderAccess.ShaderResource,
+                Format: "R8_UNorm",
+                Width: 640,
+                Height: 240,
+                DepthOrCount: 1,
+                StrideBytes: 1,
+                ValidFromNs: 1_000_000_000L,
+                ValidUntilNs: 1_000_000_000L,
+                Version: 1_000_000_000UL,
+                NativeHandle: new IntPtr(0x5001),
+                NativeHandleKind: "synthetic-shared-d3d12-texture"),
+            new AquariumFieldResourceDeclaration(
+                ResourceKey: "mimir:resource:texture2d:leap-right-ir",
+                Kind: AquariumFieldResourceKind.Texture2D,
+                Residency: AquariumFieldResourceResidency.SharedGpu,
+                Access: AquariumFieldShaderAccess.ShaderResource,
+                Format: "R8_UNorm",
+                Width: 640,
+                Height: 240,
+                DepthOrCount: 1,
+                StrideBytes: 1,
+                ValidFromNs: 1_000_000_000L,
+                ValidUntilNs: 1_000_000_000L,
+                Version: 1_000_000_000UL,
+                NativeHandle: new IntPtr(0x5002),
+                NativeHandleKind: "synthetic-shared-d3d12-texture")
         ]);
 }
 
@@ -2316,6 +2348,7 @@ static int RunStereoDepthContractSmoke()
     var validation = AquariumFieldEvidenceValidator.Validate(frame);
     var plan = AquariumFieldLoweringPlanner.Plan(frame);
     var claim = frame.Claims.FirstOrDefault();
+    var stereoLowering = frame.StereoDepthLowerings.FirstOrDefault();
     var disparity = frame.Resources.FirstOrDefault(resource => resource.ResourceKey == "mimir:resource:stereo-depth:leap-disparity-r16f");
     var confidence = frame.Resources.FirstOrDefault(resource => resource.ResourceKey == "mimir:resource:stereo-depth:leap-confidence-r8");
 
@@ -2324,7 +2357,7 @@ static int RunStereoDepthContractSmoke()
     Console.WriteLine(
         $"stereo-depth-field resources={frame.Resources.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
     Console.WriteLine(
-        $"stereo-depth-output disparity={disparity.ResourceKey} kind={disparity.Kind} access={disparity.Access} format={disparity.Format} confidence={confidence.ResourceKey} confidenceFormat={confidence.Format} backend={(plan.Packets.Count > 0 ? plan.Packets[0].Backend : AquariumFieldBackendKind.Unknown)}");
+        $"stereo-depth-output disparity={disparity.ResourceKey} kind={disparity.Kind} access={disparity.Access} format={disparity.Format} confidence={confidence.ResourceKey} confidenceFormat={confidence.Format} lowerings={frame.StereoDepthLowerings.Count} left={stereoLowering.LeftResourceKey} right={stereoLowering.RightResourceKey} backend={(plan.Packets.Count > 0 ? plan.Packets[0].Backend : AquariumFieldBackendKind.Unknown)}");
 
     return !validation.HasErrors &&
         !profile.LiveDependency &&
@@ -2333,7 +2366,12 @@ static int RunStereoDepthContractSmoke()
         profile.RequiresRectifiedInputs &&
         profile.RequiresCalibration &&
         profile.NegativeChecks.Any(check => check.Contains("no CUDA", StringComparison.OrdinalIgnoreCase)) &&
-        frame.Resources.Count == 2 &&
+        frame.Resources.Count == 4 &&
+        frame.StereoDepthLowerings.Count == 1 &&
+        stereoLowering.ProfileKey == profile.Id &&
+        stereoLowering.LeftResourceKey == "mimir:resource:texture2d:leap-left-ir" &&
+        stereoLowering.RightResourceKey == "mimir:resource:texture2d:leap-right-ir" &&
+        stereoLowering.DisparityResourceKey == disparity.ResourceKey &&
         disparity.Kind == AquariumFieldResourceKind.SurfacePage &&
         disparity.Residency == AquariumFieldResourceResidency.GpuResident &&
         disparity.Access == AquariumFieldShaderAccess.UnorderedAccess &&
@@ -2517,7 +2555,7 @@ static int RunPerfectMachineProfileSmoke()
     Console.WriteLine(
         $"perfect-machine-visual-marker claims={visualMarkerFrame.Claims.Count} planned={visualMarkerPlan.Packets.Count} deferred={visualMarkerPlan.DeferredRequests.Count}");
     Console.WriteLine(
-        $"perfect-machine-stereo-depth profiles={stereoDepthProfiles.Count} resources={stereoDepthFrame.Resources.Count} claims={stereoDepthFrame.Claims.Count} planned={stereoDepthPlan.Packets.Count} deferred={stereoDepthPlan.DeferredRequests.Count}");
+        $"perfect-machine-stereo-depth profiles={stereoDepthProfiles.Count} resources={stereoDepthFrame.Resources.Count} claims={stereoDepthFrame.Claims.Count} lowerings={stereoDepthFrame.StereoDepthLowerings.Count} planned={stereoDepthPlan.Packets.Count} deferred={stereoDepthPlan.DeferredRequests.Count}");
     Console.WriteLine(
         $"perfect-machine-authority appliesTo=raven-scarlett-witness decision={authority.Decision} rule={authority.RuleId}");
     Console.WriteLine(
@@ -2563,8 +2601,9 @@ static int RunPerfectMachineProfileSmoke()
         visualMarkerPlan.DeferredRequests.Count == 0 &&
         visualMarkerFrame.Claims[0].ClaimKey.Contains("synthetic-camera-rig-calibration", StringComparison.Ordinal) &&
         visualMarkerFrame.Claims[0].ClaimKey.Contains("synthetic-marker-a", StringComparison.Ordinal) &&
-        stereoDepthFrame.Resources.Count == 2 &&
+        stereoDepthFrame.Resources.Count == 4 &&
         stereoDepthFrame.Claims.Count == 1 &&
+        stereoDepthFrame.StereoDepthLowerings.Count == 1 &&
         stereoDepthPlan.Packets.Count == 1 &&
         stereoDepthPlan.Packets[0].Backend == AquariumFieldBackendKind.SurfacePage &&
         stereoDepthPlan.DeferredRequests.Count == 0 &&

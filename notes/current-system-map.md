@@ -409,9 +409,13 @@ research references only.
 The first live contract exists: `MimirStereoDepthConfigurations` names the
 libSGM-provenance D3D12 SGM profile, and
 `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame` lowers a synthetic
-rectified stereo result into a GPU-resident compute-writable disparity
-SurfacePage, confidence texture, and Height FieldEvidence claim planned as a
-`SurfacePage` packet. The kernel itself is still future work.
+rectified stereo result by referencing caller-declared shader-readable
+left/right input textures, then emitting a GPU-resident compute-writable
+disparity SurfacePage, confidence texture, Height FieldEvidence claim, and
+`AquariumFieldStereoDepthLowering` sidecar. The lowering sidecar is the dispatch contract: it binds the
+libSGM-provenance profile, calibration id, camera pair, inputs, disparity
+output, disparity levels, aggregation paths, and depth range. The kernel itself
+is still future work.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

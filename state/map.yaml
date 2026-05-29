@@ -60,9 +60,12 @@ invariants:
   - The first stereo-depth contract is code-visible:
     `MimirStereoDepthConfigurations` names the libSGM-provenance D3D12 SGM
     profile, and `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`
-    lowers synthetic rectified stereo depth into a compute-writable R16F
-    disparity SurfacePage, R8 confidence Texture2D, and Height FieldEvidence
-    claim. The actual SGM HLSL/D3D12 kernel is still future work.
+    references caller-declared shader-readable left/right Texture2D resources,
+    then lowers synthetic rectified stereo depth into a compute-writable R16F
+    disparity SurfacePage, R8 confidence Texture2D, a Height FieldEvidence claim, and an
+    `AquariumFieldStereoDepthLowering` sidecar tying profile, calibration,
+    camera pair, inputs, disparity output, and depth range together. The actual
+    SGM HLSL/D3D12 kernel is still future work.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

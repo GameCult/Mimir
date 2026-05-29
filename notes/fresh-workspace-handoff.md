@@ -94,8 +94,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   The first code contract is in `MimirStereoDepthConfigurations` and
   `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`; run
   `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --stereo-depth-contract-smoke`
-  to verify the synthetic compute-writable R16F disparity `SurfacePage`
-  FieldEvidence socket. This proves the lane shape, not the SGM kernel.
+  to verify caller-declared synthetic rectified left/right input textures,
+  compute-writable R16F disparity `SurfacePage`, confidence texture, Height
+  claim, and `AquariumFieldStereoDepthLowering` dispatch metadata. This proves
+  the lane shape, not the SGM kernel.
 - Fensalir also owns the EVE-facing dashboard pixels through
   `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
   texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas

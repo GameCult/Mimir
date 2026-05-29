@@ -181,14 +181,21 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
     }
 
     public AquariumFieldEvidenceFrame BuildStereoDepthCandidateFrame(
-        IEnumerable<MimirStereoDepthFieldCandidate> depthCandidates)
+        IEnumerable<MimirStereoDepthFieldCandidate> depthCandidates,
+        IEnumerable<AquariumFieldResourceDeclaration>? inputResources = null)
     {
         var domains = new List<AquariumFieldDomain>();
         var claims = new List<AquariumFieldClaim>();
         var candidates = new List<AquariumFieldCandidate>();
         var resources = new List<AquariumFieldResourceDeclaration>();
+        var stereoDepthLowerings = new List<AquariumFieldStereoDepthLowering>();
         var seenDomains = new HashSet<string>(StringComparer.Ordinal);
         var seenResources = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var inputResource in inputResources ?? [])
+        {
+            AddResource(resources, seenResources, inputResource);
+        }
 
         foreach (var depthCandidate in depthCandidates)
         {
@@ -206,6 +213,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             var claim = ClaimForStereoDepthCandidate(depthCandidate, domain.DomainKey);
             claims.Add(claim);
             candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+            stereoDepthLowerings.Add(StereoDepthLoweringForCandidate(depthCandidate, claim.ClaimKey));
         }
 
         return new AquariumFieldEvidenceFrame
@@ -214,6 +222,7 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Claims = claims,
             Candidates = candidates,
             Resources = resources,
+            StereoDepthLowerings = stereoDepthLowerings,
             AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
             PresentationDelaySeconds = (float)options.PresentationDelaySeconds
         };
@@ -743,6 +752,26 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             NativeHandle: IntPtr.Zero,
             NativeHandleKind: "fensalir-stereo-depth-confidence");
     }
+
+    private static AquariumFieldStereoDepthLowering StereoDepthLoweringForCandidate(
+        MimirStereoDepthFieldCandidate depthCandidate,
+        string claimKey) =>
+        new(
+            LoweringKey: $"stereo-depth:{depthCandidate.CalibrationId}:{depthCandidate.CameraPairId}:{depthCandidate.CandidateKey}",
+            ClaimKey: claimKey,
+            ProfileKey: depthCandidate.ProfileId,
+            CalibrationKey: depthCandidate.CalibrationId,
+            CameraPairKey: depthCandidate.CameraPairId,
+            LeftResourceKey: depthCandidate.LeftResourceKey,
+            RightResourceKey: depthCandidate.RightResourceKey,
+            DisparityResourceKey: depthCandidate.DisparityResourceKey,
+            ConfidenceResourceKey: depthCandidate.ConfidenceResourceKey,
+            Width: Math.Max(1, depthCandidate.Width),
+            Height: Math.Max(1, depthCandidate.Height),
+            DisparityLevels: Math.Max(1, depthCandidate.DisparityLevels),
+            AggregationPathCount: Math.Max(1, depthCandidate.AggregationPathCount),
+            MinDepthMeters: (float)depthCandidate.MinDepthMeters,
+            MaxDepthMeters: (float)depthCandidate.MaxDepthMeters);
 
     private AquariumFieldSupport SupportForSurfaceIntent(MimirSurfaceIntent intent)
     {
