@@ -366,6 +366,18 @@ complete: OBS consumes final Mimir/Fensalir surfaces and stems through the
 native plugin, raw feeds remain debug inputs, and the ledger records the live
 program texture, texture ring, dedicated producer fence, and consumer-fence
 proofs.
+The public self-hosted edge has its first deployable path. `src/Mimir.Broadcast`
+builds the Starfire-side FFmpeg/NVENC push command for
+`rtmp://127.0.0.1:11935/live/mimir`; the port is an SSH local forward to
+Yggdrasil's localhost RTMP listener. Yggdrasil owns nginx RTMP ingest and HLS
+segment serving only. It must not transcode or compose in v1. The static Mimir
+viewer route is `https://mimir.gamecult.org/live`, backed by
+`static/live/player.js` and `static/live/player.css`, and it reads
+`https://live.mimir.gamecult.org/hls/mimir.m3u8`. On 2026-05-30 the deployed
+Yggdrasil origin validated nginx, listened on `127.0.0.1:1935`, returned
+`mimir-live-ok`, and generated four HLS segments plus `mimir.m3u8` from an
+eight-second Starfire synthetic NVENC push. The unresolved blocker is public
+DNS/TLS for `live.mimir.gamecult.org`.
 `MimirSynchronizedBufferPlanner` is now the low-level aligned-buffer primitive:
 it picks one canonical presentation time inside the retained rolling window and
 returns per-stream slices for cameras, network display feeds, and audio. Timing

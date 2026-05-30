@@ -109,6 +109,16 @@ accepted_design:
     decode/composite. The local launch script opens an SSH reverse tunnel to
     Eve when Windows firewall policy blocks direct inbound TCP, and EveCanvas
     tries localhost before the LAN host.
+  - `src/Mimir.Broadcast` is the first self-hosted public edge sender:
+    Starfire uses FFmpeg/NVENC to push one final H.264/AAC RTMP stream through
+    an SSH local forward to Yggdrasil. Yggdrasil owns nginx RTMP ingest and HLS
+    segment serving only; it does not transcode or compose. The public viewer
+    route is `https://mimir.gamecult.org/live`, and it reads
+    `https://live.mimir.gamecult.org/hls/mimir.m3u8`. The deployed Yggdrasil
+    origin already validates, listens on localhost RTMP `127.0.0.1:1935`, and
+    produced HLS segments from an eight-second Starfire synthetic NVENC push on
+    2026-05-30. Public DNS/TLS for `live.mimir.gamecult.org` remains the
+    activation blocker.
   - `MimirAudioBlockDescriptor` carries sample rate, channels, sample format,
     frame count, timestamp, and optional native handle.
   - `MimirFrameEventProcessStreamSource` is a temporary diagnostic adapter for

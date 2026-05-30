@@ -1,0 +1,104 @@
+.mimir-live-page,
+.mimir-live-shell {
+  color-scheme: dark;
+  font-family: Ubuntu, system-ui, sans-serif;
+  color: #f3fbff;
+}
+
+.mimir-live-page *,
+.mimir-live-shell * {
+  box-sizing: border-box;
+}
+
+.mimir-live-page {
+  margin: 0;
+  min-height: 100vh;
+  background: #05090d;
+}
+
+.mimir-live-shell a {
+  color: #9bd887;
+}
+
+.mimir-live-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 24px;
+  align-items: start;
+  min-height: 100vh;
+  padding: clamp(16px, 3vw, 42px);
+}
+
+.mimir-live-stage {
+  display: grid;
+  gap: 10px;
+}
+
+.mimir-live-shell video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #020507;
+  border: 1px solid rgba(100, 183, 255, 0.28);
+  border-radius: 6px;
+}
+
+.mimir-live-status {
+  min-height: 1.4rem;
+  color: #c4dce5;
+  font-size: 0.92rem;
+}
+
+.mimir-live-panel {
+  display: grid;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.mimir-live-kicker {
+  margin: 0;
+  color: #64b7ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mimir-live-panel h1,
+.mimir-live-panel h2 {
+  margin: 0;
+  font-family: Montserrat, system-ui, sans-serif;
+  font-size: clamp(2rem, 5vw, 4.2rem);
+  font-weight: 200;
+  letter-spacing: 0;
+}
+
+.mimir-live-panel p {
+  margin: 0;
+  color: #c4dce5;
+  line-height: 1.55;
+}
+
+.mimir-live-panel dl {
+  display: grid;
+  gap: 14px;
+  margin: 6px 0 0;
+}
+
+.mimir-live-panel dt {
+  color: #6d8792;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mimir-live-panel dd {
+  margin: 4px 0 0;
+  color: #f3fbff;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 840px) {
+  .mimir-live-shell {
+    grid-template-columns: 1fr;
+  }
+}

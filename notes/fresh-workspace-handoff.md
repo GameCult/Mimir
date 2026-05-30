@@ -107,6 +107,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
   over `/stream`; EveCanvas decodes with `AVSampleBufferDisplayLayer`. The
   launch script uses an SSH reverse tunnel to Eve when Windows firewall blocks
   direct inbound TCP.
+- `src/Mimir.Broadcast` is the first self-hosted public sender. Starfire pushes
+  one final H.264/AAC NVENC RTMP stream to
+  `rtmp://127.0.0.1:11935/live/mimir` through an SSH local forward to
+  Yggdrasil. Yggdrasil's nginx RTMP/HLS origin is deployed and has produced
+  HLS segments from a bounded synthetic push; public activation still needs DNS
+  and TLS for `live.mimir.gamecult.org`. The static viewer route is
+  [[live|Mimir Live]] and reads
+  `https://live.mimir.gamecult.org/hls/mimir.m3u8`.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
 - OBS receives final program surfaces; it does not own synchronization.
