@@ -70,28 +70,37 @@
       "kind": "Video",
       "origin": "Network",
       "enabled": true,
-      "adapter": "ffmpeg-rawvideo",
-      "command": "ffmpeg",
-      "width": 1280,
-      "height": 720,
-      "pixelFormat": "Bgra8",
+      "adapter": "frame-events",
+      "command": "../src/Mimir.EveSensorReceiver/bin/Debug/net10.0/Mimir.EveSensorReceiver.exe",
       "arguments": [
-        "-hide_banner",
-        "-nostdin",
-        "-loglevel",
-        "warning",
-        "-fflags",
-        "nobuffer",
-        "-flags",
-        "low_delay",
-        "-i",
-        "srt://0.0.0.0:5201?mode=listener&latency=120000&timeout=5000000",
-        "-an",
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "bgra",
-        "-"
+        "--port",
+        "8793",
+        "--path",
+        "/eve/camera",
+        "--source-id",
+        "eve-camera",
+        "--type",
+        "video-frame"
+      ]
+    },
+    {
+      "sourceId": "eve-mic",
+      "displayName": "Eve microphone capture",
+      "clockDomainId": "eve-camera",
+      "kind": "Audio",
+      "origin": "Network",
+      "enabled": true,
+      "adapter": "frame-events",
+      "command": "../src/Mimir.EveSensorReceiver/bin/Debug/net10.0/Mimir.EveSensorReceiver.exe",
+      "arguments": [
+        "--port",
+        "8794",
+        "--path",
+        "/eve/mic",
+        "--source-id",
+        "eve-mic",
+        "--type",
+        "audio-block"
       ]
     }
   ]

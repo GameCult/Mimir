@@ -2,25 +2,25 @@
 
 ## Objective
 
-Ingest Raven screen capture and Eve camera capture into Mimir as ordinary
-network video sources, then let the existing synchronization hub place those
-samples in rolling buffers beside Scarlett audio and local camera sources.
+Ingest Raven screen capture plus Eve camera and microphone capture into Mimir,
+then let the existing synchronization hub place those samples in rolling buffers
+beside Scarlett audio and local camera sources.
 
 ## Authority Map
 
-- Owner: `Mimir.Runtime` owns decoded video samples and rolling-buffer
-  placement.
+- Owner: `Mimir.Runtime` owns decoded samples and rolling-buffer placement.
 - Inputs: Raven sends H.264/MPEG-TS over SRT to Starfire port `5200`; Eve sends
-  camera video over SRT to Starfire port `5201`; Scarlett/ASIO carries audio and
-  sync evidence.
-- Outputs: `raven-display` and `eve-camera` emit `MimirStreamSample` frames with
-  BGRA payloads and `MimirVideoFrameDescriptor` metadata.
+  camera frame-events over WebSocket port `8793`; Eve sends microphone
+  frame-events over WebSocket port `8794`; Scarlett/ASIO carries audio and sync
+  evidence.
+- Outputs: `raven-display`, `eve-camera`, and `eve-mic` emit
+  `MimirStreamSample` records with video or audio descriptors.
 - Derived state: network arrival timestamps are capture metadata only. Raven
   audio-in-Scarlett remains the timing witness for global alignment.
-- Forbidden writers: OBS, FFmpeg sender clocks, and SRT arrival time do not own
-  final sync truth.
-- Cut line: no custom transport daemon and no second compositor path until this
-  FFmpeg/SRT edge fails a concrete invariant.
+- Forbidden writers: OBS, FFmpeg sender clocks, WebSocket receive time, and SRT
+  arrival time do not own final sync truth.
+- Cut line: EveCanvas owns Eve's sensors directly. External iOS streaming apps
+  are fallback tools, not the current architecture.
 
 ## Starfire Receiver
 
@@ -38,13 +38,15 @@ $env:MIMIR_RUNTIME_CONFIG = "E:\Projects\Mimir\config\mimir-runtime.raven-eve.ex
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --seconds 5 --require-samples
 ```
 
-The config starts two FFmpeg listener processes:
+The config starts one FFmpeg listener and two Eve sensor receiver processes:
 
 - `raven-display`: `srt://0.0.0.0:5200?mode=listener&latency=120000&timeout=5000000`
-- `eve-camera`: `srt://0.0.0.0:5201?mode=listener&latency=120000&timeout=5000000`
+- `eve-camera`: `ws://0.0.0.0:8793/eve/camera`
+- `eve-mic`: `ws://0.0.0.0:8794/eve/mic`
 
-Each listener decodes to raw BGRA frames on stdout. Mimir reads exact frame
-boundaries and stores those frames in the normal synchronization buffers.
+The Raven listener decodes to raw BGRA frames on stdout. The Eve receivers emit
+typed JSON frame-events from EveCanvas camera/mic packets. Mimir stores all of
+them in the normal synchronization buffers.
 
 ## Raven Sender
 
@@ -64,29 +66,28 @@ Raven sync signal: route Raven audio or a Raven-generated chirp into the
 Scarlett alongside the microphone. Mimir should treat that audio evidence as
 the authority for aligning Raven video with the rest of the program.
 
-## Eve Sender Status
+## Eve Sensor Sender
 
-Eve is configured as a receiver lane now, and SSH is reachable, but the actual
-camera producer is not implemented in this repo yet. The existing Eve app is a
-view/control surface for receiving Starfire video and sending touch events; it
-is not currently an AVFoundation camera broadcaster. No `ffmpeg` or obvious
-camera-capture helper is installed on the iPad path checked during setup.
+EveCanvas now starts native AVFoundation capture after permission grants:
 
-Current next options:
+- Camera frames are sampled from `AVCaptureVideoDataOutput`, JPEG-compressed,
+  wrapped as `video-frame` events for `eve-camera`, and sent to
+  `ws://192.168.1.66:8793/eve/camera`.
+- Microphone blocks are captured with `AVAudioEngine`, packed as interleaved
+  Float32 samples, wrapped as `audio-block` events for `eve-mic`, and sent to
+  `ws://192.168.1.66:8794/eve/mic`.
 
-- Add AVFoundation capture to Eve and send H.264 over SRT or MPEG-TS/TCP to
-  Starfire. This keeps Eve as the source owner and matches the network-producer
-  model, but needs the iPad online and a native sender cut.
-- Use a known iOS camera streaming app that can publish RTSP, SRT, NDI, or
-  MPEG-TS, then point the `eve-camera` FFmpeg listener/receiver at that stream.
-  This is fastest for a room test, but delegates camera authority to an app
-  outside the Mimir/Eve codebase.
-- Capture Eve over USB/Continuity on Starfire and expose it as a local camera
-  source. This is operationally simple if Windows sees the device, but Eve stops
-  being a networked producer and the clock-domain model changes.
+This is an inspectable first transport, not the final high-throughput shape.
+When cadence or bandwidth becomes the bottleneck, replace the JSON/base64 event
+transport with binary packet framing or VideoToolbox H.264 while preserving the
+same source ownership and Mimir runtime sample contract.
 
-The coherent default is the AVFoundation sender, because it gives Mimir one
-clean producer per physical source and leaves sync ownership explicit.
+Deploy EveCanvas after staging:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File E:\Projects\Eve\scripts\stage-to-eve.ps1
+ssh eve "cd /var/mobile/Projects/Eve && export THEOS=/var/theos && make package install && uiopen --bundleid org.gamecult.evecanvas"
+```
 
 ## Smoke Test
 
@@ -99,3 +100,9 @@ dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --ffmpe
 
 That smoke starts FFmpeg with `testsrc2`, decodes BGRA frames through stdout,
 and verifies the sample metadata and payload size that Mimir receives.
+
+The Eve sensor receiver can be checked without launching the whole runtime:
+
+```powershell
+dotnet run --project .\src\Mimir.EveSensorReceiver\Mimir.EveSensorReceiver.csproj -- --port 8793 --path /eve/camera --source-id eve-camera --type video-frame
+```

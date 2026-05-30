@@ -36,8 +36,10 @@ network producer pass:
 
 - `raven-display` listens for Raven screen capture on SRT port `5200`, decodes
   through FFmpeg, and emits BGRA video samples into the runtime buffer path.
-- `eve-camera` listens for Eve camera capture on SRT port `5201`, using the same
-  raw-video adapter.
+- `eve-camera` listens for EveCanvas camera frame-events on WebSocket port
+  `8793`.
+- `eve-mic` listens for EveCanvas microphone frame-events on WebSocket port
+  `8794`.
 
 The older disabled `frame-events` example in
 `config/mimir-runtime.asio.example.json` remains diagnostic only. It can witness

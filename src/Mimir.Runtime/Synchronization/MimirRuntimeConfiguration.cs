@@ -275,6 +275,7 @@ public sealed class MimirRuntimeConfiguration
     private static string ResolveCommand(string command, string? configDirectory)
     {
         if (string.IsNullOrWhiteSpace(command)
+            || (!command.Contains(Path.DirectorySeparatorChar) && !command.Contains(Path.AltDirectorySeparatorChar))
             || Path.IsPathRooted(command)
             || string.IsNullOrWhiteSpace(configDirectory))
         {
