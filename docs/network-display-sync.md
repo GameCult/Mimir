@@ -31,15 +31,23 @@ Practical shape:
    applies that clock-domain correction to the `raven-display` video buffer.
 5. Fensalir receives aligned buffer slices and still owns composition.
 
-The disabled example in `config/mimir-runtime.asio.example.json` tags the
-network display stream with `clockDomainId: raven-sync`. The display receiver is
-expected to emit frame-event metadata with Raven source timestamps and frame
-identity. The Scarlett channel carrying Raven's sync audio is the evidence path
-that earns the `raven-sync` timing correction.
+`config/mimir-runtime.raven-eve.example.json` is the active setup shape for the
+network producer pass:
+
+- `raven-display` listens for Raven screen capture on SRT port `5200`, decodes
+  through FFmpeg, and emits BGRA video samples into the runtime buffer path.
+- `eve-camera` listens for Eve camera capture on SRT port `5201`, using the same
+  raw-video adapter.
+
+The older disabled `frame-events` example in
+`config/mimir-runtime.asio.example.json` remains diagnostic only. It can witness
+source timestamps and frame identity, but it does not carry pixels. The Scarlett
+channel carrying Raven's sync audio is still the evidence path that earns the
+`raven-sync` timing correction.
 
 Smoke proof:
 
 ```powershell
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --synchronized-buffer-planner-smoke
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --ffmpeg-rawvideo-source-smoke
 ```
-

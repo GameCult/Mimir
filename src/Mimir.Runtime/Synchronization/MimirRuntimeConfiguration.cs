@@ -234,6 +234,26 @@ public sealed class MimirRuntimeConfiguration
                         : null)));
         }
 
+        if (string.Equals(stream.Adapter, "ffmpeg-rawvideo", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(stream.Adapter, "rawvideo-process", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(stream.Command))
+            {
+                return null;
+            }
+
+            return new MimirStreamSourceFactory(descriptor, () => new MimirFfmpegRawVideoStreamSource(
+                descriptor,
+                new MimirFfmpegRawVideoStreamSourceOptions(
+                    ResolveCommand(stream.Command, configDirectory),
+                    stream.Arguments,
+                    stream.Width,
+                    stream.Height,
+                    ParsePixelFormat(stream.PixelFormat),
+                    stream.FrameBytes,
+                    stream.StrideBytes)));
+        }
+
         if (!string.Equals(stream.Adapter, "process", StringComparison.OrdinalIgnoreCase))
         {
             return null;
@@ -281,6 +301,26 @@ public sealed class MimirRuntimeConfiguration
         return Enum.TryParse<MimirStreamOrigin>(value, ignoreCase: true, out var origin)
             ? origin
             : throw new InvalidOperationException($"Unknown Mimir stream origin: {value}");
+    }
+
+    private static MimirVideoPixelFormat ParsePixelFormat(string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? MimirVideoPixelFormat.Unknown
+            : value.Trim().ToUpperInvariant() switch
+            {
+                "BAYER" or "BAYER8" => MimirVideoPixelFormat.Bayer8,
+                "GRAY8" or "Y8" => MimirVideoPixelFormat.Gray8,
+                "R8" => MimirVideoPixelFormat.R8,
+                "RG8" => MimirVideoPixelFormat.Rg8,
+                "YUY2" => MimirVideoPixelFormat.Yuy2,
+                "MJPG" or "MJPEG" => MimirVideoPixelFormat.Mjpg,
+                "H264" => MimirVideoPixelFormat.H264,
+                "NV12" => MimirVideoPixelFormat.Nv12,
+                "BGRA8" or "BGRA" => MimirVideoPixelFormat.Bgra8,
+                "LEAP_STEREO_IR" or "LEAPSTEREOIR" => MimirVideoPixelFormat.LeapStereoIr,
+                _ => MimirVideoPixelFormat.Unknown,
+            };
     }
 }
 
@@ -393,6 +433,10 @@ public sealed class MimirStreamConfig
     public int Height { get; set; }
 
     public string PixelFormat { get; set; } = "";
+
+    public int FrameBytes { get; set; }
+
+    public int StrideBytes { get; set; }
 
     public string InputFormat { get; set; } = "";
 

@@ -116,6 +116,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
   static viewer belongs to the root GameCult site at
   `https://gamecult.org/livestream` and reads
   `https://streampixels.gamecult.org/mimir/live/hls/mimir.m3u8`.
+- Raven/Eve ingest now has a network-pixel receiver config:
+  `config/mimir-runtime.raven-eve.example.json` starts FFmpeg-backed raw-video
+  listeners for `raven-display` on SRT port `5200` and `eve-camera` on port
+  `5201`. `scripts/start-raven-screen-capture-sender.ps1` launches Raven desktop
+  capture with `gdigrab` plus NVENC. Eve's Mimir receiver lane exists, but the
+  iPad-side camera producer is still an open cut: add native AVFoundation send
+  support or deliberately choose an external iOS streaming app.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
 - OBS receives final program surfaces; it does not own synchronization.

@@ -216,6 +216,12 @@ a named invariant that the native runtime cannot protect yet.
   The display feed remains derived evidence, not an independent timing owner.
   `Mimir.BufferSmoke --synchronized-buffer-planner-smoke` proves the aligned
   local-camera, Raven-display, loopback, and mic buffer shape.
+- `MimirFfmpegRawVideoStreamSource` is the current network-pixel adapter for
+  Raven/Eve ingest. FFmpeg owns SRT receive/decode, Mimir owns exact raw-video
+  frame reads and synchronized buffer samples. `config/mimir-runtime.raven-eve.example.json`
+  listens for Raven screen capture on port `5200` and Eve camera capture on
+  port `5201`. `Mimir.BufferSmoke --ffmpeg-rawvideo-source-smoke` proves the
+  local raw-video adapter without Raven or Eve online.
 - `MimirPresentationControlState` owns operator intent for the Fensalir program
   surface: video feed visibility/solo/opacity/layer order, audio mute/solo/gain,
   and global LUT preset selection. The `Mimir Program` UI panel is deliberately

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -167,6 +168,11 @@ if (args.Any(arg => string.Equals(arg, "--ps3eye-driver-smoke", StringComparison
 if (args.Any(arg => string.Equals(arg, "--mf-gpu-driver-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMfGpuDriverSmoke(args);
+}
+
+if (args.Any(arg => string.Equals(arg, "--ffmpeg-rawvideo-source-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunFfmpegRawVideoSourceSmoke(args);
 }
 
 if (args.Any(arg => string.Equals(arg, "--mimir-spectrum-upload-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -1036,6 +1042,69 @@ static int RunMfGpuDriverSmoke(string[] args)
     }
 
     Console.WriteLine($"mf-gpu-driver-smoke timeout source={sourceId} pathNeedle={pathNeedle} {width}x{height} {inputFormat}->{outputFormat}");
+    return 1;
+}
+
+static int RunFfmpegRawVideoSourceSmoke(string[] args)
+{
+    var ffmpeg = ParseStringOption(args, "--ffmpeg", "ffmpeg");
+    var sourceId = ParseStringOption(args, "--source-id", "ffmpeg-rawvideo-smoke");
+    var width = ParseIntOption(args, "--width", 160);
+    var height = ParseIntOption(args, "--height", 90);
+    var fps = ParseIntOption(args, "--fps", 10);
+    var frames = ParseIntOption(args, "--frames", 3);
+    var timeoutMs = ParseIntOption(args, "--timeout-ms", 3000);
+
+    using var source = new MimirFfmpegRawVideoStreamSource(
+        new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.Network),
+        new MimirFfmpegRawVideoStreamSourceOptions(
+            ffmpeg,
+            [
+                "-hide_banner",
+                "-nostdin",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                $"testsrc2=size={width}x{height}:rate={fps}",
+                "-frames:v",
+                frames.ToString(CultureInfo.InvariantCulture),
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "bgra",
+                "-"
+            ],
+            width,
+            height,
+            MimirVideoPixelFormat.Bgra8));
+
+    var deadline = Stopwatch.GetTimestamp() + (long)(timeoutMs / 1000.0 * Stopwatch.Frequency);
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        if (!source.TryRead(out var sample))
+        {
+            Thread.Sleep(1);
+            continue;
+        }
+
+        var frame = sample.VideoFrame;
+        var expectedBytes = width * height * 4;
+        Console.WriteLine(
+            $"ffmpeg-rawvideo-source-smoke source={sample.SourceId} {frame?.Width}x{frame?.Height} format={frame?.PixelFormat} liveBytes={sample.ByteLength} payloadBytes={sample.Data.Length} stride={frame?.StrideBytes}");
+        return frame != null &&
+            frame.Width == width &&
+            frame.Height == height &&
+            frame.PixelFormat == MimirVideoPixelFormat.Bgra8 &&
+            frame.StrideBytes == width * 4 &&
+            sample.ByteLength == expectedBytes &&
+            sample.Data.Length == expectedBytes
+            ? 0
+            : 1;
+    }
+
+    Console.WriteLine($"ffmpeg-rawvideo-source-smoke timeout source={sourceId} {width}x{height}@{fps}");
     return 1;
 }
 

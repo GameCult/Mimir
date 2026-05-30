@@ -82,6 +82,12 @@ probes can emit per-frame JSON metadata so Fensalir sees real sensor cadence in
 the rolling buffers while the direct ABI driver is being cut. It does not carry
 pixels and does not own the final six-camera hot path. Multi-camera probes are
 one process with declared accepted source ids, not one process per camera.
+The `ffmpeg-rawvideo` adapter is the live network-pixel edge for Raven/Eve
+setup: FFmpeg owns SRT receive/decode and writes exact raw frames to stdout;
+`MimirFfmpegRawVideoStreamSource` owns frame-boundary reads, BGRA/NV12 payload
+geometry, sample descriptors, and insertion into the normal synchronization
+path. `config/mimir-runtime.raven-eve.example.json` declares `raven-display`
+on SRT port `5200` and `eve-camera` on SRT port `5201`.
 
 ## OBS Bridge Utility
 
@@ -387,6 +393,11 @@ shape is explicit: Raven controls both display pixels and an audio timing signal
 routed into Scarlett, so Scarlett-decoded Raven audio evidence can earn a
 `raven-sync` correction that is applied to the `raven-display` buffer. Network
 arrival timestamps remain metadata, not timing authority.
+The first operational ingest config is `config/mimir-runtime.raven-eve.example.json`:
+Raven screen capture and Eve camera capture arrive over SRT, decode to raw BGRA
+through FFmpeg, and enter the same rolling-buffer model as local sources. Eve's
+receiver lane exists; the iPad-side camera producer still needs either a native
+AVFoundation sender or an explicitly chosen external camera-streaming app.
 `MimirPresentationControlState` now owns the Fensalir program-control intent:
 video feed visibility/solo/opacity/layer order, audio mute/solo/gain, and
 global LUT preset selection. The `Mimir Program` panel exposes those controls

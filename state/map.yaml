@@ -259,6 +259,14 @@ accepted_design:
     shared `clockDomainId`; the Raven path uses audio evidence routed into
     Scarlett to earn a `raven-sync` correction for Raven display frames.
     Network arrival timestamps remain metadata only.
+    `MimirFfmpegRawVideoStreamSource` is the network-pixel adapter for the
+    Raven/Eve ingest setup: FFmpeg owns SRT receive/decode, while Mimir owns
+    exact raw-video frame reads, payload geometry, video descriptors, and
+    rolling-buffer samples. `config/mimir-runtime.raven-eve.example.json`
+    listens for `raven-display` on port 5200 and `eve-camera` on port 5201.
+    Raven can send desktop capture with `scripts/start-raven-screen-capture-sender.ps1`.
+    Eve's receiver lane exists, but the iPad-side camera producer still needs a
+    native AVFoundation sender or a chosen external camera streaming app.
     `MimirPresentationControlState` owns program-control intent for Fensalir:
     video feed visibility/solo/opacity/layer order, audio mute/solo/gain, and
     global LUT preset selection. The `Mimir Program` panel filters video
