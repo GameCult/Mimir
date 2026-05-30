@@ -92,12 +92,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
   future Fensalir-owned D3D12 stereo SGM compute lane. Do not import CUDA or
   TensorRT as live depth authority.
   The first code contract is in `MimirStereoDepthConfigurations` and
-  `MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`; run
+  `MimirFensalirFieldLowering`. Run
   `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --stereo-depth-contract-smoke`
-  to verify caller-declared synthetic rectified left/right input textures,
-  compute-writable R16F disparity `SurfacePage`, confidence texture, Height
-  claim, and `AquariumFieldStereoDepthLowering` dispatch metadata. This proves
-  the lane shape, not the SGM kernel.
+  to verify caller-declared rectified left/right input textures, or
+  `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --leap-packed-stereo-depth-smoke`
+  to verify live `LeapStereoIr` packed R8G8 lowering. The Leap path reuses the
+  same declared texture as left/right resource identity and treats R/G as the
+  packed observation lanes. Fensalir now has a first packed-Leap D3D12
+  SAD/block-match disparity writer, not full libSGM-style SGM or calibrated
+  metric depth.
 - Fensalir also owns the EVE-facing dashboard pixels through
   `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
   texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas

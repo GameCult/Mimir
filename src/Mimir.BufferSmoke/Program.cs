@@ -149,6 +149,11 @@ if (args.Any(arg => string.Equals(arg, "--stereo-depth-contract-smoke", StringCo
     return RunStereoDepthContractSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--leap-packed-stereo-depth-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunLeapPackedStereoDepthSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--ks-camera-driver-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunKsCameraDriverSmoke(args);
@@ -2389,6 +2394,72 @@ static int RunStereoDepthContractSmoke()
         claim.Encoding == AquariumFieldEncoding.Height &&
         claim.PayloadHandle == disparity.ResourceKey &&
         claim.ProducerKey == profile.Id &&
+        plan.Packets.Count == 1 &&
+        plan.Packets[0].Backend == AquariumFieldBackendKind.SurfacePage &&
+        plan.DeferredRequests.Count == 0
+            ? 0
+            : 1;
+}
+
+static int RunLeapPackedStereoDepthSmoke()
+{
+    const string sourceId = "leap-stereo-ir";
+    var frameDescriptor = new MimirVideoFrameDescriptor(
+        Width: 640,
+        Height: 240,
+        PixelFormat: MimirVideoPixelFormat.LeapStereoIr,
+        StrideBytes: 1280,
+        DeviceTimestampNs: 1_000_000_000L,
+        NativeHandle: 0xCAFE,
+        NativeHandleKind: "fensalir-owned-d3d12-texture2d",
+        ResourceKey: MimirFensalirTextureLeaseClient.ResourceKeyForSource(sourceId),
+        ProducerFenceHandle: 0xD00D,
+        ProducerFenceValue: 7);
+    var sample = new MimirStreamSample(
+        sourceId,
+        MimirStreamKind.Video,
+        MimirStreamOrigin.LocalDevice,
+        TimestampNs: frameDescriptor.DeviceTimestampNs,
+        ArrivalNs: frameDescriptor.DeviceTimestampNs,
+        Sequence: 7,
+        PayloadHandle: frameDescriptor.NativeHandle,
+        ByteLength: 0,
+        VideoFrame: frameDescriptor);
+    var buffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    buffer.Append(sample);
+
+    var lowerer = new MimirFensalirFieldLowering();
+    var cameraFrame = lowerer.BuildCameraObservationFrame([buffer]);
+    var windows = new List<MimirRollingStreamWindow>();
+    MimirFensalirBridgeMapper.MapWindows([buffer], windows);
+    var stereoFrame = lowerer.BuildLeapPackedStereoDepthCandidateFrame(windows, cameraFrame.Resources);
+    var validation = AquariumFieldEvidenceValidator.Validate(stereoFrame);
+    var plan = AquariumFieldLoweringPlanner.Plan(stereoFrame);
+    var lowering = stereoFrame.StereoDepthLowerings.FirstOrDefault();
+    var packedResource = stereoFrame.Resources.FirstOrDefault(resource =>
+        string.Equals(resource.ResourceKey, frameDescriptor.ResourceKey, StringComparison.Ordinal));
+    var disparity = stereoFrame.Resources.FirstOrDefault(resource =>
+        string.Equals(resource.ResourceKey, "mimir:resource:stereo-depth:leap-stereo-ir:disparity-r16f", StringComparison.Ordinal));
+
+    Console.WriteLine(
+        $"leap-packed-stereo-depth resources={stereoFrame.Resources.Count} claims={stereoFrame.Claims.Count} lowerings={stereoFrame.StereoDepthLowerings.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
+    Console.WriteLine(
+        $"leap-packed-stereo-depth-input packed={packedResource.ResourceKey} format={packedResource.Format} left={lowering.LeftResourceKey} right={lowering.RightResourceKey} calibration={lowering.CalibrationKey}");
+    Console.WriteLine(
+        $"leap-packed-stereo-depth-output disparity={disparity.ResourceKey} access={disparity.Access} format={disparity.Format} minDisparity={lowering.MinDisparity} disparities={lowering.DisparityLevels} paths={lowering.AggregationPathCount}");
+
+    return !validation.HasErrors &&
+        stereoFrame.Resources.Count == 3 &&
+        stereoFrame.Claims.Count == 1 &&
+        stereoFrame.StereoDepthLowerings.Count == 1 &&
+        packedResource.Format == "LeapStereoIr" &&
+        lowering.LeftResourceKey == frameDescriptor.ResourceKey &&
+        lowering.RightResourceKey == frameDescriptor.ResourceKey &&
+        lowering.CalibrationKey == "leapuvc-packed-stereo-ir-calibration-pending" &&
+        disparity.Kind == AquariumFieldResourceKind.SurfacePage &&
+        disparity.Access == AquariumFieldShaderAccess.UnorderedAccess &&
         plan.Packets.Count == 1 &&
         plan.Packets[0].Backend == AquariumFieldBackendKind.SurfacePage &&
         plan.DeferredRequests.Count == 0

@@ -180,6 +180,63 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         };
     }
 
+    public AquariumFieldEvidenceFrame BuildLeapPackedStereoDepthCandidateFrame(
+        IEnumerable<MimirRollingStreamWindow> windows,
+        IEnumerable<AquariumFieldResourceDeclaration> inputResources)
+    {
+        var resourcesByKey = inputResources
+            .Where(static resource => resource.HasIdentity)
+            .GroupBy(static resource => resource.ResourceKey, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
+        var leapWindow = windows
+            .Where(static window =>
+                window.Status == MimirBridgeWindowStatus.Live &&
+                window.SourceKind == MimirStreamKind.Video &&
+                window.SampleDescriptor.PixelFormat == MimirVideoPixelFormat.LeapStereoIr &&
+                window.Payload.HasResource &&
+                !string.IsNullOrWhiteSpace(window.Payload.ResourceKey))
+            .OrderByDescending(static window => window.EdgeNs)
+            .FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(leapWindow.WindowId))
+        {
+            return AquariumFieldEvidenceFrame.Empty;
+        }
+
+        var packedResourceKey = MimirFensalirBridgeMapper.ResourceKeyForPayload(leapWindow.Payload);
+        if (!resourcesByKey.TryGetValue(packedResourceKey, out var packedInput))
+        {
+            return AquariumFieldEvidenceFrame.Empty;
+        }
+
+        var profile = MimirStereoDepthConfigurations.D3D12SgmLibSgmProvenance;
+        var sourceSegment = SanitizeResourceSegment(leapWindow.StreamId);
+        var candidate = new MimirStereoDepthFieldCandidate(
+            CandidateKey: $"live-{sourceSegment}-{leapWindow.SequenceId}",
+            CalibrationId: "leapuvc-packed-stereo-ir-calibration-pending",
+            CameraPairId: leapWindow.StreamId,
+            ProducerKey: profile.Id,
+            ProfileId: profile.Id,
+            LeftObservationKey: $"{leapWindow.WindowId}:left-packed-r",
+            RightObservationKey: $"{leapWindow.WindowId}:right-packed-g",
+            LeftResourceKey: packedResourceKey,
+            RightResourceKey: packedResourceKey,
+            DisparityResourceKey: $"mimir:resource:stereo-depth:{sourceSegment}:disparity-r16f",
+            ConfidenceResourceKey: $"mimir:resource:stereo-depth:{sourceSegment}:confidence-r8",
+            Width: Math.Max(1, leapWindow.SampleDescriptor.Width),
+            Height: Math.Max(1, leapWindow.SampleDescriptor.Height),
+            MinDisparity: profile.MinDisparity,
+            DisparityLevels: profile.DisparityLevels,
+            AggregationPathCount: profile.AggregationPathCount,
+            CensusRadius: profile.CensusRadius,
+            SmoothnessPenaltySmall: profile.SmoothnessPenaltySmall,
+            SmoothnessPenaltyLarge: profile.SmoothnessPenaltyLarge,
+            MinDepthMeters: 0.20,
+            MaxDepthMeters: 4.0,
+            Confidence: 0.50,
+            ObservedTimeNs: leapWindow.EdgeNs);
+        return BuildStereoDepthCandidateFrame([candidate], [packedInput]);
+    }
+
     public AquariumFieldEvidenceFrame BuildStereoDepthCandidateFrame(
         IEnumerable<MimirStereoDepthFieldCandidate> depthCandidates,
         IEnumerable<AquariumFieldResourceDeclaration>? inputResources = null)
@@ -950,6 +1007,19 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         $"mimir:stereo-depth:{candidate.CalibrationId}:{candidate.CameraPairId}:{candidate.CandidateKey}";
 
     private static string DomainKeyForSurfaceIntent(string intentKey) => $"mimir:intent:{intentKey}";
+
+    private static string SanitizeResourceSegment(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "unknown";
+        }
+
+        var chars = value.Trim().ToLowerInvariant()
+            .Select(static character => char.IsLetterOrDigit(character) ? character : '-')
+            .ToArray();
+        return chars.Length == 0 ? "unknown" : new string(chars);
+    }
 
     private static float Clamp01(float value) => Math.Clamp(value, 0.0f, 1.0f);
 

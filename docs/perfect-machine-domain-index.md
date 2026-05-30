@@ -85,6 +85,11 @@ letting OBS become the synchronization authority.
 ### Visual Evidence
 
 - Leap stereo IR: timing/depth candidate, topology-sensitive but high-value.
+  The live `LeapStereoIr` resource is a packed R8G8 texture; Mimir now lowers
+  it into a stereo-depth FieldEvidence claim by treating R/G as the left/right
+  observation lanes and asking Fensalir for an R16F disparity `SurfacePage`.
+  The first installed Fensalir kernel is a packed block matcher, not calibrated
+  metric depth or full SGM.
 - PS3 Eyes: high-rate tracking witnesses.
 - Kiyo/Kiyo Pro: RGB context and texture, with Kiyo Pro currently cadence/USB
   limited.

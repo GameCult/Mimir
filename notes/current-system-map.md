@@ -408,20 +408,22 @@ resources, and explicit fences. CUDA, TensorRT, and monocular depth demos remain
 research references only.
 The first live contract exists: `MimirStereoDepthConfigurations` names the
 libSGM-provenance D3D12 SGM profile, and
-`MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame` lowers a synthetic
-rectified stereo result by referencing caller-declared shader-readable
-left/right input textures, then emitting a GPU-resident compute-writable
+`MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame` lowers caller-
+declared rectified stereo input textures into a GPU-resident compute-writable
 disparity SurfacePage, confidence texture, Height FieldEvidence claim, and
-`AquariumFieldStereoDepthLowering` sidecar. The lowering sidecar is the dispatch contract: it binds the
+`AquariumFieldStereoDepthLowering` sidecar. The live
+`BuildLeapPackedStereoDepthCandidateFrame` path now recognizes a live
+`LeapStereoIr` rolling video window, reuses its declared packed R8G8 texture as
+both left and right resource identity, names the left/right observations as
+packed R/G lanes, and emits the same depth lowering automatically from the
+runtime frame. The lowering sidecar is the dispatch contract: it binds the
 libSGM-provenance profile, calibration id, camera pair, inputs, disparity
 output, min disparity, disparity levels, aggregation paths, census radius,
 P1/P2 smoothness penalties, and depth range. The current D3D12 SGM profile
 publishes min disparity 0, 128 disparities, four paths, census radius 2, P1 8,
-and P2 96. The kernel itself is still future work. Fensalir's D3D12 renderer now counts stereo-depth
-lowerings as dispatch-ready only when the Height claim is planned and the
-left/right input textures plus UAV disparity `SurfacePage` resolve through its
-field resource registry; it logs that readiness separately from the absent
-kernel.
+and P2 96. Fensalir now has a first packed-Leap D3D12 kernel that writes R16F
+disparity through a crude SAD/block-match pass. This is intentionally a small
+kernel-shaped proof, not full libSGM-style SGM or calibrated metric depth yet.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

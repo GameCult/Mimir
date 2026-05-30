@@ -321,7 +321,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
 
         var frame = fieldLowering.BuildFieldEvidenceFrame(windows, observations, constraints, intents);
-        return AddSpectrumFieldEvidence(frame);
+        frame = AddSpectrumFieldEvidence(frame);
+        return AddLeapStereoDepthFieldEvidence(frame, windows);
     }
 
     private void CommitProducerLeases(IReadOnlyList<MimirRollingStreamWindow> windows)
@@ -366,6 +367,58 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             MaterialGraph: new MimirSurfaceMaterialIntent("program-video", "source-evidence", Math.Clamp(opacity, 0.0f, 1.0f)),
             UpdateBudget: new MimirSurfaceUpdateBudget(0.0, 1, Math.Max(0, window.Payload.ByteLength)),
             Purpose: MimirSurfaceIntentPurpose.Production);
+    }
+
+    private AquariumFieldEvidenceFrame AddLeapStereoDepthFieldEvidence(
+        AquariumFieldEvidenceFrame frame,
+        IReadOnlyList<MimirRollingStreamWindow> windows)
+    {
+        var stereoFrame = fieldLowering.BuildLeapPackedStereoDepthCandidateFrame(windows, frame.Resources);
+        if (!stereoFrame.HasInput)
+        {
+            return frame;
+        }
+
+        return new AquariumFieldEvidenceFrame
+        {
+            Domains = [.. frame.Domains, .. stereoFrame.Domains],
+            Claims = [.. frame.Claims, .. stereoFrame.Claims],
+            Candidates = [.. frame.Candidates, .. stereoFrame.Candidates],
+            BackendPackets = [.. frame.BackendPackets, .. stereoFrame.BackendPackets],
+            Resources = MergeResources(frame.Resources, stereoFrame.Resources),
+            ResourceUploads = [.. frame.ResourceUploads, .. stereoFrame.ResourceUploads],
+            TubeSplineLowerings = [.. frame.TubeSplineLowerings, .. stereoFrame.TubeSplineLowerings],
+            StereoDepthLowerings = [.. frame.StereoDepthLowerings, .. stereoFrame.StereoDepthLowerings],
+            AccumulationWindowSeconds = frame.AccumulationWindowSeconds,
+            PresentationDelaySeconds = frame.PresentationDelaySeconds,
+        };
+    }
+
+    private static IReadOnlyList<AquariumFieldResourceDeclaration> MergeResources(
+        IReadOnlyList<AquariumFieldResourceDeclaration> first,
+        IReadOnlyList<AquariumFieldResourceDeclaration> second)
+    {
+        if (first.Count == 0)
+        {
+            return second;
+        }
+
+        if (second.Count == 0)
+        {
+            return first;
+        }
+
+        var resources = new List<AquariumFieldResourceDeclaration>(first.Count + second.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var resource in first.Concat(second))
+        {
+            if (resource.HasIdentity && seen.Add(resource.ResourceKey))
+            {
+                resources.Add(resource);
+            }
+        }
+
+        return resources;
     }
 
     private AquariumFieldEvidenceFrame AddSpectrumFieldEvidence(AquariumFieldEvidenceFrame frame)

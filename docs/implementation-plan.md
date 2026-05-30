@@ -41,19 +41,21 @@ The research ledger is
 That note is not a dependency grant: CUDA implementations, TensorRT ports, and
 monocular model demos are provenance only. The live owner is Fensalir D3D12
 compute over Mimir-declared texture resources and calibration state.
-The first contract slice now exists in `MimirStereoDepthConfigurations` and
-`MimirFensalirFieldLowering.BuildStereoDepthCandidateFrame`: a calibrated
-stereo pair profile references caller-declared shader-readable left/right input
-textures, emits a GPU-resident compute-writable R16F disparity `SurfacePage`,
-an R8 confidence texture, a Height FieldEvidence claim planned to the
-`SurfacePage` backend, and an `AquariumFieldStereoDepthLowering` sidecar tying
-profile, calibration, camera pair, inputs, disparity output, disparity
-settings, SGM constants, and depth range together. The libSGM-provenance profile
-currently publishes min disparity 0, 128 disparities, four aggregation paths,
-census radius 2, P1 8, and P2 96. This is the socket for the kernel, not the
-kernel. Fensalir's renderer now reports whether those lowerings are
-dispatch-ready after planning/resource resolution, without writing placeholder
-depth values.
+The first live Leap slice now exists in `MimirStereoDepthConfigurations` and
+`MimirFensalirFieldLowering`. The generic
+`BuildStereoDepthCandidateFrame` still lowers caller-declared rectified
+left/right textures into a GPU-resident compute-writable R16F disparity
+`SurfacePage`, an R8 confidence texture, a Height FieldEvidence claim, and an
+`AquariumFieldStereoDepthLowering` sidecar. The live
+`BuildLeapPackedStereoDepthCandidateFrame` path now recognizes the current
+`LeapStereoIr` rolling video window, reuses its declared packed R8G8 texture as
+both left and right input resources, names the R/G lane observations, and emits
+the same Height/depth lowering automatically from the runtime frame. The
+calibration id is explicitly pending, so the output is disparity evidence, not
+metric geometry truth. The libSGM-provenance profile currently publishes min
+disparity 0, 128 disparities, four aggregation paths, census radius 2, P1 8,
+and P2 96. Fensalir has the first packed-Leap D3D12 compute kernel installed as
+a crude SAD/block-match disparity writer; it is not full SGM yet.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
