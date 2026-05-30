@@ -10,8 +10,8 @@ flowchart LR
     B --> D["SSH TCP forward"]
     D --> E["Yggdrasil localhost RTMP ingest"]
     E --> F["HLS segment ring"]
-    F --> G["nginx static HTTPS"]
-    G --> H["mimir.gamecult.org static viewer"]
+    F --> G["streampixels.gamecult.org static HTTPS"]
+    G --> H["gamecult.org/livestream static viewer"]
 ```
 
 ## Authority Map
@@ -45,16 +45,17 @@ The default push target is:
 rtmp://127.0.0.1:11935/live/mimir
 ```
 
-The public HLS playlist is:
+The public HLS playlist is served on the existing Yggdrasil-routed
+StreamPixels domain:
 
 ```text
-https://live.mimir.gamecult.org/hls/mimir.m3u8
+https://streampixels.gamecult.org/mimir/live/hls/mimir.m3u8
 ```
 
-The static viewer lives at:
+The static viewer lives on the root GameCult site:
 
 ```text
-https://mimir.gamecult.org/live
+https://gamecult.org/livestream
 ```
 
 ## Scaling Rule

@@ -111,10 +111,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   one final H.264/AAC NVENC RTMP stream to
   `rtmp://127.0.0.1:11935/live/mimir` through an SSH local forward to
   Yggdrasil. Yggdrasil's nginx RTMP/HLS origin is deployed and has produced
-  HLS segments from a bounded synthetic push; public activation still needs DNS
-  and TLS for `live.mimir.gamecult.org`. The static viewer route is
-  [[live|Mimir Live]] and reads
-  `https://live.mimir.gamecult.org/hls/mimir.m3u8`.
+  HLS segments from a bounded synthetic push. Public HLS is served through the
+  existing StreamPixels TLS host, not a new Mimir media hostname. The public
+  static viewer belongs to the root GameCult site at
+  `https://gamecult.org/livestream` and reads
+  `https://streampixels.gamecult.org/mimir/live/hls/mimir.m3u8`.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
 - OBS receives final program surfaces; it does not own synchronization.
