@@ -63,8 +63,12 @@ Leap disparity-to-point-cloud projection profile, and
 runtime merges that Mesh claim alongside the stereo-depth claim, and
 `Mimir.BufferSmoke --leap-point-cloud-root-smoke` proves the contract plans as
 one `SurfacePage` packet plus one `Mesh` packet with no deferred requests. This
-is the first point-cloud root, not yet visible rendered points: Fensalir still
-must implement the D3D12 disparity-to-vertex lowering and the editor draw path.
+is the first point-cloud root. Fensalir branch `codex/leap-packed-depth` now has
+the matching first render lane: `D3D12PointCloudFromDisparityCS` fills the
+derived point-list Mesh from the disparity SurfacePage, and
+`D3D12PointCloudPS` renders it through the scene candidate targets. The next
+truth cut is live-device/editor verification plus global residual/calibration
+ownership, not another fake RGB depth path.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
@@ -576,9 +580,10 @@ a named invariant that the native runtime cannot protect yet.
    GPU-resident disparity/depth/confidence resources and FieldEvidence claims.
    Keep `libSGM` as provenance for algorithm shape and benchmark pressure, not
    as imported CUDA authority. The typed contract, live packed-Leap disparity
-   path, and Leap point-cloud Mesh socket exist; the next cuts are full
-   HLSL/D3D12 SGM aggregation, disparity-to-point vertices, editor rendering,
-   and then a global residual/calibration owner.
+   path, Leap point-cloud Mesh socket, and first Fensalir point render lane
+   exist; the next cuts are live editor verification, full HLSL/D3D12 SGM
+   aggregation, calibrated projection constants, and then a global
+   residual/calibration owner.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver

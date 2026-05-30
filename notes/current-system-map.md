@@ -459,9 +459,13 @@ R16F disparity SurfacePage. `MimirRuntime` merges that Mesh claim into the same
 evidence frame as the Leap stereo-depth lowering. `Mimir.BufferSmoke
 --leap-point-cloud-root-smoke` proves the combined depth/point-cloud contract
 plans as one `SurfacePage` packet and one `Mesh` packet with zero deferred
-requests. Fensalir still needs the actual D3D12 disparity-to-vertex compute
-lowering and editor draw path before those points are visible in the Mimir
-scene.
+requests. Fensalir branch `codex/leap-packed-depth` now has the first render
+lane too. It preserves Mesh `SourceUri=derived-from:*`, allocates generated
+point-list vertex/index buffers as UAV-capable GPU resources, fills them from
+the disparity SurfacePage in `D3D12PointCloudFromDisparityCS`, and renders the
+standard `PositionNormalUvColor` PointList through `D3D12PointCloudPS`. The
+remaining truth gap is live Leap/editor verification, calibrated projection
+constants, full SGM, and a global residual/calibration owner.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

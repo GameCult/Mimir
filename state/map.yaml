@@ -83,8 +83,11 @@ invariants:
     Leap disparity SurfacePage. `MimirRuntime` merges that Mesh claim with the
     live Leap stereo-depth claim. `Mimir.BufferSmoke --leap-point-cloud-root-smoke`
     proves one `SurfacePage` packet plus one `Mesh` packet and zero deferred
-    requests. This is a typed socket, not visible points yet; Fensalir still
-    owns the D3D12 disparity-to-vertex lowering and editor draw path.
+    requests. Fensalir branch `codex/leap-packed-depth` now owns the matching
+    first render lane: generated PointList Mesh buffers are filled from the
+    disparity SurfacePage on D3D12 and rendered into scene candidate targets.
+    Live-device/editor verification, calibrated projection constants, full SGM,
+    and global residual/calibration ownership remain open.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before
@@ -634,10 +637,10 @@ accepted_design:
     whenever dirty.
 
 active_subgoals:
-  - Implement Fensalir's Leap disparity-to-point vertex lowering and render the
-    resulting point cloud in the Mimir editor.
-  - Add a global residual/calibration owner that can consume Leap point-cloud
-    errors before PS3 Eyes, Kiyos, and Eve feed wider online calibration.
+  - Verify the live Leap point cloud in the Mimir editor.
+  - Add calibrated projection constants and a global residual/calibration owner
+    that can consume Leap point-cloud errors before PS3 Eyes, Kiyos, and Eve
+    feed wider online calibration.
   - Add remaining local camera drivers through `IMimirVideoCaptureDriver`.
   - Use the verified in-process Focusrite ASIO source for local Scarlett mic and
     loopback ingest; WASAPI remains a diagnostic witness.
@@ -727,11 +730,12 @@ current_status:
   next_action: >
     Continue the Leap-first visual geometry cut. Mimir now lowers live
     `LeapStereoIr` packed R/G stereo into a disparity SurfacePage and declares a
-    derived point-cloud Mesh socket. The next implementation belongs in
-    Fensalir: generate PointList vertices from disparity on D3D12, render that
-    resource in the Mimir editor camera, then add a global residual/calibration
-    owner that can consume point-cloud alignment error. Do not fan RGB cameras
-    into fake depth: PS3 Eyes are fast motion/feature witnesses, Kiyos and Eve
-    are RGB/context witnesses, and Leap owns the first dense close-range
-    geometry. Keep the Focusrite away from the Leap USB neighborhood. Treat Kiyo
-    Pro as a ~25 fps source until its SuperSpeed negotiation is fixed.
+    derived point-cloud Mesh socket. Fensalir now has the first D3D12
+    disparity-to-point render lane. The next implementation is live-device/editor
+    verification, calibrated projection constants, then a global
+    residual/calibration owner that can consume point-cloud alignment error. Do
+    not fan RGB cameras into fake depth: PS3 Eyes are fast motion/feature
+    witnesses, Kiyos and Eve are RGB/context witnesses, and Leap owns the first
+    dense close-range geometry. Keep the Focusrite away from the Leap USB
+    neighborhood. Treat Kiyo Pro as a ~25 fps source until its SuperSpeed
+    negotiation is fixed.
