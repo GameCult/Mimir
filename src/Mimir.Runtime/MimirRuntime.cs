@@ -322,7 +322,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
         var frame = fieldLowering.BuildFieldEvidenceFrame(windows, observations, constraints, intents);
         frame = AddSpectrumFieldEvidence(frame);
-        return AddLeapStereoDepthFieldEvidence(frame, windows);
+        return AddLeapGeometryFieldEvidence(frame, windows);
     }
 
     private void CommitProducerLeases(IReadOnlyList<MimirRollingStreamWindow> windows)
@@ -369,7 +369,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             Purpose: MimirSurfaceIntentPurpose.Production);
     }
 
-    private AquariumFieldEvidenceFrame AddLeapStereoDepthFieldEvidence(
+    private AquariumFieldEvidenceFrame AddLeapGeometryFieldEvidence(
         AquariumFieldEvidenceFrame frame,
         IReadOnlyList<MimirRollingStreamWindow> windows)
     {
@@ -379,16 +379,17 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             return frame;
         }
 
+        var pointCloudFrame = fieldLowering.BuildLeapPackedStereoPointCloudCandidateFrame(windows);
         return new AquariumFieldEvidenceFrame
         {
-            Domains = [.. frame.Domains, .. stereoFrame.Domains],
-            Claims = [.. frame.Claims, .. stereoFrame.Claims],
-            Candidates = [.. frame.Candidates, .. stereoFrame.Candidates],
-            BackendPackets = [.. frame.BackendPackets, .. stereoFrame.BackendPackets],
-            Resources = MergeResources(frame.Resources, stereoFrame.Resources),
-            ResourceUploads = [.. frame.ResourceUploads, .. stereoFrame.ResourceUploads],
-            TubeSplineLowerings = [.. frame.TubeSplineLowerings, .. stereoFrame.TubeSplineLowerings],
-            StereoDepthLowerings = [.. frame.StereoDepthLowerings, .. stereoFrame.StereoDepthLowerings],
+            Domains = [.. frame.Domains, .. stereoFrame.Domains, .. pointCloudFrame.Domains],
+            Claims = [.. frame.Claims, .. stereoFrame.Claims, .. pointCloudFrame.Claims],
+            Candidates = [.. frame.Candidates, .. stereoFrame.Candidates, .. pointCloudFrame.Candidates],
+            BackendPackets = [.. frame.BackendPackets, .. stereoFrame.BackendPackets, .. pointCloudFrame.BackendPackets],
+            Resources = MergeResources(MergeResources(frame.Resources, stereoFrame.Resources), pointCloudFrame.Resources),
+            ResourceUploads = [.. frame.ResourceUploads, .. stereoFrame.ResourceUploads, .. pointCloudFrame.ResourceUploads],
+            TubeSplineLowerings = [.. frame.TubeSplineLowerings, .. stereoFrame.TubeSplineLowerings, .. pointCloudFrame.TubeSplineLowerings],
+            StereoDepthLowerings = [.. frame.StereoDepthLowerings, .. stereoFrame.StereoDepthLowerings, .. pointCloudFrame.StereoDepthLowerings],
             AccumulationWindowSeconds = frame.AccumulationWindowSeconds,
             PresentationDelaySeconds = frame.PresentationDelaySeconds,
         };

@@ -15,10 +15,10 @@ objective:
     microphones, two speakers, Leap timing, Fensalir GPU rendering, Faust DSP,
     and OBS output.
   current: >
-    Promote the active bioacoustic packet-song receiver into runtime state:
-    self-identifying song contours should pin multiple time/frequency anchors
-    per heard call, learn per-path response, and drive the audio actuator while
-    direct camera/audio capture continues feeding Mimir.Runtime buffers.
+    Make Leap dense geometry visible and calibratable first: live Leap packed
+    stereo IR feeds Fensalir D3D12 disparity, Mimir declares a derived
+    point-cloud Mesh socket, then Fensalir should generate/render points in the
+    editor and feed global residuals into online calibration.
 
 constraints:
   - Sender is Windows.
@@ -75,6 +75,16 @@ invariants:
     packed-Leap D3D12 SAD/block-match kernel that writes R16F disparity through
     the typed SurfacePage socket; full SGM and calibrated metric depth remain
     future work.
+  - The first Leap point-cloud root is code-visible:
+    `MimirPointCloudConfigurations.LeapDisparityPointCloudRoot` records the
+    stereo-disparity projection profile and provenance, and
+    `MimirFensalirFieldLowering.BuildLeapPackedStereoPointCloudCandidateFrame`
+    declares a GPU-resident `FieldMesh` PointList resource derived from the
+    Leap disparity SurfacePage. `MimirRuntime` merges that Mesh claim with the
+    live Leap stereo-depth claim. `Mimir.BufferSmoke --leap-point-cloud-root-smoke`
+    proves one `SurfacePage` packet plus one `Mesh` packet and zero deferred
+    requests. This is a typed socket, not visible points yet; Fensalir still
+    owns the D3D12 disparity-to-vertex lowering and editor draw path.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before
@@ -624,7 +634,10 @@ accepted_design:
     whenever dirty.
 
 active_subgoals:
-  - Implement the first concrete Leap direct capture driver and measure cadence.
+  - Implement Fensalir's Leap disparity-to-point vertex lowering and render the
+    resulting point cloud in the Mimir editor.
+  - Add a global residual/calibration owner that can consume Leap point-cloud
+    errors before PS3 Eyes, Kiyos, and Eve feed wider online calibration.
   - Add remaining local camera drivers through `IMimirVideoCaptureDriver`.
   - Use the verified in-process Focusrite ASIO source for local Scarlett mic and
     loopback ingest; WASAPI remains a diagnostic witness.
@@ -712,31 +725,13 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Use the new bioacoustic timeline watermark as the active acoustic sync
-    direction. Cut the next implementation in this order: streaming indexed
-    log-mel/MFCC motif decoder state with a global clock/path hypothesis fed by
-    `--bioacoustic-train` receipts, calibration-session command/replay proof that learns
-    per-output/mic motif/formant response, fractional-delay/SRO actuator, then
-    native camera payload handles and Fensalir lowering. Keep chirp-bin
-    calibration captures as reference evidence, not the runtime target.
-    Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
-    loopback, live mic buffers stay populated, runtime sync analysis now runs as
-    a bounded rotating service without UI/telemetry re-entry, and the bioacoustic
-    motif timeline produces deterministic synthetic active sync. The next
-    invariant is self-identifying song contours producing stable intra-call
-    time/frequency anchors and clock fits through real loopback and microphones,
-    so the actuator can use decoded time instead of filtered lag guesses.
-    Replace the remaining
-    diagnostic JSON-line process bridges with direct native capture drivers that
-    push buffer handles into Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports
-    for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
-    calibration witnesses are playing. Treat PS3 Eye audio as
-    enumeration/runtime-fragile, not unavailable. Keep the Focusrite away from
-    the Leap USB neighborhood. The Scarlett Solo 4th Gen is now attached to
-    Starfire, and `native/probes/asio_audio_cadence` proves local Focusrite USB
-    ASIO access with 4 inputs / 2 outputs including Loopback 1/2, 192-frame
-    preferred buffers, 44.1-192 kHz support, and nonzero 4-channel Int32LSB
-    input callbacks at 192 kHz. Raven also has a 192 kHz loopback-capable
-    Scarlett for co-streamer/game timing evidence, but Starfire owns the heavy
-    soundfield and sensor-fusion work. Treat Kiyo Pro as a ~25 fps source until
-    its SuperSpeed negotiation is fixed.
+    Continue the Leap-first visual geometry cut. Mimir now lowers live
+    `LeapStereoIr` packed R/G stereo into a disparity SurfacePage and declares a
+    derived point-cloud Mesh socket. The next implementation belongs in
+    Fensalir: generate PointList vertices from disparity on D3D12, render that
+    resource in the Mimir editor camera, then add a global residual/calibration
+    owner that can consume point-cloud alignment error. Do not fan RGB cameras
+    into fake depth: PS3 Eyes are fast motion/feature witnesses, Kiyos and Eve
+    are RGB/context witnesses, and Leap owns the first dense close-range
+    geometry. Keep the Focusrite away from the Leap USB neighborhood. Treat Kiyo
+    Pro as a ~25 fps source until its SuperSpeed negotiation is fixed.

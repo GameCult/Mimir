@@ -56,6 +56,15 @@ metric geometry truth. The libSGM-provenance profile currently publishes min
 disparity 0, 128 disparities, four aggregation paths, census radius 2, P1 8,
 and P2 96. Fensalir has the first packed-Leap D3D12 compute kernel installed as
 a crude SAD/block-match disparity writer; it is not full SGM yet.
+The next socket now exists too: `MimirPointCloudConfigurations` records the
+Leap disparity-to-point-cloud projection profile, and
+`BuildLeapPackedStereoPointCloudCandidateFrame` derives a GPU-resident
+`FieldMesh` point-list resource from the live Leap disparity resource. The
+runtime merges that Mesh claim alongside the stereo-depth claim, and
+`Mimir.BufferSmoke --leap-point-cloud-root-smoke` proves the contract plans as
+one `SurfacePage` packet plus one `Mesh` packet with no deferred requests. This
+is the first point-cloud root, not yet visible rendered points: Fensalir still
+must implement the D3D12 disparity-to-vertex lowering and the editor draw path.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
@@ -565,9 +574,10 @@ a named invariant that the native runtime cannot protect yet.
    lane over rectified synchronized camera texture pairs, emitting
    GPU-resident disparity/depth/confidence resources and FieldEvidence claims.
    Keep `libSGM` as provenance for algorithm shape and benchmark pressure, not
-   as imported CUDA authority. The typed contract and smoke exist; the next cut
-   is the actual HLSL/D3D12 cost-volume and SGM aggregation kernel behind that
-   contract.
+   as imported CUDA authority. The typed contract, live packed-Leap disparity
+   path, and Leap point-cloud Mesh socket exist; the next cuts are full
+   HLSL/D3D12 SGM aggregation, disparity-to-point vertices, editor rendering,
+   and then a global residual/calibration owner.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver

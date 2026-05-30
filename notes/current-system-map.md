@@ -448,6 +448,18 @@ publishes min disparity 0, 128 disparities, four paths, census radius 2, P1 8,
 and P2 96. Fensalir now has a first packed-Leap D3D12 kernel that writes R16F
 disparity through a crude SAD/block-match pass. This is intentionally a small
 kernel-shaped proof, not full libSGM-style SGM or calibrated metric depth yet.
+The first point-cloud root is also code-visible now:
+`MimirPointCloudConfigurations.LeapDisparityPointCloudRoot` records the
+stereo-disparity projection profile and provenance, while
+`MimirFensalirFieldLowering.BuildLeapPackedStereoPointCloudCandidateFrame`
+declares a GPU-resident `FieldMesh` point-list resource derived from the Leap
+R16F disparity SurfacePage. `MimirRuntime` merges that Mesh claim into the same
+evidence frame as the Leap stereo-depth lowering. `Mimir.BufferSmoke
+--leap-point-cloud-root-smoke` proves the combined depth/point-cloud contract
+plans as one `SurfacePage` packet and one `Mesh` packet with zero deferred
+requests. Fensalir still needs the actual D3D12 disparity-to-vertex compute
+lowering and editor draw path before those points are visible in the Mimir
+scene.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

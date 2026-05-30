@@ -155,6 +155,11 @@ if (args.Any(arg => string.Equals(arg, "--leap-packed-stereo-depth-smoke", Strin
     return RunLeapPackedStereoDepthSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--leap-point-cloud-root-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunLeapPointCloudRootSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--ks-camera-driver-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunKsCameraDriverSmoke(args);
@@ -2531,6 +2536,95 @@ static int RunLeapPackedStereoDepthSmoke()
         disparity.Access == AquariumFieldShaderAccess.UnorderedAccess &&
         plan.Packets.Count == 1 &&
         plan.Packets[0].Backend == AquariumFieldBackendKind.SurfacePage &&
+        plan.DeferredRequests.Count == 0
+            ? 0
+            : 1;
+}
+
+static int RunLeapPointCloudRootSmoke()
+{
+    const string sourceId = "leap-stereo-ir";
+    var frameDescriptor = new MimirVideoFrameDescriptor(
+        Width: 640,
+        Height: 240,
+        PixelFormat: MimirVideoPixelFormat.LeapStereoIr,
+        StrideBytes: 1280,
+        DeviceTimestampNs: 1_000_000_000L,
+        NativeHandle: 0xCAFE,
+        NativeHandleKind: "fensalir-owned-d3d12-texture2d",
+        ResourceKey: MimirFensalirTextureLeaseClient.ResourceKeyForSource(sourceId),
+        ProducerFenceHandle: 0xD00D,
+        ProducerFenceValue: 7);
+    var sample = new MimirStreamSample(
+        sourceId,
+        MimirStreamKind.Video,
+        MimirStreamOrigin.LocalDevice,
+        TimestampNs: frameDescriptor.DeviceTimestampNs,
+        ArrivalNs: frameDescriptor.DeviceTimestampNs,
+        Sequence: 7,
+        PayloadHandle: frameDescriptor.NativeHandle,
+        ByteLength: 0,
+        VideoFrame: frameDescriptor);
+    var buffer = new MimirRollingStreamBuffer(
+        new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
+        TimeSpan.FromSeconds(5));
+    buffer.Append(sample);
+
+    var lowerer = new MimirFensalirFieldLowering();
+    var cameraFrame = lowerer.BuildCameraObservationFrame([buffer]);
+    var windows = new List<MimirRollingStreamWindow>();
+    MimirFensalirBridgeMapper.MapWindows([buffer], windows);
+    var stereoFrame = lowerer.BuildLeapPackedStereoDepthCandidateFrame(windows, cameraFrame.Resources);
+    var pointCloudFrame = lowerer.BuildLeapPackedStereoPointCloudCandidateFrame(windows);
+    var mergedResources = stereoFrame.Resources
+        .Concat(pointCloudFrame.Resources)
+        .Where(static resource => resource.HasIdentity)
+        .GroupBy(static resource => resource.ResourceKey, StringComparer.Ordinal)
+        .Select(static group => group.First())
+        .ToArray();
+    var merged = new AquariumFieldEvidenceFrame
+    {
+        Domains = [.. stereoFrame.Domains, .. pointCloudFrame.Domains],
+        Claims = [.. stereoFrame.Claims, .. pointCloudFrame.Claims],
+        Candidates = [.. stereoFrame.Candidates, .. pointCloudFrame.Candidates],
+        Resources = mergedResources,
+        StereoDepthLowerings = stereoFrame.StereoDepthLowerings,
+        AccumulationWindowSeconds = cameraFrame.AccumulationWindowSeconds,
+        PresentationDelaySeconds = cameraFrame.PresentationDelaySeconds
+    };
+    var validation = AquariumFieldEvidenceValidator.Validate(merged);
+    var plan = AquariumFieldLoweringPlanner.Plan(merged);
+    var profile = MimirPointCloudConfigurations.LeapDisparityPointCloudRoot;
+    var pointResource = pointCloudFrame.Resources.FirstOrDefault(resource =>
+        string.Equals(resource.ResourceKey, "mimir:resource:point-cloud:leap-stereo-ir:leap-points", StringComparison.Ordinal));
+    var pointClaim = pointCloudFrame.Claims.FirstOrDefault();
+    var meshPacket = plan.Packets.FirstOrDefault(packet => packet.Backend == AquariumFieldBackendKind.Mesh);
+    var stereoPacket = plan.Packets.FirstOrDefault(packet => packet.Backend == AquariumFieldBackendKind.SurfacePage);
+
+    Console.WriteLine(
+        $"leap-point-cloud-root profile={profile.Id} provenance={profile.Provenance} liveDependency={profile.LiveDependency} stride={profile.DefaultSampleStride} baseline={profile.BaselineMeters:0.###} focal={profile.FocalLengthPixels:0.###}");
+    Console.WriteLine(
+        $"leap-point-cloud-root-field resources={merged.Resources.Count} pointResources={pointCloudFrame.Resources.Count} claims={pointCloudFrame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} errors={validation.HasErrors}");
+    Console.WriteLine(
+        $"leap-point-cloud-root-output resource={pointResource.ResourceKey} kind={pointResource.Kind} topology={pointResource.Mesh.Topology} layout={pointResource.Mesh.Layout} vertices={pointResource.Mesh.Vertices.Count} indices={pointResource.Mesh.Indices.Count} source={pointResource.SourceUri} backend={meshPacket.Backend}");
+
+    return !validation.HasErrors &&
+        !profile.LiveDependency &&
+        profile.ProjectionKind == MimirPointCloudProjectionKind.StereoDisparityProjection &&
+        profile.NegativeChecks.Any(check => check.Contains("no synthetic point cloud", StringComparison.OrdinalIgnoreCase)) &&
+        pointCloudFrame.Resources.Count == 1 &&
+        pointCloudFrame.Claims.Count == 1 &&
+        pointClaim.Encoding == AquariumFieldEncoding.Mesh &&
+        pointClaim.PayloadHandle == pointResource.ResourceKey &&
+        pointClaim.ProducerKey == profile.Id &&
+        pointResource.Kind == AquariumFieldResourceKind.Mesh &&
+        pointResource.Mesh.Topology == AquariumFieldMeshTopology.PointList &&
+        pointResource.Mesh.Layout == AquariumFieldMeshLayout.PositionNormalUvColor &&
+        pointResource.Mesh.Vertices.Count == 320 * 120 &&
+        pointResource.Mesh.Indices.Count == pointResource.Mesh.Vertices.Count &&
+        pointResource.SourceUri == "derived-from:mimir:resource:stereo-depth:leap-stereo-ir:disparity-r16f" &&
+        stereoPacket.Backend == AquariumFieldBackendKind.SurfacePage &&
+        meshPacket.Backend == AquariumFieldBackendKind.Mesh &&
         plan.DeferredRequests.Count == 0
             ? 0
             : 1;

@@ -14,6 +14,13 @@ public enum MimirStereoDepthOutputKind
     ConfidenceTexture
 }
 
+public enum MimirPointCloudProjectionKind
+{
+    StereoDisparityProjection,
+    VisualFeatureTriangulation,
+    ExternalDepthSensor
+}
+
 public sealed record MimirStereoDepthKernelProfile(
     string Id,
     string Description,
@@ -54,6 +61,45 @@ public sealed record MimirStereoDepthFieldCandidate(
     int CensusRadius,
     double SmoothnessPenaltySmall,
     double SmoothnessPenaltyLarge,
+    double MinDepthMeters,
+    double MaxDepthMeters,
+    double Confidence,
+    long ObservedTimeNs);
+
+public sealed record MimirPointCloudProjectionProfile(
+    string Id,
+    string Description,
+    MimirPointCloudProjectionKind ProjectionKind,
+    string Owner,
+    string Provenance,
+    string License,
+    bool LiveDependency,
+    string[] RequiredInputResources,
+    string[] OutputResources,
+    int DefaultSampleStride,
+    double BaselineMeters,
+    double FocalLengthPixels,
+    double PrincipalPointX,
+    double PrincipalPointY,
+    string[] NegativeChecks);
+
+public sealed record MimirPointCloudFieldCandidate(
+    string CandidateKey,
+    string CalibrationId,
+    string CameraRigId,
+    string ProducerKey,
+    string ProfileId,
+    string SourceDisparityResourceKey,
+    string SourceConfidenceResourceKey,
+    string PointCloudResourceKey,
+    int Width,
+    int Height,
+    int SampleStride,
+    int MaxPointCount,
+    double BaselineMeters,
+    double FocalLengthPixels,
+    double PrincipalPointX,
+    double PrincipalPointY,
     double MinDepthMeters,
     double MaxDepthMeters,
     double Confidence,
@@ -132,5 +178,41 @@ public static class MimirStereoDepthConfigurations
         D3D12SgmLibSgmProvenance,
         FastAcvNetReference,
         DepthAnythingSmallReference
+    ];
+}
+
+public static class MimirPointCloudConfigurations
+{
+    public static MimirPointCloudProjectionProfile LeapDisparityPointCloudRoot { get; } = new(
+        "leap-disparity-point-cloud-root",
+        "D3D12 point-cloud projection rooted in the Leap packed-stereo disparity SurfacePage.",
+        MimirPointCloudProjectionKind.StereoDisparityProjection,
+        "Fensalir D3D12 compute",
+        "Derived from calibrated stereo pinhole projection: z = f * baseline / disparity; disparity source follows the libSGM-provenance D3D12 lane.",
+        "Repo-native implementation; upstream stereo kernel provenance remains Apache-2.0 libSGM.",
+        LiveDependency: false,
+        RequiredInputResources:
+        [
+            "R16Float disparity SurfacePage",
+            "R8_UNorm confidence Texture2D",
+            "stereo intrinsics/extrinsics calibration"
+        ],
+        OutputResources: ["FieldMesh PointList PositionNormalUvColor"],
+        DefaultSampleStride: 2,
+        BaselineMeters: 0.04,
+        FocalLengthPixels: 250.0,
+        PrincipalPointX: 320.0,
+        PrincipalPointY: 120.0,
+        NegativeChecks:
+        [
+            "no synthetic point cloud without a live disparity resource",
+            "no RGB monocular depth accepted as metric geometry owner",
+            "no calibration optimizer update before residual ownership exists",
+            "no CPU point array in the live D3D12 path"
+        ]);
+
+    public static IReadOnlyList<MimirPointCloudProjectionProfile> BuiltIn { get; } =
+    [
+        LeapDisparityPointCloudRoot
     ];
 }

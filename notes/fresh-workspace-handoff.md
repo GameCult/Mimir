@@ -100,7 +100,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
   same declared texture as left/right resource identity and treats R/G as the
   packed observation lanes. Fensalir now has a first packed-Leap D3D12
   SAD/block-match disparity writer, not full libSGM-style SGM or calibrated
-  metric depth.
+  metric depth. Mimir also now declares the first Leap point-cloud root:
+  `MimirPointCloudConfigurations.LeapDisparityPointCloudRoot` and
+  `BuildLeapPackedStereoPointCloudCandidateFrame` emit a GPU-resident
+  `FieldMesh` point-list resource derived from that disparity SurfacePage. Run
+  `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --leap-point-cloud-root-smoke`
+  to verify the combined `SurfacePage` plus `Mesh` packet plan. This is a
+  typed socket only; Fensalir still needs the D3D12 vertex-generation lowering
+  and editor draw path to show the point cloud.
 - Fensalir also owns the EVE-facing dashboard pixels through
   `Global\MimirFensalirProgramTexture`. `src/Mimir.EveRelay` opens that shared
   texture, encodes H.264 Annex-B with NVENC by default, and serves EveCanvas
@@ -129,7 +136,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Current Pressure
 
-- Implement the first concrete Leap direct capture driver and measure cadence.
+- Implement Fensalir's Leap disparity-to-point vertex lowering and render the
+  resulting point cloud in the Mimir editor; then add the global
+  residual/calibration owner.
 - Cut the Phase 1 Mimir-to-Fensalir bridge DTOs for rolling windows,
   observations, calibration constraints, and surface intent before adding
   another backend-specific visual path.
