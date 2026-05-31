@@ -160,6 +160,16 @@ if (args.Any(arg => string.Equals(arg, "--led-spline-live-score", StringComparis
     return RunLedSplineLiveScore(args);
 }
 
+if (args.Any(arg => string.Equals(arg, "--ps3eye-tracking-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunPs3EyeTrackingSmoke();
+}
+
+if (args.Any(arg => string.Equals(arg, "--ps3eye-tracking-live", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunPs3EyeTrackingLive(args);
+}
+
 if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunFensalirTextureLeaseSmoke();
@@ -1090,6 +1100,139 @@ static int RunLedSplineLiveScore(string[] args)
         catch (Exception ex)
         {
             Console.WriteLine($"led-spline-live-score source={profile.SourceId} status=failed error=\"{ex.Message.Replace("\"", "'", StringComparison.Ordinal)}\"");
+        }
+    }
+
+    return anyCaptured ? 0 : 1;
+}
+
+static int RunPs3EyeTrackingSmoke()
+{
+    const int width = 160;
+    const int height = 120;
+    var tracker = new MimirSparseFeatureTracker(new MimirSparseFeatureTrackerOptions(
+        MaxFeatures: 32,
+        CellSizePixels: 10,
+        SearchRadiusPixels: 12,
+        MinimumTrackAgeFrames: 3,
+        MinimumCornerScore: 0.08,
+        MinimumLuma: 0.12));
+    MimirSparseFeatureTrackerFrame latest = default!;
+    for (var frameIndex = 0; frameIndex < 8; frameIndex++)
+    {
+        var luma = new byte[width * height];
+        for (var marker = 0; marker < 8; marker++)
+        {
+            var x = 24 + marker * 14 + frameIndex * 2;
+            var y = 20 + marker * 9 + frameIndex;
+            StampBlob(luma, width, height, x, y, radius: 2, peak: 230);
+        }
+
+        latest = tracker.Update(
+            "ps3-eye-0",
+            width,
+            height,
+            luma,
+            1_000_000_000L + frameIndex * 5_350_000L);
+    }
+
+    var observation = tracker.ToCameraObservation(latest);
+    var candidate = new MimirFeatureTrackFieldCandidate(
+        "ps3-eye-synthetic-tracks",
+        "visual-calibration",
+        "Mimir.BufferSmoke",
+        [observation],
+        latest.StableTrackCount,
+        latest.MeanTrackAgeFrames,
+        latest.MeanSpeedPixelsPerSecond,
+        latest.Confidence,
+        latest.ObservedTimeNs);
+    var evidence = new MimirFensalirFieldLowering().BuildFeatureTrackCandidateFrame([candidate]);
+    var validation = AquariumFieldEvidenceValidator.Validate(evidence);
+    Console.WriteLine(
+        $"ps3eye-tracking-smoke frames={latest.FrameCount} tracks={latest.Tracks.Count} stable={latest.StableTrackCount} meanAge={latest.MeanTrackAgeFrames:0.000} meanSpeed={latest.MeanSpeedPixelsPerSecond:0.000} confidence={latest.Confidence:0.000} claims={evidence.Claims.Count} planned={evidence.BackendPackets.Count} errors={validation.HasErrors}");
+
+    return latest.StableTrackCount >= 8 &&
+        latest.Confidence > 0.50 &&
+        evidence.Claims.Count == 1 &&
+        !validation.HasErrors
+            ? 0
+            : 1;
+}
+
+static int RunPs3EyeTrackingLive(string[] args)
+{
+    var library = ParseStringOption(args, "--native-library", Path.GetFullPath("native/camera_capture/build/Release/mimir_ps3eye_capture.dll"));
+    var seconds = Math.Max(0.10, ParseDoubleOption(args, "--seconds", 1.0));
+    var width = ParseIntOption(args, "--width", 320);
+    var height = ParseIntOption(args, "--height", 240);
+    var fps = ParseIntOption(args, "--fps", 187);
+    var maxFeatures = Math.Max(8, ParseIntOption(args, "--max-features", 160));
+    var cameraFilter = ParseIntOption(args, "--camera-index", -1);
+    var cameras = cameraFilter >= 0 ? [cameraFilter] : new[] { 0, 1 };
+    var anyCaptured = false;
+    foreach (var cameraIndex in cameras)
+    {
+        var sourceId = $"ps3-eye-{cameraIndex}";
+        try
+        {
+            using var driver = new MimirPs3EyeVideoCaptureDriver(new MimirPs3EyeVideoCaptureDriverOptions(
+                library,
+                sourceId,
+                cameraIndex,
+                width,
+                height,
+                fps));
+            var tracker = new MimirSparseFeatureTracker(new MimirSparseFeatureTrackerOptions(
+                MaxFeatures: maxFeatures,
+                CellSizePixels: ParseIntOption(args, "--cell-size", 12),
+                SearchRadiusPixels: ParseIntOption(args, "--search-radius", 24),
+                MinimumTrackAgeFrames: ParseIntOption(args, "--min-age", 3),
+                MinimumCornerScore: ParseDoubleOption(args, "--min-corner", 0.05),
+                MinimumLuma: ParseDoubleOption(args, "--min-luma", 0.03)));
+            var deadline = Stopwatch.GetTimestamp() + (long)(seconds * Stopwatch.Frequency);
+            MimirSparseFeatureTrackerFrame latest = default!;
+            var frames = 0;
+            while (Stopwatch.GetTimestamp() < deadline)
+            {
+                if (!driver.TryCapture(out var frame, out var data))
+                {
+                    Thread.Sleep(1);
+                    continue;
+                }
+
+                if (data.IsEmpty || !TryExtractLiveLuma(frame, data.Span, out var luma, out var lumaWidth, out var lumaHeight))
+                {
+                    continue;
+                }
+
+                latest = tracker.Update(sourceId, lumaWidth, lumaHeight, luma, frame.DeviceTimestampNs);
+                frames++;
+            }
+
+            anyCaptured |= frames > 0;
+            var observation = frames == 0 ? null : tracker.ToCameraObservation(latest);
+            var candidate = observation == null
+                ? null
+                : new MimirFeatureTrackFieldCandidate(
+                    $"{sourceId}:live-tracks:{latest.FrameCount}",
+                    "visual-calibration-live",
+                    "Mimir.BufferSmoke",
+                    [observation],
+                    latest.StableTrackCount,
+                    latest.MeanTrackAgeFrames,
+                    latest.MeanSpeedPixelsPerSecond,
+                    latest.Confidence,
+                    latest.ObservedTimeNs);
+            var evidence = candidate == null
+                ? AquariumFieldEvidenceFrame.Empty
+                : new MimirFensalirFieldLowering().BuildFeatureTrackCandidateFrame([candidate]);
+            Console.WriteLine(
+                $"ps3eye-tracking-live source={sourceId} frames={frames} tracks={latest?.Tracks.Count ?? 0} stable={latest?.StableTrackCount ?? 0} meanAge={latest?.MeanTrackAgeFrames ?? 0.0:0.000} meanSpeed={latest?.MeanSpeedPixelsPerSecond ?? 0.0:0.000} confidence={latest?.Confidence ?? 0.0:0.000} claims={evidence.Claims.Count} format={MimirVideoPixelFormat.Bayer8} size={width}x{height}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ps3eye-tracking-live source={sourceId} status=failed error=\"{ex.Message.Replace("\"", "'", StringComparison.Ordinal)}\"");
         }
     }
 

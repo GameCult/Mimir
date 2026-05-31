@@ -129,6 +129,15 @@ invariants:
     for both Kiyo Pro and Kiyo Basic. LeapUVC rejected the generic KS
     exposure/gain writes and PS3 Eye capture remains fixed-control until its
     native wrapper owns gain/exposure.
+  - PS3 Eyes now have a first sparse tracking surface instead of only cadence
+    proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
+    links them into sensor-local tracks with clipspace position, velocity, age,
+    and confidence, and `MimirFeatureTrackFieldCandidate` lowers them as
+    camera Feature claims. `Mimir.BufferSmoke --ps3eye-tracking-live` proved a
+    one-second 320x240@187 run can return 160 live tracks from each Eye: 160
+    stable tracks from `ps3-eye-0` and 156 stable tracks from `ps3-eye-1` with
+    sensitive defaults. This is CPU diagnostic/bootstrap work;
+    Fensalir D3D12 feature extraction remains the production owner.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

@@ -193,6 +193,40 @@ public sealed record MimirLedSplineFieldCandidate(
     double Confidence,
     long ObservedTimeNs);
 
+public readonly record struct MimirFeatureTrackPoint(
+    int TrackId,
+    double ImageX,
+    double ImageY,
+    double ClipX,
+    double ClipY,
+    double VelocityXPerSecond,
+    double VelocityYPerSecond,
+    int AgeFrames,
+    double Confidence);
+
+public sealed record MimirFeatureTrackCameraObservation(
+    string ObservationKey,
+    string SourceId,
+    int Width,
+    int Height,
+    long ObservedTimeNs,
+    IReadOnlyList<MimirFeatureTrackPoint> Tracks,
+    int FrameCount,
+    double MeanTrackAgeFrames,
+    double MeanSpeedPixelsPerSecond,
+    double Confidence);
+
+public sealed record MimirFeatureTrackFieldCandidate(
+    string CandidateKey,
+    string CalibrationId,
+    string ProducerKey,
+    IReadOnlyList<MimirFeatureTrackCameraObservation> CameraObservations,
+    int StableTrackCount,
+    double MeanTrackAgeFrames,
+    double MeanSpeedPixelsPerSecond,
+    double Confidence,
+    long ObservedTimeNs);
+
 public readonly record struct MimirSurfaceAxes(
     string X,
     string Y,

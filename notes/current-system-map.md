@@ -636,9 +636,18 @@ format, and the best spline setting is reported per source. On 2026-05-31 with
 `-9`, gain `8` (`kiyo-pro-rgb` score `0.666`; `kiyo-basic-rgb` score `0.650`).
 LeapUVC rejected generic KS exposure/gain writes and only found two LED
 components; PS3 Eye feeds are still fixed-control until the WinUSB wrapper owns
-gain/exposure. Once the frustum fit is coherent, detected surface candidates
-can be sampled across every synchronized view before Fensalir resolves them
-into 4D Gaussian/surface splat claims.
+gain/exposure. PS3 Eyes now also have a sparse tracking bootstrap:
+`MimirSparseFeatureTracker` detects grid-suppressed Bayer/luma corner features,
+links them frame-to-frame, and emits `MimirFeatureTrackCameraObservation`
+records with sensor-local image/clipspace position, velocity, age, and
+confidence. `MimirFeatureTrackFieldCandidate` lowers those observations as
+camera Feature claims through Fensalir field evidence. A one-second live pass
+at 320x240@187 with sensitive defaults returned 160 live tracks from each Eye:
+160 stable tracks from `ps3-eye-0` and 156 stable tracks from `ps3-eye-1`.
+This is a CPU diagnostic owner; the hot production path remains Fensalir D3D12
+feature extraction. Once the frustum fit is coherent, detected
+surface candidates can be sampled across every synchronized view before
+Fensalir resolves them into 4D Gaussian/surface splat claims.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

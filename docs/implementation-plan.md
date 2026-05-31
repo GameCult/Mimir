@@ -414,6 +414,18 @@ a named invariant that the native runtime cannot protect yet.
   generic KS exposure/gain writes and only recovered two LED components; both
   PS3 Eye feeds currently score fixed-control frames because their native
   wrapper does not yet expose gain/exposure.
+  PS3 Eyes now have the first sparse tracking surface:
+  `MimirSparseFeatureTracker` detects grid-suppressed Bayer/luma corner
+  features, links them frame-to-frame by bounded nearest-neighbor motion, and
+  emits sensor-local `MimirFeatureTrackCameraObservation` records with track
+  ids, image/clipspace coordinates, velocity, age, and confidence.
+  `MimirFeatureTrackFieldCandidate` lowers those observations as camera-sensor
+  Feature claims through `BuildFeatureTrackCandidateFrame`. The CPU tracker is
+  a live diagnostic/bootstrap owner; Fensalir D3D12 feature extraction remains
+  the production owner. `--ps3eye-tracking-live` proved both Eyes can produce
+  stable tracks at 320x240@187: with sensitive wide tracking defaults, each Eye
+  returned 160 live tracks from each Eye in a one-second pass, with 160 stable
+  tracks from `ps3-eye-0` and 156 stable tracks from `ps3-eye-1`.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

@@ -40,6 +40,11 @@ flowchart TD
   now: it opens direct sensor feeds, applies KS/UVC manual exposure/gain where
   supported, scores actual luma frames, and reports the best setting per
   source. PS3 Eye and Leap-specific controls still need native control cuts.
+- PS3 Eyes own high-rate sparse tracking evidence before they own depth:
+  `MimirSparseFeatureTracker` turns live Bayer/luma frames into stable
+  sensor-local feature tracks, and `MimirFeatureTrackFieldCandidate` lowers
+  them as camera Feature claims. This CPU path is a diagnostic bootstrap; the
+  production hot path belongs in Fensalir D3D12 feature extraction.
 - The first camera-rig solver fits bounded camera translation updates from a
   scene-anchored LED curve by minimizing ray-to-curve distance. Rotation,
   intrinsics, and distortion are future owners.
