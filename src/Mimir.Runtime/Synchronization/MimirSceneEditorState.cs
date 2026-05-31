@@ -11,6 +11,8 @@ public sealed class MimirSceneEditorState
     private const float ProgramWorldWidth = 12.8f;
     private const float ProgramWorldHeight = 7.2f;
     private readonly List<MimirSceneEditorNode> nodes = [];
+    private readonly HashSet<string> configuredProgramSources = new(StringComparer.Ordinal);
+    private bool selectedConfiguredSource;
     private Vector2? previousMousePosition;
 
     public MimirSceneEditorState()
@@ -102,6 +104,38 @@ public sealed class MimirSceneEditorState
             nodes.FirstOrDefault(static node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel) is { } firstFeed)
         {
             SelectedNodeId = firstFeed.Id;
+        }
+    }
+
+    public void ApplyProgramSurfaceConfig(MimirProgramSurfaceConfigDocument config)
+    {
+        foreach (var layer in config.Layers.OrderBy(static layer => layer.Layer))
+        {
+            if (configuredProgramSources.Contains(layer.SourceId) ||
+                NodeForSource(layer.SourceId) is not { } node)
+            {
+                continue;
+            }
+
+            node.Visible = layer.Visible;
+            node.Layer = Math.Max(0, layer.Layer);
+            SetNodeProgramPlacement(node, new MimirCompositorPlacement(
+                Math.Clamp(layer.CenterX, 0.0f, 1.0f),
+                Math.Clamp(layer.CenterY, 0.0f, 1.0f),
+                Math.Clamp(layer.Width, 0.01f, 1.0f),
+                Math.Clamp(layer.Height, 0.01f, 1.0f),
+                layer.RotationRadians,
+                Math.Max(0, layer.Layer)));
+            node.Locked = layer.Locked;
+            configuredProgramSources.Add(layer.SourceId);
+        }
+
+        if (!selectedConfiguredSource &&
+            !string.IsNullOrWhiteSpace(config.SelectedSourceId) &&
+            NodeForSource(config.SelectedSourceId) is { } selected)
+        {
+            SelectedNodeId = selected.Id;
+            selectedConfiguredSource = true;
         }
     }
 

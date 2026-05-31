@@ -43,6 +43,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirAlignmentActuatorBank audioActuatorBank = new();
     private readonly MimirPresentationControlState presentationControls = new();
     private readonly MimirSceneEditorState sceneEditor = new();
+    private readonly MimirProgramSurfaceConfigDocument programSurfaceConfig;
     private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
     private readonly MimirObsStemSharedMemoryPublisher? obsStemPublisher;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
@@ -127,6 +128,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             settings.BufferDuration.TotalSeconds));
         spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize(), ParseSpectrumBandCount());
         this.sourceFactories = sourceFactories.ToArray();
+        programSurfaceConfig = MimirProgramSurfaceConfigStore.LoadDefault(options.CultCachePath);
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
@@ -813,6 +815,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         lastPollCount = synchronization.PollSources();
         presentationControls.SyncFromBuffers(synchronization.Buffers.Buffers);
         sceneEditor.SyncSensorFeeds(synchronization.Buffers.Buffers);
+        sceneEditor.ApplyProgramSurfaceConfig(programSurfaceConfig);
         sceneEditor.UpdateInput(deltaSeconds, input);
         ApplyPresentationPostprocess();
         UpdateObsStemPublication();

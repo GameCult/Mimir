@@ -59,6 +59,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `MimirSynchronizationHub.AudioSynchronizationStates`. Do not move sample
   alignment, chirp response mapping, or ambient/noise neutralization authority
   into the UI; the surface only controls and observes runtime audio state.
+- Program surface placement is seeded from CultCache config
+  `config/mimir-program-surface.cc` unless `--cache`,
+  `AQUARIUM_CULTCACHE_PATH`, or `MIMIR_PROGRAM_SURFACE_CONFIG` points
+  elsewhere. The default `mimir.program.default` document puts
+  `raven-display` full-frame at layer 0 and `kiyo-pro-rgb` as a top-left
+  picture-in-picture at layer 1. `MimirSceneEditorState` applies matching
+  source placements once when those feeds appear, then inspector/drag edits own
+  subsequent placement.
 - Live camera image buffers should use Fensalir-owned texture leases when they
   are rendering inputs: Mimir asks the engine broker for a keyed D3D12
   Texture2D/fence lease, writes decoded frames into that texture, commits the
