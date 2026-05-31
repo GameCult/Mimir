@@ -863,22 +863,10 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                         graph.Options("video.source-select", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
                         graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f);
                         graph.Text("video.layer-list", sceneEditor.DescribeHierarchy, "mono", weight: 3.8f);
-                        graph.Row("video.source-state", state =>
+                        graph.Row("video.nav", nav =>
                         {
-                            state.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
-                            state.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
-                        });
-                        graph.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
-                        graph.Row("video.layer-fit", fit =>
-                        {
-                            fit.Button("video.center", "Center", sceneEditor.CenterSelectedProgramLayer);
-                            fit.Button("video.fit", "Fit", sceneEditor.FitSelectedProgramLayer);
-                            fit.Button("video.fill", "Fill", sceneEditor.FillSelectedProgramLayer);
-                        });
-                        graph.Row("video.layer-order", order =>
-                        {
-                            order.Button("video.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
-                            order.Button("video.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
+                            nav.Button("video.previous", "Previous", sceneEditor.SelectPrevious);
+                            nav.Button("video.next", "Next", sceneEditor.SelectNext);
                         });
                         graph.Text("video.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f);
                     }, weight: 0.85f);
@@ -886,15 +874,43 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     shell.Vertical("mimir.editor-center", center =>
                     {
                         center.Preview("scene.view-preview", "", () => sceneEditor.PreviewItems, weight: 1.0f);
-                    }, weight: 2.1f);
+                        center.Pane("mimir.audio-mixer", "Audio Mixer", mixer =>
+                        {
+                            mixer.Options("audio.stem", "Stem", () => presentationControls.SelectedAudioIndex, SelectAudioStem, AudioFeedOptions());
+                            mixer.Row("audio.toggles", toggles =>
+                            {
+                                toggles.Toggle("audio.mute", "Mute", () => presentationControls.SelectedAudio?.Muted ?? false, SetSelectedAudioMuted);
+                                toggles.Toggle("audio.solo", "Solo", () => presentationControls.SelectedAudio?.Solo ?? false, SetSelectedAudioSolo);
+                            });
+                            mixer.Slider("audio.gain", "Gain", () => presentationControls.SelectedAudio?.Gain ?? 1.0f, SetSelectedAudioGain, 0.0f, 2.0f, "0.00");
+                            mixer.Text("audio.program", DescribeProgramAudio, "caption", weight: 0.8f);
+                        }, weight: 0.72f);
+                    }, weight: 1.75f);
 
-                    shell.Pane("mimir.audio-inspector", "Audio Mix", inspector =>
+                    shell.Pane("mimir.inspector", "Inspector", inspector =>
                     {
-                        inspector.Options("audio.stem", "Stem", () => presentationControls.SelectedAudioIndex, SelectAudioStem, AudioFeedOptions());
-                        inspector.Toggle("audio.mute", "Mute", () => presentationControls.SelectedAudio?.Muted ?? false, SetSelectedAudioMuted);
-                        inspector.Toggle("audio.solo", "Solo", () => presentationControls.SelectedAudio?.Solo ?? false, SetSelectedAudioSolo);
-                        inspector.Slider("audio.gain", "Gain", () => presentationControls.SelectedAudio?.Gain ?? 1.0f, SetSelectedAudioGain, 0.0f, 2.0f, "0.00");
-                        inspector.Text("audio.program", DescribeProgramAudio, "caption", weight: 1.2f);
+                        inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
+                        inspector.Options("inspector.video-feed", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
+                        inspector.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
+                        inspector.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
+                        inspector.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
+                        inspector.Text("inspector.program-placement", "Program Frame", "strong");
+                        inspector.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
+                        inspector.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
+                        inspector.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
+                        inspector.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
+                        inspector.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
+                        inspector.Row("program.fit", fit =>
+                        {
+                            fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer);
+                            fit.Button("program.fit-selected", "Fit", sceneEditor.FitSelectedProgramLayer);
+                            fit.Button("program.fill-selected", "Fill", sceneEditor.FillSelectedProgramLayer);
+                        });
+                        inspector.Row("program.order", order =>
+                        {
+                            order.Button("program.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
+                            order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
+                        });
                     }, weight: 0.95f);
                 });
             });
