@@ -162,6 +162,12 @@ invariants:
     collections. USB report decoding should own identity/buttons/IMU and later
     LED sphere control; camera observations of the sphere should enter the
     existing global calibration evidence path.
+    `--pair-host <bdaddr>` now writes the target Bluetooth host to the
+    controller through feature report `0x05` on the `col02` collection. The
+    first live controller `00:06:f5:23:e2:d1` was written with Nightwing's
+    host address `5c:93:a2:9c:a8:a8`; Nightwing BlueZ is installed and
+    configured, but wireless connection is not verified until the controller
+    is unplugged from USB and observed over Bluetooth.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,

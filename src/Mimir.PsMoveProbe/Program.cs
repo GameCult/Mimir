@@ -6,6 +6,7 @@ const ushort SonyVid = 0x054C;
 const ushort PsMovePid = 0x03D5;
 
 var readReports = args.Any(arg => string.Equals(arg, "--read", StringComparison.OrdinalIgnoreCase));
+var pairHost = TryGetOption(args, "--pair-host");
 var showAll = args.Any(arg => string.Equals(arg, "--all", StringComparison.OrdinalIgnoreCase));
 if (showAll)
 {
@@ -37,6 +38,12 @@ foreach (var device in devices)
 {
     PrintDevice(device);
 
+    if (!string.IsNullOrWhiteSpace(pairHost))
+    {
+        var result = WindowsHid.TryPairHost(device, pairHost);
+        Console.WriteLine($"  pairHost={result}");
+    }
+
     if (readReports)
     {
         var result = await WindowsHid.TryReadInputReportAsync(device, TimeSpan.FromMilliseconds(350));
@@ -61,6 +68,24 @@ static void PrintDevice(HidDeviceInfo device)
     Console.WriteLine($"  values in/out/feature={device.Caps.NumberInputValueCaps}/{device.Caps.NumberOutputValueCaps}/{device.Caps.NumberFeatureValueCaps}");
 }
 
+static string? TryGetOption(string[] values, string name)
+{
+    for (var index = 0; index < values.Length; index++)
+    {
+        if (string.Equals(values[index], name, StringComparison.OrdinalIgnoreCase) && index + 1 < values.Length)
+        {
+            return values[index + 1];
+        }
+
+        if (values[index].StartsWith(name + "=", StringComparison.OrdinalIgnoreCase))
+        {
+            return values[index][(name.Length + 1)..];
+        }
+    }
+
+    return null;
+}
+
 internal sealed record HidDeviceInfo(
     string Path,
     ushort VendorId,
@@ -83,6 +108,10 @@ internal static class WindowsHid
     private const uint WaitObject0 = 0;
     private const uint WaitTimeout = 258;
     private const int HidpStatusSuccess = 0x00110000;
+    private const byte GetBtAddressReport = 0x04;
+    private const byte SetBtAddressReport = 0x05;
+    private const int BtAddressGetSize = 16;
+    private const int BtAddressSetSize = 23;
 
     public static IEnumerable<HidDeviceInfo> Enumerate()
     {
@@ -195,6 +224,89 @@ internal static class WindowsHid
         {
             CloseHandle(readEvent);
         }
+    }
+
+    public static string TryPairHost(HidDeviceInfo device, string hostAddress)
+    {
+        if (device.Caps.FeatureReportByteLength < BtAddressSetSize || device.Path.IndexOf("&col02#", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return "skipped: pairing uses the PS Move col02 feature-report collection";
+        }
+
+        if (!TryParseBluetoothAddress(hostAddress, out var host))
+        {
+            return $"invalid host address: {hostAddress}";
+        }
+
+        using var handle = CreateFile(
+            device.Path,
+            0,
+            FileShareRead | FileShareWrite,
+            IntPtr.Zero,
+            OpenExisting,
+            0,
+            IntPtr.Zero);
+
+        if (handle.IsInvalid)
+        {
+            return $"open failed: {new Win32Exception(Marshal.GetLastWin32Error()).Message}";
+        }
+
+        var before = ReadBluetoothAddresses(handle);
+        var report = new byte[BtAddressSetSize];
+        report[0] = SetBtAddressReport;
+        host.CopyTo(report.AsSpan(1, 6));
+
+        if (!HidD_SetFeature(handle, report, report.Length))
+        {
+            return $"HidD_SetFeature failed: {new Win32Exception(Marshal.GetLastWin32Error()).Message}";
+        }
+
+        var after = ReadBluetoothAddresses(handle);
+        var controller = after.Controller ?? before.Controller ?? "(unknown)";
+        var assigned = after.Host ?? FormatBluetoothAddress(host);
+        return $"ok controller={controller} host={assigned}";
+    }
+
+    private static (string? Controller, string? Host) ReadBluetoothAddresses(SafeFileHandle handle)
+    {
+        var report = new byte[BtAddressGetSize];
+        report[0] = GetBtAddressReport;
+        if (!HidD_GetFeature(handle, report, report.Length))
+        {
+            return (null, null);
+        }
+
+        return (FormatBluetoothAddress(report.AsSpan(1, 6)), FormatBluetoothAddress(report.AsSpan(10, 6)));
+    }
+
+    private static bool TryParseBluetoothAddress(string value, out byte[] bytes)
+    {
+        bytes = new byte[6];
+        var parts = value.Split(':', '-');
+        if (parts.Length != 6)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < parts.Length; index++)
+        {
+            if (!byte.TryParse(parts[index], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            {
+                return false;
+            }
+
+            bytes[5 - index] = parsed;
+        }
+
+        return true;
+    }
+
+    private static string FormatBluetoothAddress(ReadOnlySpan<byte> littleEndianAddress)
+    {
+        return string.Join(
+            ":",
+            littleEndianAddress.ToArray().Reverse().Select(value => value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture)));
     }
 
     private static string GetDevicePath(IntPtr deviceInfoSet, SpDeviceInterfaceData interfaceData)
@@ -328,6 +440,12 @@ internal static class WindowsHid
 
     [DllImport("hid.dll", SetLastError = true)]
     private static extern bool HidD_GetSerialNumberString(SafeFileHandle hidDeviceObject, byte[] buffer, int bufferLength);
+
+    [DllImport("hid.dll", SetLastError = true)]
+    private static extern bool HidD_GetFeature(SafeFileHandle hidDeviceObject, byte[] reportBuffer, int reportBufferLength);
+
+    [DllImport("hid.dll", SetLastError = true)]
+    private static extern bool HidD_SetFeature(SafeFileHandle hidDeviceObject, byte[] reportBuffer, int reportBufferLength);
 
     [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr SetupDiGetClassDevs(

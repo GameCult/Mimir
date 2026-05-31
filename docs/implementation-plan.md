@@ -433,6 +433,12 @@ a named invariant that the native runtime cannot protect yet.
   collection with 49-byte input/output/feature reports, plus two vendor-defined
   feature-report collections. The safe `--read` path uses overlapped `ReadFile`
   plus `CancelIoEx` so idle input reads time out instead of hanging the probe.
+  `--pair-host <bdaddr>` writes a target Bluetooth host address through the
+  PS Move `0x05` feature report on the `col02` collection, following PS Move
+  API's pairing contract. The first live controller `00:06:f5:23:e2:d1` was
+  assigned to Nightwing's BlueZ adapter `5c:93:a2:9c:a8:a8`; wireless
+  connection still needs the controller unplugged from USB and a PS-button
+  connection pass while Nightwing scans.
   Next useful cut is report decoding and controlled LED/sphere command
   provenance, then optical sphere observations from PS3 Eyes/Kiyos can enter
   the same calibration-evidence path as LED spline constraints.
