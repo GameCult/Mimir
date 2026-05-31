@@ -214,6 +214,12 @@ invariants:
     Machine profile emit typed Move observation, camera feature-track, and
     visual marker state; raw Eye media from Nightwing is diagnostic only and
     Nightwing does not own camera placement or the canonical clock.
+    The Eyes have physically moved to Nightwing and Linux sees them as stock
+    `ov534`/`gspca` V4L2 cameras on `/dev/video2` and `/dev/video3`. A
+    repo-owned `tools/nightwing_v4l2_cadence_probe.py` copied to Nightwing
+    proved both devices can deliver 320x240 at about 187 fps with zero
+    sequence gaps when the worker explicitly sets `VIDIOC_S_PARM`
+    `timeperframe=1/187`; default V4L2 streaming remains a false 30 fps signal.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,

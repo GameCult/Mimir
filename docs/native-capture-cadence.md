@@ -56,6 +56,37 @@ buffer handles directly.
 The probe reported one unrelated invalid USB descriptor from
 `USB\VID_0000&PID_0002`; it did not prevent PS3 Eye capture.
 
+## 2026-05-31: Nightwing Linux V4L2 PS3 Eye Probe
+
+The two PS3 Eyes were moved to Nightwing. Linux enumerated them as Sony
+Playstation Eye USB devices (`1415:2000`) through the stock `ov534`/`gspca`
+V4L2 path:
+
+- `/dev/video2`: `USB Camera-B4.09.24.1`, bus `usb-0000:00:14.0-1`
+- `/dev/video3`: `USB Camera-B4.09.24.1`, bus `usb-0000:00:14.0-2`
+
+Probe source:
+
+- `tools/nightwing_v4l2_cadence_probe.py`
+- copied to Nightwing and run directly against `/dev/video2` and `/dev/video3`
+- no `v4l2-ctl`, `ffmpeg`, or third-party Python package dependency
+
+Initial reads without setting frame interval negotiated only the default
+`timeperframe=1/30`. After explicitly setting `VIDIOC_S_PARM` to
+`timeperframe=1/187`, both Eyes delivered high-rate frames with zero sequence
+gaps.
+
+| Device | Requested Mode | Actual Mode | Frames | Delivered FPS | Device FPS | Sequence Gap |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/dev/video2` | 320x240 GRBG @ 187 | 320x240 GRBG | 375 | 187.07 | 187.37 | 0 |
+| `/dev/video3` | 320x240 GRBG @ 187 | 320x240 GRBG | 375 | 187.14 | 187.37 | 0 |
+| `/dev/video2` | 320x240 YUYV @ 187 | 320x240 YUYV | 374 | 186.94 | 187.37 | 0 |
+| `/dev/video3` | 320x240 YUYV @ 187 | 320x240 YUYV | 375 | 187.06 | 187.38 | 0 |
+
+Conclusion: Nightwing's stock Linux V4L2 path can sustain the high-rate PS3 Eye
+witness mode if the witness worker explicitly sets frame interval before
+streaming. Default V4L2 reads are a false low-cadence signal.
+
 ## 2026-05-21: LeapUVC Kernel Streaming Probe
 
 The Leap Motion Controller is currently present as `VID_F182&PID_0003` and bound

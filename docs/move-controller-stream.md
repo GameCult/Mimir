@@ -48,6 +48,13 @@ typed witness: it may emit `mimir.move_controller_observation_state`,
 not stream raw Eye media as the normal live contract and must not own the
 canonical clock. Raw frames from Nightwing are diagnostic receipts only.
 
+The first Nightwing receipt is good enough to build on: both PS3 Eyes enumerate
+as stock Linux `ov534`/`gspca` V4L2 cameras on `/dev/video2` and `/dev/video3`.
+Default V4L2 cadence is only 30 fps, but explicitly setting
+`timeperframe=1/187` before streaming makes both cameras deliver about 187 fps
+at 320x240 with zero sequence gaps. The witness worker must set frame interval;
+otherwise Linux will quietly look worse than it is.
+
 ## Runtime Profile
 
 Use:
