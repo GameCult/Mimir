@@ -1253,12 +1253,28 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
     private AquariumFieldSupport SupportForSurfaceIntent(MimirSurfaceIntent intent)
     {
         var age = Math.Max(0.0f, (float)intent.SupportPolicy.MaximumAgeSeconds);
-        var radius = Math.Max(options.DefaultSupportRadius, age);
+        if (intent.Placement is { } placement)
+        {
+            var radius = new Vector3(
+                Math.Max(options.DefaultSupportRadius, placement.Width * 0.5f),
+                Math.Max(options.DefaultSupportRadius, placement.Height * 0.5f),
+                Math.Max(options.DefaultSupportRadius, age));
+            return new AquariumFieldSupport(
+                Center: new Vector3(placement.CenterX, placement.CenterY, 0.0f),
+                Radius: radius,
+                LocalFrame: Matrix4x4.CreateRotationZ(placement.RotationRadians),
+                ConservativeRadius: Math.Max(radius.X, Math.Max(radius.Y, radius.Z)),
+                ProjectedError: 0.0f,
+                Curvature: 0.0f,
+                TemporalUncertainty: age);
+        }
+
+        var fallbackRadius = Math.Max(options.DefaultSupportRadius, age);
         return new AquariumFieldSupport(
             Center: Vector3.Zero,
-            Radius: new Vector3(options.DefaultSupportRadius, options.DefaultSupportRadius, radius),
+            Radius: new Vector3(options.DefaultSupportRadius, options.DefaultSupportRadius, fallbackRadius),
             LocalFrame: Matrix4x4.Identity,
-            ConservativeRadius: radius,
+            ConservativeRadius: fallbackRadius,
             ProjectedError: 0.0f,
             Curvature: 0.0f,
             TemporalUncertainty: age);

@@ -2,11 +2,14 @@ using System.Numerics;
 using Aquarium.Engine;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
+using Aquarium.Engine.Ui;
 
 namespace Mimir.Runtime.Synchronization;
 
 public sealed class MimirSceneEditorState
 {
+    private const float ProgramWorldWidth = 12.8f;
+    private const float ProgramWorldHeight = 7.2f;
     private readonly List<MimirSceneEditorNode> nodes = [];
     private readonly Dictionary<string, bool> expandedGroups = new(StringComparer.Ordinal)
     {
@@ -66,6 +69,25 @@ public sealed class MimirSceneEditorState
     public IReadOnlyList<MimirSceneEditorNode> VisibleNodes =>
         nodes.Where(node => node.Visible).ToArray();
 
+    public IReadOnlyList<AquariumUiPreviewItem> PreviewItems =>
+        nodes
+            .Where(static node => node.Visible && node.Kind != MimirSceneEditorNodeKind.Camera)
+            .OrderBy(static node => node.Layer)
+            .Select(node =>
+            {
+                var placement = PlacementForNode(node);
+                return new AquariumUiPreviewItem(
+                    node.Id,
+                    node.DisplayName,
+                    placement.CenterX - placement.Width * 0.5f,
+                    placement.CenterY - placement.Height * 0.5f,
+                    placement.Width,
+                    placement.Height,
+                    string.Equals(node.Id, SelectedNodeId, StringComparison.Ordinal),
+                    node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel ? "cool" : node.Kind == MimirSceneEditorNodeKind.SdfTextPanel ? "warm" : "neutral");
+            })
+            .ToArray();
+
     public Vector3 CameraPosition => nodes
         .First(node => node.Kind == MimirSceneEditorNodeKind.Camera)
         .Transform.Position;
@@ -102,6 +124,7 @@ public sealed class MimirSceneEditorState
                     0.0f,
                     new Vector2(2.8f, 1.6f)))
             {
+                Layer = index,
                 SourceId = buffer.Descriptor.SourceId,
             });
         }
@@ -242,6 +265,52 @@ public sealed class MimirSceneEditorState
             };
         }
     }
+
+    public float SelectedProgramX => SelectedNode is { } selected ? PlacementForNode(selected).CenterX : 0.5f;
+
+    public float SelectedProgramY => SelectedNode is { } selected ? PlacementForNode(selected).CenterY : 0.5f;
+
+    public float SelectedProgramWidth => SelectedNode is { } selected ? PlacementForNode(selected).Width : 0.1f;
+
+    public float SelectedProgramHeight => SelectedNode is { } selected ? PlacementForNode(selected).Height : 0.1f;
+
+    public void SetSelectedProgramX(float value)
+    {
+        if (SelectedNode is { } selected)
+        {
+            SetNodeProgramPlacement(selected, PlacementForNode(selected) with { CenterX = value });
+        }
+    }
+
+    public void SetSelectedProgramY(float value)
+    {
+        if (SelectedNode is { } selected)
+        {
+            SetNodeProgramPlacement(selected, PlacementForNode(selected) with { CenterY = value });
+        }
+    }
+
+    public void SetSelectedProgramWidth(float value)
+    {
+        if (SelectedNode is { } selected)
+        {
+            SetNodeProgramPlacement(selected, PlacementForNode(selected) with { Width = value });
+        }
+    }
+
+    public void SetSelectedProgramHeight(float value)
+    {
+        if (SelectedNode is { } selected)
+        {
+            SetNodeProgramPlacement(selected, PlacementForNode(selected) with { Height = value });
+        }
+    }
+
+    public bool IncludesVideoSource(string sourceId) =>
+        NodeForSource(sourceId) is not { } node || node.Visible;
+
+    public MimirCompositorPlacement? PlacementForSource(string sourceId) =>
+        NodeForSource(sourceId) is { } node ? PlacementForNode(node) : null;
 
     public void ResetSelectedTransform()
     {
@@ -431,7 +500,7 @@ public sealed class MimirSceneEditorState
 
     private void ApplyScreenDelta(MimirSceneEditorNode selected, Vector2 screenDelta, float deltaSeconds)
     {
-        var worldDelta = new Vector2(screenDelta.X, -screenDelta.Y) * 0.012f;
+        var worldDelta = new Vector2(screenDelta.X, -screenDelta.Y) * (ProgramWorldWidth / 960.0f);
         switch (GizmoMode)
         {
             case MimirSceneEditorGizmoMode.Translate:
@@ -534,6 +603,42 @@ public sealed class MimirSceneEditorState
 
     private static string FeedNodeId(string sourceId) =>
         $"feed:{sourceId}";
+
+    private MimirSceneEditorNode? NodeForSource(string sourceId) =>
+        nodes.FirstOrDefault(node =>
+            node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel &&
+            string.Equals(node.SourceId, sourceId, StringComparison.Ordinal));
+
+    private static MimirCompositorPlacement PlacementForNode(MimirSceneEditorNode node)
+    {
+        var transform = node.Transform;
+        return new MimirCompositorPlacement(
+            CenterX: Math.Clamp(0.5f + transform.Position.X / ProgramWorldWidth, 0.0f, 1.0f),
+            CenterY: Math.Clamp(0.5f - transform.Position.Y / ProgramWorldHeight, 0.0f, 1.0f),
+            Width: Math.Clamp(transform.Scale.X / ProgramWorldWidth, 0.01f, 1.0f),
+            Height: Math.Clamp(transform.Scale.Y / ProgramWorldHeight, 0.01f, 1.0f),
+            RotationRadians: transform.RotationRadians,
+            Layer: node.Layer);
+    }
+
+    private static void SetNodeProgramPlacement(MimirSceneEditorNode node, MimirCompositorPlacement placement)
+    {
+        if (node.Locked)
+        {
+            return;
+        }
+
+        var centerX = Math.Clamp(placement.CenterX, 0.0f, 1.0f);
+        var centerY = Math.Clamp(placement.CenterY, 0.0f, 1.0f);
+        var width = Math.Clamp(placement.Width, 0.01f, 1.0f);
+        var height = Math.Clamp(placement.Height, 0.01f, 1.0f);
+        node.Transform = node.Transform with
+        {
+            Position = new Vector3((centerX - 0.5f) * ProgramWorldWidth, (0.5f - centerY) * ProgramWorldHeight, node.Transform.Position.Z),
+            Scale = new Vector2(width * ProgramWorldWidth, height * ProgramWorldHeight),
+            RotationRadians = placement.RotationRadians,
+        };
+    }
 }
 
 public sealed class MimirSceneEditorNode(
@@ -558,6 +663,8 @@ public sealed class MimirSceneEditorNode(
     public bool Visible { get; set; } = true;
 
     public bool Locked { get; set; }
+
+    public int Layer { get; set; }
 
     public string SourceId { get; init; } = "";
 

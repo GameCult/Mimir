@@ -312,12 +312,17 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 continue;
             }
 
-            if (!presentationControls.IncludesVideo(window.StreamId))
+            if (!presentationControls.IncludesVideo(window.StreamId) ||
+                !sceneEditor.IncludesVideoSource(window.StreamId))
             {
                 continue;
             }
 
-            intents.Add(BuildSurfaceIntent(window, observation, presentationControls.VideoOpacity(window.StreamId)));
+            intents.Add(BuildSurfaceIntent(
+                window,
+                observation,
+                presentationControls.VideoOpacity(window.StreamId),
+                sceneEditor.PlacementForSource(window.StreamId)));
         }
 
         var frame = fieldLowering.BuildFieldEvidenceFrame(windows, observations, constraints, intents);
@@ -343,7 +348,11 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
     }
 
-    private static MimirSurfaceIntent BuildSurfaceIntent(MimirRollingStreamWindow window, MimirObservation observation, float opacity = 1.0f)
+    private static MimirSurfaceIntent BuildSurfaceIntent(
+        MimirRollingStreamWindow window,
+        MimirObservation observation,
+        float opacity = 1.0f,
+        MimirCompositorPlacement? placement = null)
     {
         if (window.SourceKind == MimirStreamKind.Audio)
         {
@@ -366,7 +375,10 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             SupportPolicy: new MimirSurfaceSupportPolicy("program-composite", 0.0, window.Duration.TotalSeconds),
             MaterialGraph: new MimirSurfaceMaterialIntent("program-video", "source-evidence", Math.Clamp(opacity, 0.0f, 1.0f)),
             UpdateBudget: new MimirSurfaceUpdateBudget(0.0, 1, Math.Max(0, window.Payload.ByteLength)),
-            Purpose: MimirSurfaceIntentPurpose.Production);
+            Purpose: MimirSurfaceIntentPurpose.Production)
+        {
+            Placement = placement,
+        };
     }
 
     private AquariumFieldEvidenceFrame AddLeapGeometryFieldEvidence(
@@ -893,6 +905,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                             scene.Text("scene.view-program", DescribeProgramVideo, "mono");
                             scene.Text("scene.view-sync", () => $"{synchronization.Summary()} | {synchronization.SourceCount} sources | poll {lastPollCount} | ingested {synchronization.IngestedSamples}", "caption");
                             scene.Text("scene.view-audio", () => $"{DescribeAudioSyncState()} | aligned {DescribeAlignedAudio()}", "caption");
+                            scene.Preview("scene.view-preview", "Program Preview", () => sceneEditor.PreviewItems, weight: 1.8f);
                             scene.Card("scene.view-frame", frame =>
                             {
                                 frame.Text("scene.view-frame-title", "Program Surface", "strong");
@@ -940,6 +953,11 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                         inspector.Slider("transform.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
                         inspector.Slider("transform.scale-x", "Scale X", () => sceneEditor.SelectedNode?.Transform.Scale.X ?? 1.0f, sceneEditor.SetSelectedScaleX, 0.05f, 8.0f, "0.00");
                         inspector.Slider("transform.scale-y", "Scale Y", () => sceneEditor.SelectedNode?.Transform.Scale.Y ?? 1.0f, sceneEditor.SetSelectedScaleY, 0.05f, 8.0f, "0.00");
+                        inspector.Text("inspector.program-placement", "Program Frame", "strong");
+                        inspector.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
+                        inspector.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
+                        inspector.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
+                        inspector.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
                         inspector.Row("transform.reset", reset =>
                         {
                             reset.Button("transform.reset-node", "Reset Transform", sceneEditor.ResetSelectedTransform);

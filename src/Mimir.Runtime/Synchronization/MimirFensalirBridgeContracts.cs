@@ -243,6 +243,14 @@ public readonly record struct MimirSurfaceMaterialIntent(
     string Role,
     double Confidence);
 
+public readonly record struct MimirCompositorPlacement(
+    float CenterX,
+    float CenterY,
+    float Width,
+    float Height,
+    float RotationRadians,
+    int Layer);
+
 public readonly record struct MimirSurfaceUpdateBudget(
     double MaximumUpdateHz,
     int MaximumObservations,
@@ -256,7 +264,10 @@ public sealed record MimirSurfaceIntent(
     MimirSurfaceSupportPolicy SupportPolicy,
     MimirSurfaceMaterialIntent MaterialGraph,
     MimirSurfaceUpdateBudget UpdateBudget,
-    MimirSurfaceIntentPurpose Purpose);
+    MimirSurfaceIntentPurpose Purpose)
+{
+    public MimirCompositorPlacement? Placement { get; init; }
+}
 
 public static class MimirFensalirBridgeMapper
 {
