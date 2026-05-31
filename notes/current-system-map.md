@@ -418,12 +418,20 @@ the Fensalir camera plus derived spline outlines, selection handles, and the
 output. World SDF glyph rendering, ASSIMP-style mesh decoding/upload, and
 pixel-accurate gizmo hit-testing are explicit Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].
-`Mimir.EveDashboard` is the first native Eve operator dashboard server. It
-serves `/eve/dashboard` snapshots and accepts selected-node transform,
-visibility, and reset commands. EveCanvas renders the dashboard locally in
-UIKit, including the scene graph and multitouch pan/pinch/rotate source panels.
-The current server state is fixture state for the transport/control proof; the
-next cut is binding it to live `MimirPresentationControlState` and
+`Mimir.EveDashboard` is now a small native Eve dashboard broker. It serves
+`/eve/deck` plus the compatibility `/eve/dashboard` endpoint, exposes provider
+manifests at `/eve/deck/providers`, and routes retained dashboard snapshots and
+commands for provider-owned trees. Built-in providers are the switchboard,
+`mimir.stream.layout`, and `yggdrasil.streampixels.edge`; launch-time external
+providers can be registered as `id|title|ws-url` descriptors for LAN or
+SSH-forwarded TCP surfaces. EveCanvas renders the dashboard locally in UIKit,
+including the scene graph and multitouch pan/pinch/rotate source panels, and
+now treats provider-card taps as `open-provider` commands. Dashboard manifests
+and states have typed CultMesh-compatible document shapes
+`mimir.eve_dashboard_manifest.v1` and `mimir.eve_dashboard_state.v1`, while the
+live iPad lane remains WebSocket/TCP because it is the proven tunnelable
+transport. The Mimir stream-layout provider still uses fixture state; the next
+cut is binding it to live `MimirPresentationControlState` and
 `MimirSceneEditorState`.
 
 ## Visual Fusion
@@ -478,12 +486,15 @@ The 2026-05-31 live capture
 LeapUVC frames uploaded through a Fensalir-owned D3D12 texture, packed stereo
 dispatched to R16F disparity, point-cloud compute generated 19,200 surface
 claims, the point-list mesh renderer stayed at `rendered 0`, and the reservoir
-resolver presented visible Leap-derived splats. Reservoir history update is
-still disabled during the proof with `AQUARIUM_DISABLE_RESERVOIR_HISTORY=1`;
-the fallback presentation source now explicitly reads the current resolver
-output instead of the untouched history target. Remaining truth gaps are
-calibrated projection constants, full SGM, reservoir-history shader startup
-repair, and a global residual/calibration owner.
+resolver presented visible Leap-derived splats. The follow-up
+`artifacts/runtime/mimir-leap-history-split-shader-visible.png` proves the
+history pass now starts without `AQUARIUM_DISABLE_RESERVOIR_HISTORY`: Fensalir
+compiles a dedicated lean `D3D12ReservoirHistoryUpdate.hlsl` and writes the
+current resolver sample into the four-row history/resolved target. Temporal and
+spatial reuse are deliberately not restored in that lean shader yet; the
+remaining truth gaps are calibrated projection constants, full SGM, temporal
+reservoir reuse split into a compilable shader, and a global
+residual/calibration owner.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

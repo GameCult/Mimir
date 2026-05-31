@@ -72,12 +72,15 @@ presentation is through the shared splat/reservoir resolver. The live proof is
 `artifacts/runtime/mimir-leap-surface-claims-clean.png`: LeapUVC -> Fensalir
 D3D12 texture lease -> packed stereo disparity -> 19,200 generated surface
 claims -> visible reservoir-resolved splats, with point-list rendering still
-at `rendered 0`. The proof currently runs with
-`AQUARIUM_DISABLE_RESERVOIR_HISTORY=1`; when history is disabled, presentation
-now deliberately reads the current resolver target instead of an unwritten
-history target. The next truth cut is calibrated projection constants,
-reservoir-history startup repair, and global residual/calibration ownership,
-not another fake RGB depth path.
+at `rendered 0`. A second proof,
+`artifacts/runtime/mimir-leap-history-split-shader-visible.png`, runs without
+`AQUARIUM_DISABLE_RESERVOIR_HISTORY`: Fensalir now compiles a dedicated lean
+`D3D12ReservoirHistoryUpdate.hlsl` instead of compiling the monolithic post
+shader for the history compute pass. That lean pass writes the current resolver
+sample into all four reservoir-history rows and the resolved target; temporal
+and spatial reuse still need their own compilable shader cut. The next truth
+cut is calibrated projection constants, temporal reservoir reuse, and global
+residual/calibration ownership, not another fake RGB depth path.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth

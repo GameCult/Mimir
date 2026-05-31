@@ -94,8 +94,14 @@ invariants:
     frames uploaded through a Fensalir-owned D3D12 texture, packed stereo depth
     dispatch-ready/dispatched, 19,200 generated surface claims, point-list
     rendering at `rendered 0`, and visible reservoir-resolved Leap splats.
-    Calibrated projection constants, full SGM, reservoir-history startup repair,
-    and global residual/calibration ownership remain open.
+    The follow-up proof
+    `artifacts/runtime/mimir-leap-history-split-shader-visible.png` ran without
+    `AQUARIUM_DISABLE_RESERVOIR_HISTORY`: Fensalir now compiles a dedicated lean
+    `D3D12ReservoirHistoryUpdate.hlsl` for current-sample history/resolved
+    output instead of compiling the monolithic post shader as a compute entry.
+    Calibrated projection constants, full SGM, temporal/spatial reservoir reuse
+    in a compilable shader, and global residual/calibration ownership remain
+    open.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before
@@ -748,11 +754,13 @@ current_status:
     SurfacePage and declares a derived point-cloud Mesh socket. Fensalir now
     generates Leap surface splats from that disparity, feeds them into the
     native splat/reservoir resolver, and presents visible Leap-derived points
-    without the diagnostic point-list draw path. Next: replace provisional
-    projection display fit with calibrated Leap intrinsics/extrinsics, repair
-    reservoir-history startup so the temporal pass can stay enabled, then add a
-    global residual/calibration owner that can consume point-cloud alignment
-    error. Do not fan RGB cameras into fake depth: PS3 Eyes are fast
+    without the diagnostic point-list draw path. The reservoir-history pass now
+    starts through a dedicated lean current-sample shader; temporal/spatial
+    reuse remains the next reservoir shader cut. Next: replace provisional
+    projection display fit with calibrated Leap intrinsics/extrinsics, restore
+    temporal reservoir reuse in the split shader, then add a global
+    residual/calibration owner that can consume point-cloud alignment error. Do
+    not fan RGB cameras into fake depth: PS3 Eyes are fast
     motion/feature witnesses, Kiyos and Eve are RGB/context witnesses, and Leap
     owns the first dense close-range geometry. Keep the Focusrite away from the
     Leap USB neighborhood. Treat Kiyo Pro as a ~25 fps source until its
