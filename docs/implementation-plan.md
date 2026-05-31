@@ -436,12 +436,18 @@ a named invariant that the native runtime cannot protect yet.
   `--pair-host <bdaddr>` writes a target Bluetooth host address through the
   PS Move `0x05` feature report on the `col02` collection, following PS Move
   API's pairing contract. The first live controller `00:06:f5:23:e2:d1` was
-  assigned to Nightwing's BlueZ adapter `5c:93:a2:9c:a8:a8`; wireless
-  connection still needs the controller unplugged from USB and a PS-button
-  connection pass while Nightwing scans.
-  Next useful cut is report decoding and controlled LED/sphere command
-  provenance, then optical sphere observations from PS3 Eyes/Kiyos can enter
-  the same calibration-evidence path as LED spline constraints.
+  assigned to Nightwing's BlueZ adapter `5c:93:a2:9c:a8:a8`. Nightwing now
+  carries the matching BlueZ persistent device/cache records from PS Move
+  API's Linux registration path, accepts the PS-button wireless connection,
+  and exposes the controller as `/dev/input/js0`, `/dev/input/event14`, and
+  `/dev/hidraw1`.
+  `tools/nightwing_psmove_music_pulse.py` is the current controlled
+  LED/sphere command proof: Starfire owns the Scarlett ASIO loopback envelope,
+  computes a cheap broadband spectral-rise onset detector with a tiny FFT, and
+  streams RGB report `0x06` frames over SSH to Nightwing's hidraw writer.
+  Next useful cut is direct report decoding plus optical sphere observations
+  from PS3 Eyes/Kiyos entering the same calibration-evidence path as LED
+  spline constraints.
   PS3 Eyes now have the first sparse tracking surface:
   `MimirSparseFeatureTracker` detects grid-suppressed Bayer/luma corner
   features, links them frame-to-frame by bounded nearest-neighbor motion, and
