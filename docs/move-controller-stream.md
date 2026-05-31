@@ -187,6 +187,8 @@ see the selected grid alongside half-time/double-time alternatives.
 
 The non-dry run targets the two wireless Nightwing Moves by default:
 `00:07:04:a6:be:5f` on `/dev/hidraw2` and `00:06:f5:23:e2:d1` on
-`/dev/hidraw3`. Current BlueZ permissions expose those Bluetooth hidraw nodes
-as root-only, so multi-Move LED actuation needs a udev rule or privileged
-helper before the non-root SSH writer can drive both spheres.
+`/dev/hidraw3`. Nightwing now carries `/etc/udev/rules.d/70-move.rules`, which
+sets Bluetooth PS Move hidraw nodes to `root:input 0660`. The `metacrat` user
+is in `input`, so the non-root SSH writer can drive both spheres. Root SSH is
+available as the short local alias `nwroot` for maintenance only; the hot LED
+path should stay non-root.
