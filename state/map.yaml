@@ -154,6 +154,14 @@ invariants:
     for both Kiyo Pro and Kiyo Basic. LeapUVC rejected the generic KS
     exposure/gain writes and PS3 Eye capture remains fixed-control until its
     native wrapper owns gain/exposure.
+  - PS Move is usable as an active marker/IMU witness, not as an optical depth
+    owner. `Mimir.PsMoveProbe` now enumerates Sony `VID_054C` / `PID_03D5`
+    through Windows HID without third-party packages. The connected controller
+    exposes three collections: a generic desktop gamepad collection with
+    49-byte input/output/feature reports and two vendor-defined feature-report
+    collections. USB report decoding should own identity/buttons/IMU and later
+    LED sphere control; camera observations of the sphere should enter the
+    existing global calibration evidence path.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,

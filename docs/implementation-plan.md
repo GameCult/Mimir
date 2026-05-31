@@ -426,6 +426,16 @@ a named invariant that the native runtime cannot protect yet.
   generic KS exposure/gain writes and only recovered two LED components; both
   PS3 Eye feeds currently score fixed-control frames because their native
   wrapper does not yet expose gain/exposure.
+  PS Move is now a concrete active-marker input candidate rather than a lore
+  object on a cable. `Mimir.PsMoveProbe` enumerates Sony `VID_054C` /
+  `PID_03D5` over Windows HID with no third-party dependency. The connected
+  controller exposes three HID collections: one generic desktop gamepad
+  collection with 49-byte input/output/feature reports, plus two vendor-defined
+  feature-report collections. The safe `--read` path uses overlapped `ReadFile`
+  plus `CancelIoEx` so idle input reads time out instead of hanging the probe.
+  Next useful cut is report decoding and controlled LED/sphere command
+  provenance, then optical sphere observations from PS3 Eyes/Kiyos can enter
+  the same calibration-evidence path as LED spline constraints.
   PS3 Eyes now have the first sparse tracking surface:
   `MimirSparseFeatureTracker` detects grid-suppressed Bayer/luma corner
   features, links them frame-to-frame by bounded nearest-neighbor motion, and
