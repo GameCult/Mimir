@@ -375,6 +375,15 @@ a named invariant that the native runtime cannot protect yet.
   It also proves a synthetic multi-camera marker candidate using the same
   FieldEvidence authority: deterministic marker features plan as
   `DebugOverlay` packets while ambiguous raw camera features still defer.
+  LED strip calibration now has the same typed evidence path:
+  `MimirLedSplineFieldCandidate` stores ordered per-camera bright-curve samples,
+  temporal-code/index stability flags, and shared calibration/spline identity.
+  `BuildLedSplineCandidateFrame` lowers that curve as deterministic
+  camera-sensor Feature evidence, and `--led-spline-calibration-smoke` proves
+  Fensalir plans it as one `DebugOverlay` packet with no deferred request.
+  This is calibration evidence only. Exact correspondence requires coded or
+  otherwise stable LED identity; uncoded repeated lights remain curve
+  constraints until the global residual solver resolves them.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

@@ -161,6 +161,36 @@ public sealed record MimirVisualMarkerFieldCandidate(
     double Confidence,
     long ObservedTimeNs);
 
+public readonly record struct MimirLedSplineObservationPoint(
+    int LedIndex,
+    double CurveT,
+    double ImageX,
+    double ImageY,
+    double RadiusPixels,
+    double Confidence);
+
+public sealed record MimirLedSplineCameraObservation(
+    string ObservationKey,
+    string SourceId,
+    int Width,
+    int Height,
+    long ObservedTimeNs,
+    IReadOnlyList<MimirLedSplineObservationPoint> Points,
+    double Confidence);
+
+public sealed record MimirLedSplineFieldCandidate(
+    string CandidateKey,
+    string CalibrationId,
+    string SplineId,
+    string ProducerKey,
+    IReadOnlyList<MimirLedSplineCameraObservation> CameraObservations,
+    int EstimatedLedCount,
+    bool HasTemporalCode,
+    bool HasStableLedIndices,
+    double CurveLengthPixels,
+    double Confidence,
+    long ObservedTimeNs);
+
 public readonly record struct MimirSurfaceAxes(
     string X,
     string Y,

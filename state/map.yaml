@@ -102,6 +102,16 @@ invariants:
     Calibrated projection constants, full SGM, temporal/spatial reservoir reuse
     in a compilable shader, and global residual/calibration ownership remain
     open.
+  - LED strips on performers are active visual calibration evidence, not fake
+    depth. `MimirLedSplineFieldCandidate` carries per-camera ordered bright
+    curve observations with optional temporal code / stable LED indices, and
+    `MimirFensalirFieldLowering.BuildLedSplineCandidateFrame` lowers them as
+    deterministic camera-sensor Feature claims that Fensalir plans as
+    `DebugOverlay` calibration evidence. Exact cross-camera correspondence
+    requires addressable/blink-coded LEDs or another identity source; uncoded
+    identical LEDs remain useful curve constraints but cannot own camera pose.
+    The future global residual/calibration owner consumes these claims and is
+    the only writer of camera intrinsics/extrinsics.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

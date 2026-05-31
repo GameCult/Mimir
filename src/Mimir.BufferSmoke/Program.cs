@@ -140,6 +140,11 @@ if (args.Any(arg => string.Equals(arg, "--fensalir-camera-observation-smoke", St
     return RunFensalirCameraObservationSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--led-spline-calibration-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunLedSplineCalibrationSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunFensalirTextureLeaseSmoke();
@@ -787,6 +792,86 @@ static int RunFensalirCameraObservationSmoke()
         requests.Count == 3 &&
         plan.Packets.Count == 0 &&
         plan.DeferredRequests.Count == 3
+            ? 0
+            : 1;
+}
+
+static int RunLedSplineCalibrationSmoke()
+{
+    var candidate = new MimirLedSplineFieldCandidate(
+        CandidateKey: "co-streamer-led-strip-frame-42",
+        CalibrationId: "room-camera-rig-online-calibration",
+        SplineId: "co-streamer-neck-to-hand-led-strip",
+        ProducerKey: "mimir-led-spline-detector",
+        CameraObservations:
+        [
+            new MimirLedSplineCameraObservation(
+                ObservationKey: "ps3-eye-0:led-spline:42",
+                SourceId: "ps3-eye-0",
+                Width: 320,
+                Height: 240,
+                ObservedTimeNs: 1_000_000_000L,
+                Points:
+                [
+                    new MimirLedSplineObservationPoint(0, 0.00, 110.0, 82.0, 2.5, 0.91),
+                    new MimirLedSplineObservationPoint(1, 0.25, 132.0, 98.0, 2.2, 0.94),
+                    new MimirLedSplineObservationPoint(2, 0.50, 148.0, 126.0, 2.4, 0.92),
+                    new MimirLedSplineObservationPoint(3, 0.75, 171.0, 152.0, 2.6, 0.90),
+                    new MimirLedSplineObservationPoint(4, 1.00, 204.0, 184.0, 2.7, 0.89),
+                ],
+                Confidence: 0.91),
+            new MimirLedSplineCameraObservation(
+                ObservationKey: "kiyo-basic:led-spline:42",
+                SourceId: "kiyo-basic",
+                Width: 1920,
+                Height: 1080,
+                ObservedTimeNs: 1_000_000_004L,
+                Points:
+                [
+                    new MimirLedSplineObservationPoint(0, 0.00, 763.0, 356.0, 4.4, 0.88),
+                    new MimirLedSplineObservationPoint(1, 0.25, 840.0, 432.0, 4.1, 0.93),
+                    new MimirLedSplineObservationPoint(2, 0.50, 914.0, 552.0, 4.3, 0.94),
+                    new MimirLedSplineObservationPoint(3, 0.75, 1018.0, 673.0, 4.6, 0.90),
+                    new MimirLedSplineObservationPoint(4, 1.00, 1188.0, 816.0, 4.9, 0.86),
+                ],
+                Confidence: 0.90),
+        ],
+        EstimatedLedCount: 5,
+        HasTemporalCode: true,
+        HasStableLedIndices: true,
+        CurveLengthPixels: 568.0,
+        Confidence: 0.89,
+        ObservedTimeNs: 1_000_000_004L);
+
+    var lowerer = new MimirFensalirFieldLowering();
+    var frame = lowerer.BuildLedSplineCandidateFrame([candidate]);
+    var validation = AquariumFieldEvidenceValidator.Validate(frame);
+    var plan = AquariumFieldLoweringPlanner.Plan(frame);
+    var claim = frame.Claims.SingleOrDefault();
+
+    Console.WriteLine(
+        $"led-spline-calibration-smoke domains={frame.Domains.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} points={candidate.CameraObservations.Sum(static observation => observation.Points.Count)} errors={validation.HasErrors}");
+
+    if (validation.HasErrors)
+    {
+        foreach (var issue in validation.Issues)
+        {
+            Console.Error.WriteLine($"led-spline-calibration-issue {issue.Severity} {issue.Key}: {issue.Message}");
+        }
+    }
+
+    return !validation.HasErrors &&
+        MimirVisualFusionConfigurations.BuiltIn.Any(profile => profile.Model == MimirVisualFusionModel.LedSplineCalibration) &&
+        frame.Domains.Count == 1 &&
+        frame.Domains[0].Kind == AquariumFieldDomainKind.CameraSensor &&
+        frame.Claims.Count == 1 &&
+        claim.Encoding == AquariumFieldEncoding.Feature &&
+        claim.Proposal.Kind == AquariumFieldProposalKind.DeterministicStructural &&
+        claim.Proposal.RepresentedCandidateCount == 10 &&
+        claim.PayloadHandle.Contains("indexed:coded", StringComparison.Ordinal) &&
+        plan.Packets.Count == 1 &&
+        plan.Packets[0].Backend == AquariumFieldBackendKind.DebugOverlay &&
+        plan.DeferredRequests.Count == 0
             ? 0
             : 1;
 }

@@ -15,6 +15,7 @@ public enum MimirVisualFusionModel
     TimestampedFramesOnly,
     SparseFeatureTracks,
     StereoSgmDepth,
+    LedSplineCalibration,
     VisualConstrainedAudioField,
     TemporalGaussianClaims,
     FullHybridEvidenceField
@@ -68,6 +69,15 @@ public static class MimirVisualFusionConfigurations
         PublishesSpout: false,
         UsesAudioConstraints: false);
 
+    public static MimirVisualFusionConfiguration LedSplineCalibration { get; } = new(
+        "led-spline-calibration",
+        "Ordered bright LED curve observations become calibration evidence; global residual solving owns camera-pose updates.",
+        MimirVisualFusionModel.LedSplineCalibration,
+        CreateDefaultSensors(),
+        RequiresFensalirD3D12: true,
+        PublishesSpout: false,
+        UsesAudioConstraints: false);
+
     public static MimirVisualFusionConfiguration AudioConstrainedField { get; } = new(
         "audio-constrained-field",
         "Visual feature tracks constrain acoustic source hypotheses before Fensalir stabilizes field claims.",
@@ -91,6 +101,7 @@ public static class MimirVisualFusionConfigurations
         CadenceProof,
         TrackingFusion,
         StereoSgmDepth,
+        LedSplineCalibration,
         AudioConstrainedField,
         FullHybridEvidence
     ];

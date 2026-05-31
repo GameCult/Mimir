@@ -180,6 +180,40 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         };
     }
 
+    public AquariumFieldEvidenceFrame BuildLedSplineCandidateFrame(
+        IEnumerable<MimirLedSplineFieldCandidate> splineCandidates)
+    {
+        var domains = new List<AquariumFieldDomain>();
+        var claims = new List<AquariumFieldClaim>();
+        var candidates = new List<AquariumFieldCandidate>();
+        var seenDomains = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var splineCandidate in splineCandidates)
+        {
+            if (string.IsNullOrWhiteSpace(splineCandidate.CandidateKey) ||
+                splineCandidate.CameraObservations.Count == 0)
+            {
+                continue;
+            }
+
+            var domain = DomainForLedSplineCandidate(splineCandidate);
+            AddDomain(domains, seenDomains, domain);
+
+            var claim = ClaimForLedSplineCandidate(splineCandidate, domain.DomainKey);
+            claims.Add(claim);
+            candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+        }
+
+        return new AquariumFieldEvidenceFrame
+        {
+            Domains = domains,
+            Claims = claims,
+            Candidates = candidates,
+            AccumulationWindowSeconds = (float)options.AccumulationWindowSeconds,
+            PresentationDelaySeconds = (float)options.PresentationDelaySeconds
+        };
+    }
+
     public AquariumFieldEvidenceFrame BuildLeapPackedStereoDepthCandidateFrame(
         IEnumerable<MimirRollingStreamWindow> windows,
         IEnumerable<AquariumFieldResourceDeclaration> inputResources)
@@ -566,6 +600,27 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             "Mimir.Runtime");
     }
 
+    private static AquariumFieldDomain DomainForLedSplineCandidate(MimirLedSplineFieldCandidate candidate)
+    {
+        var points = candidate.CameraObservations.SelectMany(static observation => observation.Points).ToArray();
+        var maxWidth = Math.Max(1, candidate.CameraObservations.Max(static observation => observation.Width));
+        var maxHeight = Math.Max(1, candidate.CameraObservations.Max(static observation => observation.Height));
+        var minX = points.Length == 0 ? 0.0f : Math.Clamp((float)points.Min(static point => point.ImageX), 0.0f, maxWidth);
+        var minY = points.Length == 0 ? 0.0f : Math.Clamp((float)points.Min(static point => point.ImageY), 0.0f, maxHeight);
+        var maxX = points.Length == 0 ? maxWidth : Math.Clamp((float)points.Max(static point => point.ImageX), minX, maxWidth);
+        var maxY = points.Length == 0 ? maxHeight : Math.Clamp((float)points.Max(static point => point.ImageY), minY, maxHeight);
+        return new AquariumFieldDomain(
+            DomainKeyForLedSplineCandidate(candidate),
+            "",
+            AquariumFieldDomainKind.CameraSensor,
+            Matrix4x4.Identity,
+            Matrix4x4.Identity,
+            new Vector3(minX, minY, 0.0f),
+            new Vector3(maxX, maxY, Math.Max(1, candidate.CameraObservations.Count)),
+            Vector3.Zero,
+            "Mimir.Runtime");
+    }
+
     private static AquariumFieldDomain DomainForStereoDepthCandidate(MimirStereoDepthFieldCandidate candidate)
     {
         var width = Math.Max(1, candidate.Width);
@@ -708,6 +763,34 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             Proposal: proposal,
             PayloadHandle: markerCandidate.CalibrationId,
             ObservedTimeNs: markerCandidate.ObservedTimeNs,
+            Confidence: confidence);
+    }
+
+    private AquariumFieldClaim ClaimForLedSplineCandidate(
+        MimirLedSplineFieldCandidate splineCandidate,
+        string domainKey)
+    {
+        var confidence = Clamp01((float)splineCandidate.Confidence);
+        var represented = Math.Max(1, splineCandidate.CameraObservations.Sum(static observation => observation.Points.Count));
+        var proposal = new AquariumFieldProposalPolicy(
+            AquariumFieldProposalKind.DeterministicStructural,
+            SourcePdf: 1.0f,
+            TargetContribution: confidence,
+            RepresentedCandidateCount: represented,
+            Seed: StableSeed(splineCandidate.CandidateKey));
+        var indexState = splineCandidate.HasStableLedIndices ? "indexed" : "unindexed";
+        var codeState = splineCandidate.HasTemporalCode ? "coded" : "uncoded";
+
+        return new AquariumFieldClaim(
+            ClaimKey: $"led-spline:{splineCandidate.CalibrationId}:{splineCandidate.SplineId}:{splineCandidate.CandidateKey}",
+            DomainKey: domainKey,
+            ProducerKey: splineCandidate.ProducerKey,
+            Layer: AquariumFieldLayer.Form,
+            Encoding: AquariumFieldEncoding.Feature,
+            Support: SupportForLedSplineCandidate(splineCandidate),
+            Proposal: proposal,
+            PayloadHandle: $"{splineCandidate.CalibrationId}:{splineCandidate.SplineId}:{indexState}:{codeState}",
+            ObservedTimeNs: splineCandidate.ObservedTimeNs,
             Confidence: confidence);
     }
 
@@ -902,6 +985,27 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             ProjectedError: radius,
             Curvature: 0.0f,
             TemporalUncertainty: 0.0f);
+    }
+
+    private AquariumFieldSupport SupportForLedSplineCandidate(MimirLedSplineFieldCandidate splineCandidate)
+    {
+        var points = splineCandidate.CameraObservations.SelectMany(static observation => observation.Points).ToArray();
+        var radiusPixels = points.Length == 0
+            ? 1.0f
+            : Math.Max(1.0f, (float)points.Average(static point => Math.Max(point.RadiusPixels, 0.0)));
+        var pointConfidence = points.Length == 0
+            ? 0.0f
+            : (float)points.Average(static point => Math.Clamp(point.Confidence, 0.0, 1.0));
+        var length = Math.Max(radiusPixels, (float)splineCandidate.CurveLengthPixels);
+        var correspondencePenalty = splineCandidate.HasStableLedIndices ? 0.25f : 1.0f;
+        return new AquariumFieldSupport(
+            Center: new Vector3(length * 0.5f, 0.0f, Math.Max(1, splineCandidate.CameraObservations.Count)),
+            Radius: new Vector3(length * 0.5f, radiusPixels, Math.Max(1.0f, splineCandidate.CameraObservations.Count * 0.5f)),
+            LocalFrame: Matrix4x4.Identity,
+            ConservativeRadius: Math.Max(radiusPixels, length * 0.5f),
+            ProjectedError: correspondencePenalty * (1.0f - pointConfidence),
+            Curvature: points.Length >= 3 ? 1.0f / Math.Max(1.0f, length) : 0.0f,
+            TemporalUncertainty: splineCandidate.HasTemporalCode ? 0.0f : 1.0f / 187.0f);
     }
 
     private AquariumFieldSupport SupportForStereoDepthCandidate(MimirStereoDepthFieldCandidate depthCandidate)
@@ -1213,6 +1317,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
 
     private static string DomainKeyForVisualMarkerCandidate(MimirVisualMarkerFieldCandidate candidate) =>
         $"mimir:visual-marker:{candidate.CalibrationId}:{candidate.MarkerId}:{candidate.CandidateKey}";
+
+    private static string DomainKeyForLedSplineCandidate(MimirLedSplineFieldCandidate candidate) =>
+        $"mimir:led-spline:{candidate.CalibrationId}:{candidate.SplineId}:{candidate.CandidateKey}";
 
     private static string DomainKeyForStereoDepthCandidate(MimirStereoDepthFieldCandidate candidate) =>
         DomainKeyForStereoDepthCandidate(candidate.CalibrationId, candidate.CameraPairId, candidate.CandidateKey);

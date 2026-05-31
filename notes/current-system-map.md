@@ -602,6 +602,19 @@ monitor notes. Phase 5's synthetic marker proof now exists too: Mimir lowers a
 deterministic multi-camera marker candidate with calibration/marker identity and
 world-space support, and Fensalir plans it as `DebugOverlay` evidence while
 ambiguous raw camera features still defer.
+LED strips now have a typed calibration-evidence socket instead of being folded
+into fake depth. `MimirLedSplineFieldCandidate` carries ordered per-camera
+bright-curve samples, whether the LEDs were temporally coded, and whether the
+sample indices are stable. `BuildLedSplineCandidateFrame` lowers that shared
+curve as deterministic camera-sensor Feature evidence; Fensalir plans it as a
+`DebugOverlay` packet through the same FieldEvidence authority. Addressable or
+blink-coded strips can provide exact cross-camera LED identity. Plain identical
+white LEDs still provide a strong spline/epipolar constraint, but their point
+correspondence is ambiguous under occlusion, saturation, repeated spacing, and
+motion blur until temporal continuity, Leap/body anchors, or a future residual
+solver disambiguates it. Individual cameras do not write calibration state; the
+future global residual owner consumes these claims and is the only authority
+allowed to update camera intrinsics/extrinsics.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's
