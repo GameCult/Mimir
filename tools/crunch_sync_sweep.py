@@ -208,12 +208,16 @@ def main() -> int:
     for name in ("kiyo-pro", "kiyo"):
         sensors.append(crunch_video(sweep_dir, name, events, args))
     observations = [obs for sensor in sensors for obs in sensor.get("observations", [])]
+    pair_overlaps = compute_pair_overlaps(observations)
+    event_coverage = compute_event_coverage(observations)
     document = {
         "kind": "mimir.articulated_sync_observation_crunch.v1",
         "sweep_dir": str(sweep_dir),
         "event_count": len(events),
         "sensor_count": len(sensors),
         "observation_count": len(observations),
+        "pair_overlaps": pair_overlaps,
+        "event_coverage": event_coverage,
         "sensors": sensors,
     }
     output_json = Path(args.output_json) if args.output_json else sweep_dir / "calibration-observations.json"
@@ -224,8 +228,40 @@ def main() -> int:
         writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(observations)
-    print(json.dumps({"output_json": str(output_json), "output_csv": str(output_csv), "observation_count": len(observations)}, indent=2))
+    print(json.dumps({
+        "output_json": str(output_json),
+        "output_csv": str(output_csv),
+        "observation_count": len(observations),
+        "pair_overlaps": pair_overlaps,
+    }, indent=2))
     return 0 if observations else 1
+
+
+def compute_pair_overlaps(observations: list[dict]) -> list[dict]:
+    by_event: dict[int, dict[str, dict]] = {}
+    for obs in observations:
+        event_index = int(obs["event_index"])
+        by_event.setdefault(event_index, {})[str(obs["source_id"])] = obs
+    pairs: dict[tuple[str, str], int] = {}
+    for sensors in by_event.values():
+        names = sorted(sensors)
+        for left_index, left in enumerate(names):
+            for right in names[left_index + 1:]:
+                pairs[(left, right)] = pairs.get((left, right), 0) + 1
+    return [
+        {"left": left, "right": right, "shared_events": count}
+        for (left, right), count in sorted(pairs.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def compute_event_coverage(observations: list[dict]) -> list[dict]:
+    by_event: dict[int, set[str]] = {}
+    for obs in observations:
+        by_event.setdefault(int(obs["event_index"]), set()).add(str(obs["source_id"]))
+    return [
+        {"event_index": event_index, "sensor_count": len(sources), "sources": sorted(sources)}
+        for event_index, sources in sorted(by_event.items())
+    ]
 
 
 if __name__ == "__main__":
