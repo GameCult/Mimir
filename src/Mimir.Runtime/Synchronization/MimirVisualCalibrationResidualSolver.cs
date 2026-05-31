@@ -83,6 +83,11 @@ public readonly record struct MimirLedSplineScenePoint(
     Vector3 PositionMeters,
     double Confidence);
 
+public readonly record struct MimirFeatureTrackScenePoint(
+    int TrackId,
+    Vector3 PositionMeters,
+    double Confidence);
+
 public sealed record MimirCameraPoseEstimate(
     string SourceId,
     Vector3 PositionMeters,
@@ -142,7 +147,7 @@ public sealed record MimirCameraFrustumSolveUpdate(
 public sealed record MimirCameraFrustumSolveFrame(
     string CalibrationId,
     string CandidateKey,
-    string SplineId,
+    string MarkerSetId,
     IReadOnlyList<MimirCameraFrustumSolveUpdate> FrustumUpdates,
     double MeanReprojectionErrorClip,
     double Confidence,
@@ -727,18 +732,10 @@ public sealed class MimirCameraFrustumCalibrationSolver
             .Where(static point => point.LedIndex >= 0 && point.Confidence > 0.0)
             .GroupBy(static point => point.LedIndex)
             .ToDictionary(static group => group.Key, static group => group.OrderByDescending(point => point.Confidence).First());
-        var frustumBySource = currentFrustums.ToDictionary(static frustum => frustum.SourceId, StringComparer.Ordinal);
-        var updates = new List<MimirCameraFrustumSolveUpdate>();
-
-        foreach (var observation in candidate.CameraObservations)
-        {
-            if (!frustumBySource.TryGetValue(observation.SourceId, out var seed) ||
-                seed.Confidence <= 0.0)
-            {
-                continue;
-            }
-
-            var correspondences = observation.Points
+        var observations = candidate.CameraObservations
+            .Select(observation => new FrustumObservation(
+                observation.SourceId,
+                observation.Points
                 .Where(point => sceneByLed.ContainsKey(point.LedIndex) && point.Confidence > 0.0)
                 .Select(point =>
                 {
@@ -749,19 +746,96 @@ public sealed class MimirCameraFrustumCalibrationSolver
                         point.ClipY,
                         Math.Min(point.Confidence, scene.Confidence));
                 })
-                .ToArray();
-            if (correspondences.Length < 4)
+                .ToArray()))
+            .ToArray();
+        return FitFrustums(
+            candidate.CalibrationId,
+            candidate.CandidateKey,
+            candidate.SplineId,
+            candidate.Confidence,
+            observations,
+            currentFrustums,
+            maximumDeltaMeters,
+            maximumRotationDeltaDegrees,
+            minimumTanHalfFov,
+            maximumTanHalfFov);
+    }
+
+    public MimirCameraFrustumSolveFrame FitFrustumsFromFeatureTracks(
+        MimirFeatureTrackFieldCandidate candidate,
+        IEnumerable<MimirFeatureTrackScenePoint> scenePoints,
+        IEnumerable<MimirCameraFrustumEstimate> currentFrustums,
+        string markerSetId = "feature-tracks",
+        double maximumDeltaMeters = 0.50,
+        double maximumRotationDeltaDegrees = 30.0,
+        double minimumTanHalfFov = 0.20,
+        double maximumTanHalfFov = 2.50)
+    {
+        var sceneByTrack = scenePoints
+            .Where(static point => point.TrackId >= 0 && point.Confidence > 0.0)
+            .GroupBy(static point => point.TrackId)
+            .ToDictionary(static group => group.Key, static group => group.OrderByDescending(point => point.Confidence).First());
+        var observations = candidate.CameraObservations
+            .Select(observation => new FrustumObservation(
+                observation.SourceId,
+                observation.Tracks
+                    .Where(track => sceneByTrack.ContainsKey(track.TrackId) && track.Confidence > 0.0)
+                    .Select(track =>
+                    {
+                        var scene = sceneByTrack[track.TrackId];
+                        return new FrustumCorrespondence(
+                            scene.PositionMeters,
+                            track.ClipX,
+                            track.ClipY,
+                            Math.Min(track.Confidence, scene.Confidence));
+                    })
+                    .ToArray()))
+            .ToArray();
+        return FitFrustums(
+            candidate.CalibrationId,
+            candidate.CandidateKey,
+            markerSetId,
+            candidate.Confidence,
+            observations,
+            currentFrustums,
+            maximumDeltaMeters,
+            maximumRotationDeltaDegrees,
+            minimumTanHalfFov,
+            maximumTanHalfFov);
+    }
+
+    private static MimirCameraFrustumSolveFrame FitFrustums(
+        string calibrationId,
+        string candidateKey,
+        string markerSetId,
+        double candidateConfidence,
+        IReadOnlyList<FrustumObservation> observations,
+        IEnumerable<MimirCameraFrustumEstimate> currentFrustums,
+        double maximumDeltaMeters,
+        double maximumRotationDeltaDegrees,
+        double minimumTanHalfFov,
+        double maximumTanHalfFov)
+    {
+        var frustumBySource = currentFrustums.ToDictionary(static frustum => frustum.SourceId, StringComparer.Ordinal);
+        var updates = new List<MimirCameraFrustumSolveUpdate>();
+
+        foreach (var observation in observations)
+        {
+            if (!frustumBySource.TryGetValue(observation.SourceId, out var seed) ||
+                seed.Confidence <= 0.0 ||
+                observation.Correspondences.Count < 4)
             {
                 continue;
             }
 
+            var correspondences = observation.Correspondences;
             if (!TryFitFrustum(
                 correspondences,
                 seed,
                 minimumTanHalfFov,
                 maximumTanHalfFov,
                 out var solved,
-                out var meanError))
+                out _))
             {
                 continue;
             }
@@ -785,7 +859,7 @@ public sealed class MimirCameraFrustumCalibrationSolver
                 VerticalTanHalfFov = Clamp(solved.VerticalTanHalfFov, minimumTanHalfFov, maximumTanHalfFov),
             };
             var finalError = MeanReprojectionError(correspondences, finalEstimate);
-            var confidence = Clamp01(candidate.Confidence) *
+            var confidence = Clamp01(candidateConfidence) *
                 Clamp01(seed.Confidence) *
                 correspondences.Average(static point => Clamp01(point.Confidence)) *
                 (1.0 / (1.0 + finalError * 4.0));
@@ -797,7 +871,7 @@ public sealed class MimirCameraFrustumCalibrationSolver
                 finalEstimate.VerticalTanHalfFov,
                 clampedDelta,
                 rotationDeltaDegrees,
-                correspondences.Length,
+                correspondences.Count,
                 finalError,
                 confidence));
         }
@@ -809,9 +883,9 @@ public sealed class MimirCameraFrustumCalibrationSolver
             ? 0.0
             : updates.Average(static update => update.Confidence);
         return new MimirCameraFrustumSolveFrame(
-            candidate.CalibrationId,
-            candidate.CandidateKey,
-            candidate.SplineId,
+            calibrationId,
+            candidateKey,
+            markerSetId,
             updates,
             meanFrameError,
             frameConfidence,
@@ -1109,6 +1183,8 @@ public sealed class MimirCameraFrustumCalibrationSolver
 
     private static double Clamp01(double value) =>
         double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.0;
+
+    private sealed record FrustumObservation(string SourceId, IReadOnlyList<FrustumCorrespondence> Correspondences);
 
     private readonly record struct FrustumCorrespondence(Vector3 Scene, double ClipX, double ClipY, double Confidence);
 }

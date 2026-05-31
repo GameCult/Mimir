@@ -500,9 +500,13 @@ a named invariant that the native runtime cannot protect yet.
   consumes stable LED/marker correspondences, scene-space marker points, and
   seed frustums, then emits per-source position, rotation, horizontal/vertical
   tangent half-FOV, correspondence count, clipspace reprojection residual, and
-  confidence. Synthetic smoke `--frustum-calibration-smoke` solves both Eyes,
-  Kiyo Pro, Leap stereo IR, and Eve camera, establishing the first fusion-ready
-  frustum state before dense surface fusion.
+  confidence. The same solver accepts `MimirFeatureTrackFieldCandidate` plus
+  scene-space `TrackId` anchors, so PS Move sphere histories, sparse Eye
+  tracks, and Eve-local marker tracks use the same Starfire frustum authority
+  as the LED strip. Synthetic smoke `--frustum-calibration-smoke` solves both
+  LED-spline and feature-track frustums for both Eyes, Kiyo Pro, Leap stereo
+  IR, and Eve camera, establishing the first fusion-ready frustum state before
+  dense surface fusion.
   Next useful cut is direct report decoding plus optical sphere observations
   from PS3 Eyes/Kiyos/Eve entering the same calibration-evidence path as LED
   spline constraints.

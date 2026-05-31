@@ -232,9 +232,13 @@ invariants:
     reprojection residual, and confidence. This supersedes translation-only
     rig updates for global fusion setup; the older
     `MimirCameraRigCalibrationSolver` remains a narrow bounded translation
-    residual helper. `Mimir.BufferSmoke --frustum-calibration-smoke` proves
-    five solved frustums for both Eyes, Kiyo Pro, Leap stereo IR, and Eve
-    camera.
+    residual helper. The same solver also consumes
+    `MimirFeatureTrackFieldCandidate` plus scene-space `TrackId` anchors, so
+    PS Move sphere histories, Eye feature tracks, and Eve-local marker tracks
+    can enter the frustum solve without becoming a separate authority.
+    `Mimir.BufferSmoke --frustum-calibration-smoke` proves five LED-spline
+    frustums and five feature-track frustums for both Eyes, Kiyo Pro, Leap
+    stereo IR, and Eve camera.
     The Eyes have physically moved to Nightwing and Linux sees them as stock
     `ov534`/`gspca` V4L2 cameras on `/dev/video2` and `/dev/video3`. A
     repo-owned `tools/nightwing_v4l2_cadence_probe.py` copied to Nightwing

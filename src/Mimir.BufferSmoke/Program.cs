@@ -1128,15 +1128,52 @@ static int RunFrustumCalibrationSmoke()
         seeds,
         maximumDeltaMeters: 0.20,
         maximumRotationDeltaDegrees: 12.0);
+    var trackScenePoints = scenePoints
+        .Select(point => new MimirFeatureTrackScenePoint(
+            10_000 + point.LedIndex,
+            point.PositionMeters,
+            point.Confidence))
+        .ToArray();
+    var featureCandidate = new MimirFeatureTrackFieldCandidate(
+        "frustum-solve:move-eve-markers:frame-1",
+        "room-frustum-calibration",
+        "mimir-local-witness-feature-tracks",
+        truth.Select((frustum, index) =>
+        {
+            var size = sizes[frustum.SourceId];
+            return ProjectFrustumFeatureTracks(
+                scenePoints,
+                frustum,
+                size.Width,
+                size.Height,
+                3_000_100_000L + index);
+        }).ToArray(),
+        StableTrackCount: scenePoints.Length,
+        MeanTrackAgeFrames: 8.0,
+        MeanSpeedPixelsPerSecond: 0.0,
+        Confidence: 0.91,
+        ObservedTimeNs: 3_000_100_004L);
+    var featureFrame = new MimirCameraFrustumCalibrationSolver().FitFrustumsFromFeatureTracks(
+        featureCandidate,
+        trackScenePoints,
+        seeds,
+        markerSetId: "move-and-eve-feature-markers",
+        maximumDeltaMeters: 0.20,
+        maximumRotationDeltaDegrees: 12.0);
 
     Console.WriteLine(
-        $"frustum-calibration-smoke updates={frame.FrustumUpdates.Count} confidence={frame.Confidence:0.000} meanClipError={frame.MeanReprojectionErrorClip:0.000000} sources={string.Join(",", frame.FrustumUpdates.Select(static update => $"{update.SourceId}:{update.UsedPointCount}/{update.RotationDeltaDegrees:0.00}deg/{update.HorizontalTanHalfFov:0.000}x{update.VerticalTanHalfFov:0.000}"))}");
+        $"frustum-calibration-smoke ledUpdates={frame.FrustumUpdates.Count} featureUpdates={featureFrame.FrustumUpdates.Count} confidence={frame.Confidence:0.000}/{featureFrame.Confidence:0.000} meanClipError={frame.MeanReprojectionErrorClip:0.000000}/{featureFrame.MeanReprojectionErrorClip:0.000000} sources={string.Join(",", frame.FrustumUpdates.Select(static update => $"{update.SourceId}:{update.UsedPointCount}/{update.RotationDeltaDegrees:0.00}deg/{update.HorizontalTanHalfFov:0.000}x{update.VerticalTanHalfFov:0.000}"))}");
 
     return frame.HasFrustumUpdate &&
+        featureFrame.HasFrustumUpdate &&
         frame.FrustumUpdates.Count == truth.Length &&
+        featureFrame.FrustumUpdates.Count == truth.Length &&
         frame.FrustumUpdates.All(update => update.UsedPointCount == scenePoints.Length) &&
+        featureFrame.FrustumUpdates.All(update => update.UsedPointCount == scenePoints.Length) &&
         frame.FrustumUpdates.All(static update => update.MeanReprojectionErrorClip < 0.010) &&
-        frame.Confidence >= 0.70
+        featureFrame.FrustumUpdates.All(static update => update.MeanReprojectionErrorClip < 0.010) &&
+        frame.Confidence >= 0.70 &&
+        featureFrame.Confidence >= 0.70
             ? 0
             : 1;
 }
@@ -1933,6 +1970,46 @@ static IReadOnlyList<MimirLedPixelDetection> ProjectFrustumLedDetections(
     }
 
     return output;
+}
+
+static MimirFeatureTrackCameraObservation ProjectFrustumFeatureTracks(
+    IReadOnlyList<MimirLedSplineScenePoint> scenePoints,
+    MimirCameraFrustumEstimate frustum,
+    int width,
+    int height,
+    long observedTimeNs)
+{
+    var worldToCamera = Quaternion.Inverse(frustum.CameraToWorldRotation);
+    var tracks = scenePoints.Select(point =>
+    {
+        var cameraSpace = Vector3.Transform(point.PositionMeters - frustum.PositionMeters, worldToCamera);
+        var z = Math.Max(1.0e-6f, cameraSpace.Z);
+        var clipX = cameraSpace.X / (z * (float)Math.Max(1.0e-6, frustum.HorizontalTanHalfFov));
+        var clipY = cameraSpace.Y / (z * (float)Math.Max(1.0e-6, frustum.VerticalTanHalfFov));
+        var imageX = (clipX + 1.0f) * 0.5f * width;
+        var imageY = (1.0f - clipY) * 0.5f * height;
+        return new MimirFeatureTrackPoint(
+            10_000 + point.LedIndex,
+            imageX,
+            imageY,
+            clipX,
+            clipY,
+            VelocityXPerSecond: 0.0,
+            VelocityYPerSecond: 0.0,
+            AgeFrames: 8,
+            Confidence: point.Confidence);
+    }).ToArray();
+    return new MimirFeatureTrackCameraObservation(
+        $"{frustum.SourceId}:feature-frustum:{observedTimeNs}",
+        frustum.SourceId,
+        width,
+        height,
+        observedTimeNs,
+        tracks,
+        FrameCount: 1,
+        MeanTrackAgeFrames: 8.0,
+        MeanSpeedPixelsPerSecond: 0.0,
+        Confidence: tracks.Average(static track => track.Confidence));
 }
 
 static IReadOnlyList<MimirLedPixelDetection> SyntheticSweepDetections(
