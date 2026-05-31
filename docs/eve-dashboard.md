@@ -76,10 +76,10 @@ dotnet run --project .\src\Mimir.EveDashboard\Mimir.EveDashboard.csproj -- `
 - `eve.dashboard.broker`: the switchboard rendered as provider cards.
 - `mimir.stream.layout`: the existing Mimir source-layout fixture provider.
 - `voidbot.swarm`: the native VoidBot tab. It reads the existing
-  `swarm-state.json` projection from VoidBot, renders the CTB rail as upcoming
-  turn cards, renders agent status cards, and expands the selected Face's state
-  leaves/detail. It is read-only in this cut; scheduler mutations still belong
-  to VoidBot's heartbeat controls.
+  `swarm-state.json` projection from VoidBot, publishes avatar image URLs on
+  identity nodes, and lets Eve render the CTB rail, selected Face status panel,
+  state tree, and detail pane as native UIKit. It is read-only in this cut;
+  scheduler mutations still belong to VoidBot's heartbeat controls.
 - `yggdrasil.streampixels.edge`: the first Yggdrasil/StreamPixels service
   dashboard placeholder for the TCP/SSH-routed live edge.
 
@@ -114,6 +114,6 @@ The broker smoke on 2026-05-31 verified:
 - WebSocket `/eve/deck` sends the switchboard snapshot.
 - `open-provider` switches to `mimir.stream.layout` and broadcasts that
   provider state.
-- `open-provider` switches to `voidbot.swarm`, which emits VoidBot's paused
-  swarm status, CTB rail, agent cards, and selected Face state detail from the
-  existing VoidBot swarm snapshot.
+- `open-provider` switches to `voidbot.swarm`, which emits VoidBot's swarm
+  status, CTB rail with avatar URLs, agent cards, and selected Face state
+  detail from the existing VoidBot swarm snapshot.

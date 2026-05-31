@@ -812,6 +812,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
                 active ? "active" : mentionCount > 0 ? "mention" : Minutes(NumberValue(turn, "nextTurnInMinutes")))
             {
                 IdentityId = identityId,
+                AvatarUrl = StringValue(turn, "avatarUrl"),
                 Detail = $"speed {NumberValue(turn, "effectiveSpeed") ?? 0:0.###} heat {NumberValue(turn, "heat") ?? 0:0.###}",
             });
         }
@@ -843,6 +844,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
                 selected ? "selected" : active ? "active" : Minutes(NumberValue(agent, "nextTurnInMinutes")))
             {
                 IdentityId = identityId,
+                AvatarUrl = StringValue(agent, "avatarUrl"),
                 Detail = $"load {NumberValue(agent, "currentLoad") ?? 0:0.##}  heat {NumberValue(agent, "heat") ?? 0:0.##}",
             });
         }
@@ -870,6 +872,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
             BoolValue(faceState, "readable") == true ? "readable" : "unreadable")
         {
             IdentityId = identityId,
+            AvatarUrl = StringValue(agent, "avatarUrl"),
             Detail = $"memory {NumberValue(counts, "memory") ?? 0:0} pressures {NumberValue(counts, "pressures") ?? 0:0} constraints {NumberValue(agent, "constraintCount") ?? 0:0}\n{Truncate(description, 150)}",
         });
 
@@ -1190,6 +1193,8 @@ internal sealed class DashboardNode(
     public string? Endpoint { get; set; }
 
     public string? IdentityId { get; set; }
+
+    public string? AvatarUrl { get; set; }
 
     public string? StatePath { get; set; }
 

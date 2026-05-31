@@ -428,8 +428,9 @@ descriptors for LAN or SSH-forwarded TCP surfaces. EveCanvas renders the
 dashboard locally in UIKit, including the scene graph and multitouch
 pan/pinch/rotate source panels, and now treats provider-card taps as
 `open-provider` commands. `voidbot.swarm` reads VoidBot's existing
-`.voidbot/status/swarm-state.json` projection, rendering the CTB rail as
-upcoming turn cards plus agent status cards and selected Face state detail.
+`.voidbot/status/swarm-state.json` projection, publishes avatar URLs on
+identity nodes, and Eve renders a native VoidBot-style cockpit: CTB rail,
+selected Face/status pane, state tree, and detail panel.
 Dashboard manifests and states have typed CultMesh-compatible document shapes
 `mimir.eve_dashboard_manifest.v1` and `mimir.eve_dashboard_state.v1`, while the
 live iPad lane remains WebSocket/TCP because it is the proven tunnelable
