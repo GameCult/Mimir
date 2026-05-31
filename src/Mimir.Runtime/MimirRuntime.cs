@@ -899,29 +899,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     {
                         center.Pane("mimir.scene-view", "Scene View", scene =>
                         {
-                            scene.Text("scene.view-camera", () => sceneEditor.Enabled
-                                ? $"Editor camera pos={sceneEditor.CameraPosition.X:0.00},{sceneEditor.CameraPosition.Y:0.00},{sceneEditor.CameraPosition.Z:0.00} target={sceneEditor.CameraTarget.X:0.00},{sceneEditor.CameraTarget.Y:0.00},{sceneEditor.CameraTarget.Z:0.00}"
-                                : "Editor camera disabled; spectrum camera owns the program view.", "caption");
-                            scene.Text("scene.view-program", DescribeProgramVideo, "mono");
-                            scene.Text("scene.view-sync", () => $"{synchronization.Summary()} | {synchronization.SourceCount} sources | poll {lastPollCount} | ingested {synchronization.IngestedSamples}", "caption");
-                            scene.Text("scene.view-audio", () => $"{DescribeAudioSyncState()} | aligned {DescribeAlignedAudio()}", "caption");
-                            scene.Preview("scene.view-preview", "Program Preview", () => sceneEditor.PreviewItems, weight: 1.8f);
-                            scene.Card("scene.view-frame", frame =>
-                            {
-                                frame.Text("scene.view-frame-title", "Program Surface", "strong");
-                                frame.Text("scene.view-frame-detail", () =>
-                                {
-                                    var spectra = sceneReady
-                                        ? $"{lastAudioSpectra.Count} spectra fft={lastAudioSpectra.FirstOrDefault()?.FftSize ?? 0}"
-                                        : "waiting for Fensalir scene ready";
-                                    return $"{spectra} | frustum {DescribeSpectrumFrustum()}";
-                                }, "mono");
-                                frame.Text("scene.view-frame-budget", () =>
-                                {
-                                    var dropped = lastDroppedSpectrumSourceLaneCount > 0 ? $" dropped={lastDroppedSpectrumSourceLaneCount}" : "";
-                                    return $"{spectrumHistory.Count}/{SpectrumHistoryWindowCount} age columns x {Math.Min(lastAudioSpectra.Count, spectrumSourceLaneCapacity)}/{spectrumSourceLaneCapacity} lanes x {spectrumTubeSubdivisions} subdivisions{dropped}";
-                                }, "mono");
-                            }, weight: 1.4f);
+                            scene.Preview("scene.view-preview", "Program Preview", () => sceneEditor.PreviewItems, weight: 1.0f);
                             scene.Row("scene.view-actions", actions =>
                             {
                                 actions.Button("scene.view-frame-selected", "Frame Selected", sceneEditor.ResetCamera);
