@@ -219,6 +219,21 @@ invariants:
     `nightwing_typed_witness_publisher.py --track-eyes`, so Nightwing publishes
     compact `mimir.move_controller_observation_state.v1` claims through the
     `/eve/periwinkle` CultMesh observation receiver.
+    The stream-proof profile is the live demo cut:
+    `config/mimir-runtime.stream-proof.local.json` keeps Starfire's canonical
+    window on local Scarlett ASIO, local Leap stereo IR, local Kiyo Pro RGB,
+    Raven display over SRT port 5200, and Raven Realtek loopback as decoded
+    f32 PCM audio over SRT port 5202. `MimirFfmpegPcmAudioStreamSource` owns
+    that network PCM edge and emits real `MimirAudioBlockDescriptor` samples
+    instead of generic process bytes. `scripts/start-stream-proof.ps1` stages
+    Nightwing's compact Eye/Move publisher and keeps only one `--track-eyes`
+    worker alive; `scripts/raven-audio.ps1` starts the Raven Realtek loopback
+    sender from the logged-in Raven desktop session. `tools/solve_stream_proof_frustum.py`
+    turns articulated sweep observations into a provisional Kiyo AR trail
+    receipt: Nightwing matched views define a temporary local witness space,
+    Kiyo observations are fit into it, and the output
+    `mimir.stream_proof_frustum_solve.v1` is calibration evidence for the demo,
+    not final metric room truth.
     `MimirMoveControllerTracker` is the first Mimir-native overlay owner for
     multiple PS Move controllers: it tracks bright sphere observations from
     PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves

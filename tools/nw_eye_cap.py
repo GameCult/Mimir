@@ -167,6 +167,7 @@ def yuyv_to_luma(raw: bytes, width: int, height: int, stride: int) -> bytes:
 def capture(args: argparse.Namespace) -> dict:
     fd = os.open(args.device, os.O_RDWR | os.O_NONBLOCK)
     maps: list[mmap.mmap] = []
+    stream_stdout = bool(getattr(args, "stdout", False))
     out = Path(args.out) if args.out else None
     if out is not None:
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -203,7 +204,7 @@ def capture(args: argparse.Namespace) -> dict:
         deadline = start + args.seconds
         timestamps = []
         sequences = []
-        frames = sys.stdout.buffer if args.stdout else frames_path.open("wb")  # type: ignore[union-attr]
+        frames = sys.stdout.buffer if stream_stdout else frames_path.open("wb")  # type: ignore[union-attr]
         try:
             while time.monotonic() < deadline:
                 ready, _, _ = select.select([fd], [], [], 0.25)
@@ -222,7 +223,7 @@ def capture(args: argparse.Namespace) -> dict:
                 sequences.append(int(buf.sequence))
                 xioctl(fd, VIDIOC_QBUF, buf)
         finally:
-            if not args.stdout:
+            if not stream_stdout:
                 frames.close()
         try:
             fcntl.ioctl(fd, VIDIOC_STREAMOFF, stream_type)

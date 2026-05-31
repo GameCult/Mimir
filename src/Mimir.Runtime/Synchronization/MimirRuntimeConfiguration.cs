@@ -255,6 +255,25 @@ public sealed class MimirRuntimeConfiguration
                     stream.StrideBytes)));
         }
 
+        if (string.Equals(stream.Adapter, "ffmpeg-pcmaudio", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(stream.Adapter, "pcmaudio-process", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(stream.Command))
+            {
+                return null;
+            }
+
+            return new MimirStreamSourceFactory(descriptor, () => new MimirFfmpegPcmAudioStreamSource(
+                descriptor,
+                new MimirFfmpegPcmAudioStreamSourceOptions(
+                    ResolveCommand(stream.Command, configDirectory),
+                    stream.Arguments,
+                    stream.SampleRate,
+                    stream.Channels,
+                    ParseAudioSampleFormat(stream.SampleFormat),
+                    stream.BlockFrames)));
+        }
+
         if (!string.Equals(stream.Adapter, "process", StringComparison.OrdinalIgnoreCase))
         {
             return null;
@@ -324,6 +343,20 @@ public sealed class MimirRuntimeConfiguration
                 _ => MimirVideoPixelFormat.Unknown,
             };
     }
+
+    private static MimirAudioSampleFormat ParseAudioSampleFormat(string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? MimirAudioSampleFormat.Unknown
+            : value.Trim().ToUpperInvariant() switch
+            {
+                "FLOAT32" or "F32" or "IEEE_FLOAT" => MimirAudioSampleFormat.Float32,
+                "INT16" or "PCM16" or "S16" => MimirAudioSampleFormat.Int16,
+                "INT24" or "PCM24" or "S24" => MimirAudioSampleFormat.Int24,
+                "INT32" or "PCM32" or "S32" => MimirAudioSampleFormat.Int32,
+                _ => MimirAudioSampleFormat.Unknown,
+            };
+    }
 }
 
 public sealed record MimirStreamSourceFactory(
@@ -381,7 +414,7 @@ public sealed class MimirAudioSyncConfig
                 ? fallback.BioacousticWitnessProfileId
                 : BioacousticWitnessProfileId.Trim(),
             EnableComplexContourRuntime = EnableComplexContourRuntime || fallback.EnableComplexContourRuntime,
-        };
+            };
     }
 
     private static long StopwatchTicksToNs(long ticks)
@@ -425,6 +458,12 @@ public sealed class MimirStreamConfig
     public int ChunkBytes { get; set; } = 65_536;
 
     public int SampleRate { get; set; } = 192_000;
+
+    public int Channels { get; set; } = 2;
+
+    public string SampleFormat { get; set; } = "Float32";
+
+    public int BlockFrames { get; set; } = 960;
 
     public string DriverClsid { get; set; } = "";
 

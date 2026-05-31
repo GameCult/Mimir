@@ -5,29 +5,33 @@ param(
     [string]$CaptureFrame = "",
     [string]$NightwingHost = "nightwing",
     [string]$WitnessUrl = "ws://192.168.1.66:8796/eve/periwinkle",
-    [string]$ConfigPath = "E:\Projects\Mimir\config\mimir-runtime.mvp-leap-eyes-kiyo.local.json"
+    [string]$ConfigPath = "E:\Projects\Mimir\config\mimir-runtime.stream-proof.local.json",
+    [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
-$logDir = Join-Path $repo "artifacts\runtime\mvp-leap-eyes-kiyo"
+$logDir = Join-Path $repo "artifacts\runtime\stream-proof"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
-function Test-CommandOk {
-    param([string[]]$Command, [string]$Name)
-    $process = Start-Process -FilePath $Command[0] -ArgumentList $Command[1..($Command.Length - 1)] -NoNewWindow -Wait -PassThru -RedirectStandardOutput (Join-Path $logDir "$Name.out.log") -RedirectStandardError (Join-Path $logDir "$Name.err.log")
-    return $process.ExitCode -eq 0
+if ($DryRun) {
+    Write-Host "MIMIR_RUNTIME_CONFIG=$ConfigPath"
+    Write-Host "Would stage Nightwing witness tools to $NightwingHost and start --track-eyes publisher at $WitnessUrl"
+    Write-Host "Would launch: dotnet run --project $repo\src\Mimir.App\Mimir.App.csproj"
+    Write-Host "Raven screen sender: scripts\start-raven-screen-capture-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
+    Write-Host "Raven Realtek sender: scripts\raven-audio.ps1 -TargetHost 192.168.1.66 -Port 5202"
+    exit 0
 }
 
 $kiyo = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match "VID_1532&PID_0E05&MI_00" } | Select-Object -First 1
 $leap = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match "VID_F182&PID_0003&MI_00" } | Select-Object -First 1
 
 if (-not $kiyo) {
-    throw "Kiyo Pro camera interface is not present. MVP needs Kiyo Pro RGB."
+    throw "Kiyo Pro camera interface is not present. Stream proof needs the Kiyo AR program view."
 }
 
 if (-not $leap) {
-    throw "LeapUVC camera interface is not present. Replug/wake the Leap before launching this MVP profile."
+    throw "LeapUVC camera interface is not present. Replug/wake the Leap before launching this profile."
 }
 
 $nightwingCheck = ssh $NightwingHost "test -e /dev/video2 -a -e /dev/video3 && command -v python3 >/dev/null && echo ok" 2>$null
@@ -72,7 +76,7 @@ if (-not $receiverRunning) {
     Start-Sleep -Milliseconds 800
 }
 
-$remotePublisher = 'ps -eo pid=,comm=,args= | awk ''$2=="python3" && $0 ~ /\/tmp\/nightwing_typed_witness_publisher.py/ && $0 ~ /--track-eyes/ {print $1}'' | xargs -r kill; nohup python3 /tmp/nightwing_typed_witness_publisher.py --url ''' + $WitnessUrl + ''' --track-eyes --interval 0.12 > /tmp/mimir-nightwing-mvp-witness.log 2>&1 &'
+$remotePublisher = 'ps -eo pid=,comm=,args= | awk ''$2=="python3" && $0 ~ /\/tmp\/nightwing_typed_witness_publisher.py/ && $0 ~ /--track-eyes/ {print $1}'' | xargs -r kill; nohup python3 /tmp/nightwing_typed_witness_publisher.py --url ''' + $WitnessUrl + ''' --track-eyes --interval 0.12 > /tmp/mimir-nightwing-stream-proof.log 2>&1 &'
 ssh $NightwingHost $remotePublisher | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "Could not start Nightwing typed witness publisher."
@@ -94,5 +98,7 @@ if ($Headless) {
 }
 
 Write-Host "MIMIR_RUNTIME_CONFIG=$ConfigPath"
-Write-Host "Starting MVP: Starfire Leap + Kiyo Pro, Nightwing Eye/Move witness claims"
+Write-Host "Starting stream proof: Leap + Kiyo Pro + Raven screen/audio, Nightwing Eye/Move witness claims"
+Write-Host "Raven senders expected: scripts\start-raven-screen-capture-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
+Write-Host "Raven audio expected: scripts\raven-audio.ps1 -TargetHost 192.168.1.66 -Port 5202"
 dotnet @args

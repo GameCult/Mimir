@@ -219,6 +219,7 @@ def eye_tracking_observations(args: argparse.Namespace, sequence: int) -> list[b
     docs: list[bytes] = []
     devices = [part for part in args.eye_devices.split(",") if part]
     for eye_index, device in enumerate(devices):
+        raw_path = None
         source_id = f"ps3-eye-{eye_index}"
         stats_path = f"/tmp/mimir-mvp-{source_id}.json"
         cap_args = argparse.Namespace(
@@ -280,7 +281,7 @@ def eye_tracking_observations(args: argparse.Namespace, sequence: int) -> list[b
             ))
         finally:
             try:
-                if "raw_path" in locals():
+                if raw_path:
                     os.unlink(raw_path)
             except OSError:
                 pass

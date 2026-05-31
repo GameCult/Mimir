@@ -81,7 +81,31 @@ correctly drops the result to `InsufficientWitnesses`.
 
 ## Runtime Profile
 
-For the ASAP MVP stream, use the narrower Leap/Eyes/Kiyo Pro profile:
+For the current stream-proof demo, use the corrected Starfire/Nightwing/Raven
+profile:
+
+```powershell
+E:\Projects\Mimir\scripts\start-stream-proof.ps1
+```
+
+This profile keeps Nightwing raw Eye pixels off Starfire. Starfire ingests local
+Scarlett ASIO, local Leap stereo IR, local Kiyo Pro RGB, Raven screen capture,
+and Raven Realtek loopback PCM. Nightwing publishes compact Eye/Move
+observations through `/eve/periwinkle`; those observations are calibration and
+overlay evidence, not raw media ownership.
+
+The profile declares:
+
+- `leap-stereo-ir`: LeapUVC stereo IR / depth root.
+- `kiyo-pro-rgb`: Kiyo Pro AR program view.
+- `raven-display`: Raven screen capture over SRT port `5200`, in the
+  `raven-sync` clock domain.
+- `raven-realtk-loopback`: Raven Realtek render loopback as f32 PCM over SRT
+  port `5202`, also in `raven-sync`.
+- `focusrite-asio`: Starfire hero mics plus local Raven/program loopback lanes
+  on `asio-ch0..asio-ch3`.
+
+For the narrower Leap/Eyes/Kiyo Pro bring-up path, use:
 
 ```powershell
 E:\Projects\Mimir\scripts\start-mvp-leap-eyes-kiyo.ps1
@@ -140,9 +164,30 @@ On Raven, start screen capture from the logged-in desktop session:
 E:\Projects\Mimir\scripts\start-raven-screen-capture-sender.ps1 -TargetHost 192.168.1.66 -Port 5200
 ```
 
-Route Raven program audio into the Scarlett path that appears on
-`asio-ch2/asio-ch3`. That audio is the timing witness that earns the
-`raven-sync` correction for `raven-display`.
+Start Realtek render loopback from the same logged-in desktop session:
+
+```powershell
+E:\Projects\Mimir\scripts\raven-audio.ps1 -TargetHost 192.168.1.66 -Port 5202
+```
+
+If Raven program audio is also routed into Starfire Scarlett on
+`asio-ch2/asio-ch3`, that remains the strongest local timing witness. The
+Realtek loopback is now a real network PCM audio source in Mimir, not generic
+stdout bytes.
+
+## Kiyo AR Trail Receipt
+
+The first offline proof that the Kiyo view can accept Move trails is:
+
+```powershell
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\solve_stream_proof_frustum.py .\artifacts\runtime\all-sensor-articulated-20260531-232349\sweep\calibration-observations.json
+```
+
+That solver uses Nightwing's two matched optical witnesses as a provisional
+local witness space, fits the Kiyo Pro observations into it, and writes a
+`mimir.stream_proof_frustum_solve.v1` receipt plus an AR trail preview. It is
+enough for the stream demo and for Starfire's global residual owner to consume;
+it is not final metric room calibration.
 
 ## Multiple Move Controllers
 
