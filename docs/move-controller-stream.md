@@ -135,3 +135,58 @@ controller identity.
 those histories into the existing Feature evidence path. This is deliberately
 2D observation history. 6DoF pose waits for calibrated frustums and the global
 residual owner.
+
+## Music-Keyed Calibration Words
+
+`tools/music_keyed_move_chirp_sync.py` is the first planner for calibration
+words that are both musical and machine-decodable. It listens to Scarlett ASIO,
+uses the same Perlines-style adaptive FFT delta whitening as
+`tools/nightwing_psmove_music_pulse.py`, autocorrelates the whitened broadband
+spectral-rise function for tempo, estimates a lightweight root from recent
+best-fit fundamentals, then writes one shared plan:
+
+- beat-aligned chirps quantized to the estimated minor-pentatonic scale;
+- de Bruijn-coded event symbols so adjacent timing/frequency/color words remain
+  distinguishable;
+- per-Move RGB pulses using stable controller identities and unique colors;
+- a JSON receipt shaped like AquaSynth song analysis vocabulary:
+  `tempo_bpm`, `beat_seconds`, `tempo_confidence`, `root_note`,
+  `suggested_scale`, `scale_frequencies_hz`, and
+  `whitened_spectral_autocorr`.
+
+The synthetic smoke is:
+
+```powershell
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\music_keyed_move_chirp_sync.py --mode synthetic --dry-run --events 8 --out-dir artifacts/runtime/music-keyed-move-chirp-sync-smoke
+```
+
+The live dry-run against Scarlett is:
+
+```powershell
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\music_keyed_move_chirp_sync.py --dry-run --analyze-seconds 5 --events 8 --out-dir artifacts/runtime/music-keyed-move-chirp-sync-live-dry
+```
+
+For double-time material:
+
+```powershell
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\music_keyed_move_chirp_sync.py --dry-run --tempo-grid doubletime --tempo-max-bpm 260 --analyze-seconds 5 --events 8 --out-dir artifacts/runtime/music-keyed-move-chirp-sync-dirtyphonics-dry
+```
+
+On the 2026-05-31 live dry-run, the planner produced a usable but not final
+receipt: about `92.31` BPM, beat `0.650s`, tempo confidence `0.343`, root `A`,
+key confidence `0.716`. That is enough to prove the dataflow, not enough to
+claim final musical tempo authority.
+
+For dense double-time material, use `--tempo-grid doubletime`; the planner then
+selects the double-time member of the autocorrelation tempo family instead of
+preferring the slower parent grid. On the Dirtyphonics-style live source this
+produced about `171.43` BPM, beat `0.350s`, tempo confidence `0.358`, root `A`,
+key confidence `0.703` after widening the search ceiling with
+`--tempo-max-bpm 260`. The receipt records `tempo_family` so later decoders can
+see the selected grid alongside half-time/double-time alternatives.
+
+The non-dry run targets the two wireless Nightwing Moves by default:
+`00:07:04:a6:be:5f` on `/dev/hidraw2` and `00:06:f5:23:e2:d1` on
+`/dev/hidraw3`. Current BlueZ permissions expose those Bluetooth hidraw nodes
+as root-only, so multi-Move LED actuation needs a udev rule or privileged
+helper before the non-root SSH writer can drive both spheres.
