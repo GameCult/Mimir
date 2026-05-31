@@ -166,6 +166,8 @@ public readonly record struct MimirLedSplineObservationPoint(
     double CurveT,
     double ImageX,
     double ImageY,
+    double ClipX,
+    double ClipY,
     double RadiusPixels,
     double Confidence);
 

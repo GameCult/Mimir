@@ -813,11 +813,11 @@ static int RunLedSplineCalibrationSmoke()
                 ObservedTimeNs: 1_000_000_000L,
                 Points:
                 [
-                    new MimirLedSplineObservationPoint(0, 0.00, 110.0, 82.0, 2.5, 0.91),
-                    new MimirLedSplineObservationPoint(1, 0.25, 132.0, 98.0, 2.2, 0.94),
-                    new MimirLedSplineObservationPoint(2, 0.50, 148.0, 126.0, 2.4, 0.92),
-                    new MimirLedSplineObservationPoint(3, 0.75, 171.0, 152.0, 2.6, 0.90),
-                    new MimirLedSplineObservationPoint(4, 1.00, 204.0, 184.0, 2.7, 0.89),
+                    new MimirLedSplineObservationPoint(0, 0.00, 110.0, 82.0, -0.3125, 0.3167, 2.5, 0.91),
+                    new MimirLedSplineObservationPoint(1, 0.25, 132.0, 98.0, -0.1750, 0.1833, 2.2, 0.94),
+                    new MimirLedSplineObservationPoint(2, 0.50, 148.0, 126.0, -0.0750, -0.0500, 2.4, 0.92),
+                    new MimirLedSplineObservationPoint(3, 0.75, 171.0, 152.0, 0.0688, -0.2667, 2.6, 0.90),
+                    new MimirLedSplineObservationPoint(4, 1.00, 204.0, 184.0, 0.2750, -0.5333, 2.7, 0.89),
                 ],
                 Confidence: 0.91),
             new MimirLedSplineCameraObservation(
@@ -828,11 +828,11 @@ static int RunLedSplineCalibrationSmoke()
                 ObservedTimeNs: 1_000_000_004L,
                 Points:
                 [
-                    new MimirLedSplineObservationPoint(0, 0.00, 763.0, 356.0, 4.4, 0.88),
-                    new MimirLedSplineObservationPoint(1, 0.25, 840.0, 432.0, 4.1, 0.93),
-                    new MimirLedSplineObservationPoint(2, 0.50, 914.0, 552.0, 4.3, 0.94),
-                    new MimirLedSplineObservationPoint(3, 0.75, 1018.0, 673.0, 4.6, 0.90),
-                    new MimirLedSplineObservationPoint(4, 1.00, 1188.0, 816.0, 4.9, 0.86),
+                    new MimirLedSplineObservationPoint(0, 0.00, 763.0, 356.0, -0.2052, 0.3407, 4.4, 0.88),
+                    new MimirLedSplineObservationPoint(1, 0.25, 840.0, 432.0, -0.1250, 0.2000, 4.1, 0.93),
+                    new MimirLedSplineObservationPoint(2, 0.50, 914.0, 552.0, -0.0479, -0.0222, 4.3, 0.94),
+                    new MimirLedSplineObservationPoint(3, 0.75, 1018.0, 673.0, 0.0604, -0.2463, 4.6, 0.90),
+                    new MimirLedSplineObservationPoint(4, 1.00, 1188.0, 816.0, 0.2375, -0.5111, 4.9, 0.86),
                 ],
                 Confidence: 0.90),
         ],
@@ -847,10 +847,11 @@ static int RunLedSplineCalibrationSmoke()
     var frame = lowerer.BuildLedSplineCandidateFrame([candidate]);
     var validation = AquariumFieldEvidenceValidator.Validate(frame);
     var plan = AquariumFieldLoweringPlanner.Plan(frame);
+    var residual = new MimirVisualCalibrationResidualSolver().EvaluateLedSpline(candidate);
     var claim = frame.Claims.SingleOrDefault();
 
     Console.WriteLine(
-        $"led-spline-calibration-smoke domains={frame.Domains.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} points={candidate.CameraObservations.Sum(static observation => observation.Points.Count)} errors={validation.HasErrors}");
+        $"led-spline-calibration-smoke domains={frame.Domains.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} pairs={residual.PairResiduals.Count} clipResidual={residual.PairResiduals.FirstOrDefault()?.MeanClipspaceDistance ?? double.NaN:0.000000} points={candidate.CameraObservations.Sum(static observation => observation.Points.Count)} errors={validation.HasErrors}");
 
     if (validation.HasErrors)
     {
@@ -869,6 +870,11 @@ static int RunLedSplineCalibrationSmoke()
         claim.Proposal.Kind == AquariumFieldProposalKind.DeterministicStructural &&
         claim.Proposal.RepresentedCandidateCount == 10 &&
         claim.PayloadHandle.Contains("indexed:coded", StringComparison.Ordinal) &&
+        residual.Status == MimirVisualCalibrationResidualStatus.ResidualOnly &&
+        !residual.HasPoseUpdate &&
+        residual.PairResiduals.Count == 1 &&
+        residual.PairResiduals[0].SharedLedCount == 5 &&
+        residual.PairResiduals[0].MeanClipspaceDistance < 0.12 &&
         plan.Packets.Count == 1 &&
         plan.Packets[0].Backend == AquariumFieldBackendKind.DebugOverlay &&
         plan.DeferredRequests.Count == 0
