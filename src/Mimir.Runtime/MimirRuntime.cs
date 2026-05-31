@@ -33,6 +33,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private const float SpectrumFrustumMinimumNear = 0.01f;
     private const float SpectrumSplineTubePadding = 0.18f;
     private const int DefaultSpectrumSourceLaneCapacity = 8;
+    private const int AudioMixerChannelSlotCount = 6;
     private const string SpectrumFieldResourceKey = "mimir:resource:spectrum:field-upload";
     private const string SpectrumRampResourceKey = AquariumBuiltInFieldResources.BlackbodyRampResourceKey;
     private static readonly string SpectrumRampTexturePath = AquariumBuiltInFieldResources.ResolveBlackbodyRampPath();
@@ -873,18 +874,29 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
                     shell.Vertical("mimir.editor-center", center =>
                     {
-                        center.Preview("scene.view-preview", "", () => sceneEditor.PreviewItems, weight: 1.0f);
+                        center.Preview("scene.view-preview", "", () => sceneEditor.PreviewItems, weight: 2.2f);
                         center.Pane("mimir.audio-mixer", "Audio Mixer", mixer =>
                         {
-                            mixer.Options("audio.stem", "Stem", () => presentationControls.SelectedAudioIndex, SelectAudioStem, AudioFeedOptions());
-                            mixer.Row("audio.toggles", toggles =>
+                            mixer.Horizontal("audio.channel-bank", bank =>
                             {
-                                toggles.Toggle("audio.mute", "Mute", () => presentationControls.SelectedAudio?.Muted ?? false, SetSelectedAudioMuted);
-                                toggles.Toggle("audio.solo", "Solo", () => presentationControls.SelectedAudio?.Solo ?? false, SetSelectedAudioSolo);
-                            });
-                            mixer.Slider("audio.gain", "Gain", () => presentationControls.SelectedAudio?.Gain ?? 1.0f, SetSelectedAudioGain, 0.0f, 2.0f, "0.00");
-                            mixer.Text("audio.program", DescribeProgramAudio, "caption", weight: 0.8f);
-                        }, weight: 0.72f);
+                                for (var slot = 0; slot < AudioMixerChannelSlotCount; slot++)
+                                {
+                                    var channelIndex = slot;
+                                    bank.Card($"audio.channel.{slot}", strip =>
+                                    {
+                                        strip.Text($"audio.channel.{slot}.name", () => AudioChannelName(channelIndex), "strong", weight: 0.55f);
+                                        strip.Row($"audio.channel.{slot}.toggles", toggles =>
+                                        {
+                                            toggles.Toggle($"audio.channel.{slot}.mute", "M", () => AudioMuted(channelIndex), value => SetAudioMuted(channelIndex, value));
+                                            toggles.Toggle($"audio.channel.{slot}.solo", "S", () => AudioSolo(channelIndex), value => SetAudioSolo(channelIndex, value));
+                                        }, weight: 0.55f);
+                                        strip.Slider($"audio.channel.{slot}.gain", "Gain", () => AudioGain(channelIndex), value => SetAudioGain(channelIndex, value), 0.0f, 2.0f, "0.00", weight: 0.65f);
+                                        strip.Text($"audio.channel.{slot}.status", () => DescribeAudioChannelStatus(channelIndex), "caption", weight: 0.95f);
+                                    });
+                                }
+                            }, weight: 1.0f, gap: 6.0f);
+                            mixer.Text("audio.program", DescribeProgramAudio, "caption", weight: 0.35f);
+                        }, weight: 0.95f);
                     }, weight: 1.75f);
 
                     shell.Pane("mimir.inspector", "Inspector", inspector =>
@@ -1074,11 +1086,6 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
     }
 
-    private void SelectAudioStem(int index)
-    {
-        presentationControls.SelectedAudioIndex = Math.Clamp(index, 0, Math.Max(0, presentationControls.AudioFeeds.Count - 1));
-    }
-
     private void SetSelectedVideoVisible(bool visible)
     {
         sceneEditor.SetSelectedVisible(visible);
@@ -1115,29 +1122,95 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         sceneEditor.MoveSelectedLayer(delta);
     }
 
-    private void SetSelectedAudioMuted(bool muted)
+    private MimirAudioPresentationControl? AudioChannel(int index)
     {
-        if (presentationControls.SelectedAudio is { } selected)
+        var feeds = presentationControls.AudioFeeds;
+        return index >= 0 && index < feeds.Count
+            ? feeds[index]
+            : null;
+    }
+
+    private string AudioChannelName(int index) =>
+        AudioChannel(index)?.DisplayName ?? "empty";
+
+    private string AudioChannelRole(MimirAudioPresentationControl channel)
+    {
+        var id = channel.SourceId;
+        if (id.Contains("raven", StringComparison.OrdinalIgnoreCase))
         {
-            selected.Muted = muted;
+            return "Raven loopback";
+        }
+
+        if (id.Contains("loopback", StringComparison.OrdinalIgnoreCase))
+        {
+            return "stereo loopback";
+        }
+
+        if (id.Contains("asio", StringComparison.OrdinalIgnoreCase) ||
+            id.Contains("focusrite", StringComparison.OrdinalIgnoreCase) ||
+            id.Contains("scarlett", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Scarlett ASIO";
+        }
+
+        return id;
+    }
+
+    private bool AudioMuted(int index) => AudioChannel(index)?.Muted ?? false;
+
+    private bool AudioSolo(int index) => AudioChannel(index)?.Solo ?? false;
+
+    private float AudioGain(int index) => AudioChannel(index)?.Gain ?? 1.0f;
+
+    private void SetAudioMuted(int index, bool muted)
+    {
+        if (AudioChannel(index) is { } channel)
+        {
+            channel.Muted = muted;
         }
     }
 
-    private void SetSelectedAudioSolo(bool solo)
+    private void SetAudioSolo(int index, bool solo)
     {
-        if (presentationControls.SelectedAudio is { } selected)
+        if (AudioChannel(index) is { } channel)
         {
-            selected.Solo = solo;
+            channel.Solo = solo;
         }
     }
 
-    private void SetSelectedAudioGain(float gain)
+    private void SetAudioGain(int index, float gain)
     {
-        if (presentationControls.SelectedAudio is { } selected)
+        if (AudioChannel(index) is { } channel)
         {
-            selected.Gain = Math.Clamp(gain, 0.0f, 2.0f);
+            channel.Gain = Math.Clamp(gain, 0.0f, 2.0f);
         }
     }
+
+    private string DescribeAudioChannelStatus(int index)
+    {
+        var channel = AudioChannel(index);
+        if (channel == null)
+        {
+            return "";
+        }
+
+        var role = AudioChannelRole(channel);
+        var state = AudioSynchronizationState(channel.SourceId);
+        if (state == null)
+        {
+            return $"{role} | sync waiting";
+        }
+
+        var lockLabel = state.Confidence >= 0.75 ? "locked" : "learning";
+        var response = state.BandResponses.Count == 0
+            ? "chirp unmapped"
+            : $"{state.BandResponses.Count} chirp bands";
+        return $"{role} | {lockLabel} {state.DelayMicroseconds:0}us c={state.Confidence:0.00} | {response}";
+    }
+
+    private MimirAudioSynchronizationState? AudioSynchronizationState(string sourceId) =>
+        synchronization.AudioSynchronizationStates
+            .FirstOrDefault(state => string.Equals(state.SourceId, sourceId, StringComparison.Ordinal));
 
     private IReadOnlyList<AquariumUiOption> VideoFeedOptions()
     {
@@ -1145,14 +1218,6 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         return feeds.Count == 0
             ? [new AquariumUiOption(0, "No video")]
             : feeds.Select((feed, index) => new AquariumUiOption(index, $"{feed.Layer + 1}. {feed.DisplayName}")).ToArray();
-    }
-
-    private IReadOnlyList<AquariumUiOption> AudioFeedOptions()
-    {
-        var feeds = presentationControls.AudioFeeds;
-        return feeds.Count == 0
-            ? [new AquariumUiOption(0, "No audio")]
-            : feeds.Select((feed, index) => new AquariumUiOption(index, feed.DisplayName)).ToArray();
     }
 
     private IReadOnlyList<AquariumUiOption> LutPresetOptions() =>

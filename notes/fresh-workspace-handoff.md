@@ -51,6 +51,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
   properties. Camera/SDF/model editor affordances have no live UI authority,
   and editor camera/SDF/spline output no longer contributes to the runtime
   frame. Smoke with `--scene-editor-smoke`.
+- The Audio Mixer dock is a horizontal CultUI channel-strip bank, not a
+  selected-stem inspector form. Six fixed slots read the live
+  `presentationControls.AudioFeeds` order so Scarlett ASIO mono inputs,
+  stereo loopback, and Raven loopback can appear as parallel strips with M/S,
+  gain, and compact sync/chirp-response readouts derived from
+  `MimirSynchronizationHub.AudioSynchronizationStates`. Do not move sample
+  alignment, chirp response mapping, or ambient/noise neutralization authority
+  into the UI; the surface only controls and observes runtime audio state.
 - Live camera image buffers should use Fensalir-owned texture leases when they
   are rendering inputs: Mimir asks the engine broker for a keyed D3D12
   Texture2D/fence lease, writes decoded frames into that texture, commits the
