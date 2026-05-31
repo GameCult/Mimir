@@ -287,6 +287,13 @@ accepted_design:
     Faust streaming DSP path. LUT presets are typed postprocess state; exposure
     and bloom map into current Fensalir `GraphicsSettings`, while actual LUT
     texture sampling remains the named renderer hook.
+    `Mimir.EveDashboard` is the first native Eve operator dashboard server:
+    `/eve/dashboard` sends scene/control snapshots and accepts select, move,
+    scale, rotate, visibility, and reset commands. EveCanvas renders the scene
+    graph and source panels natively in UIKit with multitouch transform editing.
+    This is currently fixture dashboard state for the transport/control proof;
+    live binding to `MimirPresentationControlState` and `MimirSceneEditorState`
+    is the next authority cut.
     `MimirSceneEditorState` owns the separate Mimir-window editor graph:
     editor camera, scene nodes, selected node, visibility/locks, 2D-plane
     transforms, reset affordances, and grab/rotate/resize gizmo mode. Rolling

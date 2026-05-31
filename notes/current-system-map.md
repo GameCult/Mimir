@@ -418,6 +418,13 @@ the Fensalir camera plus derived spline outlines, selection handles, and the
 output. World SDF glyph rendering, ASSIMP-style mesh decoding/upload, and
 pixel-accurate gizmo hit-testing are explicit Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].
+`Mimir.EveDashboard` is the first native Eve operator dashboard server. It
+serves `/eve/dashboard` snapshots and accepts selected-node transform,
+visibility, and reset commands. EveCanvas renders the dashboard locally in
+UIKit, including the scene graph and multitouch pan/pinch/rotate source panels.
+The current server state is fixture state for the transport/control proof; the
+next cut is binding it to live `MimirPresentationControlState` and
+`MimirSceneEditorState`.
 
 ## Visual Fusion
 

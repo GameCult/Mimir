@@ -4,6 +4,7 @@
     <Project Path="src/Mimir.Broadcast/Mimir.Broadcast.csproj" />
     <Project Path="src/Mimir.EveRelay/Mimir.EveRelay.csproj" />
     <Project Path="src/Mimir.EveDialogue/Mimir.EveDialogue.csproj" />
+    <Project Path="src/Mimir.EveDashboard/Mimir.EveDashboard.csproj" />
     <Project Path="src/Mimir.EveSensorReceiver/Mimir.EveSensorReceiver.csproj" />
     <Project Path="src/Mimir.Runtime/Mimir.Runtime.csproj" />
     <Project Path="src/Mimir.BufferSmoke/Mimir.BufferSmoke.csproj" />
