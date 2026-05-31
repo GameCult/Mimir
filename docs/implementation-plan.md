@@ -443,11 +443,15 @@ a named invariant that the native runtime cannot protect yet.
   `/dev/hidraw1`.
   `tools/nightwing_psmove_music_pulse.py` is the current controlled
   LED/sphere command proof: Starfire owns the Scarlett ASIO loopback envelope,
-  computes a thresholdable tiny-FFT onset novelty function from
-  adaptive-whitened broadband spectral flux, suppresses duplicate spikes with
-  a short refractory window, fits a provisional fundamental, folds spectral
-  bin energy into one octave around that fundamental, and streams color-balanced
-  RGB report `0x06` frames over SSH to Nightwing's hidraw writer.
+  computes a thresholdable tiny-FFT onset novelty function using the old
+  Perlines-style adaptive whitening pattern: fast/slow scrubbed spectrum,
+  positive delta scrubbed against slow delta, rapidly decaying adaptive min/max
+  normalization, and warm-up/refractory gating. It fits a provisional
+  fundamental, folds spectral bin energy into one octave around that
+  fundamental, and streams dark-idle, high-saturation RGB report `0x06` bursts
+  over SSH to Nightwing's hidraw writer. A peak-picked strike against the top
+  of the adaptive delta range forces full LED brightness; steady-state material
+  falls back toward black between strikes.
   Next useful cut is direct report decoding plus optical sphere observations
   from PS3 Eyes/Kiyos entering the same calibration-evidence path as LED
   spline constraints.

@@ -171,10 +171,12 @@ invariants:
     `/dev/input/js0`, `/dev/input/event14`, and `/dev/hidraw1`.
     `tools/nightwing_psmove_music_pulse.py` proves the output path by reading
     Starfire Scarlett ASIO loopback channels 2/3, computing a thresholdable
-    adaptive-whitened spectral-flux onset novelty function, fitting a
-    provisional fundamental, folding spectral bin energy into one octave around
-    that fundamental for RGB balance, and streaming LED report `0x06` frames
-    over SSH to Nightwing's hidraw writer.
+    Perlines-style adaptive-whitened spectral-delta novelty function, fitting
+    a provisional fundamental, folding spectral bin energy into one octave
+    around that fundamental for RGB balance, and streaming LED report `0x06`
+    frames over SSH to Nightwing's hidraw writer. The LED idles near black, and
+    a peak-picked strike against the top of the adaptive delta range forces
+    full brightness.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,

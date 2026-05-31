@@ -98,17 +98,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidraw", default="/dev/hidraw1", help="Nightwing PS Move hidraw path.")
     parser.add_argument("--rate", type=int, default=48000, help="Sample rate.")
     parser.add_argument("--fps", type=float, default=30.0, help="LED update rate.")
-    parser.add_argument("--gain", type=float, default=3.2, help="Audio envelope gain.")
+    parser.add_argument("--gain", type=float, default=0.25, help="Sustain/body gain under onset bursts.")
     parser.add_argument("--floor", type=float, default=0.008, help="Noise floor.")
     parser.add_argument("--fft-size", type=int, default=512, help="Tiny FFT size for onset flux.")
-    parser.add_argument("--onset-gain", type=float, default=7.0, help="Spectral-rise onset gain.")
-    parser.add_argument("--onset-decay", type=float, default=0.38, help="Per-frame onset decay.")
-    parser.add_argument("--onset-threshold", type=float, default=1.45, help="Adaptive onset threshold in standard deviations.")
-    parser.add_argument("--onset-baseline-rate", type=float, default=0.015, help="Adaptive novelty baseline update rate.")
-    parser.add_argument("--onset-cooldown-ms", type=float, default=70.0, help="Suppress duplicate onset spikes inside this window.")
-    parser.add_argument("--whiten-rate", type=float, default=0.035, help="Adaptive spectral-floor update rate.")
-    parser.add_argument("--whiten-contrast", type=float, default=2.4, help="Adaptive whitening contrast exponent.")
-    parser.add_argument("--color-contrast", type=float, default=1.8, help="Folded octave color balance contrast.")
+    parser.add_argument("--onset-gain", type=float, default=18.0, help="Spectral-rise onset gain.")
+    parser.add_argument("--onset-decay", type=float, default=0.22, help="Per-frame onset decay.")
+    parser.add_argument("--onset-threshold", type=float, default=0.42, help="Whitened novelty floor.")
+    parser.add_argument("--onset-baseline-rate", type=float, default=0.04, help="Adaptive novelty baseline update rate.")
+    parser.add_argument("--onset-cooldown-ms", type=float, default=120.0, help="Suppress duplicate onset spikes inside this window.")
+    parser.add_argument("--range-hit-threshold", type=float, default=1.15, help="Adaptive-range rise that forces max onset brightness.")
+    parser.add_argument("--range-memory-decay", type=float, default=0.965, help="Peak-picking memory for adaptive-range hits.")
+    parser.add_argument("--warmup-ms", type=float, default=450.0, help="Let adaptive whitening settle before emitting peaks.")
+    parser.add_argument("--whiten-fast", type=float, default=0.78, help="Perlines-style fast FFT scrub alpha.")
+    parser.add_argument("--whiten-slow", type=float, default=0.12, help="Perlines-style slow FFT scrub alpha.")
+    parser.add_argument("--whiten-delta-fast", type=float, default=0.62, help="Fast positive-delta scrub alpha.")
+    parser.add_argument("--whiten-delta-slow", type=float, default=0.08, help="Slow positive-delta scrub alpha.")
+    parser.add_argument("--whiten-decay", type=float, default=0.78, help="Adaptive max/min decay; lower wipes history faster.")
+    parser.add_argument("--whiten-contrast", type=float, default=3.4, help="Adaptive whitening contrast exponent.")
+    parser.add_argument("--color-contrast", type=float, default=3.2, help="Folded octave color balance contrast.")
     parser.add_argument("--fundamental-min", type=float, default=55.0, help="Minimum best-fit fundamental in Hz.")
     parser.add_argument("--fundamental-max", type=float, default=880.0, help="Maximum best-fit fundamental in Hz.")
     return parser.parse_args()
@@ -119,8 +126,16 @@ class AsioOnsetReader:
         self.channels = channels
         self.fft_size = max(64, int(fft_size))
         self.pending: list[float] = []
-        self.previous = np.zeros(self.fft_size // 2 + 1, dtype=np.float32)
-        self.floor = np.zeros(self.fft_size // 2 + 1, dtype=np.float32)
+        bin_count = self.fft_size // 2 + 1
+        self.slow = np.full(bin_count, 1e-4, dtype=np.float32)
+        self.fast = np.full(bin_count, 1e-4, dtype=np.float32)
+        self.scrubbed = np.ones(bin_count, dtype=np.float32)
+        self.delta_slow = np.full(bin_count, 1e-4, dtype=np.float32)
+        self.delta_fast = np.full(bin_count, 1e-4, dtype=np.float32)
+        self.adaptive_max = np.ones(bin_count, dtype=np.float32)
+        self.adaptive_min = np.zeros(bin_count, dtype=np.float32)
+        self.delta_adaptive_max = np.ones(bin_count, dtype=np.float32)
+        self.delta_adaptive_min = np.zeros(bin_count, dtype=np.float32)
         self.window = np.hanning(self.fft_size).astype(np.float32)
         self.color_balance = np.array([0.25, 0.2, 0.55], dtype=np.float32)
         self.flux_mean = 0.0
@@ -128,6 +143,7 @@ class AsioOnsetReader:
         self.frame_index = 0
         self.last_onset_frame = -1_000_000
         self.last_onset_score = 0.0
+        self.range_memory = 0.0
         self.dll = ctypes.WinDLL(dll_path)
         self.dll.mimir_asio_create.argtypes = [
             ctypes.c_char_p,
@@ -178,14 +194,21 @@ class AsioOnsetReader:
         floor: float,
         gain: float,
         deadline: float,
-        whiten_rate: float,
+        whiten_fast: float,
+        whiten_slow: float,
+        whiten_delta_fast: float,
+        whiten_delta_slow: float,
+        whiten_decay: float,
         whiten_contrast: float,
         fundamental_min: float,
         fundamental_max: float,
         onset_threshold: float,
         onset_baseline_rate: float,
         onset_cooldown_ms: float,
-    ) -> tuple[float, float, tuple[float, float, float], float] | None:
+        range_hit_threshold: float,
+        range_memory_decay: float,
+        warmup_ms: float,
+    ) -> tuple[float, float, tuple[float, float, float], float, float] | None:
         channel = ctypes.c_int()
         timestamp_ns = ctypes.c_longlong()
         sequence = ctypes.c_ulonglong()
@@ -213,53 +236,79 @@ class AsioOnsetReader:
                 del self.pending[: self.fft_size // 2]
                 rms = float(np.sqrt(np.mean(frame * frame)))
                 spectrum = np.abs(np.fft.rfft(frame * self.window)).astype(np.float32)
-                spectrum = np.log1p(spectrum)
-                if not np.any(self.floor):
-                    self.floor = spectrum.copy()
-                floor_alpha = max(0.001, min(0.5, whiten_rate))
-                self.floor = np.minimum(
-                    spectrum,
-                    (1.0 - floor_alpha) * self.floor + floor_alpha * spectrum,
-                )
-                whitened = np.maximum(spectrum - self.floor, 0.0)
-                if whitened.size > 4:
-                    whitened -= np.quantile(whitened[2:], 0.35)
-                whitened = np.maximum(whitened, 0.0)
-                if whitened.size > 4:
-                    peak = float(np.quantile(whitened[2:], 0.97))
-                    if peak > 1e-6:
-                        whitened = np.clip(whitened / peak, 0.0, 2.0)
-                whitened = np.power(whitened, max(0.5, whiten_contrast)).astype(np.float32)
+                spectrum = np.sqrt(np.maximum(spectrum, 0.0)).astype(np.float32)
 
-                rise = np.maximum(whitened - self.previous, 0.0)
-                self.previous = whitened
-                active = rise[2:]
-                flux = float(np.mean(active) + 0.35 * np.percentile(active, 92))
+                fast_alpha = max(0.001, min(1.0, whiten_fast))
+                slow_alpha = max(0.001, min(1.0, whiten_slow))
+                self.fast = (1.0 - fast_alpha) * self.fast + fast_alpha * spectrum
+                self.slow = (1.0 - slow_alpha) * self.slow + slow_alpha * spectrum
+                previous_scrubbed = self.scrubbed
+                scrubbed = self.fast / np.maximum(self.slow, 1e-6)
+                delta = np.maximum(scrubbed - previous_scrubbed, 0.0)
+                delta_fast_alpha = max(0.001, min(1.0, whiten_delta_fast))
+                delta_slow_alpha = max(0.001, min(1.0, whiten_delta_slow))
+                self.delta_fast = (1.0 - delta_fast_alpha) * self.delta_fast + delta_fast_alpha * delta
+                self.delta_slow = (1.0 - delta_slow_alpha) * self.delta_slow + delta_slow_alpha * delta
+                delta_scrubbed = self.delta_fast / np.maximum(self.delta_slow, 1e-6)
+
+                decay = max(0.05, min(0.999, whiten_decay))
+                prior_delta_max = np.maximum(self.delta_adaptive_max * decay, 1e-6)
+                self.adaptive_max *= decay
+                self.delta_adaptive_max = prior_delta_max
+                self.adaptive_min = 1.0 - ((1.0 - self.adaptive_min) * decay)
+                self.delta_adaptive_min = 1.0 - ((1.0 - self.delta_adaptive_min) * decay)
+                self.adaptive_max = np.maximum(self.adaptive_max, scrubbed)
+                self.delta_adaptive_max = np.maximum(self.delta_adaptive_max, delta_scrubbed)
+                self.adaptive_min = np.minimum(self.adaptive_min, scrubbed)
+                self.delta_adaptive_min = np.minimum(self.delta_adaptive_min, delta_scrubbed)
+
+                normalized = scrubbed / np.maximum(self.adaptive_max, 1e-6)
+                delta_normalized = (
+                    (delta_scrubbed - self.delta_adaptive_min)
+                    / np.maximum(self.delta_adaptive_max - self.delta_adaptive_min, 1e-6)
+                )
+                range_hit = float(np.percentile(delta_scrubbed[2:] / prior_delta_max[2:], 98))
+                range_memory = self.range_memory
+                range_strike = range_hit >= max(range_hit_threshold, range_memory * 1.18)
+                self.range_memory = max(range_hit, range_memory * max(0.1, min(0.999, range_memory_decay)))
+                normalized = np.clip(normalized, 0.0, 2.0)
+                delta_normalized = np.clip(delta_normalized, 0.0, 2.0)
+                whitened = np.power(delta_normalized, max(0.5, whiten_contrast)).astype(np.float32)
+                self.scrubbed = scrubbed
+
+                active = whitened[2:]
+                flux = float(0.25 * np.mean(active) + 0.75 * np.percentile(active, 96))
                 baseline_rate = max(0.001, min(0.2, onset_baseline_rate))
                 baseline = self.flux_mean
-                flux_std = math.sqrt(max(1e-9, self.flux_var))
-                novelty = max(0.0, flux - baseline - max(0.0, onset_threshold) * flux_std)
+                novelty = max(0.0, flux - baseline - max(0.0, onset_threshold))
+                if range_strike:
+                    novelty = max(novelty, 1.0)
+                hop_seconds = (self.fft_size // 2) / max(1, self.sample_rate)
+                warmup_frames = max(0, int((warmup_ms / 1000.0) / hop_seconds))
+                if self.frame_index < warmup_frames:
+                    novelty = 0.0
+                    range_strike = False
                 delta = flux - self.flux_mean
                 adapt_rate = baseline_rate * (0.25 if novelty > 0.0 else 1.0)
                 self.flux_mean += adapt_rate * delta
                 self.flux_var = (1.0 - adapt_rate) * self.flux_var + adapt_rate * delta * delta
-                hop_seconds = (self.fft_size // 2) / max(1, self.sample_rate)
                 cooldown_frames = max(1, int((onset_cooldown_ms / 1000.0) / hop_seconds))
                 if self.frame_index - self.last_onset_frame < cooldown_frames:
                     if novelty <= self.last_onset_score * 1.35:
                         novelty = 0.0
+                        range_strike = False
                 if novelty > 0.0:
                     self.last_onset_frame = self.frame_index
                     self.last_onset_score = novelty
                 self.frame_index += 1
-                fundamental = self._estimate_fundamental(whitened, fundamental_min, fundamental_max)
-                color = self._fold_color(whitened + rise * 1.8, fundamental)
-                onset = max(0.0, novelty * gain)
-                body = max(0.0, (rms - floor) * 0.45)
-                return onset, body, color, fundamental
+                fundamental = self._estimate_fundamental(normalized, fundamental_min, fundamental_max)
+                color = self._fold_color(normalized * (0.25 + whitened * 2.0), fundamental)
+                onset = 1.0 if range_strike else max(0.0, novelty * gain)
+                body = max(0.0, (rms - floor) * 0.08)
+                return onset, body, color, fundamental, range_hit
         if not self.pending:
             return None
-        return 0.0, 0.0, tuple(float(v) for v in self.color_balance), 0.0
+        return 0.0, 0.0, tuple(float(v) for v in self.color_balance), 0.0, 0.0
 
     def _estimate_fundamental(self, spectrum: np.ndarray, min_hz: float, max_hz: float) -> float:
         nyquist = self.sample_rate * 0.5
@@ -320,10 +369,10 @@ def rgb_from_level(level: float, balance: tuple[float, float, float], color_cont
     color = np.asarray(balance, dtype=np.float32)
     color = np.power(np.maximum(color, 0.0), max(0.5, color_contrast))
     color /= max(1e-6, float(np.max(color)))
-    white = max(0.0, glow - 0.86) / 0.14
-    r = int(8 + 232 * glow * (0.12 + 0.88 * float(color[0])) + 14 * white)
-    g = int(8 + 232 * glow * (0.12 + 0.88 * float(color[1])) + 14 * white)
-    b = int(12 + 232 * glow * (0.12 + 0.88 * float(color[2])) + 14 * white)
+    white = max(0.0, glow - 0.94) / 0.06
+    r = int(1 + 246 * glow * (0.03 + 0.97 * float(color[0])) + 8 * white)
+    g = int(1 + 246 * glow * (0.03 + 0.97 * float(color[1])) + 8 * white)
+    b = int(2 + 246 * glow * (0.03 + 0.97 * float(color[2])) + 8 * white)
     return (min(255, r), min(255, g), min(255, b))
 
 
@@ -397,17 +446,24 @@ def main() -> int:
                     args.floor,
                     args.onset_gain,
                     time.monotonic() + (1.0 / args.fps),
-                    args.whiten_rate,
+                    args.whiten_fast,
+                    args.whiten_slow,
+                    args.whiten_delta_fast,
+                    args.whiten_delta_slow,
+                    args.whiten_decay,
                     args.whiten_contrast,
                     args.fundamental_min,
                     args.fundamental_max,
                     args.onset_threshold,
                     args.onset_baseline_rate,
                     args.onset_cooldown_ms,
+                    args.range_hit_threshold,
+                    args.range_memory_decay,
+                    args.warmup_ms,
                 )
                 if onset is None:
                     continue
-                hit, body, balance, fundamental = onset
+                hit, body, balance, fundamental, range_hit = onset
                 onset_env = max(hit, onset_env * args.onset_decay)
                 level = max(body * args.gain, onset_env)
             else:
@@ -422,6 +478,7 @@ def main() -> int:
                 balance = (0.25, 0.2, 0.55)
                 fundamental = 0.0
                 hit = 0.0
+                range_hit = 0.0
             env_decay = args.onset_decay if asio is not None else 0.82
             env = max(level, env * env_decay)
             r, g, b = rgb_from_level(env, balance, args.color_contrast)
@@ -432,7 +489,7 @@ def main() -> int:
             frames += 1
             if hit > 0.02:
                 print(
-                    f"peak onset={hit:.3f} f0={fundamental:.1f} "
+                    f"peak onset={hit:.3f} range={range_hit:.3f} f0={fundamental:.1f} "
                     f"balance={balance[0]:.2f},{balance[1]:.2f},{balance[2]:.2f} "
                     f"rgb={r},{g},{b}",
                     flush=True,
@@ -440,7 +497,7 @@ def main() -> int:
             if frames % int(args.fps * 2) == 0:
                 print(
                     "level="
-                    f"{env:.3f} onset={onset_env:.3f} f0={fundamental:.1f} "
+                    f"{env:.3f} onset={onset_env:.3f} range={range_hit:.3f} f0={fundamental:.1f} "
                     f"balance={balance[0]:.2f},{balance[1]:.2f},{balance[2]:.2f} "
                     f"rgb={r},{g},{b}",
                     flush=True,
