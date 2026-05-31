@@ -830,7 +830,10 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
     {
         var snapshot = MimirLiveStatsSnapshot.Load(telemetryLogPath, observationLogPath);
         var confidence = snapshot.SyncStates.Count == 0
-            ? snapshot.SyncReports.DefaultIfEmpty().Max(report => report?.Confidence ?? 0.0)
+            ? snapshot.SyncReports.Select(static report => report.Confidence)
+                .Concat(snapshot.SyncDecodeAttempts.Select(static attempt => attempt.Confidence))
+                .DefaultIfEmpty(0.0)
+                .Max()
             : snapshot.SyncStates.Average(static state => state.Confidence);
         var rms = snapshot.Spectra.Count == 0 ? 0.0 : snapshot.Spectra.Max(static spectrum => spectrum.Rms);
         var liveObservationCount = snapshot.ObservationStreams.Count(static stream => stream.State == "active");
@@ -843,7 +846,7 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             },
             new("mimir-tracking-confidence", $"Tracking Confidence\n{confidence:0.000}", "confidence", -0.44, -0.12, 0.28, 0.16, ToneFor(confidence))
             {
-                Detail = $"{snapshot.SyncStates.Count} sync states / {snapshot.SyncReports.Count} reports",
+                Detail = $"{snapshot.SyncStates.Count} sync states / {snapshot.SyncReports.Count} reports / {snapshot.SyncDecodeAttempts.Count} decode attempts",
             },
             new("mimir-audio-rms", $"Audio RMS\n{rms:0.000000}", "audio-rms", 0.0, -0.12, 0.28, 0.16, ToneFor(NormalizeRms(rms)))
             {
@@ -943,6 +946,14 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             children.Add(UiElement.Text(
                 $"sync-report-{StableId(report.SourceId)}",
                 $"{report.Evidence} {report.ReferenceSourceId}->{report.SourceId} {report.DelayUs:0.000} us c={report.Confidence:0.000} events={report.Events}",
+                "caption"));
+        }
+
+        foreach (var attempt in snapshot.SyncDecodeAttempts.OrderByDescending(static attempt => attempt.Confidence).ThenBy(static attempt => attempt.SourceId, StringComparer.Ordinal).Take(8))
+        {
+            children.Add(UiElement.Text(
+                $"sync-decode-{StableId(attempt.ReferenceSourceId)}-{StableId(attempt.SourceId)}",
+                $"decode {attempt.Status} {attempt.ReferenceSourceId}->{attempt.SourceId} c={attempt.Confidence:0.000} ref={attempt.ReferenceEnergy:0.000} cand={attempt.CandidateEnergy:0.000} matched={attempt.Matched}",
                 "caption"));
         }
 
@@ -1073,11 +1084,12 @@ internal sealed class MimirLiveStatsSnapshot
     public IReadOnlyList<MimirSpectrumStat> Spectra { get; init; } = [];
     public IReadOnlyList<MimirSyncStateStat> SyncStates { get; init; } = [];
     public IReadOnlyList<MimirSyncReportStat> SyncReports { get; init; } = [];
+    public IReadOnlyList<MimirSyncDecodeAttemptStat> SyncDecodeAttempts { get; init; } = [];
     public IReadOnlyList<MimirVideoBufferStat> VideoBuffers { get; init; } = [];
     public IReadOnlyList<MimirActuatorCommandStat> ActuatorCommands { get; init; } = [];
     public IReadOnlyList<MimirObservationStreamStat> ObservationStreams { get; init; } = [];
     public bool HasAnyData => Telemetry != null || Spectra.Count > 0 || SyncStates.Count > 0 || VideoBuffers.Count > 0 || ObservationStreams.Count > 0;
-    public string Summary => $"{Spectra.Count} audio lanes / {SyncStates.Count} sync states / {VideoBuffers.Count} video buffers / {ObservationStreams.Count} device streams";
+    public string Summary => $"{Spectra.Count} audio lanes / {SyncStates.Count} sync states / {SyncDecodeAttempts.Count} decode attempts / {VideoBuffers.Count} video buffers / {ObservationStreams.Count} device streams";
 
     public static MimirLiveStatsSnapshot Load(string telemetryLogPath, string observationLogPath)
     {
@@ -1092,6 +1104,7 @@ internal sealed class MimirLiveStatsSnapshot
             Spectra = LatestBySource(telemetryLines.Select(ParseSpectrum).Where(static value => value != null)!),
             SyncStates = LatestBySource(telemetryLines.Select(ParseSyncState).Where(static value => value != null)!),
             SyncReports = LatestBySource(telemetryLines.Select(ParseSyncReport).Where(static value => value != null)!),
+            SyncDecodeAttempts = LatestSyncDecodeAttempts(telemetryLines.Select(ParseSyncDecodeAttempt).Where(static value => value != null)!),
             VideoBuffers = LatestBySource(telemetryLines.Select(ParseVideoBuffer).Where(static value => value != null)!),
             ActuatorCommands = LatestBySource(telemetryLines.Select(ParseActuatorCommand).Where(static value => value != null)!),
             ObservationStreams = LatestObservationStreams(observationLines),
@@ -1148,6 +1161,25 @@ internal sealed class MimirLiveStatsSnapshot
         }
 
         return bySource.Values.OrderBy(static value => value.SourceId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyList<MimirSyncDecodeAttemptStat> LatestSyncDecodeAttempts(IEnumerable<MimirSyncDecodeAttemptStat?> values)
+    {
+        var byRoute = new Dictionary<string, MimirSyncDecodeAttemptStat>(StringComparer.Ordinal);
+        foreach (var value in values)
+        {
+            if (value == null)
+            {
+                continue;
+            }
+
+            byRoute[$"{value.ReferenceSourceId}->{value.SourceId}"] = value;
+        }
+
+        return byRoute.Values
+            .OrderByDescending(static value => value.Confidence)
+            .ThenBy(static value => value.SourceId, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static IReadOnlyList<MimirObservationStreamStat> LatestObservationStreams(IEnumerable<string> lines)
@@ -1306,6 +1338,33 @@ internal sealed class MimirLiveStatsSnapshot
             (int)Number(fields, "timelineEvents") + (int)Number(fields, "directHits"));
     }
 
+    private static MimirSyncDecodeAttemptStat? ParseSyncDecodeAttempt(string line)
+    {
+        if (!line.StartsWith("mimir-sync-decode ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var route = TokenAfterPrefix(line, "mimir-sync-decode ");
+        var parts = route.Split("->", 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+        {
+            return null;
+        }
+
+        var fields = Fields(line);
+        return new MimirSyncDecodeAttemptStat(
+            parts[1],
+            parts[0],
+            Text(fields, "status", "unknown"),
+            (int)Number(fields, "compared"),
+            (int)Number(fields, "rate"),
+            Number(fields, "refEnergy"),
+            Number(fields, "candEnergy"),
+            (int)Number(fields, "matched"),
+            Number(fields, "confidence"));
+    }
+
     private static MimirVideoBufferStat? ParseVideoBuffer(string line)
     {
         if (!line.StartsWith("mimir-video-buffer ", StringComparison.Ordinal))
@@ -1436,6 +1495,8 @@ internal sealed record MimirSpectrumStat(string SourceId, string Label, int Samp
 internal sealed record MimirSyncStateStat(string SourceId, string ReferenceSourceId, double DelaySamples, double DelayUs, double DelayMs, double SroPpm, double Confidence) : IMimirSourceStat;
 
 internal sealed record MimirSyncReportStat(string SourceId, string ReferenceSourceId, string Evidence, double DelayUs, double Confidence, int Events) : IMimirSourceStat;
+
+internal sealed record MimirSyncDecodeAttemptStat(string SourceId, string ReferenceSourceId, string Status, int Compared, int SampleRate, double ReferenceEnergy, double CandidateEnergy, int Matched, double Confidence) : IMimirSourceStat;
 
 internal sealed record MimirVideoBufferStat(string SourceId, int Count, string Latest) : IMimirSourceStat;
 
