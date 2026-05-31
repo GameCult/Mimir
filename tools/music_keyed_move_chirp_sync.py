@@ -26,6 +26,7 @@ import base64
 import json
 import math
 import os
+import colorsys
 import subprocess
 import sys
 import time
@@ -117,6 +118,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lead-seconds", type=float, default=0.55)
     parser.add_argument("--chirp-ms", type=float, default=55.0)
     parser.add_argument("--pulse-ms", type=float, default=90.0)
+    parser.add_argument("--visual-gesture", choices=("square", "contour"), default="contour")
+    parser.add_argument("--visual-gesture-hz", type=float, default=80.0)
     parser.add_argument("--sample-rate", type=int, default=48000)
     parser.add_argument("--fps", type=float, default=60.0)
     parser.add_argument("--fft-size", type=int, default=512)
@@ -310,6 +313,52 @@ def midi_to_hz(midi: int) -> float:
     return 440.0 * (2.0 ** ((midi - 69) / 12.0))
 
 
+def rgb_to_hsv(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
+    return colorsys.rgb_to_hsv(*(channel / 255.0 for channel in rgb))
+
+
+def hsv_to_rgb255(hue: float, saturation: float, value: float) -> tuple[int, int, int]:
+    r, g, b = colorsys.hsv_to_rgb(hue % 1.0, max(0.0, min(1.0, saturation)), max(0.0, min(1.0, value)))
+    return tuple(int(round(channel * 255.0)) for channel in (r, g, b))  # type: ignore[return-value]
+
+
+def visual_contour_samples(
+    symbol: int,
+    move: MoveTarget,
+    move_index: int,
+    move_count: int,
+    pulse_seconds: float,
+    gesture_hz: float,
+    emphasized: bool,
+) -> list[dict]:
+    if pulse_seconds <= 0.0:
+        return []
+    step = 1.0 / max(1.0, gesture_hz)
+    sample_count = max(3, int(math.ceil(pulse_seconds / step)) + 1)
+    base_hue, base_sat, base_value = rgb_to_hsv(move.color)
+    symbol_phase = ((symbol * 0.071428571) + move_index / max(1, move_count)) % 1.0
+    hue_span = 0.07 + 0.015 * (symbol % 5)
+    tremolo_cycles = 1 + (symbol % 3)
+    tremolo_depth = 0.16 + 0.05 * ((symbol // 3) % 3)
+    identity_floor = 0.22 if emphasized else 0.13
+    peak = 1.0 if emphasized else 0.58
+    samples: list[dict] = []
+    for sample_index in range(sample_count):
+        offset = min(pulse_seconds, sample_index * step)
+        t = offset / pulse_seconds
+        attack = min(1.0, t / 0.22)
+        release = min(1.0, (1.0 - t) / 0.34)
+        envelope = max(0.0, min(1.0, attack, release))
+        articulation = 1.0 - tremolo_depth * (0.5 - 0.5 * math.cos(2.0 * math.pi * tremolo_cycles * t + symbol_phase * math.tau))
+        value = max(identity_floor, peak * envelope * articulation)
+        hue = base_hue + hue_span * math.sin(math.pi * (t - 0.5)) + symbol_phase * 0.035
+        saturation = min(1.0, max(0.55, base_sat + 0.10 * math.sin(math.tau * t + symbol_phase * math.tau)))
+        rgb = hsv_to_rgb255(hue, saturation, value * base_value)
+        samples.append({"offset_seconds": offset, "rgb": rgb, "envelope": envelope, "value": value, "hue": hue % 1.0})
+    samples.append({"offset_seconds": pulse_seconds, "rgb": (0, 0, 0), "envelope": 0.0, "value": 0.0, "hue": base_hue})
+    return samples
+
+
 def render_chirp(start_hz: float, end_hz: float, sample_rate: int, chirp_ms: float) -> np.ndarray:
     length = max(16, int(sample_rate * chirp_ms * 0.001))
     t = np.arange(length, dtype=np.float32) / sample_rate
@@ -352,6 +401,7 @@ def build_plan(args: argparse.Namespace, moves: list[MoveTarget], bpm: float, be
     symbols = rotate_to_distinct_opening(build_debruijn(max(2, len(MINOR_PENTATONIC)), 3), 3)
     scale = [midi_to_hz(root_midi + interval) for interval in MINOR_PENTATONIC]
     events = []
+    pulse_seconds = args.pulse_ms * 0.001
     for index in range(args.events):
         symbol = symbols[index % len(symbols)]
         note_hz = scale[symbol % len(scale)]
@@ -359,9 +409,30 @@ def build_plan(args: argparse.Namespace, moves: list[MoveTarget], bpm: float, be
         offset = args.lead_seconds + index * beat_seconds
         move_events = []
         for move_index, move in enumerate(moves):
-            intensity = 1.0 if move_index == symbol % max(1, len(moves)) else 0.55
+            emphasized = move_index == symbol % max(1, len(moves))
+            intensity = 1.0 if emphasized else 0.55
             color = tuple(int(channel * intensity) for channel in move.color)
-            move_events.append({"name": move.name, "hidraw": move.hidraw, "rgb": color})
+            contour = (
+                visual_contour_samples(symbol, move, move_index, len(moves), pulse_seconds, args.visual_gesture_hz, emphasized)
+                if args.visual_gesture == "contour"
+                else [
+                    {"offset_seconds": 0.0, "rgb": color, "envelope": 1.0, "value": intensity, "hue": rgb_to_hsv(color)[0]},
+                    {"offset_seconds": pulse_seconds, "rgb": (0, 0, 0), "envelope": 0.0, "value": 0.0, "hue": rgb_to_hsv(color)[0]},
+                ]
+            )
+            move_events.append({
+                "name": move.name,
+                "hidraw": move.hidraw,
+                "base_rgb": color,
+                "visual_word": {
+                    "kind": f"mimir.move_visual_{args.visual_gesture}_word.v1",
+                    "sample_rate_hz": args.visual_gesture_hz,
+                    "duration_seconds": pulse_seconds,
+                    "symbol": symbol,
+                    "emphasized": emphasized,
+                    "samples": contour,
+                },
+            })
         events.append(
             {
                 "index": index,
@@ -385,6 +456,12 @@ def build_plan(args: argparse.Namespace, moves: list[MoveTarget], bpm: float, be
         "key_confidence": key_confidence,
         "suggested_scale": "minor-pentatonic",
         "scale_frequencies_hz": scale,
+        "visual_gesture": {
+            "mode": args.visual_gesture,
+            "sample_rate_hz": args.visual_gesture_hz,
+            "pulse_seconds": pulse_seconds,
+            "encoding": "identity color bias plus symbol-dependent hue glide, envelope, and tremolo articulation",
+        },
         "moves": [move.__dict__ for move in moves],
         "events": events,
     }
@@ -412,12 +489,15 @@ def emit(plan: dict, args: argparse.Namespace, moves: list[MoveTarget], wav_path
     )
     ssh = subprocess.Popen(["ssh", "-o", "BatchMode=yes", args.ssh_target, remote_cmd], stdin=subprocess.PIPE, text=True)
     assert ssh.stdin is not None
-    pulse_seconds = args.pulse_ms * 0.001
     for event in plan["events"]:
         for pulse in event["move_pulses"]:
-            r, g, b = pulse["rgb"]
-            ssh.stdin.write(f"{event['offset_seconds']:.6f} {pulse['name']} {r} {g} {b}\n")
-            ssh.stdin.write(f"{event['offset_seconds'] + pulse_seconds:.6f} {pulse['name']} 0 0 0\n")
+            samples = pulse.get("visual_word", {}).get("samples") or [
+                {"offset_seconds": 0.0, "rgb": pulse.get("base_rgb", (0, 0, 0))},
+                {"offset_seconds": args.pulse_ms * 0.001, "rgb": (0, 0, 0)},
+            ]
+            for sample in samples:
+                r, g, b = sample["rgb"]
+                ssh.stdin.write(f"{event['offset_seconds'] + sample['offset_seconds']:.6f} {pulse['name']} {int(r)} {int(g)} {int(b)}\n")
     ssh.stdin.write("go\n")
     ssh.stdin.flush()
     audio = subprocess.Popen([args.ffplay, "-nodisp", "-autoexit", "-loglevel", "quiet", str(wav_path)])

@@ -148,7 +148,10 @@ best-fit fundamentals, then writes one shared plan:
 - beat-aligned chirps quantized to the estimated minor-pentatonic scale;
 - de Bruijn-coded event symbols so adjacent timing/frequency/color words remain
   distinguishable;
-- per-Move RGB pulses using stable controller identities and unique colors;
+- per-Move visual words using stable controller identities and unique colors;
+  the default is no longer a square flash, but a sampled RGB contour with
+  attack/release envelope, symbol-dependent hue glide, tremolo articulation,
+  and an emphasized controller lane;
 - a JSON receipt shaped like AquaSynth song analysis vocabulary:
   `tempo_bpm`, `beat_seconds`, `tempo_confidence`, `root_note`,
   `suggested_scale`, `scale_frequencies_hz`, and
@@ -184,6 +187,15 @@ produced about `171.43` BPM, beat `0.350s`, tempo confidence `0.358`, root `A`,
 key confidence `0.703` after widening the search ceiling with
 `--tempo-max-bpm 260`. The receipt records `tempo_family` so later decoders can
 see the selected grid alongside half-time/double-time alternatives.
+
+Visual calibration words are deliberately shaped like the audio words: one
+gesture carries more than one bit. `--visual-gesture contour` records a
+`mimir.move_visual_contour_word.v1` per Move per event, with `sample_rate_hz`,
+duration, base identity color, symbol emphasis, and the exact RGB samples sent
+over HID. Start conservatively around `--visual-gesture-hz 80`; the HID writer
+accepted a short 80 Hz contour test on Nightwing, but the useful rate is the
+rate cameras can recover cleanly, not merely the rate the controller accepts.
+`--visual-gesture square` remains available as a baseline comparator.
 
 The non-dry run targets the two wireless Nightwing Moves by default:
 `00:07:04:a6:be:5f` on `/dev/hidraw2` and `00:06:f5:23:e2:d1` on
