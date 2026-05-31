@@ -20,6 +20,13 @@ import struct
 import time
 import urllib.parse
 
+try:
+    import nw_eye_cap
+    import nw_move_hint
+except Exception:
+    nw_eye_cap = None
+    nw_move_hint = None
+
 
 def pack_nil() -> bytes:
     return b"\xc0"
@@ -206,6 +213,80 @@ def observations(sequence: int) -> list[bytes]:
     return docs
 
 
+def eye_tracking_observations(args: argparse.Namespace, sequence: int) -> list[bytes]:
+    if nw_eye_cap is None or nw_move_hint is None:
+        return []
+    docs: list[bytes] = []
+    devices = [part for part in args.eye_devices.split(",") if part]
+    for eye_index, device in enumerate(devices):
+        source_id = f"ps3-eye-{eye_index}"
+        stats_path = f"/tmp/mimir-mvp-{source_id}.json"
+        cap_args = argparse.Namespace(
+            device=device,
+            width=args.eye_width,
+            height=args.eye_height,
+            format="YUYV",
+            fps=args.eye_fps,
+            seconds=args.eye_window_seconds,
+            buffers=8,
+            out=stats_path,
+            stdout=False,
+        )
+        try:
+            stats = nw_eye_cap.capture(cap_args)
+            raw_path = stats["frames_path"]
+            width = int(stats["width"])
+            height = int(stats["height"])
+            frame_bytes = width * height
+            with open(raw_path, "rb") as handle:
+                raw = handle.read()
+            frame_count = min(len(raw) // frame_bytes, len(stats.get("timestamps_s", [])))
+            stride = max(1, int(args.tracking_stride))
+            for frame_index in range(0, frame_count, stride):
+                frame = raw[frame_index * frame_bytes:(frame_index + 1) * frame_bytes]
+                blob = nw_move_hint.best_blob(frame, width, height)
+                if blob is None or float(blob["confidence"]) < args.min_confidence:
+                    continue
+                values = [
+                    float(blob["clip_x"]),
+                    float(blob["clip_y"]),
+                    float(blob["area_px"]),
+                    float(blob["radius_px"]),
+                    float(blob["mean_luma"]),
+                    float(blob["peak_luma"]),
+                    float(blob["confidence"]),
+                    float(frame_index),
+                    float(width),
+                    float(height),
+                ]
+                docs.append(sensor_document(
+                    observation_id=f"nightwing:{source_id}:move-sphere:{sequence}:{frame_index}",
+                    device_id="nightwing",
+                    stream_id=source_id,
+                    kind="mimir.move_controller_observation_state.v1",
+                    sequence=sequence * 100000 + frame_index,
+                    values=values,
+                    accuracy=3,
+                ))
+        except Exception as ex:
+            docs.append(sensor_document(
+                observation_id=f"nightwing:{source_id}:tracking-error:{sequence}",
+                device_id="nightwing",
+                stream_id=source_id,
+                kind=f"tracking-error:{type(ex).__name__}",
+                sequence=sequence,
+                values=[0.0],
+                accuracy=0,
+            ))
+        finally:
+            try:
+                if "raw_path" in locals():
+                    os.unlink(raw_path)
+            except OSError:
+                pass
+    return docs
+
+
 def run(args: argparse.Namespace) -> None:
     sequence = 0
     while True:
@@ -215,6 +296,9 @@ def run(args: argparse.Namespace) -> None:
             while True:
                 for payload in observations(sequence):
                     ws.send_binary(payload)
+                if args.track_eyes:
+                    for payload in eye_tracking_observations(args, sequence):
+                        ws.send_binary(payload)
                 sequence += 1
                 if args.once:
                     return
@@ -232,6 +316,14 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=0.25)
     parser.add_argument("--reconnect-seconds", type=float, default=2.0)
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--track-eyes", action="store_true", help="Publish compact Nightwing-local PS3 Eye Move-sphere observations.")
+    parser.add_argument("--eye-devices", default="/dev/video2,/dev/video3")
+    parser.add_argument("--eye-width", type=int, default=320)
+    parser.add_argument("--eye-height", type=int, default=240)
+    parser.add_argument("--eye-fps", type=int, default=187)
+    parser.add_argument("--eye-window-seconds", type=float, default=0.12)
+    parser.add_argument("--tracking-stride", type=int, default=6)
+    parser.add_argument("--min-confidence", type=float, default=0.25)
     args = parser.parse_args()
     run(args)
     return 0

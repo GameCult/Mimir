@@ -81,6 +81,27 @@ correctly drops the result to `InsufficientWitnesses`.
 
 ## Runtime Profile
 
+For the ASAP MVP stream, use the narrower Leap/Eyes/Kiyo Pro profile:
+
+```powershell
+E:\Projects\Mimir\scripts\start-mvp-leap-eyes-kiyo.ps1
+```
+
+This launches Starfire with only local Scarlett ASIO, local Leap stereo IR, and
+local Kiyo Pro RGB in the Mimir rolling buffers. Nightwing does not stream PS3
+Eye pixels to Starfire. The launcher stages `nw_eye_cap.py`,
+`nw_move_hint.py`, and `nightwing_typed_witness_publisher.py` on Nightwing,
+then starts the typed witness publisher with `--track-eyes`. Nightwing reads
+`/dev/video2` and `/dev/video3`, extracts compact Move-sphere observations,
+and sends `mimir.move_controller_observation_state.v1` claims to the
+`/eve/periwinkle` CultMesh observation receiver. Starfire/Fensalir can consume
+those claims for overlays and calibration without inheriting Nightwing's raw
+camera bandwidth or local tracking authority.
+
+The MVP profile refuses to start when LeapUVC is not enumerated. That is
+intentional: the Leap is the dense close-range geometry root, not an optional
+checkbox pretending to be present.
+
 Use:
 
 ```powershell

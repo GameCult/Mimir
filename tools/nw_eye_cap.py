@@ -11,6 +11,7 @@ import json
 import mmap
 import os
 import select
+import sys
 import time
 from pathlib import Path
 
@@ -166,9 +167,10 @@ def yuyv_to_luma(raw: bytes, width: int, height: int, stride: int) -> bytes:
 def capture(args: argparse.Namespace) -> dict:
     fd = os.open(args.device, os.O_RDWR | os.O_NONBLOCK)
     maps: list[mmap.mmap] = []
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    frames_path = out.with_suffix(".y8")
+    out = Path(args.out) if args.out else None
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    frames_path = out.with_suffix(".y8") if out is not None else None
     try:
         set_frame_interval(fd, args.fps)
         fmt = V4L2Format()
@@ -201,7 +203,8 @@ def capture(args: argparse.Namespace) -> dict:
         deadline = start + args.seconds
         timestamps = []
         sequences = []
-        with frames_path.open("wb") as frames:
+        frames = sys.stdout.buffer if args.stdout else frames_path.open("wb")  # type: ignore[union-attr]
+        try:
             while time.monotonic() < deadline:
                 ready, _, _ = select.select([fd], [], [], 0.25)
                 if not ready:
@@ -218,6 +221,9 @@ def capture(args: argparse.Namespace) -> dict:
                 timestamps.append(float(buf.timestamp.tv_sec) + float(buf.timestamp.tv_usec) / 1_000_000.0)
                 sequences.append(int(buf.sequence))
                 xioctl(fd, VIDIOC_QBUF, buf)
+        finally:
+            if not args.stdout:
+                frames.close()
         try:
             fcntl.ioctl(fd, VIDIOC_STREAMOFF, stream_type)
         except OSError:
@@ -227,7 +233,7 @@ def capture(args: argparse.Namespace) -> dict:
         gap = max(0, (sequences[-1] - sequences[0] + 1) - len(sequences)) if len(sequences) >= 2 else 0
         stats = {
             "device": args.device,
-            "frames_path": str(frames_path),
+            "frames_path": str(frames_path) if frames_path is not None else "stdout",
             "width": int(actual.width),
             "height": int(actual.height),
             "stride": int(actual.bytesperline),
@@ -238,7 +244,10 @@ def capture(args: argparse.Namespace) -> dict:
             "sequence_gap": gap,
             "duration_s": (rel[-1] - rel[0]) if len(rel) >= 2 else 0.0,
         }
-        out.write_text(json.dumps(stats, indent=2, sort_keys=True), encoding="utf-8")
+        if out is not None:
+            out.write_text(json.dumps(stats, indent=2, sort_keys=True), encoding="utf-8")
+        else:
+            print(json.dumps(stats, sort_keys=True), file=sys.stderr)
         return stats
     finally:
         for mapping in maps:
@@ -255,10 +264,14 @@ def main() -> int:
     parser.add_argument("--fps", type=int, default=187)
     parser.add_argument("--seconds", type=float, default=8.0)
     parser.add_argument("--buffers", type=int, default=8)
-    parser.add_argument("--out", required=True)
+    parser.add_argument("--out", default=None)
+    parser.add_argument("--stdout", action="store_true", help="Stream raw luma frames to stdout and write stats to stderr.")
     args = parser.parse_args()
+    if not args.stdout and not args.out:
+        parser.error("--out is required unless --stdout is set")
     stats = capture(args)
-    print(json.dumps(stats, sort_keys=True))
+    if not args.stdout:
+        print(json.dumps(stats, sort_keys=True))
     return 0 if stats["frames"] else 1
 
 

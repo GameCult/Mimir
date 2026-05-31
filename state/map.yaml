@@ -211,6 +211,14 @@ invariants:
     rather than silently inferred. `tools/crunch_sync_sweep.py` turns a sweep
     directory into `calibration-observations.json/csv` by merging Nightwing's
     typed Move observations with local Kiyo frame-derived marker centroids.
+    The ASAP streaming MVP is narrower and authority-correct:
+    `config/mimir-runtime.mvp-leap-eyes-kiyo.local.json` keeps Starfire's live
+    rolling buffers to local Scarlett ASIO, local Leap stereo IR, and local
+    Kiyo Pro RGB only. Nightwing's PS3 Eyes do not cross as raw video; the
+    `start-mvp-leap-eyes-kiyo.ps1` launcher stages Nightwing tools and starts
+    `nightwing_typed_witness_publisher.py --track-eyes`, so Nightwing publishes
+    compact `mimir.move_controller_observation_state.v1` claims through the
+    `/eve/periwinkle` CultMesh observation receiver.
     `MimirMoveControllerTracker` is the first Mimir-native overlay owner for
     multiple PS Move controllers: it tracks bright sphere observations from
     PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves
