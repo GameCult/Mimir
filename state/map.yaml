@@ -301,13 +301,21 @@ accepted_design:
     Faust streaming DSP path. LUT presets are typed postprocess state; exposure
     and bloom map into current Fensalir `GraphicsSettings`, while actual LUT
     texture sampling remains the named renderer hook.
-    `Mimir.EveDashboard` is the first native Eve operator dashboard server:
-    `/eve/dashboard` sends scene/control snapshots and accepts select, move,
-    scale, rotate, visibility, and reset commands. EveCanvas renders the scene
-    graph and source panels natively in UIKit with multitouch transform editing.
-    This is currently fixture dashboard state for the transport/control proof;
-    live binding to `MimirPresentationControlState` and `MimirSceneEditorState`
-    is the next authority cut.
+    `Mimir.EveDashboard` is the native Eve dashboard broker: `/eve/deck` sends
+    retained dashboard trees, `/eve/dashboard` remains the compatibility
+    endpoint, and `/eve/deck/providers` exposes provider manifests. Built-in
+    providers are the switchboard, `mimir.stream.layout`, and
+    `yggdrasil.streampixels.edge`; launch-time external providers can be
+    registered as `id|title|ws-url` descriptors for LAN or SSH-forwarded TCP
+    surfaces. EveCanvas renders the scene graph and source panels natively in
+    UIKit with multitouch transform editing, and provider-card taps send
+    `open-provider`. Dashboard manifests and states now have typed
+    CultMesh-compatible document shapes `mimir.eve_dashboard_manifest.v1` and
+    `mimir.eve_dashboard_state.v1`, while the live iPad lane stays
+    WebSocket/TCP because it is the proven tunnelable transport. The Mimir
+    stream-layout provider still uses fixture dashboard state; live binding to
+    `MimirPresentationControlState` and `MimirSceneEditorState` is the next
+    authority cut.
     `MimirSceneEditorState` owns the separate Mimir-window editor graph:
     editor camera, scene nodes, selected node, visibility/locks, 2D-plane
     transforms, reset affordances, and grab/rotate/resize gizmo mode. Rolling

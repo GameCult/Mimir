@@ -11,6 +11,7 @@ artifacts/obs-sdk/
 artifacts/asio/
 artifacts/bioacoustic-contestants/
 artifacts/birdsong-reference/
+artifacts/eve-dashboard/
 artifacts/python-packages/
 artifacts/spectra/**/*.wav
 tools/drivers/

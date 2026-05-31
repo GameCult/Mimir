@@ -6,7 +6,8 @@ public enum MimirNetworkPayloadKind
     RawAudioDebugWindow,
     CompressedAudioProgramFeed,
     CompressedVideoProgramFeed,
-    RawVideoDiagnosticWindow
+    RawVideoDiagnosticWindow,
+    NativeDashboardState
 }
 
 public enum MimirNetworkTransportKind
@@ -80,11 +81,24 @@ public static class MimirNetworkTransportConfigurations
         Notes = "Do not trust browser media timestamps without decoded witness state."
     };
 
+    public static MimirNetworkTransportConfiguration EveDashboardState { get; } = new(
+        "eve-dashboard-state",
+        "Native retained dashboard trees and provider manifests for Eve-rendered control surfaces.",
+        MimirNetworkTransportKind.CultMeshTypedState,
+        MimirNetworkPayloadKind.NativeDashboardState,
+        MayAffectClock: false,
+        CarriesRawMedia: false,
+        TargetLatencyMilliseconds: 50.0,
+        RequiredDocuments: ["mimir.eve_dashboard_manifest", "mimir.eve_dashboard_state"],
+        RejectionConditions: ["unknown-provider", "untrusted-provider", "schema-version-mismatch", "command-owner-conflict"],
+        "Dashboard providers own state and commands. Eve owns native rendering and touch. No remote UI code runs on Eve.");
+
     public static IReadOnlyList<MimirNetworkTransportConfiguration> BuiltIn { get; } =
     [
         CultMeshTimingState,
         RawAudioDebugWindow,
         SrtProgramBridge,
-        WebRtcExperiment
+        WebRtcExperiment,
+        EveDashboardState
     ];
 }

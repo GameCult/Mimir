@@ -104,6 +104,51 @@ public sealed record MimirFaustControlSnapshot(
     [property: Key(0)] string Path,
     [property: Key(1)] float Value);
 
+[CultDocument("mimir.eve_dashboard_manifest", "mimir.eve_dashboard_manifest.v1")]
+[MessagePackObject]
+public sealed record MimirEveDashboardManifestDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string ProviderId,
+    [property: Key(1)] string Title,
+    [property: Key(2)] string Description,
+    [property: Key(3)] string Version,
+    [property: Key(4)] string Endpoint,
+    [property: Key(5)] string[] Capabilities,
+    [property: Key(6)] bool UsesCultMesh,
+    [property: Key(7)] string Transport);
+
+[CultDocument("mimir.eve_dashboard_state", "mimir.eve_dashboard_state.v1")]
+[MessagePackObject]
+public sealed record MimirEveDashboardStateDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string ProviderId,
+    [property: Key(1)] string Title,
+    [property: Key(2)] long Version,
+    [property: Key(3)] string UpdatedAtUtc,
+    [property: Key(4)] string SelectedNodeId,
+    [property: Key(5)] string LutPreset,
+    [property: Key(6)] MimirEveDashboardNodeSnapshot[] Nodes);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardNodeSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] string Label,
+    [property: Key(2)] string Kind,
+    [property: Key(3)] bool Visible,
+    [property: Key(4)] double X,
+    [property: Key(5)] double Y,
+    [property: Key(6)] double Z,
+    [property: Key(7)] double Rotation,
+    [property: Key(8)] double Scale,
+    [property: Key(9)] double Width,
+    [property: Key(10)] double Height,
+    [property: Key(11)] string Health,
+    [property: Key(12)] string? ProviderId,
+    [property: Key(13)] string? Command,
+    [property: Key(14)] string? Endpoint);
+
 public static class MimirCultMeshContractFactory
 {
     public static MimirBioacousticCodebookState CreateCodebookState(
