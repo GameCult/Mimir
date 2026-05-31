@@ -43,14 +43,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - `native/reservoir` owns the lower shared-edge typed-handle invariant for
   Fensalir/Faust binding work.
 - Fensalir owns production GPU fusion, UI, and Spout2 publication.
-- `MimirSceneEditorState` owns the current Mimir-window editor graph, not the
-  OBS program output: editor camera, source/text/model nodes, visibility,
-  transforms, reset controls, and grab/rotate/resize gizmo intent. The
-  `Mimir Editor` panel and derived spline/handle geometry are live now; world
-  SDF text glyphs, ASSIMP-style mesh import/upload, and clickable gizmo
-  hit-testing are still Fensalir renderer cuts. See
-  [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]] and
-  smoke with `--scene-editor-smoke`.
+- `MimirSceneEditorState` is currently a 2D OBS-shaped program mixer owner, not
+  a camera/3D scene editor. Synced video buffers become program layers with
+  normalized X/Y/W/H/rotation placement; the Eve/CultUI surface is Source list
+  left, maximized Program Preview center, compact Audio Mixer below, and Layer
+  Inspector right. Camera/SDF/model editor affordances have no live UI
+  authority and editor camera/SDF/spline output no longer contributes to the
+  runtime frame. Smoke with `--scene-editor-smoke`.
 - Live camera image buffers should use Fensalir-owned texture leases when they
   are rendering inputs: Mimir asks the engine broker for a keyed D3D12
   Texture2D/fence lease, writes decoded frames into that texture, commits the

@@ -15,10 +15,11 @@ objective:
     microphones, two speakers, Leap timing, Fensalir GPU rendering, Faust DSP,
     and OBS output.
   current: >
-    Make Leap dense geometry visible and calibratable first: live Leap packed
-    stereo IR feeds Fensalir D3D12 disparity, Mimir declares a derived
-    point-cloud Mesh socket, then Fensalir should generate/render points in the
-    editor and feed global residuals into online calibration.
+    Build the Mimir editor as a 2D OBS-shaped program mixer first: synced video
+    streams become compositable program layers, audio streams remain mixable
+    stems, and telemetry stays on Odin's Nightwing TUI/CultMesh surface instead
+    of stealing editor space. Leap/3D calibration work remains important, but
+    it is not the live editor authority for this pass.
 
 constraints:
   - Sender is Windows.
@@ -51,6 +52,11 @@ invariants:
   - Mimir publishes physical observations, calibration constraints, and surface
     intent. Fensalir owns field claims, selected lowerings, evidence reservoirs,
     temporal guide lanes, and program presentation.
+  - The Mimir editor is currently a 2D program mixer. `MimirSceneEditorState`
+    owns normalized video-layer placement for synced video streams and emits
+    only video-source preview items; camera/SDF/model authoring has no live UI
+    authority, and editor camera/SDF/spline output must not contribute to the
+    runtime frame.
   - Fast stereo depth belongs to Fensalir's D3D12 compute/resource authority.
     `research/d3d12-stereo-depth-provenance-2026-05-29.md` records libSGM as
     the permissive north-star reference for a future SGM-shaped stereo
@@ -214,6 +220,21 @@ invariants:
     Machine profile emit typed Move observation, camera feature-track, and
     visual marker state; raw Eye media from Nightwing is diagnostic only and
     Nightwing does not own camera placement or the canonical clock.
+    Eve follows the same distributed-witness rule for its own body:
+    `eve-local-sensor-witness` / `eve-local-sensors` owns Eve camera, Eve mic,
+    local flash/chirp decode, feature tracks, visual markers, and local frustum
+    hints. It may send compact typed evidence, but raw Eve media is not global
+    placement authority and Eve never owns the canonical clock.
+    `MimirCameraFrustumCalibrationSolver` is now the first Starfire-owned
+    frustum solve: stable LED/marker correspondences plus scene-space marker
+    points and seed frustums produce per-source position, rotation,
+    horizontal/vertical tangent half-FOV, correspondence count, clipspace
+    reprojection residual, and confidence. This supersedes translation-only
+    rig updates for global fusion setup; the older
+    `MimirCameraRigCalibrationSolver` remains a narrow bounded translation
+    residual helper. `Mimir.BufferSmoke --frustum-calibration-smoke` proves
+    five solved frustums for both Eyes, Kiyo Pro, Leap stereo IR, and Eve
+    camera.
     The Eyes have physically moved to Nightwing and Linux sees them as stock
     `ov534`/`gspca` V4L2 cameras on `/dev/video2` and `/dev/video3`. A
     repo-owned `tools/nightwing_v4l2_cadence_probe.py` copied to Nightwing
@@ -801,7 +822,8 @@ accepted_design:
     whenever dirty.
 
 active_subgoals:
-  - Verify the live Leap point cloud in the Mimir editor.
+  - Make the live Mimir editor behave like an OBS-style 2D compositor for
+    synced video layers and audio stems.
   - Add calibrated projection constants and a global residual/calibration owner
     that can consume Leap point-cloud errors before PS3 Eyes, Kiyos, and Eve
     feed wider online calibration.

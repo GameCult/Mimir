@@ -89,6 +89,27 @@ public sealed record MimirCameraPoseEstimate(
     Quaternion CameraToWorldRotation,
     double Confidence);
 
+public sealed record MimirCameraFrustumEstimate(
+    string SourceId,
+    Vector3 PositionMeters,
+    Quaternion CameraToWorldRotation,
+    double HorizontalTanHalfFov,
+    double VerticalTanHalfFov,
+    double Confidence)
+{
+    public static MimirCameraFrustumEstimate FromPose(
+        MimirCameraPoseEstimate pose,
+        double horizontalTanHalfFov = 1.0,
+        double verticalTanHalfFov = 1.0) =>
+        new(
+            pose.SourceId,
+            pose.PositionMeters,
+            pose.CameraToWorldRotation,
+            horizontalTanHalfFov,
+            verticalTanHalfFov,
+            pose.Confidence);
+}
+
 public sealed record MimirCameraPoseUpdate(
     string SourceId,
     Vector3 EstimatedPositionMeters,
@@ -105,6 +126,27 @@ public sealed record MimirCameraRigCalibrationFrame(
     double MeanRayDistanceMeters,
     double Confidence,
     bool HasPoseUpdate);
+
+public sealed record MimirCameraFrustumSolveUpdate(
+    string SourceId,
+    Vector3 EstimatedPositionMeters,
+    Quaternion EstimatedCameraToWorldRotation,
+    double HorizontalTanHalfFov,
+    double VerticalTanHalfFov,
+    Vector3 DeltaMeters,
+    double RotationDeltaDegrees,
+    int UsedPointCount,
+    double MeanReprojectionErrorClip,
+    double Confidence);
+
+public sealed record MimirCameraFrustumSolveFrame(
+    string CalibrationId,
+    string CandidateKey,
+    string SplineId,
+    IReadOnlyList<MimirCameraFrustumSolveUpdate> FrustumUpdates,
+    double MeanReprojectionErrorClip,
+    double Confidence,
+    bool HasFrustumUpdate);
 
 public sealed class MimirLedSplineCurveSolver
 {
@@ -666,4 +708,407 @@ public sealed class MimirCameraRigCalibrationSolver
         double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.0;
 
     private readonly record struct RayPoint(Vector3 Scene, Vector3 Direction, double Confidence);
+}
+
+public sealed class MimirCameraFrustumCalibrationSolver
+{
+    private const int ParameterCount = 8;
+
+    public MimirCameraFrustumSolveFrame FitFrustumsFromLedSpline(
+        MimirLedSplineFieldCandidate candidate,
+        IEnumerable<MimirLedSplineScenePoint> scenePoints,
+        IEnumerable<MimirCameraFrustumEstimate> currentFrustums,
+        double maximumDeltaMeters = 0.50,
+        double maximumRotationDeltaDegrees = 30.0,
+        double minimumTanHalfFov = 0.20,
+        double maximumTanHalfFov = 2.50)
+    {
+        var sceneByLed = scenePoints
+            .Where(static point => point.LedIndex >= 0 && point.Confidence > 0.0)
+            .GroupBy(static point => point.LedIndex)
+            .ToDictionary(static group => group.Key, static group => group.OrderByDescending(point => point.Confidence).First());
+        var frustumBySource = currentFrustums.ToDictionary(static frustum => frustum.SourceId, StringComparer.Ordinal);
+        var updates = new List<MimirCameraFrustumSolveUpdate>();
+
+        foreach (var observation in candidate.CameraObservations)
+        {
+            if (!frustumBySource.TryGetValue(observation.SourceId, out var seed) ||
+                seed.Confidence <= 0.0)
+            {
+                continue;
+            }
+
+            var correspondences = observation.Points
+                .Where(point => sceneByLed.ContainsKey(point.LedIndex) && point.Confidence > 0.0)
+                .Select(point =>
+                {
+                    var scene = sceneByLed[point.LedIndex];
+                    return new FrustumCorrespondence(
+                        scene.PositionMeters,
+                        point.ClipX,
+                        point.ClipY,
+                        Math.Min(point.Confidence, scene.Confidence));
+                })
+                .ToArray();
+            if (correspondences.Length < 4)
+            {
+                continue;
+            }
+
+            if (!TryFitFrustum(
+                correspondences,
+                seed,
+                minimumTanHalfFov,
+                maximumTanHalfFov,
+                out var solved,
+                out var meanError))
+            {
+                continue;
+            }
+
+            var delta = solved.PositionMeters - seed.PositionMeters;
+            var clampedDelta = ClampLength(delta, (float)Math.Max(0.0, maximumDeltaMeters));
+            var rotationDeltaDegrees = RotationDeltaDegrees(seed.CameraToWorldRotation, solved.CameraToWorldRotation);
+            var finalRotation = solved.CameraToWorldRotation;
+            if (rotationDeltaDegrees > maximumRotationDeltaDegrees && rotationDeltaDegrees > 1.0e-9)
+            {
+                var amount = (float)(maximumRotationDeltaDegrees / rotationDeltaDegrees);
+                finalRotation = Quaternion.Normalize(Quaternion.Slerp(seed.CameraToWorldRotation, solved.CameraToWorldRotation, amount));
+                rotationDeltaDegrees = maximumRotationDeltaDegrees;
+            }
+
+            var finalEstimate = solved with
+            {
+                PositionMeters = seed.PositionMeters + clampedDelta,
+                CameraToWorldRotation = finalRotation,
+                HorizontalTanHalfFov = Clamp(solved.HorizontalTanHalfFov, minimumTanHalfFov, maximumTanHalfFov),
+                VerticalTanHalfFov = Clamp(solved.VerticalTanHalfFov, minimumTanHalfFov, maximumTanHalfFov),
+            };
+            var finalError = MeanReprojectionError(correspondences, finalEstimate);
+            var confidence = Clamp01(candidate.Confidence) *
+                Clamp01(seed.Confidence) *
+                correspondences.Average(static point => Clamp01(point.Confidence)) *
+                (1.0 / (1.0 + finalError * 4.0));
+            updates.Add(new MimirCameraFrustumSolveUpdate(
+                observation.SourceId,
+                finalEstimate.PositionMeters,
+                finalEstimate.CameraToWorldRotation,
+                finalEstimate.HorizontalTanHalfFov,
+                finalEstimate.VerticalTanHalfFov,
+                clampedDelta,
+                rotationDeltaDegrees,
+                correspondences.Length,
+                finalError,
+                confidence));
+        }
+
+        var meanFrameError = updates.Count == 0
+            ? double.NaN
+            : updates.Average(static update => update.MeanReprojectionErrorClip);
+        var frameConfidence = updates.Count == 0
+            ? 0.0
+            : updates.Average(static update => update.Confidence);
+        return new MimirCameraFrustumSolveFrame(
+            candidate.CalibrationId,
+            candidate.CandidateKey,
+            candidate.SplineId,
+            updates,
+            meanFrameError,
+            frameConfidence,
+            HasFrustumUpdate: updates.Count > 0);
+    }
+
+    private static bool TryFitFrustum(
+        IReadOnlyList<FrustumCorrespondence> correspondences,
+        MimirCameraFrustumEstimate seed,
+        double minimumTanHalfFov,
+        double maximumTanHalfFov,
+        out MimirCameraFrustumEstimate solved,
+        out double meanError)
+    {
+        var parameters = new[]
+        {
+            (double)seed.PositionMeters.X,
+            (double)seed.PositionMeters.Y,
+            (double)seed.PositionMeters.Z,
+            0.0,
+            0.0,
+            0.0,
+            Math.Log(Clamp(seed.HorizontalTanHalfFov, minimumTanHalfFov, maximumTanHalfFov)),
+            Math.Log(Clamp(seed.VerticalTanHalfFov, minimumTanHalfFov, maximumTanHalfFov)),
+        };
+        var lambda = 1.0e-3;
+        var residuals = Residuals(correspondences, seed, parameters, minimumTanHalfFov, maximumTanHalfFov);
+        var bestCost = Cost(residuals);
+
+        for (var iteration = 0; iteration < 24; iteration++)
+        {
+            var jacobian = Jacobian(correspondences, seed, parameters, residuals, minimumTanHalfFov, maximumTanHalfFov);
+            var normal = new double[ParameterCount, ParameterCount];
+            var rhs = new double[ParameterCount];
+            for (var residualIndex = 0; residualIndex < residuals.Length; residualIndex++)
+            {
+                for (var column = 0; column < ParameterCount; column++)
+                {
+                    var j = jacobian[residualIndex, column];
+                    rhs[column] -= j * residuals[residualIndex];
+                    for (var row = 0; row < ParameterCount; row++)
+                    {
+                        normal[column, row] += j * jacobian[residualIndex, row];
+                    }
+                }
+            }
+
+            for (var index = 0; index < ParameterCount; index++)
+            {
+                normal[index, index] += lambda * (normal[index, index] + 1.0);
+            }
+
+            if (!TrySolveLinearSystem(normal, rhs, out var step))
+            {
+                lambda *= 10.0;
+                continue;
+            }
+
+            var candidate = parameters.ToArray();
+            for (var index = 0; index < ParameterCount; index++)
+            {
+                candidate[index] += step[index];
+            }
+
+            var candidateResiduals = Residuals(correspondences, seed, candidate, minimumTanHalfFov, maximumTanHalfFov);
+            var candidateCost = Cost(candidateResiduals);
+            if (candidateCost < bestCost)
+            {
+                parameters = candidate;
+                residuals = candidateResiduals;
+                bestCost = candidateCost;
+                lambda = Math.Max(1.0e-9, lambda * 0.35);
+            }
+            else
+            {
+                lambda *= 8.0;
+            }
+        }
+
+        solved = BuildEstimate(seed, parameters, minimumTanHalfFov, maximumTanHalfFov);
+        meanError = MeanReprojectionError(correspondences, solved);
+        return double.IsFinite(meanError);
+    }
+
+    private static double[,] Jacobian(
+        IReadOnlyList<FrustumCorrespondence> correspondences,
+        MimirCameraFrustumEstimate seed,
+        IReadOnlyList<double> parameters,
+        IReadOnlyList<double> residuals,
+        double minimumTanHalfFov,
+        double maximumTanHalfFov)
+    {
+        var jacobian = new double[residuals.Count, ParameterCount];
+        var epsilons = new[] { 1.0e-4, 1.0e-4, 1.0e-4, 1.0e-5, 1.0e-5, 1.0e-5, 1.0e-5, 1.0e-5 };
+        for (var column = 0; column < ParameterCount; column++)
+        {
+            var shifted = parameters.ToArray();
+            shifted[column] += epsilons[column];
+            var shiftedResiduals = Residuals(correspondences, seed, shifted, minimumTanHalfFov, maximumTanHalfFov);
+            for (var residualIndex = 0; residualIndex < residuals.Count; residualIndex++)
+            {
+                jacobian[residualIndex, column] = (shiftedResiduals[residualIndex] - residuals[residualIndex]) / epsilons[column];
+            }
+        }
+
+        return jacobian;
+    }
+
+    private static double[] Residuals(
+        IReadOnlyList<FrustumCorrespondence> correspondences,
+        MimirCameraFrustumEstimate seed,
+        IReadOnlyList<double> parameters,
+        double minimumTanHalfFov,
+        double maximumTanHalfFov)
+    {
+        var estimate = BuildEstimate(seed, parameters, minimumTanHalfFov, maximumTanHalfFov);
+        var residuals = new double[correspondences.Count * 2];
+        for (var index = 0; index < correspondences.Count; index++)
+        {
+            var correspondence = correspondences[index];
+            var weight = Math.Sqrt(Math.Max(1.0e-6, correspondence.Confidence));
+            if (!TryProject(correspondence.Scene, estimate, out var clipX, out var clipY))
+            {
+                residuals[index * 2] = 8.0 * weight;
+                residuals[index * 2 + 1] = 8.0 * weight;
+                continue;
+            }
+
+            residuals[index * 2] = (clipX - correspondence.ClipX) * weight;
+            residuals[index * 2 + 1] = (clipY - correspondence.ClipY) * weight;
+        }
+
+        return residuals;
+    }
+
+    private static MimirCameraFrustumEstimate BuildEstimate(
+        MimirCameraFrustumEstimate seed,
+        IReadOnlyList<double> parameters,
+        double minimumTanHalfFov,
+        double maximumTanHalfFov)
+    {
+        var deltaRotation = Quaternion.CreateFromYawPitchRoll(
+            (float)parameters[3],
+            (float)parameters[4],
+            (float)parameters[5]);
+        return seed with
+        {
+            PositionMeters = new Vector3((float)parameters[0], (float)parameters[1], (float)parameters[2]),
+            CameraToWorldRotation = Quaternion.Normalize(deltaRotation * seed.CameraToWorldRotation),
+            HorizontalTanHalfFov = Clamp(Math.Exp(parameters[6]), minimumTanHalfFov, maximumTanHalfFov),
+            VerticalTanHalfFov = Clamp(Math.Exp(parameters[7]), minimumTanHalfFov, maximumTanHalfFov),
+        };
+    }
+
+    private static double MeanReprojectionError(
+        IReadOnlyList<FrustumCorrespondence> correspondences,
+        MimirCameraFrustumEstimate estimate)
+    {
+        var sum = 0.0;
+        var weightSum = 0.0;
+        foreach (var correspondence in correspondences)
+        {
+            if (!TryProject(correspondence.Scene, estimate, out var clipX, out var clipY))
+            {
+                continue;
+            }
+
+            var dx = clipX - correspondence.ClipX;
+            var dy = clipY - correspondence.ClipY;
+            var weight = Math.Max(1.0e-6, correspondence.Confidence);
+            sum += Math.Sqrt(dx * dx + dy * dy) * weight;
+            weightSum += weight;
+        }
+
+        return weightSum <= 0.0 ? double.NaN : sum / weightSum;
+    }
+
+    private static bool TryProject(
+        Vector3 scene,
+        MimirCameraFrustumEstimate estimate,
+        out double clipX,
+        out double clipY)
+    {
+        var worldToCamera = Quaternion.Inverse(estimate.CameraToWorldRotation);
+        var camera = Vector3.Transform(scene - estimate.PositionMeters, worldToCamera);
+        if (camera.Z <= 1.0e-5f)
+        {
+            clipX = 0.0;
+            clipY = 0.0;
+            return false;
+        }
+
+        clipX = camera.X / (camera.Z * Math.Max(1.0e-6, estimate.HorizontalTanHalfFov));
+        clipY = camera.Y / (camera.Z * Math.Max(1.0e-6, estimate.VerticalTanHalfFov));
+        return double.IsFinite(clipX) && double.IsFinite(clipY);
+    }
+
+    private static double Cost(IReadOnlyList<double> residuals) =>
+        residuals.Count == 0 ? double.PositiveInfinity : residuals.Average(static residual => residual * residual);
+
+    private static bool TrySolveLinearSystem(double[,] matrix, double[] rhs, out double[] solution)
+    {
+        var size = rhs.Length;
+        var a = new double[size, size + 1];
+        for (var row = 0; row < size; row++)
+        {
+            for (var column = 0; column < size; column++)
+            {
+                a[row, column] = matrix[row, column];
+            }
+
+            a[row, size] = rhs[row];
+        }
+
+        for (var pivot = 0; pivot < size; pivot++)
+        {
+            var bestRow = pivot;
+            var best = Math.Abs(a[pivot, pivot]);
+            for (var row = pivot + 1; row < size; row++)
+            {
+                var value = Math.Abs(a[row, pivot]);
+                if (value > best)
+                {
+                    best = value;
+                    bestRow = row;
+                }
+            }
+
+            if (best < 1.0e-12)
+            {
+                solution = [];
+                return false;
+            }
+
+            if (bestRow != pivot)
+            {
+                for (var column = pivot; column <= size; column++)
+                {
+                    (a[pivot, column], a[bestRow, column]) = (a[bestRow, column], a[pivot, column]);
+                }
+            }
+
+            var pivotValue = a[pivot, pivot];
+            for (var column = pivot; column <= size; column++)
+            {
+                a[pivot, column] /= pivotValue;
+            }
+
+            for (var row = 0; row < size; row++)
+            {
+                if (row == pivot)
+                {
+                    continue;
+                }
+
+                var factor = a[row, pivot];
+                for (var column = pivot; column <= size; column++)
+                {
+                    a[row, column] -= factor * a[pivot, column];
+                }
+            }
+        }
+
+        solution = new double[size];
+        for (var row = 0; row < size; row++)
+        {
+            solution[row] = a[row, size];
+        }
+
+        return solution.All(double.IsFinite);
+    }
+
+    private static double RotationDeltaDegrees(Quaternion left, Quaternion right)
+    {
+        var dot = Math.Abs(Quaternion.Dot(Quaternion.Normalize(left), Quaternion.Normalize(right)));
+        dot = Math.Clamp(dot, 0.0f, 1.0f);
+        return Math.Acos(dot) * 2.0 * 180.0 / Math.PI;
+    }
+
+    private static Vector3 ClampLength(Vector3 value, float maximumLength)
+    {
+        if (maximumLength <= 0.0f)
+        {
+            return Vector3.Zero;
+        }
+
+        var length = value.Length();
+        return length <= maximumLength || length <= 1.0e-9f
+            ? value
+            : value / length * maximumLength;
+    }
+
+    private static double Clamp(double value, double minimum, double maximum) =>
+        double.IsFinite(value) ? Math.Clamp(value, minimum, maximum) : minimum;
+
+    private static double Clamp01(double value) =>
+        double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.0;
+
+    private readonly record struct FrustumCorrespondence(Vector3 Scene, double ClipX, double ClipY, double Confidence);
 }

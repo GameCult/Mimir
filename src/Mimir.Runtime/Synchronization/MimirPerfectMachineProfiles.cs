@@ -7,6 +7,7 @@ public enum MimirPerfectMachineNodeRole
     PhoneWitness,
     MicrocontrollerWitness,
     NightwingEyesMoves,
+    EveLocalSensors,
     CalibrationBench,
     ObsProgramHost
 }
@@ -140,6 +141,28 @@ public static class MimirPerfectMachineProfiles
             "mimir.visual_calibration_state.v1"
         ]);
 
+    public static MimirPerfectMachineProfile EveLocalSensors { get; } = new(
+        "eve-local-sensors",
+        "Mobile Eve witness: decodes its own camera/mic flashes and chirps locally, then emits compact timing, feature, marker, and local frustum hints.",
+        MimirPerfectMachineNodeRole.EveLocalSensors,
+        MimirBioacousticDecoderConfiguration.CompactFastIndex,
+        MimirAlignmentActuatorProfile.SixSourceFaust,
+        MimirAudioFieldModel.AlignedStems,
+        [MimirComputeBackend.ManagedScalar, MimirComputeBackend.RemoteCultMeshWorker],
+        EmitsWitness: true,
+        OwnsCanonicalClock: false,
+        PublishesObsProgram: false,
+        RollingWindow: TimeSpan.FromSeconds(3),
+        RequiredCultMeshDocuments:
+        [
+            "mimir.bioacoustic_codebook_state.v1",
+            "mimir.bioacoustic_decoder_state.v1",
+            "mimir.acoustic_path_state.v1",
+            "mimir.camera_feature_track_state.v1",
+            "mimir.visual_marker_state.v1",
+            "mimir.local_frustum_hint_state.v1"
+        ]);
+
     public static MimirPerfectMachineProfile CalibrationBench { get; } = new(
         "calibration-bench",
         "Offline or live calibration worker: explores decoder/codebook/path variants and preserves receipts.",
@@ -184,6 +207,7 @@ public static class MimirPerfectMachineProfiles
         PhoneWitness,
         MicrocontrollerWitness,
         NightwingEyesMoves,
+        EveLocalSensors,
         CalibrationBench,
         ObsProgramHost
     ];

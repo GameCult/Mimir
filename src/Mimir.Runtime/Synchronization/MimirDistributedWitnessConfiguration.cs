@@ -7,7 +7,8 @@ public enum MimirDistributedWitnessKind
     MicrocontrollerListener,
     RemoteCameraRig,
     BrowserDiagnostics,
-    NightwingEyesMoves
+    NightwingEyesMoves,
+    EveLocalSensors
 }
 
 public sealed record MimirDistributedWitnessConfiguration(
@@ -97,12 +98,38 @@ public static class MimirDistributedWitnessConfigurations
         ExpectedNetworkLatencyMilliseconds: 2.0,
         "Nightwing reads the local Eyes and Moves, preserves device timestamps, and ships compact track/marker observations. Starfire/Fensalir own global pose, residuals, surface claims, and program pixels.");
 
+    public static MimirDistributedWitnessConfiguration EveLocalSensors { get; } = new(
+        "eve-local-sensor-witness",
+        "Eve device witness: owns its camera, microphone, flash/chirp decode, and local marker observations.",
+        MimirDistributedWitnessKind.EveLocalSensors,
+        "eve-local-sensors",
+        Inputs: ["eve-camera", "eve-mic", "eve-display-flash-schedule", "eve-speaker-chirp-schedule"],
+        RequiredStateDocuments:
+        [
+            "mimir.bioacoustic_codebook_state",
+            "mimir.bioacoustic_decoder_state",
+            "mimir.visual_calibration_state",
+            "mimir.camera_rig_calibration_state"
+        ],
+        EmittedStateDocuments:
+        [
+            "mimir.acoustic_path_state",
+            "mimir.camera_feature_track_state",
+            "mimir.visual_marker_state",
+            "mimir.local_frustum_hint_state"
+        ],
+        MayStreamRawMedia: false,
+        MayOwnCanonicalClock: false,
+        ExpectedNetworkLatencyMilliseconds: 12.0,
+        "Eve runs the same witness pattern as Nightwing for its own sensors: decode chirps locally, detect flashes/markers locally, and send typed timing/frustum hints to Starfire. Starfire owns global camera placement.");
+
     public static IReadOnlyList<MimirDistributedWitnessConfiguration> BuiltIn { get; } =
     [
         Raven,
         Phone,
         Microcontroller,
         RemoteCameraRig,
-        NightwingEyesMoves
+        NightwingEyesMoves,
+        EveLocalSensors
     ];
 }

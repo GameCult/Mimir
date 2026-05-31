@@ -184,15 +184,6 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
         var fieldEvidenceFrame = BuildFieldEvidenceFrame();
-        var editorSplineFrame = sceneEditor.Enabled
-            ? sceneEditor.BuildEditorSplineFrame()
-            : AquariumSplineFrame.Empty;
-        var editorSdfObjects = sceneEditor.Enabled
-            ? sceneEditor.BuildEditorSdfObjects()
-            : [];
-        var editorSdfLights = sceneEditor.Enabled
-            ? sceneEditor.BuildEditorSdfLights()
-            : [];
         var windowCount = Math.Max(1, spectrumHistory.Count);
         var (splineMin, splineMax) = syntheticSingleTubePreview
             ? (new Vector3(-5.76643f, -1.0f, 0.0f), new Vector3(5.76643f, 1.0f, 0.0f))
@@ -209,15 +200,9 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         var spectrumCameraFrustum = syntheticSingleTubePreview
             ? new AquariumCameraFrustum(-0.036f, 0.036f, -0.02025f, 0.02025f, 0.1f, 100.0f)
             : FitSpectrumCameraFrustum(splineMin, splineMax, spectrumCameraPosition, spectrumCameraTarget);
-        var cameraTarget = sceneEditor.Enabled
-            ? sceneEditor.CameraTarget
-            : spectrumCameraTarget;
-        var cameraPosition = sceneEditor.Enabled
-            ? sceneEditor.CameraPosition
-            : spectrumCameraPosition;
-        var cameraFrustum = sceneEditor.Enabled
-            ? sceneEditor.CameraFrustum
-            : spectrumCameraFrustum;
+        var cameraTarget = spectrumCameraTarget;
+        var cameraPosition = spectrumCameraPosition;
+        var cameraFrustum = spectrumCameraFrustum;
         lastSpectrumFrustum = spectrumCameraFrustum;
         lastSpectrumCameraPosition = spectrumCameraPosition;
         lastSpectrumCameraTarget = spectrumCameraTarget;
@@ -235,13 +220,13 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 UseStarfieldBackground = obsProofVisualEnabled,
                 SdfObjects = MergeSdfObjects(
                     obsProofVisualEnabled ? BuildObsProofSdfObjects(runtimeSeconds) : [],
-                    editorSdfObjects),
+                    []),
                 SdfLights = MergeSdfLights(
                     obsProofVisualEnabled ? BuildObsProofSdfLights(runtimeSeconds) : [],
-                    editorSdfLights),
+                    []),
                 FieldEvidenceFrame = fieldEvidenceFrame,
                 BufferFieldFrame = AquariumBufferFieldFrame.Empty,
-                SplineFrame = editorSplineFrame,
+                SplineFrame = AquariumSplineFrame.Empty,
             });
     }
 
@@ -873,82 +858,43 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             {
                 surface.Horizontal("mimir.editor.shell", shell =>
                 {
-                    shell.Pane("mimir.scene-graph", "Scene Graph", graph =>
+                    shell.Pane("mimir.video-sources", "Video Sources", graph =>
                     {
-                        graph.Toggle("scene.editor-view", "Editor View", () => sceneEditor.Enabled, value => sceneEditor.Enabled = value);
-                        graph.Card("scene.tree", tree =>
+                        graph.Options("video.source-select", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
+                        graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f);
+                        graph.Text("video.layer-list", sceneEditor.DescribeHierarchy, "mono", weight: 3.8f);
+                        graph.Row("video.source-state", state =>
                         {
-                            tree.Text("scene.root", "Scene", "strong");
-                            tree.Text("scene.camera", () => $"{(sceneEditor.SelectedNodeId == "editor-camera" ? "> " : "  ")}Editor Camera <Camera>", "mono");
-                            tree.Text("scene.feeds", () => $"{(sceneEditor.IsExpanded("feeds") ? "- " : "+ ")}Sensor Feeds (4)", "mono");
-                            tree.Text("scene.feed-kiyo", "    [eye] Kiyo Pro RGB context <SensorFeed>", "mono");
-                            tree.Text("scene.feed-eve", "    [eye] Eve image/mic pipe <SensorFeed>", "mono");
-                            tree.Text("scene.text", () => $"{(sceneEditor.IsExpanded("text") ? "- " : "+ ")}SDF Text", "mono");
-                            tree.Text("scene.models", () => $"{(sceneEditor.IsExpanded("models") ? "- " : "+ ")}Models", "mono");
-                        }, weight: 1.6f);
-                        graph.Text("scene.hierarchy", sceneEditor.DescribeHierarchy, "mono", weight: 2.8f);
-                        graph.Row("scene.nav", nav =>
-                        {
-                            nav.Button("scene.previous", "Previous", sceneEditor.SelectPrevious);
-                            nav.Button("scene.next", "Next", sceneEditor.SelectNext);
+                            state.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
+                            state.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
                         });
-                        graph.Text("scene.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f);
+                        graph.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
+                        graph.Row("video.layer-fit", fit =>
+                        {
+                            fit.Button("video.center", "Center", sceneEditor.CenterSelectedProgramLayer);
+                            fit.Button("video.fit", "Fit", sceneEditor.FitSelectedProgramLayer);
+                            fit.Button("video.fill", "Fill", sceneEditor.FillSelectedProgramLayer);
+                        });
+                        graph.Row("video.layer-order", order =>
+                        {
+                            order.Button("video.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
+                            order.Button("video.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
+                        });
+                        graph.Text("video.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f);
                     }, weight: 0.85f);
 
                     shell.Vertical("mimir.editor-center", center =>
                     {
-                        center.Pane("mimir.scene-view", "Scene View", scene =>
-                        {
-                            scene.Preview("scene.view-preview", "Program Preview", () => sceneEditor.PreviewItems, weight: 1.0f);
-                            scene.Row("scene.view-actions", actions =>
-                            {
-                                actions.Button("scene.view-frame-selected", "Frame Selected", sceneEditor.ResetCamera);
-                                actions.Button("scene.view-reset-camera", "Reset Camera", sceneEditor.ResetCamera);
-                            });
-                        }, weight: 1.0f);
+                        center.Preview("scene.view-preview", "", () => sceneEditor.PreviewItems, weight: 1.0f);
+                    }, weight: 2.1f);
 
-                        center.Pane("mimir.assets", "Asset Browser", assets =>
-                        {
-                            assets.Row("assets.quick", quick =>
-                            {
-                                quick.Button("assets.add-text", "Add SDF Text", sceneEditor.AddSdfTextPanel);
-                                quick.Button("assets.import-model", "Import Model", sceneEditor.ImportModelPlaceholder);
-                            });
-                            assets.Text("assets.text", () => $"Text: {sceneEditor.PendingText}", "mono");
-                            assets.Text("assets.model", () => $"Model: {sceneEditor.PendingModelPath}", "mono");
-                        }, weight: 0.72f);
-                    }, weight: 1.75f);
-
-                    shell.Pane("mimir.inspector", "Inspector", inspector =>
+                    shell.Pane("mimir.audio-inspector", "Audio Mix", inspector =>
                     {
-                        inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
-                        inspector.Toggle("transform.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, sceneEditor.SetSelectedVisible);
-                        inspector.Toggle("transform.locked", "Locked", () => sceneEditor.SelectedNode?.Locked ?? false, sceneEditor.SetSelectedLocked);
-                        inspector.Options("transform.mode", "Mode", () => (int)sceneEditor.GizmoMode, value => sceneEditor.GizmoMode = (MimirSceneEditorGizmoMode)value, SceneEditorGizmoOptions());
-                        inspector.Slider("transform.x", "X", () => sceneEditor.SelectedNode?.Transform.Position.X ?? 0.0f, sceneEditor.SetSelectedX, -12.0f, 12.0f, "0.00");
-                        inspector.Slider("transform.y", "Y", () => sceneEditor.SelectedNode?.Transform.Position.Y ?? 0.0f, sceneEditor.SetSelectedY, -8.0f, 8.0f, "0.00");
-                        inspector.Slider("transform.z", "Z", () => sceneEditor.SelectedNode?.Transform.Position.Z ?? 0.0f, sceneEditor.SetSelectedZ, -8.0f, 8.0f, "0.00");
-                        inspector.Slider("transform.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
-                        inspector.Slider("transform.scale-x", "Scale X", () => sceneEditor.SelectedNode?.Transform.Scale.X ?? 1.0f, sceneEditor.SetSelectedScaleX, 0.05f, 8.0f, "0.00");
-                        inspector.Slider("transform.scale-y", "Scale Y", () => sceneEditor.SelectedNode?.Transform.Scale.Y ?? 1.0f, sceneEditor.SetSelectedScaleY, 0.05f, 8.0f, "0.00");
-                        inspector.Text("inspector.program-placement", "Program Frame", "strong");
-                        inspector.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
-                        inspector.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
-                        inspector.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
-                        inspector.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
-                        inspector.Row("transform.reset", reset =>
-                        {
-                            reset.Button("transform.reset-node", "Reset Transform", sceneEditor.ResetSelectedTransform);
-                            reset.Button("transform.reset-camera", "Reset Camera", sceneEditor.ResetCamera);
-                        });
-                        inspector.Text("inspector.create-label", "Create", "strong");
-                        inspector.Text("create.text", () => $"Text: {sceneEditor.PendingText}", "mono");
-                        inspector.Text("create.model", () => $"Model: {sceneEditor.PendingModelPath}", "mono");
-                        inspector.Row("inspector.create-actions", actions =>
-                        {
-                            actions.Button("create.add-text", "Add SDF Text", sceneEditor.AddSdfTextPanel);
-                            actions.Button("create.import-model", "Import Model", sceneEditor.ImportModelPlaceholder);
-                        });
+                        inspector.Options("audio.stem", "Stem", () => presentationControls.SelectedAudioIndex, SelectAudioStem, AudioFeedOptions());
+                        inspector.Toggle("audio.mute", "Mute", () => presentationControls.SelectedAudio?.Muted ?? false, SetSelectedAudioMuted);
+                        inspector.Toggle("audio.solo", "Solo", () => presentationControls.SelectedAudio?.Solo ?? false, SetSelectedAudioSolo);
+                        inspector.Slider("audio.gain", "Gain", () => presentationControls.SelectedAudio?.Gain ?? 1.0f, SetSelectedAudioGain, 0.0f, 2.0f, "0.00");
+                        inspector.Text("audio.program", DescribeProgramAudio, "caption", weight: 1.2f);
                     }, weight: 0.95f);
                 });
             });
@@ -1103,6 +1049,80 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         return string.Join(" | ", synchronization.Buffers.Buffers.Select(DescribeBuffer));
     }
 
+    private void SelectVideoLayer(int index)
+    {
+        presentationControls.SelectedVideoIndex = Math.Clamp(index, 0, Math.Max(0, presentationControls.VideoFeeds.Count - 1));
+        if (presentationControls.SelectedVideo is { } selected)
+        {
+            sceneEditor.SelectSource(selected.SourceId);
+        }
+    }
+
+    private void SelectAudioStem(int index)
+    {
+        presentationControls.SelectedAudioIndex = Math.Clamp(index, 0, Math.Max(0, presentationControls.AudioFeeds.Count - 1));
+    }
+
+    private void SetSelectedVideoVisible(bool visible)
+    {
+        sceneEditor.SetSelectedVisible(visible);
+        if (presentationControls.SelectedVideo is { } selected)
+        {
+            selected.Enabled = visible;
+        }
+    }
+
+    private void SetSelectedVideoSolo(bool solo)
+    {
+        if (presentationControls.SelectedVideo is { } selected)
+        {
+            selected.Solo = solo;
+        }
+    }
+
+    private void SetSelectedVideoOpacity(float opacity)
+    {
+        if (presentationControls.SelectedVideo is { } selected)
+        {
+            selected.Opacity = Math.Clamp(opacity, 0.0f, 1.0f);
+        }
+    }
+
+    private void MoveSelectedVideoLayer(int delta)
+    {
+        if (presentationControls.SelectedVideo is { } selected)
+        {
+            presentationControls.MoveSelectedVideo(delta);
+            sceneEditor.SelectSource(selected.SourceId);
+        }
+
+        sceneEditor.MoveSelectedLayer(delta);
+    }
+
+    private void SetSelectedAudioMuted(bool muted)
+    {
+        if (presentationControls.SelectedAudio is { } selected)
+        {
+            selected.Muted = muted;
+        }
+    }
+
+    private void SetSelectedAudioSolo(bool solo)
+    {
+        if (presentationControls.SelectedAudio is { } selected)
+        {
+            selected.Solo = solo;
+        }
+    }
+
+    private void SetSelectedAudioGain(float gain)
+    {
+        if (presentationControls.SelectedAudio is { } selected)
+        {
+            selected.Gain = Math.Clamp(gain, 0.0f, 2.0f);
+        }
+    }
+
     private IReadOnlyList<AquariumUiOption> VideoFeedOptions()
     {
         var feeds = presentationControls.VideoFeeds;
@@ -1123,13 +1143,6 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         presentationControls.LutPresets
             .Select((preset, index) => new AquariumUiOption(index, preset.DisplayName))
             .ToArray();
-
-    private static IReadOnlyList<AquariumUiOption> SceneEditorGizmoOptions() =>
-    [
-        new AquariumUiOption((int)MimirSceneEditorGizmoMode.Translate, "Grab"),
-        new AquariumUiOption((int)MimirSceneEditorGizmoMode.Rotate, "Rotate"),
-        new AquariumUiOption((int)MimirSceneEditorGizmoMode.Scale, "Resize"),
-    ];
 
     private string DescribeProgramVideo()
     {

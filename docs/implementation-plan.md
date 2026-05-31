@@ -490,8 +490,21 @@ a named invariant that the native runtime cannot protect yet.
   typed `mimir.move_controller_observation_state`,
   `mimir.camera_feature_track_state`, and `mimir.visual_marker_state` rather
   than becoming a raw-media or camera-placement authority.
+  Eve now follows the same rule for its own device body:
+  `MimirDistributedWitnessConfigurations.EveLocalSensors` and the
+  `eve-local-sensors` Perfect Machine profile make Eve responsible for local
+  camera/mic chirp and flash solves, then shipping compact acoustic path,
+  feature-track, visual-marker, and local-frustum-hint state to Starfire.
+  Starfire still owns global camera placement and the canonical clock.
+  `MimirCameraFrustumCalibrationSolver` is the first global frustum solve: it
+  consumes stable LED/marker correspondences, scene-space marker points, and
+  seed frustums, then emits per-source position, rotation, horizontal/vertical
+  tangent half-FOV, correspondence count, clipspace reprojection residual, and
+  confidence. Synthetic smoke `--frustum-calibration-smoke` solves both Eyes,
+  Kiyo Pro, Leap stereo IR, and Eve camera, establishing the first fusion-ready
+  frustum state before dense surface fusion.
   Next useful cut is direct report decoding plus optical sphere observations
-  from PS3 Eyes/Kiyos entering the same calibration-evidence path as LED
+  from PS3 Eyes/Kiyos/Eve entering the same calibration-evidence path as LED
   spline constraints.
   PS3 Eyes now have the first sparse tracking surface:
   `MimirSparseFeatureTracker` detects grid-suppressed Bayer/luma corner

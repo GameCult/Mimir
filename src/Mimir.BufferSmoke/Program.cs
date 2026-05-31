@@ -155,6 +155,11 @@ if (args.Any(arg => string.Equals(arg, "--room-calibration-lock-smoke", StringCo
     return RunRoomCalibrationLockSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--frustum-calibration-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunFrustumCalibrationSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--led-spline-quality-sweep-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunLedSplineQualitySweepSmoke();
@@ -1055,6 +1060,87 @@ static int RunRoomCalibrationLockSmoke()
             : 1;
 }
 
+static int RunFrustumCalibrationSmoke()
+{
+    var scenePoints = new[]
+    {
+        new MimirLedSplineScenePoint(0, new Vector3(-0.30f, 0.34f, 2.18f), 0.95),
+        new MimirLedSplineScenePoint(1, new Vector3(-0.19f, 0.22f, 2.02f), 0.96),
+        new MimirLedSplineScenePoint(2, new Vector3(-0.08f, 0.09f, 1.91f), 0.97),
+        new MimirLedSplineScenePoint(3, new Vector3(0.06f, -0.03f, 1.84f), 0.98),
+        new MimirLedSplineScenePoint(4, new Vector3(0.19f, -0.13f, 1.88f), 0.97),
+        new MimirLedSplineScenePoint(5, new Vector3(0.31f, -0.23f, 1.98f), 0.95),
+        new MimirLedSplineScenePoint(6, new Vector3(0.22f, -0.31f, 2.18f), 0.94),
+        new MimirLedSplineScenePoint(7, new Vector3(0.02f, -0.37f, 2.36f), 0.93),
+    };
+    var truth = new[]
+    {
+        new MimirCameraFrustumEstimate("ps3-eye-0", Vector3.Zero, Quaternion.Identity, 0.96, 0.72, 1.0),
+        new MimirCameraFrustumEstimate("ps3-eye-1", new Vector3(-0.22f, 0.04f, 0.03f), Quaternion.CreateFromYawPitchRoll(0.045f, -0.012f, 0.006f), 0.98, 0.73, 1.0),
+        new MimirCameraFrustumEstimate("kiyo-pro-rgb", new Vector3(0.26f, 0.03f, -0.06f), Quaternion.CreateFromYawPitchRoll(-0.040f, 0.010f, -0.004f), 0.78, 0.48, 1.0),
+        new MimirCameraFrustumEstimate("leap-stereo-ir", new Vector3(0.04f, -0.13f, 0.10f), Quaternion.CreateFromYawPitchRoll(0.010f, 0.060f, 0.0f), 0.82, 0.38, 1.0),
+        new MimirCameraFrustumEstimate("eve-camera", new Vector3(-0.34f, 0.16f, 0.20f), Quaternion.CreateFromYawPitchRoll(0.080f, -0.030f, 0.018f), 0.90, 0.68, 1.0),
+    };
+    var sizes = new Dictionary<string, (int Width, int Height)>(StringComparer.Ordinal)
+    {
+        ["ps3-eye-0"] = (320, 240),
+        ["ps3-eye-1"] = (320, 240),
+        ["kiyo-pro-rgb"] = (1920, 1080),
+        ["leap-stereo-ir"] = (640, 240),
+        ["eve-camera"] = (1280, 720),
+    };
+    var curveSolver = new MimirLedSplineCurveSolver();
+    var observations = truth.Select((frustum, index) =>
+    {
+        var size = sizes[frustum.SourceId];
+        var fit = curveSolver.SolveCameraCurve(
+            frustum.SourceId,
+            $"{frustum.SourceId}:led-spline:frustum",
+            size.Width,
+            size.Height,
+            3_000_000_000L + index,
+            ProjectFrustumLedDetections(scenePoints, frustum, size.Width, size.Height, radiusPixels: index < 2 ? 2.2 : 4.0));
+        return curveSolver.ToCameraObservation(fit, size.Width, size.Height, 3_000_000_000L + index);
+    }).ToArray();
+    var candidate = new MimirLedSplineFieldCandidate(
+        CandidateKey: "frustum-solve:led-string:frame-1",
+        CalibrationId: "room-frustum-calibration",
+        SplineId: "co-streamer-led-string",
+        ProducerKey: "mimir-led-spline-detector",
+        CameraObservations: observations,
+        EstimatedLedCount: scenePoints.Length,
+        HasTemporalCode: true,
+        HasStableLedIndices: true,
+        CurveLengthPixels: observations.Max(static observation => observation.Points.Count == 0 ? 0.0 : observation.Points.Count),
+        Confidence: 0.93,
+        ObservedTimeNs: 3_000_000_004L);
+    var seeds = truth.Select(frustum => frustum with
+    {
+        PositionMeters = frustum.PositionMeters + new Vector3(0.035f, -0.020f, 0.018f),
+        CameraToWorldRotation = Quaternion.Normalize(Quaternion.CreateFromYawPitchRoll(0.018f, -0.014f, 0.008f) * frustum.CameraToWorldRotation),
+        HorizontalTanHalfFov = frustum.HorizontalTanHalfFov * 1.08,
+        VerticalTanHalfFov = frustum.VerticalTanHalfFov * 0.92,
+        Confidence = 0.82,
+    }).ToArray();
+    var frame = new MimirCameraFrustumCalibrationSolver().FitFrustumsFromLedSpline(
+        candidate,
+        scenePoints,
+        seeds,
+        maximumDeltaMeters: 0.20,
+        maximumRotationDeltaDegrees: 12.0);
+
+    Console.WriteLine(
+        $"frustum-calibration-smoke updates={frame.FrustumUpdates.Count} confidence={frame.Confidence:0.000} meanClipError={frame.MeanReprojectionErrorClip:0.000000} sources={string.Join(",", frame.FrustumUpdates.Select(static update => $"{update.SourceId}:{update.UsedPointCount}/{update.RotationDeltaDegrees:0.00}deg/{update.HorizontalTanHalfFov:0.000}x{update.VerticalTanHalfFov:0.000}"))}");
+
+    return frame.HasFrustumUpdate &&
+        frame.FrustumUpdates.Count == truth.Length &&
+        frame.FrustumUpdates.All(update => update.UsedPointCount == scenePoints.Length) &&
+        frame.FrustumUpdates.All(static update => update.MeanReprojectionErrorClip < 0.010) &&
+        frame.Confidence >= 0.70
+            ? 0
+            : 1;
+}
+
 static int RunLedSplineQualitySweepSmoke()
 {
     var scenePoints = new[]
@@ -1808,6 +1894,34 @@ static IReadOnlyList<MimirLedPixelDetection> ProjectLedDetections(
         var z = Math.Max(1.0e-6f, cameraSpace.Z);
         var clipX = cameraSpace.X / z;
         var clipY = cameraSpace.Y / z;
+        var imageX = (clipX + 1.0f) * 0.5f * width;
+        var imageY = (1.0f - clipY) * 0.5f * height;
+        output[index] = new MimirLedPixelDetection(
+            scenePoints[index].LedIndex,
+            imageX,
+            imageY,
+            radiusPixels,
+            scenePoints[index].Confidence);
+    }
+
+    return output;
+}
+
+static IReadOnlyList<MimirLedPixelDetection> ProjectFrustumLedDetections(
+    IReadOnlyList<MimirLedSplineScenePoint> scenePoints,
+    MimirCameraFrustumEstimate frustum,
+    int width,
+    int height,
+    double radiusPixels)
+{
+    var output = new MimirLedPixelDetection[scenePoints.Count];
+    var worldToCamera = Quaternion.Inverse(frustum.CameraToWorldRotation);
+    for (var index = 0; index < scenePoints.Count; index++)
+    {
+        var cameraSpace = Vector3.Transform(scenePoints[index].PositionMeters - frustum.PositionMeters, worldToCamera);
+        var z = Math.Max(1.0e-6f, cameraSpace.Z);
+        var clipX = cameraSpace.X / (z * (float)Math.Max(1.0e-6, frustum.HorizontalTanHalfFov));
+        var clipY = cameraSpace.Y / (z * (float)Math.Max(1.0e-6, frustum.VerticalTanHalfFov));
         var imageX = (clipX + 1.0f) * 0.5f * width;
         var imageY = (1.0f - clipY) * 0.5f * height;
         output[index] = new MimirLedPixelDetection(
@@ -3217,30 +3331,31 @@ static int RunSceneEditorSmoke()
     input.SetMousePosition(new Vector2(130.0f, 82.0f));
     editor.UpdateInput(0.016f, input);
 
-    editor.PendingText = "Signal";
-    editor.AddSdfTextPanel();
-    editor.PendingModelPath = "assets/models/raven-stage.glb";
-    editor.ImportModelPlaceholder();
+    editor.SetSelectedProgramX(0.62f);
+    editor.SetSelectedProgramY(0.45f);
+    editor.SetSelectedProgramWidth(0.36f);
+    editor.SetSelectedProgramHeight(0.28f);
+    editor.CenterSelectedProgramLayer();
+    editor.MoveSelectedLayer(-1);
 
     var hierarchy = editor.DescribeHierarchy();
-    var splineFrame = editor.BuildEditorSplineFrame();
-    var handles = editor.BuildEditorSdfObjects();
+    var previewItems = editor.PreviewItems;
+    var placement = editor.PlacementForSource("raven-display");
     var hasDisplay = hierarchy.Contains("raven-display", StringComparison.Ordinal);
-    var hasText = editor.Nodes.Any(node => node.Kind == MimirSceneEditorNodeKind.SdfTextPanel && string.Equals(node.Text, "Signal", StringComparison.Ordinal));
-    var hasModel = editor.Nodes.Any(node => node.Kind == MimirSceneEditorNodeKind.Model && string.Equals(node.ModelPath, "assets/models/raven-stage.glb", StringComparison.Ordinal));
-    var reset = Math.Abs(displayNode.Transform.Position.X - displayNode.DefaultTransform.Position.X) > 0.001f;
+    var hasCameraPreview = previewItems.Any(item => string.Equals(item.Id, "editor-camera", StringComparison.Ordinal));
+    var hasOnlyVideoPreview = previewItems.Count == 2 && previewItems.All(item => item.Id.StartsWith("feed:", StringComparison.Ordinal));
+    var programCentered = placement is { CenterX: 0.5f, CenterY: 0.5f };
 
     Console.WriteLine(
         $"scene-editor-smoke nodes={editor.Nodes.Count} feeds={editor.Nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)} " +
-        $"splines={splineFrame.Splines.Count} handles={handles.Count} selected={editor.SelectedNode?.DisplayName} hasDisplay={hasDisplay} hasText={hasText} hasModel={hasModel} movedAfterReset={reset}");
+        $"preview={previewItems.Count} selected={editor.SelectedNode?.DisplayName} hasDisplay={hasDisplay} cameraPreview={hasCameraPreview} " +
+        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered}");
 
-    return editor.Nodes.Count >= 5 &&
+    return editor.Nodes.Count == 3 &&
         hasDisplay &&
-        hasText &&
-        hasModel &&
-        reset &&
-        splineFrame.HasInput &&
-        handles.Count == 4
+        hasOnlyVideoPreview &&
+        !hasCameraPreview &&
+        programCentered
             ? 0
             : 1;
 }
@@ -3980,7 +4095,9 @@ static int RunPerfectMachineProfileSmoke()
         stereoDepthPlan.DeferredRequests.Count == 0 &&
         stereoDepthProfiles.Any(profile => profile.Id == MimirStereoDepthConfigurations.D3D12SgmLibSgmProvenance.Id && !profile.LiveDependency) &&
         profiles.Any(profile => profile.Id == MimirPerfectMachineProfiles.NightwingEyesMoves.Id && profile.EmitsWitness && !profile.OwnsCanonicalClock && !profile.PublishesObsProgram) &&
+        profiles.Any(profile => profile.Id == MimirPerfectMachineProfiles.EveLocalSensors.Id && profile.EmitsWitness && !profile.OwnsCanonicalClock && !profile.PublishesObsProgram) &&
         distributedWitnesses.Any(profile => profile.Id == MimirDistributedWitnessConfigurations.NightwingEyesMoves.Id && !profile.MayStreamRawMedia && !profile.MayOwnCanonicalClock) &&
+        distributedWitnesses.Any(profile => profile.Id == MimirDistributedWitnessConfigurations.EveLocalSensors.Id && !profile.MayStreamRawMedia && !profile.MayOwnCanonicalClock) &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&

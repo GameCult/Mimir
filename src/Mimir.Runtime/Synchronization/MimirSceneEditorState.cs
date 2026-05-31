@@ -11,16 +11,6 @@ public sealed class MimirSceneEditorState
     private const float ProgramWorldWidth = 12.8f;
     private const float ProgramWorldHeight = 7.2f;
     private readonly List<MimirSceneEditorNode> nodes = [];
-    private readonly Dictionary<string, bool> expandedGroups = new(StringComparer.Ordinal)
-    {
-        ["scene"] = true,
-        ["feeds"] = true,
-        ["text"] = true,
-        ["models"] = true,
-    };
-
-    private string pendingModelPath = "assets/models/example.glb";
-    private string pendingText = "Mimir";
     private Vector2? previousMousePosition;
 
     public MimirSceneEditorState()
@@ -31,16 +21,7 @@ public sealed class MimirSceneEditorState
             "Editor Camera",
             MimirSceneEditorNodeKind.Camera,
             new MimirSceneEditorTransform(new Vector3(0.0f, 0.0f, -18.0f), 0.0f, Vector2.One)));
-        nodes.Add(new MimirSceneEditorNode(
-            "text-title",
-            "",
-            "SDF Text Panel",
-            MimirSceneEditorNodeKind.SdfTextPanel,
-            new MimirSceneEditorTransform(new Vector3(-3.2f, 2.1f, 0.0f), 0.0f, new Vector2(2.4f, 0.8f)))
-        {
-            Text = pendingText,
-        });
-        SelectedNodeId = "text-title";
+        SelectedNodeId = "editor-camera";
     }
 
     public bool Enabled { get; set; } = true;
@@ -48,18 +29,6 @@ public sealed class MimirSceneEditorState
     public MimirSceneEditorGizmoMode GizmoMode { get; set; } = MimirSceneEditorGizmoMode.Translate;
 
     public string SelectedNodeId { get; private set; }
-
-    public string PendingModelPath
-    {
-        get => pendingModelPath;
-        set => pendingModelPath = value.Trim();
-    }
-
-    public string PendingText
-    {
-        get => pendingText;
-        set => pendingText = value;
-    }
 
     public IReadOnlyList<MimirSceneEditorNode> Nodes => nodes;
 
@@ -71,7 +40,7 @@ public sealed class MimirSceneEditorState
 
     public IReadOnlyList<AquariumUiPreviewItem> PreviewItems =>
         nodes
-            .Where(static node => node.Visible && node.Kind != MimirSceneEditorNodeKind.Camera)
+            .Where(static node => node.Visible && node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)
             .OrderBy(static node => node.Layer)
             .Select(node =>
             {
@@ -84,7 +53,7 @@ public sealed class MimirSceneEditorState
                     placement.Width,
                     placement.Height,
                     string.Equals(node.Id, SelectedNodeId, StringComparison.Ordinal),
-                    node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel ? "cool" : node.Kind == MimirSceneEditorNodeKind.SdfTextPanel ? "warm" : "neutral");
+                    "cool");
             })
             .ToArray();
 
@@ -127,6 +96,12 @@ public sealed class MimirSceneEditorState
                 Layer = index,
                 SourceId = buffer.Descriptor.SourceId,
             });
+        }
+
+        if (SelectedNode is not { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } &&
+            nodes.FirstOrDefault(static node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel) is { } firstFeed)
+        {
+            SelectedNodeId = firstFeed.Id;
         }
     }
 
@@ -194,19 +169,19 @@ public sealed class MimirSceneEditorState
             : null;
     }
 
-    public bool IsExpanded(string groupId) =>
-        expandedGroups.TryGetValue(groupId, out var expanded) && expanded;
-
-    public void SetExpanded(string groupId, bool expanded)
-    {
-        expandedGroups[groupId] = expanded;
-    }
-
     public void SelectNode(string nodeId)
     {
         if (nodes.Any(node => string.Equals(node.Id, nodeId, StringComparison.Ordinal)))
         {
             SelectedNodeId = nodeId;
+        }
+    }
+
+    public void SelectSource(string sourceId)
+    {
+        if (NodeForSource(sourceId) is { } node)
+        {
+            SelectedNodeId = node.Id;
         }
     }
 
@@ -306,6 +281,90 @@ public sealed class MimirSceneEditorState
         }
     }
 
+    public void CenterSelectedProgramLayer()
+    {
+        if (SelectedNode is { } selected)
+        {
+            SetNodeProgramPlacement(selected, PlacementForNode(selected) with { CenterX = 0.5f, CenterY = 0.5f });
+        }
+    }
+
+    public void FitSelectedProgramLayer()
+    {
+        if (SelectedNode is not { } selected)
+        {
+            return;
+        }
+
+        var placement = PlacementForNode(selected);
+        var aspect = Math.Clamp(placement.Width / Math.Max(placement.Height, 0.001f), 0.05f, 32.0f);
+        const float programAspect = 16.0f / 9.0f;
+        var width = 1.0f;
+        var height = 1.0f;
+        if (aspect > programAspect)
+        {
+            height = programAspect / aspect;
+        }
+        else
+        {
+            width = aspect / programAspect;
+        }
+
+        SetNodeProgramPlacement(selected, placement with
+        {
+            CenterX = 0.5f,
+            CenterY = 0.5f,
+            Width = width,
+            Height = height,
+        });
+    }
+
+    public void FillSelectedProgramLayer()
+    {
+        if (SelectedNode is { } selected)
+        {
+            SetNodeProgramPlacement(selected, PlacementForNode(selected) with
+            {
+                CenterX = 0.5f,
+                CenterY = 0.5f,
+                Width = 1.0f,
+                Height = 1.0f,
+            });
+        }
+    }
+
+    public void MoveSelectedLayer(int delta)
+    {
+        if (SelectedNode is not { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
+        {
+            return;
+        }
+
+        var videoNodes = nodes
+            .Where(static node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)
+            .OrderBy(static node => node.Layer)
+            .ThenBy(static node => node.SourceId, StringComparer.Ordinal)
+            .ToList();
+        var current = videoNodes.FindIndex(node => string.Equals(node.Id, selected.Id, StringComparison.Ordinal));
+        if (current < 0)
+        {
+            return;
+        }
+
+        var next = Math.Clamp(current + delta, 0, videoNodes.Count - 1);
+        if (next == current)
+        {
+            return;
+        }
+
+        videoNodes.RemoveAt(current);
+        videoNodes.Insert(next, selected);
+        for (var index = 0; index < videoNodes.Count; index++)
+        {
+            videoNodes[index].Layer = index;
+        }
+    }
+
     public bool IncludesVideoSource(string sourceId) =>
         NodeForSource(sourceId) is not { } node || node.Visible;
 
@@ -327,49 +386,25 @@ public sealed class MimirSceneEditorState
         CameraTarget = Vector3.Zero;
     }
 
-    public void AddSdfTextPanel()
-    {
-        var index = nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.SdfTextPanel) + 1;
-        var node = new MimirSceneEditorNode(
-            $"text-{index}",
-            "text",
-            $"SDF Text {index}",
-            MimirSceneEditorNodeKind.SdfTextPanel,
-            new MimirSceneEditorTransform(new Vector3(-2.8f + index * 0.25f, 1.7f - index * 0.25f, 0.0f), 0.0f, new Vector2(2.4f, 0.8f)))
-        {
-            Text = string.IsNullOrWhiteSpace(pendingText) ? "Text" : pendingText,
-        };
-        nodes.Add(node);
-        SelectedNodeId = node.Id;
-    }
-
-    public void ImportModelPlaceholder()
-    {
-        var modelPath = string.IsNullOrWhiteSpace(pendingModelPath)
-            ? "assets/models/model.glb"
-            : pendingModelPath;
-        var index = nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.Model) + 1;
-        var node = new MimirSceneEditorNode(
-            $"model-{index}",
-            "models",
-            Path.GetFileNameWithoutExtension(modelPath),
-            MimirSceneEditorNodeKind.Model,
-            new MimirSceneEditorTransform(new Vector3(2.4f, -1.5f + index * 0.2f, 0.0f), 0.0f, new Vector2(1.2f, 1.2f)))
-        {
-            ModelPath = modelPath,
-        };
-        nodes.Add(node);
-        SelectedNodeId = node.Id;
-    }
-
     public string DescribeHierarchy()
     {
+        var feeds = nodes
+            .Where(static node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)
+            .OrderBy(static node => node.Layer)
+            .ThenBy(static node => node.SourceId, StringComparer.Ordinal)
+            .ToArray();
+        if (feeds.Length == 0)
+        {
+            return "No synced video streams yet.";
+        }
+
         var builder = new System.Text.StringBuilder();
-        builder.AppendLine("Scene");
-        AppendNode(builder, nodes.First(node => node.Kind == MimirSceneEditorNodeKind.Camera), 1);
-        AppendGroup(builder, "feeds", "Sensor Feeds", MimirSceneEditorNodeKind.SensorFeedPanel);
-        AppendGroup(builder, "text", "SDF Text", MimirSceneEditorNodeKind.SdfTextPanel);
-        AppendGroup(builder, "models", "Models", MimirSceneEditorNodeKind.Model);
+        builder.AppendLine("Program Video Layers");
+        foreach (var node in feeds)
+        {
+            AppendNode(builder, node, 1);
+        }
+
         return builder.ToString().TrimEnd();
     }
 
@@ -380,9 +415,13 @@ public sealed class MimirSceneEditorState
             return "no selection";
         }
 
-        var source = string.IsNullOrWhiteSpace(selected.SourceId) ? "" : $" source={selected.SourceId}";
-        var model = string.IsNullOrWhiteSpace(selected.ModelPath) ? "" : $" model={selected.ModelPath}";
-        return $"{selected.Kind} {selected.DisplayName}{source}{model} pos={selected.Transform.Position.X:0.00},{selected.Transform.Position.Y:0.00},{selected.Transform.Position.Z:0.00} rot={selected.Transform.RotationRadians:0.00} scale={selected.Transform.Scale.X:0.00},{selected.Transform.Scale.Y:0.00}";
+        if (selected.Kind != MimirSceneEditorNodeKind.SensorFeedPanel)
+        {
+            return "no video source selected";
+        }
+
+        var placement = PlacementForNode(selected);
+        return $"{selected.Layer + 1}. {selected.DisplayName} source={selected.SourceId} frame={placement.CenterX:0.000},{placement.CenterY:0.000} {placement.Width:0.000}x{placement.Height:0.000}";
     }
 
     public AquariumSplineFrame BuildEditorSplineFrame()
@@ -425,26 +464,6 @@ public sealed class MimirSceneEditorState
         new AquariumSdfLight(new Vector4(3.0f, -2.0f, -2.5f, 3.0f), new Vector4(0.2f, 0.7f, 1.0f, 2.5f)),
     ];
 
-    private void AppendGroup(System.Text.StringBuilder builder, string groupId, string label, MimirSceneEditorNodeKind kind)
-    {
-        var groupNodes = nodes.Where(node => node.Kind == kind).OrderBy(node => node.DisplayName, StringComparer.Ordinal).ToArray();
-        builder.Append("  ")
-            .Append(IsExpanded(groupId) ? "v " : "> ")
-            .Append(label)
-            .Append(" (")
-            .Append(groupNodes.Length)
-            .AppendLine(")");
-        if (!IsExpanded(groupId))
-        {
-            return;
-        }
-
-        foreach (var node in groupNodes)
-        {
-            AppendNode(builder, node, 2);
-        }
-    }
-
     private void AppendNode(System.Text.StringBuilder builder, MimirSceneEditorNode node, int depth)
     {
         builder
@@ -452,9 +471,9 @@ public sealed class MimirSceneEditorState
             .Append(IsSelected(node) ? "* " : "- ")
             .Append(node.Visible ? "[eye] " : "[off] ")
             .Append(node.DisplayName)
-            .Append(" <")
-            .Append(node.Kind)
-            .AppendLine(">");
+            .Append(" layer=")
+            .Append(node.Layer + 1)
+            .AppendLine();
     }
 
     private void SelectRelative(int delta)
@@ -471,13 +490,7 @@ public sealed class MimirSceneEditorState
 
     private void RemoveSelectedMutableNode()
     {
-        if (SelectedNode is not { } selected || selected.Kind is MimirSceneEditorNodeKind.Camera or MimirSceneEditorNodeKind.SensorFeedPanel)
-        {
-            return;
-        }
-
-        nodes.Remove(selected);
-        SelectedNodeId = nodes.First().Id;
+        return;
     }
 
     private void SetSelectedPosition(int axis, float value)
