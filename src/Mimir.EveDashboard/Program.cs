@@ -785,7 +785,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
                 ? "voidbot-summary"
                 : currentState.SelectedNodeId;
 
-        return new DashboardState
+        var state = new DashboardState
         {
             ProviderId = ProviderId,
             Title = "VoidBot Swarm",
@@ -794,6 +794,147 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
             SelectedNodeId = selectedNodeId,
             Nodes = nodes,
         };
+        state.Surface = BuildVoidBotSurface(state, summary, cultMesh, controls, upcoming, participants, selectedAgent);
+        return state;
+    }
+
+    private DashboardSurface BuildVoidBotSurface(
+        DashboardState state,
+        JsonElement summary,
+        JsonElement cultMesh,
+        JsonElement controls,
+        IReadOnlyList<JsonElement> upcoming,
+        IReadOnlyList<JsonElement> participants,
+        JsonElement selectedAgent)
+    {
+        var generatedAt = StringValue(summary, "generatedAt") ?? state.UpdatedAt.ToString("O");
+        var cadence = NumberValue(controls, "cadenceMultiplier") ?? NumberValue(summary, "cadenceMultiplier") ?? 1;
+        var leaves = FlattenLeaves(ArrayItems(TryGet(TryGet(selectedAgent, "faceState"), "tree")).ToArray()).Take(5).ToArray();
+        var selectedLeaf = leaves.FirstOrDefault(leaf => string.Equals(leaf.Path, selectedStatePath, StringComparison.Ordinal)) ?? leaves.FirstOrDefault();
+
+        return new DashboardSurface
+        {
+            Schema = "cultmesh.eve_surface.v0",
+            Id = "voidbot.swarm.surface",
+            Title = "VoidBot Swarm",
+            Root = UiElement.Container(
+                "voidbot-cockpit",
+                "cockpit",
+                new DashboardUiLayout { Direction = "vertical", Gap = 10, Padding = 10 },
+                [
+                    BuildTurnRail(upcoming),
+                    UiElement.Container(
+                        "voidbot-workspace",
+                        "workspace",
+                        new DashboardUiLayout { Direction = "horizontal", Gap = 10, Grow = 1 },
+                        [
+                            BuildSelectedFacePane(summary, cultMesh, selectedAgent, cadence, generatedAt),
+                            BuildStateGraphPane(leaves),
+                            BuildStateDetailPane(state, selectedLeaf),
+                        ]),
+                ]),
+            Assets = participants
+                .Select(participant => new DashboardSurfaceAsset(
+                    $"avatar:{StringValue(participant, "identityId") ?? ""}",
+                    "image",
+                    StringValue(participant, "avatarUrl") ?? ""))
+                .Where(asset => !string.IsNullOrWhiteSpace(asset.Uri))
+                .GroupBy(asset => asset.Id)
+                .Select(group => group.First())
+                .ToArray(),
+        };
+    }
+
+    private DashboardUiElement BuildTurnRail(IReadOnlyList<JsonElement> upcoming)
+    {
+        var count = Math.Min(8, upcoming.Count);
+        var cards = new List<DashboardUiElement>();
+        for (var index = 0; index < count; index++)
+        {
+            var turn = upcoming[index];
+            var identityId = StringValue(turn, "identityId") ?? "";
+            var active = !string.IsNullOrWhiteSpace(StringValue(turn, "activeJobId"));
+            var mentionCount = NumberValue(turn, "pendingMentionCount") ?? 0;
+            cards.Add(UiElement.Card(
+                $"ctb-card-{index}-{identityId}",
+                "turn-card",
+                bindNodeId: $"ctb-{index}-{identityId}",
+                commandId: $"select-identity:{identityId}",
+                style: new DashboardUiStyle { Variant = active ? "active-turn" : mentionCount > 0 ? "mention-turn" : "default" },
+                children:
+                [
+                    UiElement.Avatar($"ctb-avatar-{identityId}", StringValue(turn, "avatarUrl"), StringValue(turn, "displayName") ?? identityId),
+                    UiElement.Text($"ctb-label-{identityId}", $"{index + 1}. {StringValue(turn, "displayName") ?? identityId}\n{StringValue(turn, "repoName") ?? "repo"}", "strong"),
+                    UiElement.Text($"ctb-health-{identityId}", active ? "active" : mentionCount > 0 ? "mention" : Minutes(NumberValue(turn, "nextTurnInMinutes")), "caption"),
+                ]));
+        }
+
+        return UiElement.Container(
+            "ctb-rail",
+            "ctb-rail",
+            new DashboardUiLayout { Direction = "horizontal", Gap = 8, Height = 112, Overflow = "scroll-x" },
+            cards);
+    }
+
+    private DashboardUiElement BuildSelectedFacePane(JsonElement summary, JsonElement cultMesh, JsonElement selectedAgent, double cadence, string generatedAt)
+    {
+        var identityId = StringValue(selectedAgent, "identityId") ?? "";
+        var faceState = TryGet(selectedAgent, "faceState");
+        var counts = TryGet(faceState, "counts");
+        var memory = NumberValue(counts, "memory") ?? 0;
+        var description = StringValue(selectedAgent, "description") ?? "No Face description registered.";
+        return UiElement.Pane(
+            "selected-face-pane",
+            "Controls / Selected Face",
+            [
+                UiElement.Text("voidbot-summary-text", $"VoidBot Swarm\n{StringValue(summary, "state") ?? "unknown"}  next {StringValue(summary, "nextDisplayName") ?? "none"}\nagents {NumberValue(summary, "participantCount") ?? 0:0}  ready {NumberValue(summary, "readyNowCount") ?? 0:0}  cadence x{cadence:0.##}\nmesh {StringValue(cultMesh, "writeStatus") ?? "missing"}  {generatedAt}", "mono"),
+                UiElement.Card(
+                    "selected-face-card",
+                    "inspector-hero",
+                    bindNodeId: "agent-detail",
+                    commandId: $"select-identity:{identityId}",
+                    children:
+                    [
+                        UiElement.Avatar("selected-face-avatar", StringValue(selectedAgent, "avatarUrl"), StringValue(selectedAgent, "displayName") ?? identityId),
+                        UiElement.Text("selected-face-name", $"Selected Face\n{StringValue(selectedAgent, "displayName") ?? identityId}", "title"),
+                    ]),
+                UiElement.Metric("metric-turn", "Turn", 0.96, "cool"),
+                UiElement.Metric("metric-memory", "Memory", Math.Min(1.0, memory * 0.07), "cool"),
+                UiElement.Metric("metric-pressure", "Pressure", 0.42, "warm"),
+                UiElement.Metric("metric-heat", "Heat", 0.34, "warm"),
+                UiElement.Metric("metric-load", "Load", 0.99, "danger"),
+                UiElement.Metric("metric-speed", "Speed", 0.88, "cool"),
+                UiElement.Text("selected-face-detail", $"memory {memory:0} pressures {NumberValue(counts, "pressures") ?? 0:0} constraints {NumberValue(selectedAgent, "constraintCount") ?? 0:0}\n{Truncate(description, 220)}", "body"),
+            ]);
+    }
+
+    private DashboardUiElement BuildStateGraphPane(IReadOnlyList<VoidBotStateLeaf> leaves)
+    {
+        return UiElement.Pane(
+            "state-graph-pane",
+            "State Graph",
+            leaves.Select((leaf, index) => UiElement.Card(
+                $"state-leaf-card-{index}",
+                "state-leaf",
+                bindNodeId: $"state-{index}",
+                commandId: $"select-state:{leaf.Path}",
+                style: new DashboardUiStyle { Variant = string.Equals(leaf.Path, selectedStatePath, StringComparison.Ordinal) ? "selected" : "default" },
+                children:
+                [
+                    UiElement.Text($"state-leaf-label-{index}", leaf.Label, "strong"),
+                    UiElement.Text($"state-leaf-preview-{index}", leaf.Preview, "caption"),
+                ])).ToArray());
+    }
+
+    private static DashboardUiElement BuildStateDetailPane(DashboardState state, VoidBotStateLeaf? selectedLeaf)
+    {
+        return UiElement.Pane(
+            "state-detail-pane",
+            "State Detail",
+            [
+                UiElement.Text("state-detail-heading", selectedLeaf != null ? $"{selectedLeaf.Label}\n{selectedLeaf.Path}" : state.Title, "strong"),
+                UiElement.Text("state-detail-body", selectedLeaf?.Detail ?? state.Nodes.FirstOrDefault(static node => node.Id == "voidbot-summary")?.Detail ?? "No state detail.", "mono"),
+            ]);
     }
 
     private void AddCtbRail(List<DashboardNode> nodes, IReadOnlyList<JsonElement> upcoming)
@@ -1150,6 +1291,143 @@ internal sealed class DashboardState
     public string LutPreset { get; set; } = "neutral";
 
     public List<DashboardNode> Nodes { get; set; } = [];
+
+    public DashboardSurface? Surface { get; set; }
+}
+
+internal sealed class DashboardSurface
+{
+    public string Schema { get; set; } = "cultmesh.eve_surface.v0";
+
+    public string Id { get; set; } = "";
+
+    public string Title { get; set; } = "";
+
+    public DashboardUiElement Root { get; set; } = UiElement.Container("root", "root", new DashboardUiLayout(), []);
+
+    public IReadOnlyList<DashboardSurfaceAsset> Assets { get; set; } = [];
+}
+
+internal sealed record DashboardSurfaceAsset(string Id, string Kind, string Uri);
+
+internal sealed class DashboardUiElement
+{
+    public string Id { get; set; } = "";
+
+    public string Kind { get; set; } = "";
+
+    public string? Role { get; set; }
+
+    public string? Text { get; set; }
+
+    public string? AssetRef { get; set; }
+
+    public string? AssetUri { get; set; }
+
+    public string? BindNodeId { get; set; }
+
+    public string? CommandId { get; set; }
+
+    public DashboardUiLayout? Layout { get; set; }
+
+    public DashboardUiStyle? Style { get; set; }
+
+    public DashboardUiMetric? Metric { get; set; }
+
+    public IReadOnlyList<DashboardUiElement> Children { get; set; } = [];
+}
+
+internal sealed class DashboardUiLayout
+{
+    public string Direction { get; set; } = "vertical";
+
+    public double? Width { get; set; }
+
+    public double? Height { get; set; }
+
+    public double? Grow { get; set; }
+
+    public double? Gap { get; set; }
+
+    public double? Padding { get; set; }
+
+    public string? Overflow { get; set; }
+}
+
+internal sealed class DashboardUiStyle
+{
+    public string Variant { get; set; } = "default";
+
+    public string? Tone { get; set; }
+}
+
+internal sealed record DashboardUiMetric(string Label, double Value, string Tone);
+
+internal static class UiElement
+{
+    public static DashboardUiElement Container(string id, string kind, DashboardUiLayout layout, IReadOnlyList<DashboardUiElement> children)
+    {
+        return new DashboardUiElement { Id = id, Kind = kind, Layout = layout, Children = children };
+    }
+
+    public static DashboardUiElement Pane(string id, string title, IReadOnlyList<DashboardUiElement> children)
+    {
+        return new DashboardUiElement
+        {
+            Id = id,
+            Kind = "pane",
+            Text = title,
+            Layout = new DashboardUiLayout { Direction = "vertical", Gap = 10, Padding = 12, Grow = 1 },
+            Children = children,
+        };
+    }
+
+    public static DashboardUiElement Card(
+        string id,
+        string role,
+        string? bindNodeId = null,
+        string? commandId = null,
+        DashboardUiStyle? style = null,
+        IReadOnlyList<DashboardUiElement>? children = null)
+    {
+        return new DashboardUiElement
+        {
+            Id = id,
+            Kind = "card",
+            Role = role,
+            BindNodeId = bindNodeId,
+            CommandId = commandId,
+            Style = style,
+            Children = children ?? [],
+        };
+    }
+
+    public static DashboardUiElement Avatar(string id, string? avatarUrl, string alt)
+    {
+        return new DashboardUiElement
+        {
+            Id = id,
+            Kind = "avatar",
+            Text = alt,
+            AssetUri = avatarUrl,
+            Layout = new DashboardUiLayout { Width = 42, Height = 42 },
+        };
+    }
+
+    public static DashboardUiElement Text(string id, string text, string role)
+    {
+        return new DashboardUiElement { Id = id, Kind = "text", Role = role, Text = text };
+    }
+
+    public static DashboardUiElement Metric(string id, string label, double value, string tone)
+    {
+        return new DashboardUiElement
+        {
+            Id = id,
+            Kind = "metric",
+            Metric = new DashboardUiMetric(label, Math.Clamp(value, 0.0, 1.0), tone),
+        };
+    }
 }
 
 internal sealed class DashboardNode(

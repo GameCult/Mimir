@@ -17,6 +17,10 @@ own final composition or run remote UI code.
 - Outputs: providers send `dashboard-state` snapshots with provider id, title,
   nodes, health, visibility, dimensions, transform, selected node, and LUT
   preset. Provider catalogs are exposed at `/eve/deck/providers`.
+- CultUI-shaped surface: providers may also send `surface`, a retained
+  composition tree for Eve clients. `nodes` remains the semantic compatibility
+  projection; `surface.root` owns composed layout primitives such as workspaces,
+  rails, panes, cards, avatars, text, metrics, lists, and command ids.
 - Derived state: Eve's UIKit panels are local render projections of Mimir
   state/provider state.
 - Forbidden writers: Eve gestures do not mutate program layout directly; they
@@ -117,3 +121,23 @@ The broker smoke on 2026-05-31 verified:
 - `open-provider` switches to `voidbot.swarm`, which emits VoidBot's swarm
   status, CTB rail with avatar URLs, agent cards, and selected Face state
   detail from the existing VoidBot swarm snapshot.
+
+## Surface Composition Contract
+
+`dashboard-state.surface` is the new distributed UI layer. It is intentionally
+closer to CultUI than to the old flat dashboard node list:
+
+- `surface.schema`: versioned wire contract, currently
+  `cultmesh.eve_surface.v0`.
+- `surface.root`: retained element tree. Elements have `kind`, optional `role`,
+  text, asset refs/URIs, provider command ids, layout hints, style variants,
+  metrics, and children.
+- `surface.assets`: cacheable media references such as avatar images.
+- `bindNodeId`: optional bridge back to the compatibility `nodes` projection.
+- `commandId`: provider-owned intent id. Eve clients invoke commands; providers
+  accept or reject and publish the next snapshot.
+
+The old `nodes` array is no longer expected to carry complete UI composition.
+It is a compatibility/debug/data surface. Clients that understand `surface`
+should render the composed tree first and use `nodes` only for selection,
+state-path binding, and fallback.
