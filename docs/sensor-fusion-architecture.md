@@ -36,6 +36,10 @@ flowchart TD
 - Exposure/gain sweeps optimize recovered spline quality: detected LED count,
   curve coverage, spacing coherence, smoothness, exposure fitness, and
   saturation penalty. Bright clipped blobs are not good evidence.
+- The live LED sweep owner is `Mimir.BufferSmoke --led-spline-live-score` for
+  now: it opens direct sensor feeds, applies KS/UVC manual exposure/gain where
+  supported, scores actual luma frames, and reports the best setting per
+  source. PS3 Eye and Leap-specific controls still need native control cuts.
 - The first camera-rig solver fits bounded camera translation updates from a
   scene-anchored LED curve by minimizing ray-to-curve distance. Rotation,
   intrinsics, and distortion are future owners.

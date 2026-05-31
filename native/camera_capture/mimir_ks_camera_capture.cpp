@@ -208,6 +208,28 @@ bool getPinProperty(HANDLE filter, ULONG pinId, ULONG propertyId, T& value)
     return ksProperty(filter, &property, sizeof(property), &value, sizeof(value), &returned);
 }
 
+bool setVideoProcAmp(HANDLE filter, ULONG id, LONG value, ULONG flags)
+{
+    KSPROPERTY_VIDEOPROCAMP_S property{};
+    property.Property.Set = PROPSETID_VIDCAP_VIDEOPROCAMP;
+    property.Property.Id = id;
+    property.Property.Flags = KSPROPERTY_TYPE_SET;
+    property.Value = value;
+    property.Flags = flags;
+    return ksProperty(filter, &property, sizeof(property), &property, sizeof(property));
+}
+
+bool setCameraControl(HANDLE filter, ULONG id, LONG value, ULONG flags)
+{
+    KSPROPERTY_CAMERACONTROL_S property{};
+    property.Property.Set = PROPSETID_VIDCAP_CAMERACONTROL;
+    property.Property.Id = id;
+    property.Property.Flags = KSPROPERTY_TYPE_SET;
+    property.Value = value;
+    property.Flags = flags;
+    return ksProperty(filter, &property, sizeof(property), &property, sizeof(property));
+}
+
 std::vector<std::string> enumerateCapturePaths()
 {
     std::vector<std::string> paths;
@@ -615,6 +637,41 @@ __declspec(dllexport) int mimir_ks_start(MimirKsCameraCapture* capture)
 
     capture->worker = std::thread(captureThread, capture);
     return 1;
+}
+
+__declspec(dllexport) int mimir_ks_set_exposure_gain(
+    MimirKsCameraCapture* capture,
+    int setExposure,
+    LONG exposure,
+    int setGain,
+    LONG gain)
+{
+    if (!capture || !capture->filter)
+    {
+        return 0;
+    }
+
+    int result = 0;
+    if (!setExposure ||
+        setCameraControl(
+            capture->filter.value,
+            KSPROPERTY_CAMERACONTROL_EXPOSURE,
+            exposure,
+            KSPROPERTY_CAMERACONTROL_FLAGS_MANUAL))
+    {
+        result |= 1;
+    }
+    if (!setGain ||
+        setVideoProcAmp(
+            capture->filter.value,
+            KSPROPERTY_VIDEOPROCAMP_GAIN,
+            gain,
+            KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL))
+    {
+        result |= 2;
+    }
+
+    return result;
 }
 
 __declspec(dllexport) int mimir_ks_read(

@@ -70,6 +70,18 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
 
     public string DriverName => "ks-uvc-direct";
 
+    public bool TrySetExposureGain(int? exposure, int? gain)
+    {
+        var result = native.SetExposureGain(
+            capture,
+            exposure.HasValue ? 1 : 0,
+            exposure.GetValueOrDefault(),
+            gain.HasValue ? 1 : 0,
+            gain.GetValueOrDefault());
+        return (!exposure.HasValue || (result & 1) != 0) &&
+            (!gain.HasValue || (result & 2) != 0);
+    }
+
     public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
     {
         textureLeaseClient = client;
@@ -192,6 +204,7 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
         private readonly nint library;
         private readonly delegate* unmanaged[Stdcall]<byte*, int, int, byte*, double, int, nint> create;
         private readonly delegate* unmanaged[Stdcall]<nint, int> start;
+        private readonly delegate* unmanaged[Stdcall]<nint, int, int, int, int, int> setExposureGain;
         private readonly delegate* unmanaged[Stdcall]<nint, out int, out int, out int, byte*, int, out long, out ulong, byte*, int, int> read;
         private readonly delegate* unmanaged[Stdcall]<nint, void> destroy;
 
@@ -200,6 +213,7 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
             this.library = library;
             create = (delegate* unmanaged[Stdcall]<byte*, int, int, byte*, double, int, nint>)NativeLibrary.GetExport(library, "mimir_ks_create");
             start = (delegate* unmanaged[Stdcall]<nint, int>)NativeLibrary.GetExport(library, "mimir_ks_start");
+            setExposureGain = (delegate* unmanaged[Stdcall]<nint, int, int, int, int, int>)NativeLibrary.GetExport(library, "mimir_ks_set_exposure_gain");
             read = (delegate* unmanaged[Stdcall]<nint, out int, out int, out int, byte*, int, out long, out ulong, byte*, int, int>)NativeLibrary.GetExport(library, "mimir_ks_read");
             destroy = (delegate* unmanaged[Stdcall]<nint, void>)NativeLibrary.GetExport(library, "mimir_ks_destroy");
         }
@@ -218,6 +232,9 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
         }
 
         public bool Start(nint capture) => start(capture) != 0;
+
+        public int SetExposureGain(nint capture, int setExposure, int exposure, int setGain, int gain) =>
+            setExposureGain(capture, setExposure, exposure, setGain, gain);
 
         public int Read(
             nint capture,

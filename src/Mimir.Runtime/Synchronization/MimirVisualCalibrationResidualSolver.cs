@@ -252,7 +252,9 @@ public sealed class MimirLedSplineQualityScorer
                 UsableForCalibration: false);
         }
 
-        var coverage = Clamp01(points.Length / (double)Math.Max(1, expectedLedCount));
+        var expected = Math.Max(1, expectedLedCount);
+        var detected = points.Length;
+        var coverage = Clamp01(Math.Min(detected / (double)expected, expected / (double)detected));
         var spacing = SpacingCoherence(points);
         var smoothness = Smoothness(points);
         var pointConfidence = points.Average(static point => Clamp01(point.Confidence));

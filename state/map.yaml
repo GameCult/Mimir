@@ -122,6 +122,13 @@ invariants:
     usable for calibration. `MimirLedSplineFrameAnalyzer` now extracts bright
     luma components from real frames into the same score path, so clipped blobs
     can be detected while still rejected as bad spline evidence.
+    `Mimir.BufferSmoke --led-spline-live-score` now scores actual direct sensor
+    feeds. KS/UVC sources sweep manual exposure/gain before each live scoring
+    window and print a best setting per source; the 2026-05-31 live proof with
+    `--expected-leds 38 --minimum-luma 0.55` selected exposure `-9`, gain `8`
+    for both Kiyo Pro and Kiyo Basic. LeapUVC rejected the generic KS
+    exposure/gain writes and PS3 Eye capture remains fixed-control until its
+    native wrapper owns gain/exposure.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

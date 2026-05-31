@@ -155,6 +155,11 @@ if (args.Any(arg => string.Equals(arg, "--led-spline-frame-analysis-smoke", Stri
     return RunLedSplineFrameAnalysisSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--led-spline-live-score", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunLedSplineLiveScore(args);
+}
+
 if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunFensalirTextureLeaseSmoke();
@@ -1019,6 +1024,340 @@ static int RunLedSplineFrameAnalysisSmoke()
             ? 0
             : 1;
 }
+
+static int RunLedSplineLiveScore(string[] args)
+{
+    var ksLibrary = ParseStringOption(args, "--ks-native-library", Path.GetFullPath("native/camera_capture/build/Release/mimir_camera_capture.dll"));
+    var ps3Library = ParseStringOption(args, "--ps3eye-native-library", Path.GetFullPath("native/camera_capture/build/Release/mimir_ps3eye_capture.dll"));
+    var seconds = Math.Max(0.10, ParseDoubleOption(args, "--seconds", 1.0));
+    var settingSeconds = Math.Max(0.10, ParseDoubleOption(args, "--setting-seconds", 0.30));
+    var settleMs = Math.Max(0, ParseIntOption(args, "--settle-ms", 100));
+    var sweepControls = !args.Any(arg => string.Equals(arg, "--no-sweep", StringComparison.OrdinalIgnoreCase));
+    var expectedLedCount = Math.Max(1, ParseIntOption(args, "--expected-leds", 5));
+    var minimumLuma = Math.Clamp(ParseDoubleOption(args, "--minimum-luma", 0.70), 0.0, 1.0);
+    var sourceFilter = ParseStringOption(args, "--source-id", "");
+    var timeout = TimeSpan.FromSeconds(seconds);
+    var profiles = LiveLedSplineSensorProfiles(ksLibrary, ps3Library)
+        .Where(profile => string.IsNullOrWhiteSpace(sourceFilter) ||
+            string.Equals(profile.SourceId, sourceFilter, StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+
+    if (profiles.Length == 0)
+    {
+        Console.WriteLine($"led-spline-live-score no-profile source={sourceFilter}");
+        return 1;
+    }
+
+    var anyCaptured = false;
+    foreach (var profile in profiles)
+    {
+        try
+        {
+            using var driver = CreateLiveLedSplineDriver(profile);
+            var settings = profile.Kind == LiveLedSplineSensorKind.Ks && sweepControls
+                ? LiveLedSplineExposureGainSettings()
+                : [new LiveLedSplineExposureGainSetting("current", null, null)];
+            var results = new List<(LiveLedSplineExposureGainSetting Setting, bool Applied, LiveLedSplineScoreResult Result)>(settings.Count);
+            foreach (var setting in settings)
+            {
+                var applied = true;
+                if (driver is MimirKsVideoCaptureDriver ksDriver && (setting.Exposure.HasValue || setting.Gain.HasValue))
+                {
+                    applied = ksDriver.TrySetExposureGain(setting.Exposure, setting.Gain);
+                    Thread.Sleep(settleMs);
+                    DrainLiveLedSplineFrames(driver);
+                }
+
+                var result = ScoreLiveLedSplineFeed(
+                    driver,
+                    profile,
+                    settings.Count == 1 ? timeout : TimeSpan.FromSeconds(settingSeconds),
+                    expectedLedCount,
+                    minimumLuma);
+                anyCaptured |= result.FramesScored > 0;
+                results.Add((setting, applied, result));
+                Console.WriteLine(
+                    $"led-spline-live-score source={profile.SourceId} setting={setting.Id} applied={applied} frames={result.FramesScored} bestScore={result.BestQuality?.Score ?? 0.0:0.000} bestDetected={result.BestQuality?.DetectedLedCount ?? 0} bestUsable={result.BestQuality?.UsableForCalibration ?? false} meanScore={result.MeanScore:0.000} meanDetected={result.MeanDetected:0.000} bestCoverage={result.BestQuality?.CurveCoverage ?? 0.0:0.000} bestSpacing={result.BestQuality?.SpacingCoherence ?? 0.0:0.000} bestSmooth={result.BestQuality?.Smoothness ?? 0.0:0.000} bestExposure={result.BestQuality?.ExposureFitness ?? 0.0:0.000} bestSaturated={result.BestQuality?.SaturatedFraction ?? 0.0:0.000} threshold={minimumLuma:0.000} format={result.LastPixelFormat} size={result.LastWidth}x{result.LastHeight}");
+            }
+
+            var best = results
+                .OrderByDescending(static item => item.Result.BestQuality?.Score ?? 0.0)
+                .ThenByDescending(static item => item.Result.BestQuality?.DetectedLedCount ?? 0)
+                .FirstOrDefault();
+            Console.WriteLine(
+                $"led-spline-live-best source={profile.SourceId} setting={best.Setting?.Id ?? "none"} exposure={best.Setting?.Exposure?.ToString(CultureInfo.InvariantCulture) ?? "current"} gain={best.Setting?.Gain?.ToString(CultureInfo.InvariantCulture) ?? "current"} score={best.Result?.BestQuality?.Score ?? 0.0:0.000} detected={best.Result?.BestQuality?.DetectedLedCount ?? 0} usable={best.Result?.BestQuality?.UsableForCalibration ?? false} control={(profile.Kind == LiveLedSplineSensorKind.Ks ? "ks-exposure-gain" : "fixed-control")}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"led-spline-live-score source={profile.SourceId} status=failed error=\"{ex.Message.Replace("\"", "'", StringComparison.Ordinal)}\"");
+        }
+    }
+
+    return anyCaptured ? 0 : 1;
+}
+
+static IReadOnlyList<LiveLedSplineExposureGainSetting> LiveLedSplineExposureGainSettings() =>
+[
+    new("exp-10_gain-0", -10, 0),
+    new("exp-10_gain-8", -10, 8),
+    new("exp-9_gain-0", -9, 0),
+    new("exp-9_gain-8", -9, 8),
+    new("exp-8_gain-0", -8, 0),
+    new("exp-8_gain-8", -8, 8),
+    new("exp-7_gain-0", -7, 0),
+    new("exp-7_gain-8", -7, 8),
+    new("exp-6_gain-0", -6, 0),
+    new("exp-6_gain-8", -6, 8),
+];
+
+static void DrainLiveLedSplineFrames(IMimirVideoCaptureDriver driver)
+{
+    for (var index = 0; index < 64; index++)
+    {
+        if (!driver.TryCapture(out _, out _))
+        {
+            return;
+        }
+    }
+}
+
+static IReadOnlyList<LiveLedSplineSensorProfile> LiveLedSplineSensorProfiles(string ksLibrary, string ps3Library) =>
+[
+    LiveLedSplineSensorProfile.Ks(
+        "leap-stereo-ir",
+        ksLibrary,
+        "vid_f182&pid_0003&mi_00",
+        640,
+        240,
+        "YUY2",
+        100.0,
+        MimirVideoPixelFormat.LeapStereoIr),
+    LiveLedSplineSensorProfile.Ks(
+        "kiyo-pro-rgb",
+        ksLibrary,
+        "vid_1532&pid_0e05&mi_00",
+        640,
+        480,
+        "YUY2",
+        25.0,
+        MimirVideoPixelFormat.Yuy2),
+    LiveLedSplineSensorProfile.Ks(
+        "kiyo-basic-rgb",
+        ksLibrary,
+        "vid_1532&pid_0e03&mi_00",
+        640,
+        480,
+        "YUY2",
+        30.0,
+        MimirVideoPixelFormat.Yuy2),
+    LiveLedSplineSensorProfile.Ps3Eye(
+        "ps3-eye-0",
+        ps3Library,
+        0,
+        320,
+        240,
+        187),
+    LiveLedSplineSensorProfile.Ps3Eye(
+        "ps3-eye-1",
+        ps3Library,
+        1,
+        320,
+        240,
+        187),
+];
+
+static IMimirVideoCaptureDriver CreateLiveLedSplineDriver(LiveLedSplineSensorProfile profile)
+{
+    if (profile.Kind == LiveLedSplineSensorKind.Ks)
+    {
+        return new MimirKsVideoCaptureDriver(new MimirKsVideoCaptureDriverOptions(
+            profile.NativeLibraryPath,
+            profile.SourceId,
+            profile.PathNeedle,
+            profile.Width,
+            profile.Height,
+            profile.FourCc,
+            profile.MinimumFramesPerSecond,
+            QueueDepth: 8,
+            profile.DeclaredPixelFormat));
+    }
+
+    return new MimirPs3EyeVideoCaptureDriver(new MimirPs3EyeVideoCaptureDriverOptions(
+        profile.NativeLibraryPath,
+        profile.SourceId,
+        profile.CameraIndex,
+        profile.Width,
+        profile.Height,
+        (int)Math.Round(profile.MinimumFramesPerSecond)));
+}
+
+static LiveLedSplineScoreResult ScoreLiveLedSplineFeed(
+    IMimirVideoCaptureDriver driver,
+    LiveLedSplineSensorProfile profile,
+    TimeSpan duration,
+    int expectedLedCount,
+    double minimumLuma)
+{
+    var analyzer = new MimirLedSplineFrameAnalyzer(new MimirLedSplineFrameAnalyzerOptions(
+        expectedLedCount,
+        minimumLuma,
+        MinimumComponentPixels: 2,
+        MaximumComponentPixels: 8192));
+    var deadline = Stopwatch.GetTimestamp() + (long)(duration.TotalSeconds * Stopwatch.Frequency);
+    var framesScored = 0;
+    var scoreSum = 0.0;
+    var detectedSum = 0.0;
+    MimirLedSplineQualityReport? best = null;
+    var lastWidth = 0;
+    var lastHeight = 0;
+    var lastFormat = MimirVideoPixelFormat.Unknown;
+
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        if (!driver.TryCapture(out var frame, out var data))
+        {
+            Thread.Sleep(1);
+            continue;
+        }
+
+        if (data.IsEmpty || !TryExtractLiveLuma(frame, data.Span, out var luma, out var lumaWidth, out var lumaHeight))
+        {
+            continue;
+        }
+
+        var analysis = analyzer.AnalyzeLumaFrame(
+            profile.SourceId,
+            $"{profile.SourceId}:live:{frame.ProducerFenceValue}",
+            lumaWidth,
+            lumaHeight,
+            luma,
+            frame.DeviceTimestampNs);
+        framesScored++;
+        scoreSum += analysis.Quality.Score;
+        detectedSum += analysis.Quality.DetectedLedCount;
+        lastWidth = lumaWidth;
+        lastHeight = lumaHeight;
+        lastFormat = frame.PixelFormat;
+        if (best == null ||
+            analysis.Quality.Score > best.Score ||
+            (Math.Abs(analysis.Quality.Score - best.Score) <= 1.0e-9 &&
+                analysis.Quality.DetectedLedCount > best.DetectedLedCount))
+        {
+            best = analysis.Quality;
+        }
+    }
+
+    return new LiveLedSplineScoreResult(
+        framesScored,
+        framesScored == 0 ? 0.0 : scoreSum / framesScored,
+        framesScored == 0 ? 0.0 : detectedSum / framesScored,
+        best,
+        lastWidth,
+        lastHeight,
+        lastFormat);
+}
+
+static bool TryExtractLiveLuma(
+    MimirVideoFrameDescriptor frame,
+    ReadOnlySpan<byte> data,
+    out byte[] luma,
+    out int lumaWidth,
+    out int lumaHeight)
+{
+    lumaWidth = frame.Width;
+    lumaHeight = frame.Height;
+    if (lumaWidth <= 0 || lumaHeight <= 0)
+    {
+        luma = [];
+        return false;
+    }
+
+    luma = new byte[checked(lumaWidth * lumaHeight)];
+    var stride = frame.StrideBytes <= 0 ? DefaultStride(frame) : frame.StrideBytes;
+    switch (frame.PixelFormat)
+    {
+        case MimirVideoPixelFormat.Gray8:
+        case MimirVideoPixelFormat.R8:
+        case MimirVideoPixelFormat.Bayer8:
+            for (var y = 0; y < lumaHeight; y++)
+            {
+                var source = y * stride;
+                if (source + lumaWidth > data.Length)
+                {
+                    return false;
+                }
+
+                data.Slice(source, lumaWidth).CopyTo(luma.AsSpan(y * lumaWidth, lumaWidth));
+            }
+
+            return true;
+        case MimirVideoPixelFormat.Yuy2:
+        case MimirVideoPixelFormat.LeapStereoIr:
+            for (var y = 0; y < lumaHeight; y++)
+            {
+                var row = y * stride;
+                if (row + lumaWidth * 2 > data.Length)
+                {
+                    return false;
+                }
+
+                for (var x = 0; x < lumaWidth; x++)
+                {
+                    luma[y * lumaWidth + x] = data[row + x * 2];
+                }
+            }
+
+            return true;
+        case MimirVideoPixelFormat.Rg8:
+            for (var y = 0; y < lumaHeight; y++)
+            {
+                var row = y * stride;
+                if (row + lumaWidth * 2 > data.Length)
+                {
+                    return false;
+                }
+
+                for (var x = 0; x < lumaWidth; x++)
+                {
+                    var offset = row + x * 2;
+                    luma[y * lumaWidth + x] = (byte)((data[offset] + data[offset + 1]) / 2);
+                }
+            }
+
+            return true;
+        case MimirVideoPixelFormat.Bgra8:
+            for (var y = 0; y < lumaHeight; y++)
+            {
+                var row = y * stride;
+                if (row + lumaWidth * 4 > data.Length)
+                {
+                    return false;
+                }
+
+                for (var x = 0; x < lumaWidth; x++)
+                {
+                    var offset = row + x * 4;
+                    luma[y * lumaWidth + x] = (byte)Math.Clamp(
+                        (int)Math.Round(data[offset] * 0.114 + data[offset + 1] * 0.587 + data[offset + 2] * 0.299),
+                        0,
+                        255);
+                }
+            }
+
+            return true;
+        default:
+            luma = [];
+            return false;
+    }
+}
+
+static int DefaultStride(MimirVideoFrameDescriptor frame) =>
+    frame.PixelFormat switch
+    {
+        MimirVideoPixelFormat.Yuy2 or MimirVideoPixelFormat.LeapStereoIr or MimirVideoPixelFormat.Rg8 => frame.Width * 2,
+        MimirVideoPixelFormat.Bgra8 => frame.Width * 4,
+        _ => frame.Width,
+    };
 
 static IReadOnlyList<MimirLedPixelDetection> ProjectLedDetections(
     IReadOnlyList<MimirLedSplineScenePoint> scenePoints,
@@ -7356,6 +7695,79 @@ public sealed record ComplexContourChannelModelEvaluationCase(
     double DeltaAbsolutePredictionErrorMicroseconds,
     double DeltaMeanAbsoluteErrorSamples,
     double DeltaMeanAbsolutePhaseErrorRadians);
+
+enum LiveLedSplineSensorKind
+{
+    Ks,
+    Ps3Eye,
+}
+
+sealed record LiveLedSplineSensorProfile(
+    LiveLedSplineSensorKind Kind,
+    string SourceId,
+    string NativeLibraryPath,
+    string PathNeedle,
+    int CameraIndex,
+    int Width,
+    int Height,
+    string FourCc,
+    double MinimumFramesPerSecond,
+    MimirVideoPixelFormat DeclaredPixelFormat)
+{
+    public static LiveLedSplineSensorProfile Ks(
+        string sourceId,
+        string nativeLibraryPath,
+        string pathNeedle,
+        int width,
+        int height,
+        string fourCc,
+        double minimumFramesPerSecond,
+        MimirVideoPixelFormat declaredPixelFormat) =>
+        new(
+            LiveLedSplineSensorKind.Ks,
+            sourceId,
+            nativeLibraryPath,
+            pathNeedle,
+            CameraIndex: -1,
+            width,
+            height,
+            fourCc,
+            minimumFramesPerSecond,
+            declaredPixelFormat);
+
+    public static LiveLedSplineSensorProfile Ps3Eye(
+        string sourceId,
+        string nativeLibraryPath,
+        int cameraIndex,
+        int width,
+        int height,
+        int framesPerSecond) =>
+        new(
+            LiveLedSplineSensorKind.Ps3Eye,
+            sourceId,
+            nativeLibraryPath,
+            PathNeedle: "",
+            cameraIndex,
+            width,
+            height,
+            FourCc: "BA81",
+            framesPerSecond,
+            MimirVideoPixelFormat.Bayer8);
+}
+
+sealed record LiveLedSplineScoreResult(
+    int FramesScored,
+    double MeanScore,
+    double MeanDetected,
+    MimirLedSplineQualityReport? BestQuality,
+    int LastWidth,
+    int LastHeight,
+    MimirVideoPixelFormat LastPixelFormat);
+
+sealed record LiveLedSplineExposureGainSetting(
+    string Id,
+    int? Exposure,
+    int? Gain);
 
 sealed class FakeFieldResourceBroker : IAquariumFieldResourceBroker
 {

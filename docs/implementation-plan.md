@@ -404,6 +404,16 @@ a named invariant that the native runtime cannot protect yet.
   solves the per-sensor curve, and emits the same spline quality report.
   `--led-spline-frame-analysis-smoke` proves clipped blobs can still be
   detected while scoring as unusable calibration evidence.
+  `Mimir.BufferSmoke --led-spline-live-score` now runs that score against live
+  direct sensor feeds. For KS/UVC cameras it sweeps manual exposure/gain,
+  drains stale frames after each write, scores the live luma frames for spline
+  quality, and prints a best setting per source. Current Starfire proof with
+  `--expected-leds 38 --minimum-luma 0.55` selected exposure `-9`, gain `8`
+  for both `kiyo-pro-rgb` (score `0.666`, 41 detections) and
+  `kiyo-basic-rgb` (score `0.650`, 38 detections). LeapUVC rejected the
+  generic KS exposure/gain writes and only recovered two LED components; both
+  PS3 Eye feeds currently score fixed-control frames because their native
+  wrapper does not yet expose gain/exposure.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

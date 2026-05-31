@@ -627,9 +627,17 @@ spacing coherence, smoothness, exposure fitness, and saturation penalty, and
 `MimirLedSplineFrameAnalyzer` connects physical frames to that score by
 extracting bright luma components, solving the sensor-local curve, and rejecting
 clipped blobs as unusable calibration evidence even when they are easy to
-detect. Once the frustum fit is coherent, detected surface candidates can be
-sampled across every synchronized view before Fensalir resolves them into 4D
-Gaussian/surface splat claims.
+detect. `Mimir.BufferSmoke --led-spline-live-score` is the current live sweep
+surface: KS/UVC cameras get manual exposure/gain writes before each scoring
+window, stale frames are drained, luma is extracted from the actual live frame
+format, and the best spline setting is reported per source. On 2026-05-31 with
+`--expected-leds 38 --minimum-luma 0.55`, both Kiyo cameras selected exposure
+`-9`, gain `8` (`kiyo-pro-rgb` score `0.666`; `kiyo-basic-rgb` score `0.650`).
+LeapUVC rejected generic KS exposure/gain writes and only found two LED
+components; PS3 Eye feeds are still fixed-control until the WinUSB wrapper owns
+gain/exposure. Once the frustum fit is coherent, detected surface candidates
+can be sampled across every synchronized view before Fensalir resolves them
+into 4D Gaussian/surface splat claims.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's
