@@ -150,6 +150,11 @@ if (args.Any(arg => string.Equals(arg, "--led-spline-calibration-smoke", StringC
     return RunLedSplineCalibrationSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--room-calibration-lock-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunRoomCalibrationLockSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--led-spline-quality-sweep-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunLedSplineQualitySweepSmoke();
@@ -926,6 +931,130 @@ static int RunLedSplineCalibrationSmoke()
             : 1;
 }
 
+static int RunRoomCalibrationLockSmoke()
+{
+    var scenePoints = new[]
+    {
+        new MimirLedSplineScenePoint(0, new Vector3(-0.20f, 0.30f, 2.20f), 0.95),
+        new MimirLedSplineScenePoint(1, new Vector3(-0.08f, 0.18f, 2.05f), 0.96),
+        new MimirLedSplineScenePoint(2, new Vector3(0.04f, 0.02f, 1.95f), 0.97),
+        new MimirLedSplineScenePoint(3, new Vector3(0.18f, -0.14f, 1.88f), 0.95),
+        new MimirLedSplineScenePoint(4, new Vector3(0.35f, -0.28f, 1.82f), 0.93),
+    };
+    var ps3Eye0Pose = new MimirCameraPoseEstimate("ps3-eye-0", Vector3.Zero, Quaternion.Identity, 1.0);
+    var ps3Eye1Pose = new MimirCameraPoseEstimate("ps3-eye-1", new Vector3(-0.18f, 0.04f, 0.02f), Quaternion.Identity, 1.0);
+    var kiyoPose = new MimirCameraPoseEstimate("kiyo-pro-rgb", new Vector3(0.24f, 0.02f, -0.03f), Quaternion.Identity, 1.0);
+    var curveSolver = new MimirLedSplineCurveSolver();
+    var ps3Eye0Fit = curveSolver.SolveCameraCurve(
+        ps3Eye0Pose.SourceId,
+        "ps3-eye-0:led-spline:lock",
+        320,
+        240,
+        2_000_000_000L,
+        ProjectLedDetections(scenePoints, ps3Eye0Pose, 320, 240, radiusPixels: 2.4));
+    var ps3Eye1Fit = curveSolver.SolveCameraCurve(
+        ps3Eye1Pose.SourceId,
+        "ps3-eye-1:led-spline:lock",
+        320,
+        240,
+        2_000_000_003L,
+        ProjectLedDetections(scenePoints, ps3Eye1Pose, 320, 240, radiusPixels: 2.3));
+    var kiyoFit = curveSolver.SolveCameraCurve(
+        kiyoPose.SourceId,
+        "kiyo-pro-rgb:led-spline:lock",
+        1280,
+        720,
+        2_000_000_006L,
+        ProjectLedDetections(scenePoints, kiyoPose, 1280, 720, radiusPixels: 4.0));
+    var ledCandidate = new MimirLedSplineFieldCandidate(
+        CandidateKey: "room-lock:led-string:frame-1",
+        CalibrationId: "room-calibration-lock",
+        SplineId: "co-streamer-led-string",
+        ProducerKey: "mimir-led-spline-detector",
+        CameraObservations:
+        [
+            curveSolver.ToCameraObservation(ps3Eye0Fit, 320, 240, 2_000_000_000L),
+            curveSolver.ToCameraObservation(ps3Eye1Fit, 320, 240, 2_000_000_003L),
+            curveSolver.ToCameraObservation(kiyoFit, 1280, 720, 2_000_000_006L),
+        ],
+        EstimatedLedCount: 5,
+        HasTemporalCode: true,
+        HasStableLedIndices: true,
+        CurveLengthPixels: Math.Max(Math.Max(ps3Eye0Fit.CurveLengthPixels, ps3Eye1Fit.CurveLengthPixels), kiyoFit.CurveLengthPixels),
+        Confidence: 0.91,
+        ObservedTimeNs: 2_000_000_006L);
+    var residual = new MimirVisualCalibrationResidualSolver().EvaluateLedSpline(ledCandidate);
+    var rigCalibration = new MimirCameraRigCalibrationSolver().FitCameraPositionsFromLedSpline(
+        ledCandidate,
+        scenePoints,
+        [
+            ps3Eye0Pose with { PositionMeters = new Vector3(0.025f, -0.010f, 0.008f), Confidence = 0.82 },
+            ps3Eye1Pose with { PositionMeters = new Vector3(-0.120f, 0.030f, 0.000f), Confidence = 0.80 },
+            kiyoPose with { PositionMeters = new Vector3(0.120f, 0.000f, -0.010f), Confidence = 0.78 },
+        ],
+        maximumDeltaMeters: 0.50);
+    var moveCandidate = new MimirFeatureTrackFieldCandidate(
+        "room-lock:moves:frame-1",
+        "room-calibration-lock",
+        "mimir-move-controller-tracker",
+        [
+            MoveObservation("ps3-eye-0", "move-a", 320, 240, 2_000_000_000L, 48.0, 120.0, 0.93),
+            MoveObservation("ps3-eye-1", "move-b", 320, 240, 2_000_000_003L, 210.0, 98.0, 0.91),
+        ],
+        StableTrackCount: 2,
+        MeanTrackAgeFrames: 12.0,
+        MeanSpeedPixelsPerSecond: 34.0,
+        Confidence: 0.92,
+        ObservedTimeNs: 2_000_000_006L);
+    var eyeFeatureCandidate = new MimirFeatureTrackFieldCandidate(
+        "room-lock:eyes:frame-1",
+        "room-calibration-lock",
+        "mimir-sparse-feature-tracker",
+        [
+            SparseEyeObservation("ps3-eye-0", 320, 240, 2_000_000_000L, 90),
+            SparseEyeObservation("ps3-eye-1", 320, 240, 2_000_000_003L, 86),
+        ],
+        StableTrackCount: 176,
+        MeanTrackAgeFrames: 9.4,
+        MeanSpeedPixelsPerSecond: 18.0,
+        Confidence: 0.88,
+        ObservedTimeNs: 2_000_000_006L);
+
+    var lockFrame = new MimirRoomCalibrationLockSolver().Evaluate(
+        "room-calibration-lock",
+        ledCandidate,
+        residual,
+        rigCalibration,
+        [moveCandidate],
+        [eyeFeatureCandidate]);
+    var missingMoveFrame = new MimirRoomCalibrationLockSolver().Evaluate(
+        "room-calibration-lock",
+        ledCandidate,
+        residual,
+        rigCalibration,
+        [],
+        [eyeFeatureCandidate]);
+
+    Console.WriteLine(
+        $"room-calibration-lock-smoke status={lockFrame.Status} confidence={lockFrame.Confidence:0.000} ledCameras={lockFrame.LedCameraCount} sharedLeds={lockFrame.SharedLedCount} poseUpdates={lockFrame.PoseUpdateCount} rayResidual={lockFrame.MeanRayDistanceMeters:0.000000} moves={lockFrame.MoveControllerCount} eyeSources={lockFrame.EyeSourceCount} eyeTracks={lockFrame.StableEyeTrackCount} missing={string.Join(",", lockFrame.MissingWitnesses)} negative={missingMoveFrame.Status}");
+
+    return lockFrame.HasLock &&
+        lockFrame.LedCameraCount == 3 &&
+        lockFrame.SharedLedCount == 5 &&
+        lockFrame.PoseUpdateCount == 3 &&
+        lockFrame.MeanRayDistanceMeters < 0.025 &&
+        lockFrame.MoveControllerCount == 2 &&
+        lockFrame.StableMoveTrackCount == 2 &&
+        lockFrame.EyeSourceCount == 2 &&
+        lockFrame.StableEyeTrackCount == 176 &&
+        lockFrame.Confidence >= 0.55 &&
+        lockFrame.MissingWitnesses.Count == 0 &&
+        missingMoveFrame.Status == MimirRoomCalibrationLockStatus.InsufficientWitnesses &&
+        missingMoveFrame.MissingWitnesses.Contains("move-controller-history", StringComparer.Ordinal)
+            ? 0
+            : 1;
+}
+
 static int RunLedSplineQualitySweepSmoke()
 {
     var scenePoints = new[]
@@ -1570,6 +1699,99 @@ static int DefaultStride(MimirVideoFrameDescriptor frame) =>
         MimirVideoPixelFormat.Bgra8 => frame.Width * 4,
         _ => frame.Width,
     };
+
+static MimirFeatureTrackCameraObservation MoveObservation(
+    string sourceId,
+    string controllerId,
+    int width,
+    int height,
+    long observedTimeNs,
+    double imageX,
+    double imageY,
+    double confidence)
+{
+    var trackId = StablePositiveHash(controllerId);
+    var track = new MimirFeatureTrackPoint(
+        trackId,
+        imageX,
+        imageY,
+        PixelToClipX(imageX, width),
+        PixelToClipY(imageY, height),
+        VelocityXPerSecond: 12.0,
+        VelocityYPerSecond: -8.0,
+        AgeFrames: 12,
+        Confidence: confidence);
+    return new MimirFeatureTrackCameraObservation(
+        $"{sourceId}:move:{controllerId}:{observedTimeNs}",
+        sourceId,
+        width,
+        height,
+        observedTimeNs,
+        [track],
+        FrameCount: 1,
+        MeanTrackAgeFrames: 12.0,
+        MeanSpeedPixelsPerSecond: 14.4,
+        Confidence: confidence);
+}
+
+static MimirFeatureTrackCameraObservation SparseEyeObservation(
+    string sourceId,
+    int width,
+    int height,
+    long observedTimeNs,
+    int stableTrackCount)
+{
+    var tracks = Enumerable.Range(0, stableTrackCount)
+        .Select(index =>
+        {
+            var x = 12.0 + index % 18 * 16.0;
+            var y = 14.0 + index / 18 * 18.0;
+            return new MimirFeatureTrackPoint(
+                StablePositiveHash($"{sourceId}:{index}"),
+                x,
+                y,
+                PixelToClipX(x, width),
+                PixelToClipY(y, height),
+                VelocityXPerSecond: 4.0 + index % 5,
+                VelocityYPerSecond: 3.0 + index % 7,
+                AgeFrames: 6 + index % 9,
+                Confidence: 0.72 + index % 8 * 0.02);
+        })
+        .ToArray();
+    return new MimirFeatureTrackCameraObservation(
+        $"{sourceId}:sparse-features:{observedTimeNs}",
+        sourceId,
+        width,
+        height,
+        observedTimeNs,
+        tracks,
+        FrameCount: 1,
+        MeanTrackAgeFrames: tracks.Average(static track => track.AgeFrames),
+        MeanSpeedPixelsPerSecond: tracks.Average(static track => Math.Sqrt(
+            track.VelocityXPerSecond * track.VelocityXPerSecond +
+            track.VelocityYPerSecond * track.VelocityYPerSecond)),
+        Confidence: tracks.Average(static track => track.Confidence));
+}
+
+static double PixelToClipX(double imageX, int width) =>
+    Math.Clamp(imageX / Math.Max(1.0, width) * 2.0 - 1.0, -1.0, 1.0);
+
+static double PixelToClipY(double imageY, int height) =>
+    Math.Clamp(1.0 - imageY / Math.Max(1.0, height) * 2.0, -1.0, 1.0);
+
+static int StablePositiveHash(string value)
+{
+    unchecked
+    {
+        var hash = 17;
+        foreach (var ch in value)
+        {
+            hash = hash * 31 + ch;
+        }
+
+        return Math.Abs(hash == int.MinValue ? 0 : hash);
+    }
+}
 
 static IReadOnlyList<MimirLedPixelDetection> ProjectLedDetections(
     IReadOnlyList<MimirLedSplineScenePoint> scenePoints,

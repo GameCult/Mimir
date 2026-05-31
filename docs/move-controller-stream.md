@@ -67,6 +67,18 @@ The current status records are camera-device receipts for `/dev/video*` and a
 tracking owns that signal. Values are `[present, videoIndex, isPs3Eye]` for
 camera-device receipts.
 
+`MimirRoomCalibrationLockSolver` is the first room-lock coordinator. It consumes
+the LED string candidate/residual, the camera-rig pose update frame, Move
+controller feature-history candidates, and PS3 Eye sparse-feature candidates.
+It only reports `Locked` when every witness family is present: multiple cameras
+share enough LED indices, the rig solver produced enough pose updates with low
+mean ray residual, multiple Move identities have stable history, and multiple
+Eyes contribute enough stable feature tracks. Missing families are reported by
+name instead of being papered over. `Mimir.BufferSmoke
+--room-calibration-lock-smoke` proves a synthetic three-camera LED string, two
+Moves, and two Eyes lock at confidence `0.778`, while removing Move history
+correctly drops the result to `InsufficientWitnesses`.
+
 ## Runtime Profile
 
 Use:
