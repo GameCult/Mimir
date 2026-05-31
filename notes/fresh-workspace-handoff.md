@@ -45,11 +45,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Fensalir owns production GPU fusion, UI, and Spout2 publication.
 - `MimirSceneEditorState` is currently a 2D OBS-shaped program mixer owner, not
   a camera/3D scene editor. Synced video buffers become program layers with
-  normalized X/Y/W/H/rotation placement; the Eve/CultUI surface is Source list
-  left, maximized Program Preview center, compact Audio Mixer below, and Layer
-  Inspector right. Camera/SDF/model editor affordances have no live UI
-  authority and editor camera/SDF/spline output no longer contributes to the
-  runtime frame. Smoke with `--scene-editor-smoke`.
+  normalized placement; the Eve/CultUI surface is Video Sources plus
+  source-adjacent layer actions on the left, a chrome-free program canvas in
+  the center, and Audio Mix on the right. Camera/SDF/model editor affordances
+  and numeric transform inspector controls have no live UI authority, and
+  editor camera/SDF/spline output no longer contributes to the runtime frame.
+  Smoke with `--scene-editor-smoke`.
 - Live camera image buffers should use Fensalir-owned texture leases when they
   are rendering inputs: Mimir asks the engine broker for a keyed D3D12
   Texture2D/fence lease, writes decoded frames into that texture, commits the
