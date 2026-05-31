@@ -382,10 +382,14 @@ a named invariant that the native runtime cannot protect yet.
   `BuildLedSplineCandidateFrame` lowers that curve as deterministic
   camera-sensor Feature evidence, and `--led-spline-calibration-smoke` proves
   Fensalir plans it as one `DebugOverlay` packet with no deferred request.
-  `MimirVisualCalibrationResidualSolver` is the first higher-level owner shape:
-  it compares coded/indexed observations across camera frustums and emits
-  residual reports, but it does not write camera pose until the calibration
-  state contract exists. This is calibration evidence only. Exact
+  `MimirLedSplineCurveSolver` now owns the first per-sensor curve solve from
+  bright LED detections into ordered image/clipspace samples. `MimirCameraRigCalibrationSolver`
+  owns the next bounded pose step: given stable LED indices plus a scene-space
+  LED curve anchor, it fits camera translation updates by minimizing ray-to-
+  curve distance from each local frustum. The smoke synthesizes a scene curve,
+  projects it through two camera frustums, solves the curves back out of the
+  detections, and recovers bounded camera-position updates with near-zero ray
+  residual. Rotation and intrinsics fitting remain explicit future work. Exact
   correspondence requires coded or otherwise stable LED identity; uncoded
   repeated lights remain curve constraints until the global residual solver
   resolves them.

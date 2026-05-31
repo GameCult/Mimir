@@ -612,13 +612,17 @@ deterministic camera-sensor Feature evidence; Fensalir plans it as a
 blink-coded strips can provide exact cross-camera LED identity. Plain identical
 white LEDs still provide a strong spline/epipolar constraint, but their point
 correspondence is ambiguous under occlusion, saturation, repeated spacing, and
-motion blur until temporal continuity, Leap/body anchors, or a future residual
-solver disambiguates it. Individual cameras do not write calibration state; the
-future global residual owner fits local frustums into a coherent scene and is
-the only authority allowed to update camera intrinsics/extrinsics. Once that
-frustum fit is coherent, detected surface candidates can be sampled across
-every synchronized view before Fensalir resolves them into 4D Gaussian/surface
-splat claims.
+motion blur until temporal continuity, Leap/body anchors, or the residual
+solver disambiguates it. `MimirLedSplineCurveSolver` is the first per-sensor
+curve owner: it orders bright detections and computes image/clipspace curve
+samples. `MimirCameraRigCalibrationSolver` is the first higher-level frustum
+fit owner: given stable LED indices and a scene-space LED curve anchor, it
+minimizes ray-to-curve distance and emits bounded camera translation updates.
+Individual cameras do not write calibration state. Rotation, focal length, and
+distortion solving are still future cuts, not hidden behavior. Once the frustum
+fit is coherent, detected surface candidates can be sampled across every
+synchronized view before Fensalir resolves them into 4D Gaussian/surface splat
+claims.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

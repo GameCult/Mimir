@@ -798,6 +798,31 @@ static int RunFensalirCameraObservationSmoke()
 
 static int RunLedSplineCalibrationSmoke()
 {
+    var scenePoints = new[]
+    {
+        new MimirLedSplineScenePoint(0, new Vector3(-0.20f, 0.30f, 2.20f), 0.95),
+        new MimirLedSplineScenePoint(1, new Vector3(-0.08f, 0.18f, 2.05f), 0.96),
+        new MimirLedSplineScenePoint(2, new Vector3(0.04f, 0.02f, 1.95f), 0.97),
+        new MimirLedSplineScenePoint(3, new Vector3(0.18f, -0.14f, 1.88f), 0.95),
+        new MimirLedSplineScenePoint(4, new Vector3(0.35f, -0.28f, 1.82f), 0.93),
+    };
+    var truePs3Pose = new MimirCameraPoseEstimate("ps3-eye-0", Vector3.Zero, Quaternion.Identity, 1.0);
+    var trueKiyoPose = new MimirCameraPoseEstimate("kiyo-basic", new Vector3(0.24f, 0.02f, -0.03f), Quaternion.Identity, 1.0);
+    var curveSolver = new MimirLedSplineCurveSolver();
+    var ps3Fit = curveSolver.SolveCameraCurve(
+        truePs3Pose.SourceId,
+        "ps3-eye-0:led-spline:42",
+        320,
+        240,
+        1_000_000_000L,
+        ProjectLedDetections(scenePoints, truePs3Pose, 320, 240, radiusPixels: 2.4));
+    var kiyoFit = curveSolver.SolveCameraCurve(
+        trueKiyoPose.SourceId,
+        "kiyo-basic:led-spline:42",
+        1920,
+        1080,
+        1_000_000_004L,
+        ProjectLedDetections(scenePoints, trueKiyoPose, 1920, 1080, radiusPixels: 4.5));
     var candidate = new MimirLedSplineFieldCandidate(
         CandidateKey: "co-streamer-led-strip-frame-42",
         CalibrationId: "room-camera-rig-online-calibration",
@@ -805,41 +830,13 @@ static int RunLedSplineCalibrationSmoke()
         ProducerKey: "mimir-led-spline-detector",
         CameraObservations:
         [
-            new MimirLedSplineCameraObservation(
-                ObservationKey: "ps3-eye-0:led-spline:42",
-                SourceId: "ps3-eye-0",
-                Width: 320,
-                Height: 240,
-                ObservedTimeNs: 1_000_000_000L,
-                Points:
-                [
-                    new MimirLedSplineObservationPoint(0, 0.00, 110.0, 82.0, -0.3125, 0.3167, 2.5, 0.91),
-                    new MimirLedSplineObservationPoint(1, 0.25, 132.0, 98.0, -0.1750, 0.1833, 2.2, 0.94),
-                    new MimirLedSplineObservationPoint(2, 0.50, 148.0, 126.0, -0.0750, -0.0500, 2.4, 0.92),
-                    new MimirLedSplineObservationPoint(3, 0.75, 171.0, 152.0, 0.0688, -0.2667, 2.6, 0.90),
-                    new MimirLedSplineObservationPoint(4, 1.00, 204.0, 184.0, 0.2750, -0.5333, 2.7, 0.89),
-                ],
-                Confidence: 0.91),
-            new MimirLedSplineCameraObservation(
-                ObservationKey: "kiyo-basic:led-spline:42",
-                SourceId: "kiyo-basic",
-                Width: 1920,
-                Height: 1080,
-                ObservedTimeNs: 1_000_000_004L,
-                Points:
-                [
-                    new MimirLedSplineObservationPoint(0, 0.00, 763.0, 356.0, -0.2052, 0.3407, 4.4, 0.88),
-                    new MimirLedSplineObservationPoint(1, 0.25, 840.0, 432.0, -0.1250, 0.2000, 4.1, 0.93),
-                    new MimirLedSplineObservationPoint(2, 0.50, 914.0, 552.0, -0.0479, -0.0222, 4.3, 0.94),
-                    new MimirLedSplineObservationPoint(3, 0.75, 1018.0, 673.0, 0.0604, -0.2463, 4.6, 0.90),
-                    new MimirLedSplineObservationPoint(4, 1.00, 1188.0, 816.0, 0.2375, -0.5111, 4.9, 0.86),
-                ],
-                Confidence: 0.90),
+            curveSolver.ToCameraObservation(ps3Fit, 320, 240, 1_000_000_000L),
+            curveSolver.ToCameraObservation(kiyoFit, 1920, 1080, 1_000_000_004L),
         ],
         EstimatedLedCount: 5,
         HasTemporalCode: true,
         HasStableLedIndices: true,
-        CurveLengthPixels: 568.0,
+        CurveLengthPixels: Math.Max(ps3Fit.CurveLengthPixels, kiyoFit.CurveLengthPixels),
         Confidence: 0.89,
         ObservedTimeNs: 1_000_000_004L);
 
@@ -848,10 +845,18 @@ static int RunLedSplineCalibrationSmoke()
     var validation = AquariumFieldEvidenceValidator.Validate(frame);
     var plan = AquariumFieldLoweringPlanner.Plan(frame);
     var residual = new MimirVisualCalibrationResidualSolver().EvaluateLedSpline(candidate);
+    var rigCalibration = new MimirCameraRigCalibrationSolver().FitCameraPositionsFromLedSpline(
+        candidate,
+        scenePoints,
+        [
+            truePs3Pose with { PositionMeters = new Vector3(0.02f, -0.01f, 0.01f), Confidence = 0.75 },
+            trueKiyoPose with { PositionMeters = new Vector3(0.10f, 0.00f, -0.02f), Confidence = 0.70 },
+        ],
+        maximumDeltaMeters: 0.50);
     var claim = frame.Claims.SingleOrDefault();
 
     Console.WriteLine(
-        $"led-spline-calibration-smoke domains={frame.Domains.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} pairs={residual.PairResiduals.Count} clipResidual={residual.PairResiduals.FirstOrDefault()?.MeanClipspaceDistance ?? double.NaN:0.000000} points={candidate.CameraObservations.Sum(static observation => observation.Points.Count)} errors={validation.HasErrors}");
+        $"led-spline-calibration-smoke domains={frame.Domains.Count} claims={frame.Claims.Count} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} pairs={residual.PairResiduals.Count} poseUpdates={rigCalibration.PoseUpdates.Count} rayResidual={rigCalibration.MeanRayDistanceMeters:0.000000} points={candidate.CameraObservations.Sum(static observation => observation.Points.Count)} errors={validation.HasErrors}");
 
     if (validation.HasErrors)
     {
@@ -874,12 +879,44 @@ static int RunLedSplineCalibrationSmoke()
         !residual.HasPoseUpdate &&
         residual.PairResiduals.Count == 1 &&
         residual.PairResiduals[0].SharedLedCount == 5 &&
-        residual.PairResiduals[0].MeanClipspaceDistance < 0.12 &&
+        rigCalibration.HasPoseUpdate &&
+        rigCalibration.PoseUpdates.Count == 2 &&
+        rigCalibration.PoseUpdates.All(static update => update.UsedPointCount == 5) &&
+        rigCalibration.PoseUpdates.Any(static update => update.SourceId == "kiyo-basic" && update.DeltaMeters.Length() > 0.10f) &&
+        rigCalibration.MeanRayDistanceMeters < 0.02 &&
         plan.Packets.Count == 1 &&
         plan.Packets[0].Backend == AquariumFieldBackendKind.DebugOverlay &&
         plan.DeferredRequests.Count == 0
             ? 0
             : 1;
+}
+
+static IReadOnlyList<MimirLedPixelDetection> ProjectLedDetections(
+    IReadOnlyList<MimirLedSplineScenePoint> scenePoints,
+    MimirCameraPoseEstimate pose,
+    int width,
+    int height,
+    double radiusPixels)
+{
+    var output = new MimirLedPixelDetection[scenePoints.Count];
+    var worldToCamera = Quaternion.Inverse(pose.CameraToWorldRotation);
+    for (var index = 0; index < scenePoints.Count; index++)
+    {
+        var cameraSpace = Vector3.Transform(scenePoints[index].PositionMeters - pose.PositionMeters, worldToCamera);
+        var z = Math.Max(1.0e-6f, cameraSpace.Z);
+        var clipX = cameraSpace.X / z;
+        var clipY = cameraSpace.Y / z;
+        var imageX = (clipX + 1.0f) * 0.5f * width;
+        var imageY = (1.0f - clipY) * 0.5f * height;
+        output[index] = new MimirLedPixelDetection(
+            scenePoints[index].LedIndex,
+            imageX,
+            imageY,
+            radiusPixels,
+            scenePoints[index].Confidence);
+    }
+
+    return output;
 }
 
 static int RunFensalirTextureLeaseSmoke()

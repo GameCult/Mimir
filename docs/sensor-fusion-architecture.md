@@ -10,9 +10,9 @@ flowchart TD
     C["Leap stereo IR driver"] --> B
     B --> D["native reservoir handles"]
     D --> E["Fensalir GPU feature extraction"]
-    E --> J["LED spline observations in local clipspace"]
+    E --> J["per-sensor LED curve solve"]
     E --> F["cross-view matching + flow"]
-    J --> K["global residual calibration owner"]
+    J --> K["camera rig calibration solver"]
     K --> F
     F --> G["surface/material claims"]
     G --> H["brush/splat render budget"]
@@ -33,6 +33,9 @@ flowchart TD
 - Stable LED index identity requires temporal/color/address coding or another
   correspondence source; uncoded identical lights are spline constraints, not
   metric depth authority.
+- The first camera-rig solver fits bounded camera translation updates from a
+  scene-anchored LED curve by minimizing ray-to-curve distance. Rotation,
+  intrinsics, and distortion are future owners.
 - Once camera frustums are coherent, every detected surface candidate can be
   resampled across the synchronized view set before Fensalir resolves it into
   spatiotemporal surface/splat claims.

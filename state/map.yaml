@@ -111,10 +111,11 @@ invariants:
     `DebugOverlay` calibration evidence. Exact cross-camera correspondence
     requires addressable/blink-coded LEDs or another identity source; uncoded
     identical LEDs remain useful curve constraints but cannot own camera pose.
-    `MimirVisualCalibrationResidualSolver` now emits residual-only reports over
-    coded/indexed LED observations; a future global residual/calibration owner
-    must fit local frustums into coherent scene-space camera placement and be
-    the only writer of camera intrinsics/extrinsics.
+    `MimirLedSplineCurveSolver` now solves ordered per-sensor image/clipspace
+    curves from bright detections. `MimirCameraRigCalibrationSolver` consumes
+    stable LED indices plus a scene-space LED curve anchor and emits bounded
+    camera translation updates by minimizing ray-to-curve distance. Rotation,
+    focal length, and distortion are still future calibration cuts.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before
