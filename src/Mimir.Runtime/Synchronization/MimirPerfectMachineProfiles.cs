@@ -6,6 +6,7 @@ public enum MimirPerfectMachineNodeRole
     RavenRemote,
     PhoneWitness,
     MicrocontrollerWitness,
+    NightwingEyesMoves,
     CalibrationBench,
     ObsProgramHost
 }
@@ -119,6 +120,26 @@ public static class MimirPerfectMachineProfiles
             "mimir.bioacoustic_decoder_state.v1"
         ]);
 
+    public static MimirPerfectMachineProfile NightwingEyesMoves { get; } = new(
+        "nightwing-eyes-moves",
+        "LAN visual witness: PS3 Eyes, PS Move Bluetooth/HID, LED schedules, and compact motion-marker histories.",
+        MimirPerfectMachineNodeRole.NightwingEyesMoves,
+        MimirBioacousticDecoderConfiguration.CompactFastIndex,
+        MimirAlignmentActuatorProfile.SixSourceFaust,
+        MimirAudioFieldModel.AlignedStems,
+        [MimirComputeBackend.ManagedScalar, MimirComputeBackend.NativeSimd, MimirComputeBackend.RemoteCultMeshWorker],
+        EmitsWitness: true,
+        OwnsCanonicalClock: false,
+        PublishesObsProgram: false,
+        RollingWindow: TimeSpan.FromSeconds(3),
+        RequiredCultMeshDocuments:
+        [
+            "mimir.move_controller_schedule_state.v1",
+            "mimir.move_controller_observation_state.v1",
+            "mimir.camera_feature_track_state.v1",
+            "mimir.visual_calibration_state.v1"
+        ]);
+
     public static MimirPerfectMachineProfile CalibrationBench { get; } = new(
         "calibration-bench",
         "Offline or live calibration worker: explores decoder/codebook/path variants and preserves receipts.",
@@ -162,6 +183,7 @@ public static class MimirPerfectMachineProfiles
         RavenRemote,
         PhoneWitness,
         MicrocontrollerWitness,
+        NightwingEyesMoves,
         CalibrationBench,
         ObsProgramHost
     ];

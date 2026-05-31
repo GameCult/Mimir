@@ -203,6 +203,17 @@ invariants:
     Kiyo Pro program view, both PS3 Eyes as Move trackers, Scarlett ASIO
     labeled as shotgun/cardioid/Raven loopback, and Raven display over SRT
     port 5200.
+    Nightwing is now modeled as the dedicated Eyes/Moves witness body rather
+    than a vague remote helper: it owns PS3 Eye USB reads, PS Move
+    Bluetooth/HID, LED schedules, device timestamps, and compact
+    marker/feature extraction receipts. Starfire keeps the canonical rolling
+    window, Scarlett timing, global residuals, Kiyo/Raven program sync, and
+    OBS publication. Fensalir keeps D3D12 dense feature/fusion work, surface
+    claims, and splat/reservoir presentation. The
+    `nightwing-eyes-moves-witness` config and `nightwing-eyes-moves` Perfect
+    Machine profile emit typed Move observation, camera feature-track, and
+    visual marker state; raw Eye media from Nightwing is diagnostic only and
+    Nightwing does not own camera placement or the canonical clock.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,

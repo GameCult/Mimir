@@ -3734,8 +3734,9 @@ static int RunPerfectMachineProfileSmoke()
         actuator.FaustControls.Length >= 2 &&
         cameraFieldFrame.Resources.Count == 1 &&
         cameraFieldFrame.Claims.Count == 2 &&
-        cameraPlan.Packets.Count == 0 &&
-        cameraPlan.DeferredRequests.Count == 2 &&
+        cameraPlan.Packets.Count == 1 &&
+        cameraPlan.Packets[0].Backend == AquariumFieldBackendKind.GpuSensorFusion &&
+        cameraPlan.DeferredRequests.Count == 1 &&
         acousticFieldEvidence.Claims.Count == 1 &&
         acousticPlan.Packets.Count == 1 &&
         acousticPlan.DeferredRequests.Count == 0 &&
@@ -3756,6 +3757,8 @@ static int RunPerfectMachineProfileSmoke()
         stereoDepthPlan.Packets[0].Backend == AquariumFieldBackendKind.SurfacePage &&
         stereoDepthPlan.DeferredRequests.Count == 0 &&
         stereoDepthProfiles.Any(profile => profile.Id == MimirStereoDepthConfigurations.D3D12SgmLibSgmProvenance.Id && !profile.LiveDependency) &&
+        profiles.Any(profile => profile.Id == MimirPerfectMachineProfiles.NightwingEyesMoves.Id && profile.EmitsWitness && !profile.OwnsCanonicalClock && !profile.PublishesObsProgram) &&
+        distributedWitnesses.Any(profile => profile.Id == MimirDistributedWitnessConfigurations.NightwingEyesMoves.Id && !profile.MayStreamRawMedia && !profile.MayOwnCanonicalClock) &&
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&

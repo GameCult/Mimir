@@ -49,13 +49,14 @@ public static class MimirComputeOffloadConfigurations
 
     public static MimirComputeOffloadConfiguration DistributedWitnesses { get; } = new(
         "distributed-witnesses",
-        "Phones, Raven, and microcontrollers decode locally and return typed observations over CultMesh.",
+        "Phones, Raven, Nightwing, and microcontrollers decode locally and return typed observations over CultMesh.",
         [
             new(MimirWorkloadKind.BioacousticDecode, MimirComputeBackend.RemoteCultMeshWorker, "remote witness", CanRunRemote: true, RequiresRealtime: true, "Remote nodes self-locate but do not own canonical time."),
             new(MimirWorkloadKind.ClockHypothesis, MimirComputeBackend.ManagedScalar, "Starfire", CanRunRemote: false, RequiresRealtime: true, "Starfire arbitrates clock/path hypotheses."),
             new(MimirWorkloadKind.PathCalibration, MimirComputeBackend.RemoteCultMeshWorker, "remote witness", CanRunRemote: true, RequiresRealtime: false, "Remote path evidence comes home as receipts."),
             new(MimirWorkloadKind.ActuatorControl, MimirComputeBackend.FaustNativeDsp, "Starfire Faust/native DSP", CanRunRemote: false, RequiresRealtime: true, "Only the program graph moves program samples."),
-            new(MimirWorkloadKind.CameraCapture, MimirComputeBackend.NativeSimd, "local or remote capture worker", CanRunRemote: true, RequiresRealtime: true, "Each machine reads its own devices directly.")
+            new(MimirWorkloadKind.CameraCapture, MimirComputeBackend.NativeSimd, "local or remote capture worker", CanRunRemote: true, RequiresRealtime: true, "Each machine reads its own devices directly."),
+            new(MimirWorkloadKind.VisualFeatureExtraction, MimirComputeBackend.NativeSimd, "Nightwing Eyes/Moves witness", CanRunRemote: true, RequiresRealtime: true, "Nightwing may extract sparse Move sphere and Eye feature tracks locally; Starfire/Fensalir still own global calibration and surface fusion.")
         ]);
 
     public static MimirComputeOffloadConfiguration CalibrationSweep { get; } = new(

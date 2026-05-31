@@ -95,7 +95,7 @@ public static class MimirModuleLibrary
         new(
             "distributed-witnesses",
             "Mimir.Runtime + CultMesh",
-            "Remote mini-Mimir configurations for Raven, phones, microcontrollers, and networked camera rigs.",
+            "Remote mini-Mimir configurations for Raven, phones, microcontrollers, Nightwing Eyes/Moves, and networked camera rigs.",
             MimirDistributedWitnessConfigurations.BuiltIn.Select(profile => profile.Id).ToArray(),
             ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --perfect-machine-profile-smoke"]),
         new(

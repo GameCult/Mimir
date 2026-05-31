@@ -479,6 +479,17 @@ a named invariant that the native runtime cannot protect yet.
   Kiyo Pro program view, both PS3 Eyes as Move trackers, Scarlett ASIO channels
   labeled as shotgun/cardioid/Raven loopback, and Raven screen capture on SRT
   port 5200.
+  The distributed authority split is now explicit: Nightwing owns the local
+  PS3 Eye USB reads, PS Move Bluetooth/HID link, LED schedules, device
+  timestamps, and compact marker/feature extraction receipts. Starfire owns
+  the canonical rolling window, Scarlett timing, global calibration residuals,
+  Kiyo/Raven program sync, and OBS publication. Fensalir owns D3D12 dense
+  feature/fusion work, surface claims, and splat/reservoir program pixels.
+  `MimirDistributedWitnessConfigurations.NightwingEyesMoves` and the
+  `nightwing-eyes-moves` Perfect Machine profile encode this: Nightwing emits
+  typed `mimir.move_controller_observation_state`,
+  `mimir.camera_feature_track_state`, and `mimir.visual_marker_state` rather
+  than becoming a raw-media or camera-placement authority.
   Next useful cut is direct report decoding plus optical sphere observations
   from PS3 Eyes/Kiyos entering the same calibration-evidence path as LED
   spline constraints.

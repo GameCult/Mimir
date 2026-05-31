@@ -6,7 +6,8 @@ public enum MimirDistributedWitnessKind
     PhoneMicrophone,
     MicrocontrollerListener,
     RemoteCameraRig,
-    BrowserDiagnostics
+    BrowserDiagnostics,
+    NightwingEyesMoves
 }
 
 public sealed record MimirDistributedWitnessConfiguration(
@@ -73,11 +74,35 @@ public static class MimirDistributedWitnessConfigurations
         Notes = "Raw media may arrive late; decoded anchors tell Mimir where it belongs in the window."
     };
 
+    public static MimirDistributedWitnessConfiguration NightwingEyesMoves { get; } = new(
+        "nightwing-eyes-moves-witness",
+        "LAN witness with spare USB and Bluetooth: owns local PS3 Eye reads plus PS Move HID/LED control.",
+        MimirDistributedWitnessKind.NightwingEyesMoves,
+        "nightwing-eyes-moves",
+        Inputs: ["ps3-eye-0", "ps3-eye-1", "ps-move-hid", "ps-move-led-schedule", "nightwing-bluetooth"],
+        RequiredStateDocuments:
+        [
+            "mimir.move_controller_schedule_state",
+            "mimir.camera_rig_calibration_state",
+            "mimir.visual_calibration_state"
+        ],
+        EmittedStateDocuments:
+        [
+            "mimir.move_controller_observation_state",
+            "mimir.camera_feature_track_state",
+            "mimir.visual_marker_state"
+        ],
+        MayStreamRawMedia: false,
+        MayOwnCanonicalClock: false,
+        ExpectedNetworkLatencyMilliseconds: 2.0,
+        "Nightwing reads the local Eyes and Moves, preserves device timestamps, and ships compact track/marker observations. Starfire/Fensalir own global pose, residuals, surface claims, and program pixels.");
+
     public static IReadOnlyList<MimirDistributedWitnessConfiguration> BuiltIn { get; } =
     [
         Raven,
         Phone,
         Microcontroller,
-        RemoteCameraRig
+        RemoteCameraRig,
+        NightwingEyesMoves
     ];
 }

@@ -25,6 +25,29 @@ provides the two hero mics plus Raven program-loopback timing evidence.
 - Cut line: this profile is the first streamable overlay product, not the full
   online calibration solve.
 
+## Nightwing Eyes/Moves Split
+
+Nightwing is the right body for the PS3 Eyes and PS Move controllers: it has
+the spare USB topology, BlueZ/Bluetooth, and the local HID path. That does not
+make it a camera-placement authority.
+
+The split is:
+
+- Nightwing-local authority: read PS3 Eye frames, talk to PS Move HID/Bluetooth,
+  apply LED schedules, preserve device timestamps, and extract compact sphere,
+  marker, and sparse Eye feature observations.
+- Starfire authority: own the canonical rolling window, Scarlett timing,
+  global residual solve, camera placement, Kiyo/Raven program sync, and OBS
+  program publication.
+- Fensalir authority: own D3D12 dense feature extraction/fusion, surface claims,
+  splat/reservoir resolution, and program pixels.
+
+`MimirDistributedWitnessConfigurations.NightwingEyesMoves` records this as a
+typed witness: it may emit `mimir.move_controller_observation_state`,
+`mimir.camera_feature_track_state`, and `mimir.visual_marker_state`, but it must
+not stream raw Eye media as the normal live contract and must not own the
+canonical clock. Raw frames from Nightwing are diagnostic receipts only.
+
 ## Runtime Profile
 
 Use:
