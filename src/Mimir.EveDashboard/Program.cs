@@ -311,12 +311,60 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
                     node.Health,
                     node.ProviderId,
                     node.Command,
-                    node.Endpoint)).ToArray());
+                    node.Endpoint)).ToArray(),
+                ToCultMeshSurface(state.Surface));
             await SendBinaryFrameAsync(socket.Stream, MessagePackSerializer.Serialize(document)).ConfigureAwait(false);
             return;
         }
 
         await SendTextFrameAsync(socket.Stream, JsonSerializer.Serialize(state, JsonOptions)).ConfigureAwait(false);
+    }
+
+    private static MimirEveDashboardSurfaceSnapshot? ToCultMeshSurface(DashboardSurface? surface)
+    {
+        if (surface == null)
+        {
+            return null;
+        }
+
+        return new MimirEveDashboardSurfaceSnapshot(
+            surface.Schema,
+            surface.Id,
+            surface.Title,
+            ToCultMeshElement(surface.Root),
+            surface.Assets
+                .Select(static asset => new MimirEveDashboardSurfaceAssetSnapshot(asset.Id, asset.Kind, asset.Uri))
+                .ToArray());
+    }
+
+    private static MimirEveDashboardUiElementSnapshot ToCultMeshElement(DashboardUiElement element)
+    {
+        return new MimirEveDashboardUiElementSnapshot(
+            element.Id,
+            element.Kind,
+            element.Role,
+            element.Text,
+            element.AssetRef,
+            element.AssetUri,
+            element.BindNodeId,
+            element.CommandId,
+            element.Layout == null
+                ? null
+                : new MimirEveDashboardUiLayoutSnapshot(
+                    element.Layout.Direction,
+                    element.Layout.Width,
+                    element.Layout.Height,
+                    element.Layout.Grow,
+                    element.Layout.Gap,
+                    element.Layout.Padding,
+                    element.Layout.Overflow),
+            element.Style == null
+                ? null
+                : new MimirEveDashboardUiStyleSnapshot(element.Style.Variant, element.Style.Tone),
+            element.Metric == null
+                ? null
+                : new MimirEveDashboardUiMetricSnapshot(element.Metric.Label, element.Metric.Value, element.Metric.Tone),
+            element.Children.Select(ToCultMeshElement).ToArray());
     }
 
     private async Task BroadcastStateAsync()

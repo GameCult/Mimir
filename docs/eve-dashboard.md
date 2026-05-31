@@ -150,3 +150,7 @@ The old `nodes` array is no longer expected to carry complete UI composition.
 It is a compatibility/debug/data surface. Clients that understand `surface`
 should render the composed tree first and use `nodes` only for selection,
 state-path binding, and fallback.
+
+The binary CultMesh state document mirrors this ownership: field 7 carries the
+optional `surface` tree. Older clients can stop at the node projection; current
+Eve clients should prefer `surface.root` whenever it is present.

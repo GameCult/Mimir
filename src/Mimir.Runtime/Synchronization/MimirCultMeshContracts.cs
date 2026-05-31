@@ -129,7 +129,8 @@ public sealed record MimirEveDashboardStateDocument(
     [property: Key(3)] string UpdatedAtUtc,
     [property: Key(4)] string SelectedNodeId,
     [property: Key(5)] string LutPreset,
-    [property: Key(6)] MimirEveDashboardNodeSnapshot[] Nodes);
+    [property: Key(6)] MimirEveDashboardNodeSnapshot[] Nodes,
+    [property: Key(7)] MimirEveDashboardSurfaceSnapshot? Surface);
 
 [MessagePackObject]
 public sealed record MimirEveDashboardNodeSnapshot(
@@ -148,6 +149,56 @@ public sealed record MimirEveDashboardNodeSnapshot(
     [property: Key(12)] string? ProviderId,
     [property: Key(13)] string? Command,
     [property: Key(14)] string? Endpoint);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardSurfaceSnapshot(
+    [property: Key(0)] string Schema,
+    [property: Key(1)] string Id,
+    [property: Key(2)] string Title,
+    [property: Key(3)] MimirEveDashboardUiElementSnapshot Root,
+    [property: Key(4)] MimirEveDashboardSurfaceAssetSnapshot[] Assets);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardSurfaceAssetSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] string Kind,
+    [property: Key(2)] string Uri);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiElementSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] string Kind,
+    [property: Key(2)] string? Role,
+    [property: Key(3)] string? Text,
+    [property: Key(4)] string? AssetRef,
+    [property: Key(5)] string? AssetUri,
+    [property: Key(6)] string? BindNodeId,
+    [property: Key(7)] string? CommandId,
+    [property: Key(8)] MimirEveDashboardUiLayoutSnapshot? Layout,
+    [property: Key(9)] MimirEveDashboardUiStyleSnapshot? Style,
+    [property: Key(10)] MimirEveDashboardUiMetricSnapshot? Metric,
+    [property: Key(11)] MimirEveDashboardUiElementSnapshot[] Children);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiLayoutSnapshot(
+    [property: Key(0)] string Direction,
+    [property: Key(1)] double? Width,
+    [property: Key(2)] double? Height,
+    [property: Key(3)] double? Grow,
+    [property: Key(4)] double? Gap,
+    [property: Key(5)] double? Padding,
+    [property: Key(6)] string? Overflow);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiStyleSnapshot(
+    [property: Key(0)] string Variant,
+    [property: Key(1)] string? Tone);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiMetricSnapshot(
+    [property: Key(0)] string Label,
+    [property: Key(1)] double Value,
+    [property: Key(2)] string Tone);
 
 [CultDocument("mimir.eve_dashboard_command", "mimir.eve_dashboard_command.v1")]
 [MessagePackObject]
