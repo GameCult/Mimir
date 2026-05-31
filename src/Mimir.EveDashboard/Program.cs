@@ -7,7 +7,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var port = ParseInt(args, "--port", 8795);
-var providers = EveDashboardProviderCatalog.Create(ParseProviderSpecs(args));
+var voidBotSwarmStatePath = ParseString(args, "--voidbot-swarm-state", @"E:\Projects\VoidBot\.voidbot\status\swarm-state.json");
+var providers = EveDashboardProviderCatalog.Create(ParseProviderSpecs(args), voidBotSwarmStatePath);
 using var server = new EveDashboardServer(port, providers);
 await server.RunAsync();
 
@@ -37,6 +38,20 @@ static IReadOnlyList<string> ParseProviderSpecs(IReadOnlyList<string> args)
     }
 
     return specs;
+}
+
+static string ParseString(IReadOnlyList<string> args, string name, string fallback)
+{
+    for (var index = 0; index < args.Count - 1; index++)
+    {
+        if (string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(args[index + 1]))
+        {
+            return args[index + 1];
+        }
+    }
+
+    return fallback;
 }
 
 internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog providers) : IDisposable
@@ -426,12 +441,13 @@ internal sealed class EveDashboardProviderCatalog
 
     public DashboardProviderManifest BrokerManifest { get; }
 
-    public static EveDashboardProviderCatalog Create(IReadOnlyList<string> remoteSpecs)
+    public static EveDashboardProviderCatalog Create(IReadOnlyList<string> remoteSpecs, string voidBotSwarmStatePath)
     {
         var providers = new List<IDashboardProvider>();
         var remoteProviders = remoteSpecs.Select(RemoteDashboardProvider.FromSpec).OfType<RemoteDashboardProvider>().ToArray();
         providers.Add(new DashboardBrokerProvider(remoteProviders));
         providers.Add(new MimirStreamLayoutProvider());
+        providers.Add(new VoidBotSwarmProvider(voidBotSwarmStatePath));
         providers.Add(new YggdrasilStreamPixelsProvider());
         providers.AddRange(remoteProviders);
         return new EveDashboardProviderCatalog(providers);
@@ -546,12 +562,17 @@ internal sealed class DashboardBrokerProvider : MutableDashboardProvider
     {
         var nodes = new List<DashboardNode>
         {
-            new("provider-mimir", "Mimir Stream Layout", "dashboard-provider", -0.42, -0.34, 0.34, 0.22, "local")
+            new("provider-mimir", "Mimir Stream Layout", "dashboard-provider", -0.56, -0.34, 0.30, 0.22, "local")
             {
                 ProviderId = MimirStreamLayoutProvider.ProviderId,
                 Command = "open-provider",
             },
-            new("provider-streampixels", "StreamPixels Edge", "dashboard-provider", 0.38, -0.34, 0.34, 0.22, "ssh ready")
+            new("provider-voidbot", "VoidBot Swarm", "dashboard-provider", 0.0, -0.34, 0.30, 0.22, "ctb")
+            {
+                ProviderId = VoidBotSwarmProvider.ProviderId,
+                Command = "open-provider",
+            },
+            new("provider-streampixels", "StreamPixels Edge", "dashboard-provider", 0.56, -0.34, 0.30, 0.22, "ssh ready")
             {
                 ProviderId = YggdrasilStreamPixelsProvider.ProviderId,
                 Command = "open-provider",
@@ -621,6 +642,390 @@ internal sealed class MimirStreamLayoutProvider : MutableDashboardProvider
             ],
         };
 }
+
+internal sealed class VoidBotSwarmProvider : IDashboardProvider
+{
+    public const string ProviderId = "voidbot.swarm";
+
+    private readonly string swarmStatePath;
+    private DashboardState currentState;
+    private DateTime lastWriteUtc = DateTime.MinValue;
+    private string selectedIdentityId = "";
+    private string selectedStatePath = "";
+
+    public VoidBotSwarmProvider(string swarmStatePath)
+    {
+        this.swarmStatePath = swarmStatePath;
+        Manifest = new DashboardProviderManifest(
+            ProviderId,
+            "VoidBot Swarm",
+            "Native Eve tab for VoidBot agent status, CTB order, and selected Face state.",
+            "1",
+            "/eve/deck/voidbot.swarm",
+            ["ctb", "agent-status", "state-tree", "cultmesh-snapshot"],
+            UsesCultMesh: true,
+            Transport: "Reads VoidBot swarm-state.json now; consumes voidbot.swarm_state_snapshot.v1 when CultMesh bridge is live.");
+        currentState = BuildMissingState();
+    }
+
+    public DashboardProviderManifest Manifest { get; }
+
+    public DashboardState State
+    {
+        get
+        {
+            RefreshIfNeeded(force: false);
+            return currentState;
+        }
+    }
+
+    public bool ApplyCommand(DashboardCommand command)
+    {
+        RefreshIfNeeded(force: false);
+        var node = currentState.Nodes.FirstOrDefault(candidate => string.Equals(candidate.Id, command.NodeId, StringComparison.Ordinal));
+        if (node == null)
+        {
+            return false;
+        }
+
+        currentState.SelectedNodeId = node.Id;
+        if (!string.IsNullOrWhiteSpace(node.IdentityId))
+        {
+            selectedIdentityId = node.IdentityId;
+            selectedStatePath = "";
+        }
+
+        if (!string.IsNullOrWhiteSpace(node.StatePath))
+        {
+            selectedStatePath = node.StatePath;
+        }
+
+        RefreshIfNeeded(force: true);
+        currentState.SelectedNodeId = node.Id;
+        return true;
+    }
+
+    private void RefreshIfNeeded(bool force)
+    {
+        try
+        {
+            var info = new FileInfo(swarmStatePath);
+            if (!info.Exists)
+            {
+                currentState = BuildMissingState();
+                return;
+            }
+
+            if (!force && info.LastWriteTimeUtc == lastWriteUtc)
+            {
+                return;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(info.FullName));
+            currentState = BuildState(document.RootElement, info.LastWriteTimeUtc);
+            lastWriteUtc = info.LastWriteTimeUtc;
+        }
+        catch (Exception error)
+        {
+            currentState = BuildErrorState(error.Message);
+        }
+    }
+
+    private DashboardState BuildState(JsonElement root, DateTime sourceWriteUtc)
+    {
+        var summary = TryGet(root, "summary");
+        var controls = TryGet(root, "controls");
+        var cultMesh = TryGet(root, "cultMesh");
+        var participants = ArrayItems(TryGet(root, "participants")).ToArray();
+        var upcoming = ArrayItems(TryGet(root, "upcomingTurns")).ToArray();
+
+        if (string.IsNullOrWhiteSpace(selectedIdentityId))
+        {
+            selectedIdentityId = StringValue(summary, "nextIdentityId")
+                ?? StringValue(upcoming.FirstOrDefault(), "identityId")
+                ?? StringValue(participants.FirstOrDefault(), "identityId")
+                ?? "";
+        }
+
+        var selectedAgent = participants.FirstOrDefault(participant => string.Equals(StringValue(participant, "identityId"), selectedIdentityId, StringComparison.Ordinal));
+        if (selectedAgent.ValueKind == JsonValueKind.Undefined)
+        {
+            selectedAgent = participants.FirstOrDefault();
+            selectedIdentityId = StringValue(selectedAgent, "identityId") ?? "";
+        }
+
+        var nodes = new List<DashboardNode>();
+        var paused = BoolValue(summary, "paused") == true;
+        var stateLabel = StringValue(summary, "state") ?? "unknown";
+        var generatedAt = StringValue(root, "generatedAt") ?? sourceWriteUtc.ToString("O");
+        var cadence = NumberValue(controls, "cadenceMultiplier") ?? NumberValue(summary, "cadenceMultiplier") ?? 1;
+        nodes.Add(new DashboardNode(
+            "voidbot-summary",
+            $"VoidBot Swarm\n{stateLabel}  next {StringValue(summary, "nextDisplayName") ?? "none"}",
+            "swarm",
+            -0.60,
+            -0.54,
+            0.34,
+            0.22,
+            paused ? "paused" : "running")
+        {
+            Detail = $"agents {NumberValue(summary, "participantCount") ?? 0:0}  ready {NumberValue(summary, "readyNowCount") ?? 0:0}  cadence x{cadence:0.##}\nmesh {StringValue(cultMesh, "writeStatus") ?? "missing"}  {generatedAt}",
+        });
+
+        AddCtbRail(nodes, upcoming);
+        AddAgentCards(nodes, participants);
+        AddSelectedAgent(nodes, selectedAgent);
+
+        var selectedNodeId = string.IsNullOrWhiteSpace(currentState.SelectedNodeId) ||
+            nodes.All(node => !string.Equals(node.Id, currentState.SelectedNodeId, StringComparison.Ordinal))
+                ? "voidbot-summary"
+                : currentState.SelectedNodeId;
+
+        return new DashboardState
+        {
+            ProviderId = ProviderId,
+            Title = "VoidBot Swarm",
+            Version = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            UpdatedAt = DateTimeOffset.UtcNow,
+            SelectedNodeId = selectedNodeId,
+            Nodes = nodes,
+        };
+    }
+
+    private void AddCtbRail(List<DashboardNode> nodes, IReadOnlyList<JsonElement> upcoming)
+    {
+        var count = Math.Min(8, upcoming.Count);
+        for (var index = 0; index < count; index++)
+        {
+            var turn = upcoming[index];
+            var identityId = StringValue(turn, "identityId") ?? "";
+            var active = !string.IsNullOrWhiteSpace(StringValue(turn, "activeJobId"));
+            var mentionCount = NumberValue(turn, "pendingMentionCount") ?? 0;
+            nodes.Add(new DashboardNode(
+                $"ctb-{index}-{identityId}",
+                $"{index + 1}. {StringValue(turn, "displayName") ?? identityId}\n{StringValue(turn, "repoName") ?? "repo"}",
+                "ctb-turn",
+                -0.82 + (index * 0.235),
+                -0.82,
+                0.21,
+                0.11,
+                active ? "active" : mentionCount > 0 ? "mention" : Minutes(NumberValue(turn, "nextTurnInMinutes")))
+            {
+                IdentityId = identityId,
+                Detail = $"speed {NumberValue(turn, "effectiveSpeed") ?? 0:0.###} heat {NumberValue(turn, "heat") ?? 0:0.###}",
+            });
+        }
+    }
+
+    private void AddAgentCards(List<DashboardNode> nodes, IReadOnlyList<JsonElement> participants)
+    {
+        var visible = participants
+            .OrderBy(participant => NumberValue(participant, "nextTurnInMinutes") ?? 999999)
+            .Take(10)
+            .ToArray();
+
+        for (var index = 0; index < visible.Length; index++)
+        {
+            var agent = visible[index];
+            var identityId = StringValue(agent, "identityId") ?? $"agent-{index}";
+            var column = index % 5;
+            var row = index / 5;
+            var active = !string.IsNullOrWhiteSpace(StringValue(agent, "activeJobId"));
+            var selected = string.Equals(identityId, selectedIdentityId, StringComparison.Ordinal);
+            nodes.Add(new DashboardNode(
+                $"agent-{identityId}",
+                $"{StringValue(agent, "displayName") ?? identityId}\n{StringValue(agent, "repoName") ?? "repo"}",
+                "agent",
+                -0.74 + (column * 0.37),
+                -0.28 + (row * 0.22),
+                0.31,
+                0.17,
+                selected ? "selected" : active ? "active" : Minutes(NumberValue(agent, "nextTurnInMinutes")))
+            {
+                IdentityId = identityId,
+                Detail = $"load {NumberValue(agent, "currentLoad") ?? 0:0.##}  heat {NumberValue(agent, "heat") ?? 0:0.##}",
+            });
+        }
+    }
+
+    private void AddSelectedAgent(List<DashboardNode> nodes, JsonElement agent)
+    {
+        if (agent.ValueKind == JsonValueKind.Undefined)
+        {
+            return;
+        }
+
+        var identityId = StringValue(agent, "identityId") ?? "";
+        var faceState = TryGet(agent, "faceState");
+        var counts = TryGet(faceState, "counts");
+        var description = StringValue(agent, "description") ?? "No Face description registered.";
+        nodes.Add(new DashboardNode(
+            "agent-detail",
+            $"{StringValue(agent, "displayName") ?? identityId} State\n{StringValue(agent, "repoName") ?? "repo"}",
+            "state-detail",
+            -0.42,
+            0.52,
+            0.55,
+            0.30,
+            BoolValue(faceState, "readable") == true ? "readable" : "unreadable")
+        {
+            IdentityId = identityId,
+            Detail = $"memory {NumberValue(counts, "memory") ?? 0:0} pressures {NumberValue(counts, "pressures") ?? 0:0} constraints {NumberValue(agent, "constraintCount") ?? 0:0}\n{Truncate(description, 150)}",
+        });
+
+        var leaves = FlattenLeaves(ArrayItems(TryGet(faceState, "tree")).ToArray()).Take(5).ToArray();
+        if (string.IsNullOrWhiteSpace(selectedStatePath))
+        {
+            selectedStatePath = leaves.FirstOrDefault()?.Path ?? "";
+        }
+
+        for (var index = 0; index < leaves.Length; index++)
+        {
+            var leaf = leaves[index];
+            var selected = string.Equals(leaf.Path, selectedStatePath, StringComparison.Ordinal);
+            nodes.Add(new DashboardNode(
+                $"state-{index}",
+                $"{leaf.Label}\n{leaf.Preview}",
+                "state-leaf",
+                0.34,
+                0.24 + (index * 0.13),
+                0.34,
+                0.10,
+                selected ? "open" : "leaf")
+            {
+                IdentityId = identityId,
+                StatePath = leaf.Path,
+                Detail = leaf.Detail,
+            });
+        }
+
+        var selectedLeaf = leaves.FirstOrDefault(leaf => string.Equals(leaf.Path, selectedStatePath, StringComparison.Ordinal));
+        if (selectedLeaf != null && !string.IsNullOrWhiteSpace(selectedLeaf.Path))
+        {
+            nodes.Add(new DashboardNode(
+                "state-detail",
+                $"{selectedLeaf.Label}\n{selectedLeaf.Path}",
+                "state-text",
+                0.38,
+                0.74,
+                0.38,
+                0.18,
+                "detail")
+            {
+                IdentityId = identityId,
+                StatePath = selectedLeaf.Path,
+                Detail = Truncate(selectedLeaf.Detail, 280),
+            });
+        }
+    }
+
+    private DashboardState BuildMissingState() => new()
+    {
+        ProviderId = ProviderId,
+        Title = "VoidBot Swarm",
+        SelectedNodeId = "voidbot-missing",
+        Nodes =
+        [
+            new DashboardNode("voidbot-missing", "VoidBot Swarm\nsnapshot missing", "swarm", 0.0, -0.10, 0.52, 0.24, "missing")
+            {
+                Detail = swarmStatePath,
+            },
+        ],
+    };
+
+    private DashboardState BuildErrorState(string error) => new()
+    {
+        ProviderId = ProviderId,
+        Title = "VoidBot Swarm",
+        SelectedNodeId = "voidbot-error",
+        Nodes =
+        [
+            new DashboardNode("voidbot-error", "VoidBot Swarm\nstate read failed", "swarm", 0.0, -0.10, 0.52, 0.24, "error")
+            {
+                Detail = error,
+            },
+        ],
+    };
+
+    private static IEnumerable<VoidBotStateLeaf> FlattenLeaves(IReadOnlyList<JsonElement> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (StringValue(node, "kind") == "leaf")
+            {
+                yield return new VoidBotStateLeaf(
+                    StringValue(node, "label") ?? "leaf",
+                    StringValue(node, "path") ?? "",
+                    StringValue(node, "preview") ?? "",
+                    StringValue(node, "detail") ?? StringValue(node, "preview") ?? "");
+            }
+
+            foreach (var child in FlattenLeaves(ArrayItems(TryGet(node, "children")).ToArray()))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private static JsonElement TryGet(JsonElement element, string property)
+    {
+        if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var child))
+        {
+            return child;
+        }
+
+        return default;
+    }
+
+    private static IEnumerable<JsonElement> ArrayItems(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Array)
+        {
+            yield break;
+        }
+
+        foreach (var item in element.EnumerateArray())
+        {
+            yield return item;
+        }
+    }
+
+    private static string? StringValue(JsonElement element, string property) => StringValue(TryGet(element, property));
+
+    private static string? StringValue(JsonElement element) =>
+        element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+
+    private static double? NumberValue(JsonElement element, string property) => NumberValue(TryGet(element, property));
+
+    private static double? NumberValue(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var value) ? value : null;
+
+    private static bool? BoolValue(JsonElement element, string property)
+    {
+        var child = TryGet(element, property);
+        return child.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null,
+        };
+    }
+
+    private static string Minutes(double? value)
+    {
+        if (value == null)
+        {
+            return "unknown";
+        }
+
+        return value <= 0 ? "ready" : $"{value:0.#}m";
+    }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..Math.Max(0, max - 1)] + "...";
+}
+
+internal sealed record VoidBotStateLeaf(string Label, string Path, string Preview, string Detail);
 
 internal sealed class YggdrasilStreamPixelsProvider : MutableDashboardProvider
 {
@@ -783,6 +1188,12 @@ internal sealed class DashboardNode(
     public string? Command { get; set; }
 
     public string? Endpoint { get; set; }
+
+    public string? IdentityId { get; set; }
+
+    public string? StatePath { get; set; }
+
+    public string? Detail { get; set; }
 }
 
 internal sealed class DashboardCommand

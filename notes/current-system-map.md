@@ -422,12 +422,15 @@ pixel-accurate gizmo hit-testing are explicit Fensalir renderer cuts, mapped in
 `/eve/deck` plus the compatibility `/eve/dashboard` endpoint, exposes provider
 manifests at `/eve/deck/providers`, and routes retained dashboard snapshots and
 commands for provider-owned trees. Built-in providers are the switchboard,
-`mimir.stream.layout`, and `yggdrasil.streampixels.edge`; launch-time external
-providers can be registered as `id|title|ws-url` descriptors for LAN or
-SSH-forwarded TCP surfaces. EveCanvas renders the dashboard locally in UIKit,
-including the scene graph and multitouch pan/pinch/rotate source panels, and
-now treats provider-card taps as `open-provider` commands. Dashboard manifests
-and states have typed CultMesh-compatible document shapes
+`mimir.stream.layout`, `voidbot.swarm`, and `yggdrasil.streampixels.edge`;
+launch-time external providers can be registered as `id|title|ws-url`
+descriptors for LAN or SSH-forwarded TCP surfaces. EveCanvas renders the
+dashboard locally in UIKit, including the scene graph and multitouch
+pan/pinch/rotate source panels, and now treats provider-card taps as
+`open-provider` commands. `voidbot.swarm` reads VoidBot's existing
+`.voidbot/status/swarm-state.json` projection, rendering the CTB rail as
+upcoming turn cards plus agent status cards and selected Face state detail.
+Dashboard manifests and states have typed CultMesh-compatible document shapes
 `mimir.eve_dashboard_manifest.v1` and `mimir.eve_dashboard_state.v1`, while the
 live iPad lane remains WebSocket/TCP because it is the proven tunnelable
 transport. The Mimir stream-layout provider still uses fixture state; the next
