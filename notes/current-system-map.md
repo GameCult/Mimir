@@ -624,9 +624,12 @@ sweeps are scored by the recovered spline, not raw brightness:
 `MimirLedSplineQualityScorer` combines detected LED count, curve coverage,
 spacing coherence, smoothness, exposure fitness, and saturation penalty, and
 `MimirLedSplineSweepSelector` picks the best calibration-usable setting. Once
-the frustum fit is coherent, detected surface candidates can be sampled across
-every synchronized view before Fensalir resolves them into 4D Gaussian/surface
-splat claims.
+`MimirLedSplineFrameAnalyzer` connects physical frames to that score by
+extracting bright luma components, solving the sensor-local curve, and rejecting
+clipped blobs as unusable calibration evidence even when they are easy to
+detect. Once the frustum fit is coherent, detected surface candidates can be
+sampled across every synchronized view before Fensalir resolves them into 4D
+Gaussian/surface splat claims.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

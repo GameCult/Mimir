@@ -119,7 +119,9 @@ invariants:
     and gain sweeps must optimize `MimirLedSplineQualityScorer` output:
     recovered LED count, curve coverage, spacing coherence, smoothness,
     exposure fitness, and saturation penalty decide whether a setting is
-    usable for calibration.
+    usable for calibration. `MimirLedSplineFrameAnalyzer` now extracts bright
+    luma components from real frames into the same score path, so clipped blobs
+    can be detected while still rejected as bad spline evidence.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

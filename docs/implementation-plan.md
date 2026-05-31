@@ -399,6 +399,11 @@ a named invariant that the native runtime cannot protect yet.
   fitness, and saturation penalty. `--led-spline-quality-sweep-smoke` proves
   the selector chooses the balanced setting over both underexposed missing-LED
   detections and overexposed saturated halos.
+  `MimirLedSplineFrameAnalyzer` is the frame-level bridge for physical sweeps:
+  it reads luma frames, extracts bright connected components as LED candidates,
+  solves the per-sensor curve, and emits the same spline quality report.
+  `--led-spline-frame-analysis-smoke` proves clipped blobs can still be
+  detected while scoring as unusable calibration evidence.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

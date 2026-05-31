@@ -150,6 +150,11 @@ if (args.Any(arg => string.Equals(arg, "--led-spline-quality-sweep-smoke", Strin
     return RunLedSplineQualitySweepSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--led-spline-frame-analysis-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunLedSplineFrameAnalysisSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunFensalirTextureLeaseSmoke();
@@ -962,6 +967,59 @@ static int RunLedSplineQualitySweepSmoke()
             : 1;
 }
 
+static int RunLedSplineFrameAnalysisSmoke()
+{
+    const int width = 160;
+    const int height = 120;
+    var balanced = new byte[width * height];
+    var blown = new byte[width * height];
+    var points = new (int X, int Y)[]
+    {
+        (36, 22),
+        (51, 36),
+        (66, 55),
+        (86, 74),
+        (111, 94),
+    };
+
+    foreach (var (x, y) in points)
+    {
+        StampBlob(balanced, width, height, x, y, radius: 2, peak: 220);
+        StampBlob(blown, width, height, x, y, radius: 8, peak: 255);
+    }
+
+    var analyzer = new MimirLedSplineFrameAnalyzer(new MimirLedSplineFrameAnalyzerOptions(
+        ExpectedLedCount: points.Length,
+        MinimumNormalizedLuma: 0.55,
+        MinimumComponentPixels: 3,
+        MaximumComponentPixels: 512));
+    var balancedAnalysis = analyzer.AnalyzeLumaFrame(
+        "synthetic-eye",
+        "synthetic-eye:balanced",
+        width,
+        height,
+        balanced,
+        1_000_000_000L);
+    var blownAnalysis = analyzer.AnalyzeLumaFrame(
+        "synthetic-eye",
+        "synthetic-eye:blown",
+        width,
+        height,
+        blown,
+        1_000_000_001L);
+
+    Console.WriteLine(
+        $"led-spline-frame-analysis balancedComponents={balancedAnalysis.CandidateComponentCount} balancedScore={balancedAnalysis.Quality.Score:0.000} balancedSaturated={balancedAnalysis.SaturatedFraction:0.000} blownComponents={blownAnalysis.CandidateComponentCount} blownScore={blownAnalysis.Quality.Score:0.000} blownSaturated={blownAnalysis.SaturatedFraction:0.000}");
+
+    return balancedAnalysis.Quality.UsableForCalibration &&
+        balancedAnalysis.Quality.DetectedLedCount == points.Length &&
+        balancedAnalysis.Quality.Score > 0.70 &&
+        blownAnalysis.SaturatedFraction > 0.90 &&
+        blownAnalysis.Quality.Score < balancedAnalysis.Quality.Score
+            ? 0
+            : 1;
+}
+
 static IReadOnlyList<MimirLedPixelDetection> ProjectLedDetections(
     IReadOnlyList<MimirLedSplineScenePoint> scenePoints,
     MimirCameraPoseEstimate pose,
@@ -1034,6 +1092,40 @@ static IReadOnlyList<MimirLedPixelDetection> SyntheticSweepDetections(
             })
             .ToArray(),
     };
+}
+
+static void StampBlob(byte[] luma, int width, int height, int centerX, int centerY, int radius, byte peak)
+{
+    for (var y = centerY - radius; y <= centerY + radius; y++)
+    {
+        if (y < 0 || y >= height)
+        {
+            continue;
+        }
+
+        for (var x = centerX - radius; x <= centerX + radius; x++)
+        {
+            if (x < 0 || x >= width)
+            {
+                continue;
+            }
+
+            var dx = x - centerX;
+            var dy = y - centerY;
+            var distance = Math.Sqrt(dx * dx + dy * dy);
+            if (distance > radius)
+            {
+                continue;
+            }
+
+            var falloff = peak == 255 && radius >= 8
+                ? 1.0
+                : 1.0 - distance / Math.Max(1, radius + 1);
+            var value = (byte)Math.Clamp((int)Math.Round(peak * falloff), 0, 255);
+            var offset = y * width + x;
+            luma[offset] = Math.Max(luma[offset], value);
+        }
+    }
 }
 
 static int RunFensalirTextureLeaseSmoke()
