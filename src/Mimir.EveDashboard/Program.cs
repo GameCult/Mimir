@@ -634,11 +634,15 @@ internal sealed class MimirStreamLayoutProvider : MutableDashboardProvider
             Title = "Mimir Stream Layout",
             Nodes =
             [
-                new DashboardNode("program", "Program Output", "camera", -0.05, -0.05, 0.62, 0.34, "live"),
-                new DashboardNode("raven-display", "Raven Display", "screen", -0.58, -0.50, 0.34, 0.20, "waiting"),
-                new DashboardNode("eve-camera", "Eve Camera", "camera", 0.46, -0.48, 0.30, 0.22, "armed"),
-                new DashboardNode("kiyo-pro", "Kiyo Pro", "camera", -0.42, 0.42, 0.24, 0.18, "live"),
-                new DashboardNode("leap-field", "Leap Field", "sensor", 0.38, 0.40, 0.28, 0.24, "calibrating"),
+                new DashboardNode("program", "Program Output", "camera", -0.05, -0.05, 0.62, 0.34, "live") { Detail = "Final OBS-facing composition surface. Visibility, solo, opacity, layer order, audio stem selection, mute/solo/gain, and LUT preset controls belong here." },
+                new DashboardNode("editor", "Mimir Editor", "editor", -0.48, 0.34, 0.40, 0.28, "live") { Detail = "Scene graph owner for editor camera, sensor-feed panels, SDF text placeholders, model placeholders, selected node, visibility, locks, transform reset, and grab/rotate/resize gizmo intent." },
+                new DashboardNode("sync", "Mimir Sync", "timing", 0.48, 0.34, 0.36, 0.28, "live") { Detail = "Rolling buffer and synchronization surface: five-second window, stream count, source count, poll cadence, ingested samples, audio sync state, and spectrum cadence." },
+                new DashboardNode("leap-field", "Leap Field", "sensor", 0.38, 0.02, 0.28, 0.20, "dense geometry") { Detail = "Leap packed stereo IR feeds Fensalir stereo depth, disparity SurfacePage, point-cloud Mesh socket, surface claims, and GPU sensor fusion." },
+                new DashboardNode("ps3-eye-0", "PS3 Eye 0", "camera", -0.56, -0.34, 0.24, 0.18, "187 fps tracker") { Detail = "High-rate Bayer8 tracking witness. GPU feature extraction samples this texture through Fensalir GpuSensorFusion." },
+                new DashboardNode("ps3-eye-1", "PS3 Eye 1", "camera", -0.26, -0.44, 0.24, 0.18, "187 fps tracker") { Detail = "Second high-rate Bayer8 tracking witness. Used for fast motion and online calibration constraints." },
+                new DashboardNode("kiyo-pro", "Kiyo Pro", "camera", 0.18, -0.42, 0.24, 0.18, "YUY2 RGB") { Detail = "RGB/context witness. Fensalir decodes YUY2 in compute through the documented R8G8B8A8_UNORM SRV path." },
+                new DashboardNode("kiyo-basic", "Kiyo Basic", "camera", 0.50, -0.34, 0.24, 0.18, "YUY2 RGB") { Detail = "Second RGB/context witness. Enters the same GpuSensorFusion path after YUY2 decode." },
+                new DashboardNode("eve-camera", "Eve Camera", "camera", 0.0, -0.62, 0.30, 0.18, "armed") { Detail = "Portable sensor uplink target. EveCanvas owns capture on-device and sends frame events into Mimir when online." },
             ],
         };
 }
