@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -10,7 +11,9 @@ using Mimir.Runtime.Synchronization;
 
 var port = ParseInt(args, "--port", 8795);
 var voidBotSwarmStatePath = ParseString(args, "--voidbot-swarm-state", @"E:\Projects\VoidBot\.voidbot\status\swarm-state.json");
-var providers = EveDashboardProviderCatalog.Create(ParseProviderSpecs(args), voidBotSwarmStatePath);
+var mimirTelemetryLogPath = ParseString(args, "--mimir-telemetry-log", "");
+var mimirObservationLogPath = ParseString(args, "--mimir-observation-log", @"E:\Projects\Mimir\artifacts\runtime\periwinkle-cultmesh-sensors.out.log");
+var providers = EveDashboardProviderCatalog.Create(ParseProviderSpecs(args), voidBotSwarmStatePath, mimirTelemetryLogPath, mimirObservationLogPath);
 using var server = new EveDashboardServer(port, providers);
 await server.RunAsync();
 
@@ -74,10 +77,25 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         listener.Start();
         Console.WriteLine($"Mimir Eve dashboard broker listening on ws://0.0.0.0:{port}/eve/deck");
         Console.WriteLine($"Compatibility endpoint remains ws://0.0.0.0:{port}/eve/dashboard");
+        _ = Task.Run(BroadcastHeartbeatAsync);
         while (!stopping.IsCancellationRequested)
         {
             var client = await listener.AcceptTcpClientAsync(stopping.Token).ConfigureAwait(false);
             _ = Task.Run(() => HandleAsync(client));
+        }
+    }
+
+    private async Task BroadcastHeartbeatAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        while (!stopping.IsCancellationRequested && await timer.WaitForNextTickAsync(stopping.Token).ConfigureAwait(false))
+        {
+            if (clients.IsEmpty)
+            {
+                continue;
+            }
+
+            await BroadcastStateAsync().ConfigureAwait(false);
         }
     }
 
@@ -602,11 +620,16 @@ internal sealed class EveDashboardProviderCatalog
 
     public DashboardProviderManifest BrokerManifest { get; }
 
-    public static EveDashboardProviderCatalog Create(IReadOnlyList<string> remoteSpecs, string voidBotSwarmStatePath)
+    public static EveDashboardProviderCatalog Create(
+        IReadOnlyList<string> remoteSpecs,
+        string voidBotSwarmStatePath,
+        string mimirTelemetryLogPath,
+        string mimirObservationLogPath)
     {
         var providers = new List<IDashboardProvider>();
         var remoteProviders = remoteSpecs.Select(RemoteDashboardProvider.FromSpec).OfType<RemoteDashboardProvider>().ToArray();
         providers.Add(new DashboardBrokerProvider(remoteProviders));
+        providers.Add(new MimirLiveStatsProvider(mimirTelemetryLogPath, mimirObservationLogPath));
         providers.Add(new MimirStreamLayoutProvider());
         providers.Add(new VoidBotSwarmProvider(voidBotSwarmStatePath));
         providers.Add(new YggdrasilStreamPixelsProvider());
@@ -723,7 +746,12 @@ internal sealed class DashboardBrokerProvider : MutableDashboardProvider
     {
         var nodes = new List<DashboardNode>
         {
-            new("provider-mimir", "Mimir Stream Layout", "dashboard-provider", -0.56, -0.34, 0.30, 0.22, "local")
+            new("provider-mimir-live", "Mimir Live Stats", "dashboard-provider", -0.56, -0.34, 0.30, 0.22, "telemetry")
+            {
+                ProviderId = MimirLiveStatsProvider.ProviderId,
+                Command = "open-provider",
+            },
+            new("provider-mimir", "Mimir Stream Layout", "dashboard-provider", -0.18, -0.34, 0.30, 0.22, "local")
             {
                 ProviderId = MimirStreamLayoutProvider.ProviderId,
                 Command = "open-provider",
@@ -768,6 +796,652 @@ internal sealed class DashboardBrokerProvider : MutableDashboardProvider
         };
     }
 }
+
+internal sealed class MimirLiveStatsProvider : IDashboardProvider
+{
+    public const string ProviderId = "mimir.live.stats";
+    private const int TailBytes = 512 * 1024;
+    private readonly string telemetryLogPath;
+    private readonly string observationLogPath;
+    private long version;
+
+    public MimirLiveStatsProvider(string telemetryLogPath, string observationLogPath)
+    {
+        this.telemetryLogPath = telemetryLogPath;
+        this.observationLogPath = observationLogPath;
+        Manifest = new DashboardProviderManifest(
+            ProviderId,
+            "Mimir Live Stats",
+            "Compact Eve/CultUI surface for live Mimir telemetry: RMS bars, sync confidence, source buffers, actuator state, and device observation streams.",
+            "1",
+            "/eve/deck/mimir.live.stats",
+            ["live-telemetry", "compact-tui", "audio-rms", "sync-confidence", "observation-streams"],
+            UsesCultMesh: true,
+            Transport: "Mimir telemetry and observation ledgers projected as Eve/CultUI state.");
+    }
+
+    public DashboardProviderManifest Manifest { get; }
+
+    public DashboardState State => BuildState();
+
+    public bool ApplyCommand(DashboardCommand command) => false;
+
+    private DashboardState BuildState()
+    {
+        var snapshot = MimirLiveStatsSnapshot.Load(telemetryLogPath, observationLogPath);
+        var confidence = snapshot.SyncStates.Count == 0
+            ? snapshot.SyncReports.DefaultIfEmpty().Max(report => report?.Confidence ?? 0.0)
+            : snapshot.SyncStates.Average(static state => state.Confidence);
+        var rms = snapshot.Spectra.Count == 0 ? 0.0 : snapshot.Spectra.Max(static spectrum => spectrum.Rms);
+        var liveObservationCount = snapshot.ObservationStreams.Count(static stream => stream.State == "active");
+        var status = snapshot.HasAnyData ? "live" : "waiting";
+        var nodes = new List<DashboardNode>
+        {
+            new("mimir-live-root", $"Mimir Live Stats\n{snapshot.Summary}", "mimir-live-stats", 0.0, -0.50, 0.70, 0.20, status)
+            {
+                Detail = $"telemetry={snapshot.TelemetrySource} observations={snapshot.ObservationSource}",
+            },
+            new("mimir-tracking-confidence", $"Tracking Confidence\n{confidence:0.000}", "confidence", -0.44, -0.12, 0.28, 0.16, ToneFor(confidence))
+            {
+                Detail = $"{snapshot.SyncStates.Count} sync states / {snapshot.SyncReports.Count} reports",
+            },
+            new("mimir-audio-rms", $"Audio RMS\n{rms:0.000000}", "audio-rms", 0.0, -0.12, 0.28, 0.16, ToneFor(NormalizeRms(rms)))
+            {
+                Detail = $"{snapshot.Spectra.Count} spectrum lanes",
+            },
+            new("mimir-observation-streams", $"Device Streams\n{liveObservationCount}/{snapshot.ObservationStreams.Count} active", "observation-streams", 0.44, -0.12, 0.28, 0.16, liveObservationCount > 0 ? "active" : "waiting")
+            {
+                Detail = string.Join(", ", snapshot.ObservationStreams.Select(static stream => $"{stream.StreamId}:{stream.Kind}:{stream.State}")),
+            },
+        };
+
+        return new DashboardState
+        {
+            ProviderId = ProviderId,
+            Title = "Mimir Live Stats",
+            Version = Interlocked.Increment(ref version),
+            UpdatedAt = DateTimeOffset.UtcNow,
+            SelectedNodeId = "mimir-live-root",
+            LutPreset = "terminal",
+            Nodes = nodes,
+            Surface = BuildSurface(snapshot, confidence, rms, liveObservationCount),
+        };
+    }
+
+    private static DashboardSurface BuildSurface(MimirLiveStatsSnapshot snapshot, double confidence, double rms, int liveObservationCount)
+    {
+        var pulse = Pulse();
+        var children = new List<DashboardUiElement>
+        {
+            UiElement.Pane("mimir-live-overview", "Mimir Live Stats", [
+                UiElement.Text("mimir-live-summary", $"{pulse} {snapshot.Summary}", "strong"),
+                UiElement.Text("mimir-live-sources", $"telemetry: {snapshot.TelemetrySource}\nobservations: {snapshot.ObservationSource}", "caption"),
+                StatBar("tracking-confidence", "tracking confidence", confidence, "cool"),
+                StatBar("audio-rms", "max channel RMS", NormalizeRms(rms), "warm", $"{rms:0.000000}"),
+                StatBar("observation-liveness", "device stream liveness", snapshot.ObservationStreams.Count == 0 ? 0.0 : liveObservationCount / (double)snapshot.ObservationStreams.Count, "cool"),
+            ]),
+            BuildAudioPane(snapshot.Spectra),
+            BuildSyncPane(snapshot),
+            BuildVideoPane(snapshot),
+            BuildObservationPane(snapshot.ObservationStreams),
+            BuildActuatorPane(snapshot.ActuatorCommands),
+        };
+
+        return new DashboardSurface
+        {
+            Schema = "cultmesh.eve_surface.v0",
+            Id = "mimir.live.stats.surface",
+            Title = "Mimir Live Stats",
+            Root = UiElement.Container(
+                "mimir-live-stats-root",
+                "dashboard",
+                new DashboardUiLayout { Direction = "vertical", Gap = 8, Padding = 8, Overflow = "scroll" },
+                children),
+        };
+    }
+
+    private static DashboardUiElement BuildAudioPane(IReadOnlyList<MimirSpectrumStat> spectra)
+    {
+        var items = spectra.Count == 0
+            ? [UiElement.Text("mimir-spectrum-empty", "no spectrum telemetry yet", "caption")]
+            : spectra
+                .OrderBy(static spectrum => spectrum.SourceId, StringComparer.Ordinal)
+                .Take(8)
+                .Select(spectrum => UiElement.Card(
+                    $"spectrum-{StableId(spectrum.SourceId)}",
+                    "audio-channel",
+                    style: new DashboardUiStyle { Variant = "compact", Tone = ToneFor(NormalizeRms(spectrum.Rms)) },
+                    children:
+                    [
+                        UiElement.Text($"spectrum-{StableId(spectrum.SourceId)}-label", $"{spectrum.SourceId} {Bar(NormalizeRms(spectrum.Rms), 18)}", "mono"),
+                        UiElement.Text($"spectrum-{StableId(spectrum.SourceId)}-detail", $"rms {spectrum.Rms:0.000000} peak {spectrum.Peak:0.000000} floor {spectrum.NoiseFloorDb:0.0} dB", "caption"),
+                        UiElement.Text($"spectrum-{StableId(spectrum.SourceId)}-peaks", spectrum.Peaks, "caption"),
+                    ]))
+                .ToArray();
+
+        return UiElement.Pane("mimir-audio-pane", "Per-Channel RMS", items);
+    }
+
+    private static DashboardUiElement BuildSyncPane(MimirLiveStatsSnapshot snapshot)
+    {
+        var children = new List<DashboardUiElement>();
+        foreach (var state in snapshot.SyncStates.OrderBy(static state => state.SourceId, StringComparer.Ordinal).Take(8))
+        {
+            children.Add(UiElement.Card(
+                $"sync-state-{StableId(state.SourceId)}",
+                "sync-state",
+                style: new DashboardUiStyle { Variant = "compact", Tone = ToneFor(state.Confidence) },
+                children:
+                [
+                    UiElement.Text($"sync-state-{StableId(state.SourceId)}-head", $"{state.ReferenceSourceId}->{state.SourceId} {Bar(state.Confidence, 16)}", "mono"),
+                    UiElement.Text($"sync-state-{StableId(state.SourceId)}-detail", $"delay {state.DelayUs:0.000} us / {state.DelayMs:0.000} ms  sro {state.SroPpm:0.000} ppm", "caption"),
+                ]));
+        }
+
+        foreach (var report in snapshot.SyncReports.OrderBy(static report => report.SourceId, StringComparer.Ordinal).Take(6))
+        {
+            children.Add(UiElement.Text(
+                $"sync-report-{StableId(report.SourceId)}",
+                $"{report.Evidence} {report.ReferenceSourceId}->{report.SourceId} {report.DelayUs:0.000} us c={report.Confidence:0.000} events={report.Events}",
+                "caption"));
+        }
+
+        if (children.Count == 0)
+        {
+            children.Add(UiElement.Text("mimir-sync-empty", "no sync state yet", "caption"));
+        }
+
+        return UiElement.Pane("mimir-sync-pane", "Sync Confidence", children);
+    }
+
+    private static DashboardUiElement BuildVideoPane(MimirLiveStatsSnapshot snapshot)
+    {
+        var children = new List<DashboardUiElement>();
+        if (snapshot.Telemetry != null)
+        {
+            children.Add(UiElement.Text(
+                "mimir-telemetry-line",
+                $"sources {snapshot.Telemetry.Sources} poll {snapshot.Telemetry.LastPoll} ingested {snapshot.Telemetry.Ingested} analyze {snapshot.Telemetry.AnalyzeMs:0.0} ms mode {snapshot.Telemetry.AudioSync}",
+                "mono"));
+        }
+
+        children.AddRange(snapshot.VideoBuffers
+            .OrderBy(static video => video.SourceId, StringComparer.Ordinal)
+            .Take(8)
+            .Select(video => UiElement.Text(
+                $"video-{StableId(video.SourceId)}",
+                $"{video.SourceId}: {video.Count} frames {video.Latest}",
+                "caption")));
+
+        if (children.Count == 0)
+        {
+            children.Add(UiElement.Text("mimir-video-empty", "no video-buffer telemetry yet", "caption"));
+        }
+
+        return UiElement.Pane("mimir-video-pane", "Runtime Buffers", children);
+    }
+
+    private static DashboardUiElement BuildObservationPane(IReadOnlyList<MimirObservationStreamStat> streams)
+    {
+        var children = streams.Count == 0
+            ? [UiElement.Text("mimir-observations-empty", "no device observation streams", "caption")]
+            : streams
+                .OrderBy(static stream => stream.DeviceId, StringComparer.Ordinal)
+                .ThenBy(static stream => stream.StreamId, StringComparer.Ordinal)
+                .Select(stream => UiElement.Card(
+                    $"observation-{StableId(stream.StreamId)}-{StableId(stream.Kind)}",
+                    "observation-stream",
+                    style: new DashboardUiStyle { Variant = "compact", Tone = stream.State == "active" ? "cool" : "warm" },
+                    children:
+                    [
+                        UiElement.Text($"observation-{StableId(stream.StreamId)}-head", $"{stream.StreamId} {stream.Kind} {stream.State}", "mono"),
+                        UiElement.Text($"observation-{StableId(stream.StreamId)}-detail", $"{stream.Shape} seq {stream.Sequence} age {stream.AgeSeconds:0}s", "caption"),
+                    ]))
+                .ToArray();
+
+        return UiElement.Pane("mimir-observation-pane", "Periwinkle / Eve Streams", children);
+    }
+
+    private static DashboardUiElement BuildActuatorPane(IReadOnlyList<MimirActuatorCommandStat> commands)
+    {
+        var children = commands.Count == 0
+            ? [UiElement.Text("mimir-actuator-empty", "no actuator commands yet", "caption")]
+            : commands
+                .OrderBy(static command => command.SourceId, StringComparer.Ordinal)
+                .Take(8)
+                .Select(command => UiElement.Text(
+                    $"actuator-{StableId(command.SourceId)}",
+                    $"{command.SourceId}: delay {command.DelaySamples:0.000} samples ratio {command.Ratio:0.000000000} c={command.Confidence:0.000}",
+                    "caption"))
+                .ToArray();
+
+        return UiElement.Pane("mimir-actuator-pane", "Alignment Actuator", children);
+    }
+
+    private static DashboardUiElement StatBar(string id, string label, double value, string tone, string? displayValue = null) =>
+        UiElement.Card(
+            id,
+            "stat-bar",
+            style: new DashboardUiStyle { Variant = "compact", Tone = tone },
+            children:
+            [
+                UiElement.Text($"{id}-label", $"{label}: {displayValue ?? value.ToString("0.000", CultureInfo.InvariantCulture)}", "caption"),
+                UiElement.Text($"{id}-bar", Bar(value, 28), "mono"),
+                UiElement.Metric($"{id}-metric", label, value, tone),
+            ]);
+
+    private static string Bar(double value, int width)
+    {
+        var clamped = Math.Clamp(value, 0.0, 1.0);
+        var filled = (int)Math.Round(clamped * width);
+        var pulseIndex = Math.Clamp((int)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 180 % Math.Max(1, width)), 0, Math.Max(0, width - 1));
+        var builder = new StringBuilder(width);
+        for (var index = 0; index < width; index++)
+        {
+            builder.Append(index < filled ? (index == pulseIndex ? '*' : '#') : '.');
+        }
+
+        return builder.ToString();
+    }
+
+    private static string Pulse() =>
+        (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 250 % 4) switch
+        {
+            0 => "|",
+            1 => "/",
+            2 => "-",
+            _ => "\\",
+        };
+
+    private static double NormalizeRms(double rms) => Math.Clamp(rms / 0.08, 0.0, 1.0);
+
+    private static string ToneFor(double value) =>
+        value >= 0.70 ? "cool" : value >= 0.25 ? "warm" : "danger";
+
+    private static string StableId(string value) =>
+        string.Join("-", value.ToLowerInvariant().Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries))
+            .Replace(":", "-", StringComparison.Ordinal)
+            .Replace(">", "-", StringComparison.Ordinal)
+            .Replace(" ", "-", StringComparison.Ordinal);
+}
+
+internal sealed class MimirLiveStatsSnapshot
+{
+    public string TelemetrySource { get; init; } = "none";
+    public string ObservationSource { get; init; } = "none";
+    public MimirTelemetryStat? Telemetry { get; init; }
+    public IReadOnlyList<MimirSpectrumStat> Spectra { get; init; } = [];
+    public IReadOnlyList<MimirSyncStateStat> SyncStates { get; init; } = [];
+    public IReadOnlyList<MimirSyncReportStat> SyncReports { get; init; } = [];
+    public IReadOnlyList<MimirVideoBufferStat> VideoBuffers { get; init; } = [];
+    public IReadOnlyList<MimirActuatorCommandStat> ActuatorCommands { get; init; } = [];
+    public IReadOnlyList<MimirObservationStreamStat> ObservationStreams { get; init; } = [];
+    public bool HasAnyData => Telemetry != null || Spectra.Count > 0 || SyncStates.Count > 0 || VideoBuffers.Count > 0 || ObservationStreams.Count > 0;
+    public string Summary => $"{Spectra.Count} audio lanes / {SyncStates.Count} sync states / {VideoBuffers.Count} video buffers / {ObservationStreams.Count} device streams";
+
+    public static MimirLiveStatsSnapshot Load(string telemetryLogPath, string observationLogPath)
+    {
+        var telemetrySource = ResolveTelemetryLog(telemetryLogPath);
+        var telemetryLines = File.Exists(telemetrySource) ? TailTextFile(telemetrySource, 512 * 1024).Split("\n", StringSplitOptions.RemoveEmptyEntries) : [];
+        var observationLines = File.Exists(observationLogPath) ? TailTextFile(observationLogPath, 512 * 1024).Split("\n", StringSplitOptions.RemoveEmptyEntries) : [];
+        return new MimirLiveStatsSnapshot
+        {
+            TelemetrySource = string.IsNullOrWhiteSpace(telemetrySource) ? "none" : telemetrySource,
+            ObservationSource = File.Exists(observationLogPath) ? observationLogPath : $"missing {observationLogPath}",
+            Telemetry = telemetryLines.Select(ParseTelemetry).Where(static value => value != null).LastOrDefault(),
+            Spectra = LatestBySource(telemetryLines.Select(ParseSpectrum).Where(static value => value != null)!),
+            SyncStates = LatestBySource(telemetryLines.Select(ParseSyncState).Where(static value => value != null)!),
+            SyncReports = LatestBySource(telemetryLines.Select(ParseSyncReport).Where(static value => value != null)!),
+            VideoBuffers = LatestBySource(telemetryLines.Select(ParseVideoBuffer).Where(static value => value != null)!),
+            ActuatorCommands = LatestBySource(telemetryLines.Select(ParseActuatorCommand).Where(static value => value != null)!),
+            ObservationStreams = LatestObservationStreams(observationLines),
+        };
+    }
+
+    private static string ResolveTelemetryLog(string configured)
+    {
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured;
+        }
+
+        var runtimeDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "runtime");
+        runtimeDir = Path.GetFullPath(runtimeDir);
+        if (!Directory.Exists(runtimeDir))
+        {
+            runtimeDir = @"E:\Projects\Mimir\artifacts\runtime";
+        }
+
+        if (!Directory.Exists(runtimeDir))
+        {
+            return "";
+        }
+
+        foreach (var file in Directory.EnumerateFiles(runtimeDir, "*.out.log")
+                     .OrderByDescending(File.GetLastWriteTimeUtc)
+                     .Take(32))
+        {
+            var text = TailTextFile(file, 128 * 1024);
+            if (text.Contains("mimir-sync-telemetry", StringComparison.Ordinal) ||
+                text.Contains("mimir-spectrum ", StringComparison.Ordinal) ||
+                text.Contains("mimir-video-buffer ", StringComparison.Ordinal))
+            {
+                return file;
+            }
+        }
+
+        return "";
+    }
+
+    private static IReadOnlyList<T> LatestBySource<T>(IEnumerable<T?> values)
+        where T : class, IMimirSourceStat
+    {
+        var bySource = new Dictionary<string, T>(StringComparer.Ordinal);
+        foreach (var value in values)
+        {
+            if (value == null)
+            {
+                continue;
+            }
+
+            bySource[value.SourceId] = value;
+        }
+
+        return bySource.Values.OrderBy(static value => value.SourceId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyList<MimirObservationStreamStat> LatestObservationStreams(IEnumerable<string> lines)
+    {
+        var byStream = new Dictionary<string, MimirObservationStreamStat>(StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var line in lines)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                var root = document.RootElement;
+                var type = JsonString(root, "type");
+                if (type is not ("cultmesh-observation" or "cultmesh-media-observation"))
+                {
+                    continue;
+                }
+
+                var deviceId = JsonString(root, "DeviceId") ?? "unknown";
+                var streamId = JsonString(root, "StreamId") ?? "unknown";
+                var kind = JsonString(root, "Kind") ?? "unknown";
+                var latestAt = DateTimeOffset.TryParse(JsonString(root, "WallClockUtc"), out var parsed) ? parsed : DateTimeOffset.MinValue;
+                var age = latestAt == DateTimeOffset.MinValue ? double.PositiveInfinity : Math.Max(0.0, (now - latestAt).TotalSeconds);
+                var shape = ObservationShape(root);
+                byStream[$"{deviceId}:{streamId}:{kind}"] = new MimirObservationStreamStat(
+                    deviceId,
+                    streamId,
+                    kind,
+                    JsonNumber(root, "Sequence"),
+                    age <= 120.0 ? "active" : "stale",
+                    age,
+                    shape);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return byStream.Values.ToArray();
+    }
+
+    private static string ObservationShape(JsonElement root)
+    {
+        var format = JsonString(root, "Format") ?? "";
+        var width = JsonNumber(root, "Width");
+        var height = JsonNumber(root, "Height");
+        var sampleRate = JsonNumber(root, "SampleRate");
+        var channels = JsonNumber(root, "Channels");
+        var frames = JsonNumber(root, "FrameCount");
+        var bytes = JsonNumber(root, "PayloadBytes");
+        if (width > 0 && height > 0)
+        {
+            return $"{format} {width:0}x{height:0} {bytes:0} bytes";
+        }
+
+        if (sampleRate > 0)
+        {
+            return $"{format} {sampleRate:0} Hz x {Math.Max(1, channels):0} {frames:0} frames {bytes:0} bytes";
+        }
+
+        if (root.TryGetProperty("Values", out var values) && values.ValueKind == JsonValueKind.Array)
+        {
+            return string.Join(", ", values.EnumerateArray().Take(3).Select(static value => value.TryGetDouble(out var number) ? number.ToString("0.000", CultureInfo.InvariantCulture) : "?"));
+        }
+
+        return "observation";
+    }
+
+    private static MimirTelemetryStat? ParseTelemetry(string line)
+    {
+        if (!line.StartsWith("mimir-sync-telemetry ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var fields = Fields(line);
+        return new MimirTelemetryStat(
+            Number(fields, "t"),
+            (int)Number(fields, "sources"),
+            (int)Number(fields, "lastPoll"),
+            Number(fields, "ingested"),
+            Text(fields, "audioSync"),
+            (int)Number(fields, "reports"),
+            (int)Number(fields, "states"),
+            Number(fields, "analyzeMs"));
+    }
+
+    private static MimirSpectrumStat? ParseSpectrum(string line)
+    {
+        if (!line.StartsWith("mimir-spectrum ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var sourceId = TokenAfterPrefix(line, "mimir-spectrum ");
+        var fields = Fields(line);
+        return new MimirSpectrumStat(
+            sourceId,
+            Text(fields, "label"),
+            (int)Number(fields, "rate"),
+            (int)Number(fields, "fft"),
+            Number(fields, "rms"),
+            Number(fields, "peak"),
+            Number(fields, "floorDb"),
+            Text(fields, "peaks"));
+    }
+
+    private static MimirSyncStateStat? ParseSyncState(string line)
+    {
+        if (!line.StartsWith("mimir-sync-state ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var route = TokenAfterPrefix(line, "mimir-sync-state ");
+        var parts = route.Split("->", 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+        {
+            return null;
+        }
+
+        var fields = Fields(line);
+        return new MimirSyncStateStat(
+            parts[1],
+            parts[0],
+            Number(fields, "delaySamples"),
+            Number(fields, "delayUs"),
+            Number(fields, "delayMs"),
+            Number(fields, "sroPpm"),
+            Number(fields, "confidence"));
+    }
+
+    private static MimirSyncReportStat? ParseSyncReport(string line)
+    {
+        if (!line.StartsWith("mimir-sync-report ", StringComparison.Ordinal) &&
+            !line.StartsWith("mimir-complex-contour-report ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var prefix = line.StartsWith("mimir-sync-report ", StringComparison.Ordinal) ? "mimir-sync-report " : "mimir-complex-contour-report ";
+        var route = TokenAfterPrefix(line, prefix);
+        var parts = route.Split("->", 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+        {
+            return null;
+        }
+
+        var fields = Fields(line);
+        return new MimirSyncReportStat(
+            parts[1],
+            parts[0],
+            Text(fields, "evidence", prefix.Contains("complex", StringComparison.Ordinal) ? "complex-contour" : "sync"),
+            Number(fields, "delayUs"),
+            Number(fields, "confidence"),
+            (int)Number(fields, "timelineEvents") + (int)Number(fields, "directHits"));
+    }
+
+    private static MimirVideoBufferStat? ParseVideoBuffer(string line)
+    {
+        if (!line.StartsWith("mimir-video-buffer ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var sourceId = TokenAfterPrefix(line, "mimir-video-buffer ");
+        var fields = Fields(line);
+        var latestIndex = line.IndexOf(" latest=", StringComparison.Ordinal);
+        return new MimirVideoBufferStat(
+            sourceId,
+            (int)Number(fields, "count"),
+            latestIndex < 0 ? "" : line[(latestIndex + " latest=".Length)..]);
+    }
+
+    private static MimirActuatorCommandStat? ParseActuatorCommand(string line)
+    {
+        if (!line.StartsWith("mimir-audio-actuator-command ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var fields = Fields(line);
+        var source = Text(fields, "source");
+        return string.IsNullOrWhiteSpace(source)
+            ? null
+            : new MimirActuatorCommandStat(source, Number(fields, "delaySamples"), Number(fields, "ratio"), Number(fields, "confidence"));
+    }
+
+    private static Dictionary<string, string> Fields(string line)
+    {
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var token in Tokenize(line))
+        {
+            var equals = token.IndexOf('=');
+            if (equals <= 0)
+            {
+                continue;
+            }
+
+            fields[token[..equals]] = token[(equals + 1)..].Trim('"');
+        }
+
+        return fields;
+    }
+
+    private static IEnumerable<string> Tokenize(string line)
+    {
+        var builder = new StringBuilder();
+        var quoted = false;
+        foreach (var character in line)
+        {
+            if (character == '"')
+            {
+                quoted = !quoted;
+                builder.Append(character);
+                continue;
+            }
+
+            if (char.IsWhiteSpace(character) && !quoted)
+            {
+                if (builder.Length > 0)
+                {
+                    yield return builder.ToString();
+                    builder.Clear();
+                }
+
+                continue;
+            }
+
+            builder.Append(character);
+        }
+
+        if (builder.Length > 0)
+        {
+            yield return builder.ToString();
+        }
+    }
+
+    private static string TokenAfterPrefix(string line, string prefix)
+    {
+        var rest = line[prefix.Length..];
+        var space = rest.IndexOf(' ');
+        return space < 0 ? rest : rest[..space];
+    }
+
+    private static string Text(IReadOnlyDictionary<string, string> fields, string key, string fallback = "") =>
+        fields.TryGetValue(key, out var value) ? value : fallback;
+
+    private static double Number(IReadOnlyDictionary<string, string> fields, string key) =>
+        fields.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            ? number
+            : 0.0;
+
+    private static string? JsonString(JsonElement root, string property) =>
+        root.TryGetProperty(property, out var child) && child.ValueKind == JsonValueKind.String ? child.GetString() : null;
+
+    private static double JsonNumber(JsonElement root, string property) =>
+        root.TryGetProperty(property, out var child) && child.ValueKind == JsonValueKind.Number && child.TryGetDouble(out var value) ? value : 0.0;
+
+    private static string TailTextFile(string filePath, int maxBytes)
+    {
+        var info = new FileInfo(filePath);
+        if (!info.Exists || info.Length == 0)
+        {
+            return "";
+        }
+
+        var length = (int)Math.Min(maxBytes, info.Length);
+        var buffer = new byte[length];
+        using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        stream.Seek(-length, SeekOrigin.End);
+        _ = stream.Read(buffer, 0, length);
+        return Encoding.UTF8.GetString(buffer);
+    }
+}
+
+internal interface IMimirSourceStat
+{
+    string SourceId { get; }
+}
+
+internal sealed record MimirTelemetryStat(double RuntimeSeconds, int Sources, int LastPoll, double Ingested, string AudioSync, int Reports, int States, double AnalyzeMs);
+
+internal sealed record MimirSpectrumStat(string SourceId, string Label, int SampleRate, int FftSize, double Rms, double Peak, double NoiseFloorDb, string Peaks) : IMimirSourceStat;
+
+internal sealed record MimirSyncStateStat(string SourceId, string ReferenceSourceId, double DelaySamples, double DelayUs, double DelayMs, double SroPpm, double Confidence) : IMimirSourceStat;
+
+internal sealed record MimirSyncReportStat(string SourceId, string ReferenceSourceId, string Evidence, double DelayUs, double Confidence, int Events) : IMimirSourceStat;
+
+internal sealed record MimirVideoBufferStat(string SourceId, int Count, string Latest) : IMimirSourceStat;
+
+internal sealed record MimirActuatorCommandStat(string SourceId, double DelaySamples, double Ratio, double Confidence) : IMimirSourceStat;
+
+internal sealed record MimirObservationStreamStat(string DeviceId, string StreamId, string Kind, double Sequence, string State, double AgeSeconds, string Shape);
 
 internal sealed class MimirStreamLayoutProvider : MutableDashboardProvider
 {

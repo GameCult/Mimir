@@ -84,6 +84,10 @@ dotnet run --project .\src\Mimir.EveDashboard\Mimir.EveDashboard.csproj -- `
 `Mimir.EveDashboard` now runs as a small native dashboard broker. It includes:
 
 - `eve.dashboard.broker`: the switchboard rendered as provider cards.
+- `mimir.live.stats`: compact live telemetry surface for RMS bars, sync
+  confidence, runtime buffers, actuator commands, and Periwinkle/EVE device
+  observation streams. It recomputes state from Mimir's telemetry and
+  observation ledgers and is broadcast once per second to connected clients.
 - `mimir.stream.layout`: the existing Mimir source-layout fixture provider.
 - `voidbot.swarm`: the native VoidBot tab. It reads the existing
   `swarm-state.json` projection from VoidBot, publishes avatar image URLs on
@@ -93,11 +97,17 @@ dotnet run --project .\src\Mimir.EveDashboard\Mimir.EveDashboard.csproj -- `
 - `yggdrasil.streampixels.edge`: the first Yggdrasil/StreamPixels service
   dashboard placeholder for the TCP/SSH-routed live edge.
 
-The Mimir provider still serves fixture scene nodes for the first native control
-proof. It accepts transform/visibility commands, mutates the provider state,
-increments the state version, and broadcasts the new snapshot. The next cut is
-replacing fixture state with live `MimirPresentationControlState` and
+The stream-layout provider still serves fixture scene nodes for the first native
+control proof. It accepts transform/visibility commands, mutates the provider
+state, increments the state version, and broadcasts the new snapshot. The next
+cut is replacing fixture state with live `MimirPresentationControlState` and
 `MimirSceneEditorState` snapshots.
+
+The live-stats provider is read-only. Its authority is the runtime telemetry
+surface: `mimir-spectrum`, `mimir-sync-state`, `mimir-sync-report`,
+`mimir-video-buffer`, `mimir-audio-actuator-command`, and the normalized
+CultMesh observation ledger from `Mimir.EveSensorReceiver`. If a signal is
+absent, the surface says so; it does not fabricate confidence.
 
 ## Verification
 
