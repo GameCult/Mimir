@@ -85,7 +85,7 @@
         "-flags",
         "low_delay",
         "-i",
-        "srt://0.0.0.0:5200?mode=listener&latency=120000&timeout=5000000",
+        "srt://0.0.0.0:5210?mode=listener&latency=20000&timeout=5000000",
         "-an",
         "-f",
         "rawvideo",
@@ -121,7 +121,7 @@
         "-ac",
         "2",
         "-i",
-        "srt://0.0.0.0:5202?mode=listener&latency=120000&timeout=5000000",
+        "srt://0.0.0.0:5212?mode=listener&latency=20000&timeout=5000000",
         "-f",
         "f32le",
         "-"

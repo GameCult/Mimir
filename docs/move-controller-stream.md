@@ -98,10 +98,11 @@ The profile declares:
 
 - `leap-stereo-ir`: LeapUVC stereo IR / depth root.
 - `kiyo-pro-rgb`: Kiyo Pro AR program view.
-- `raven-display`: Raven screen capture over SRT port `5200`, in the
-  `raven-sync` clock domain.
-- `raven-realtk-loopback`: Raven Realtek render loopback as f32 PCM over SRT
-  port `5202`, also in `raven-sync`.
+- `raven-display`: Raven screen capture from the muxed Raven A/V stream,
+  locally demuxed to SRT port `5210`, in the `raven-sync` clock domain.
+- `raven-realtk-loopback`: Raven Realtek render loopback from the same muxed
+  Raven A/V stream, locally demuxed as f32 PCM to SRT port `5212`, also in
+  `raven-sync`.
 - `focusrite-asio`: Starfire hero mics plus local Raven/program loopback lanes
   on `asio-ch0..asio-ch3`.
 
@@ -158,30 +159,37 @@ dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --secon
 
 ## Raven Sender
 
-On Raven, start screen capture from the logged-in desktop session:
+On Raven, start the muxed A/V sender from the logged-in desktop session:
 
 ```powershell
-E:\Projects\Mimir\scripts\start-raven-screen-capture-sender.ps1 -TargetHost 192.168.1.66 -Port 5200
+E:\Projects\Mimir\scripts\start-raven-av-sender.ps1 -TargetHost 192.168.1.66 -Port 5200
 ```
 
-Start Realtek render loopback from the same logged-in desktop session:
+That sender captures the desktop through `gdigrab`, encodes video with
+`h264_nvenc`, captures Realtek/default render loopback through the repo WASAPI
+loopback script, encodes audio as AAC, and muxes both into one MPEG-TS SRT
+stream. On Starfire, `scripts\start-stream-proof.ps1` starts
+`scripts\start-raven-av-demux.ps1`, which listens on port `5200` and splits the
+single transport into local Mimir ingest legs:
 
 ```powershell
-E:\Projects\Mimir\scripts\raven-audio.ps1 -TargetHost 192.168.1.66 -Port 5202
+raven-display          local SRT 5210, copied H.264/MPEG-TS for decode
+raven-realtk-loopback  local SRT 5212, decoded f32 PCM
 ```
 
 If Raven program audio is also routed into Starfire Scarlett on
-`asio-ch2/asio-ch3`, that remains the strongest local timing witness. The
-Realtek loopback is now a real network PCM audio source in Mimir, not generic
-stdout bytes.
+`asio-ch2/asio-ch3`, that remains another strong local timing witness. The
+Realtek loopback is now part of the same Raven transport as the display before
+Starfire demuxes it for Mimir's raw ingest APIs.
 
 Raven display sync is not allowed to ride on SRT arrival time. Both
 `raven-display` and `raven-realtk-loopback` are in the `raven-sync` clock
 domain. When audio sync estimates the Realtek loopback offset against the
 Scarlett reference, `MimirSynchronizedBufferPlanner` applies that correction to
-the whole `raven-sync` domain, including the display. A later single muxed
-Raven A/V transport can tighten this further, but the current separate-leg
-profile has an explicit audio-derived correction path.
+the whole `raven-sync` domain, including the display. The LAN transport is now
+one muxed A/V stream; the local split exists only at the Starfire demux edge
+because Mimir currently ingests raw video and PCM through separate source
+adapters.
 
 ## Kiyo AR Trail Receipt
 

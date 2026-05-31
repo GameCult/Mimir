@@ -222,13 +222,16 @@ invariants:
     The stream-proof profile is the live demo cut:
     `config/mimir-runtime.stream-proof.local.json` keeps Starfire's canonical
     window on local Scarlett ASIO, local Leap stereo IR, local Kiyo Pro RGB,
-    Raven display over SRT port 5200, and Raven Realtek loopback as decoded
-    f32 PCM audio over SRT port 5202. `MimirFfmpegPcmAudioStreamSource` owns
-    that network PCM edge and emits real `MimirAudioBlockDescriptor` samples
-    instead of generic process bytes. `scripts/start-stream-proof.ps1` stages
-    Nightwing's compact Eye/Move publisher and keeps only one `--track-eyes`
-    worker alive; `scripts/raven-audio.ps1` starts the Raven Realtek loopback
-    sender from the logged-in Raven desktop session. `tools/solve_stream_proof_frustum.py`
+    and Raven display/audio from one muxed Raven NVENC/AAC MPEG-TS SRT stream
+    on port 5200. `scripts/start-raven-av-sender.ps1` captures Raven's desktop
+    and Realtek/default render loopback together; `scripts/start-raven-av-demux.ps1`
+    is the Starfire local demux edge, copying video to local SRT port 5210 and
+    decoding audio to f32 PCM on local SRT port 5212 for Mimir's current raw
+    ingest adapters. `MimirFfmpegPcmAudioStreamSource` owns the post-demux PCM
+    edge and emits real `MimirAudioBlockDescriptor` samples instead of generic
+    process bytes. `scripts/start-stream-proof.ps1` stages Nightwing's compact
+    Eye/Move publisher and keeps only one `--track-eyes` worker alive.
+    `tools/solve_stream_proof_frustum.py`
     turns articulated sweep observations into a provisional Kiyo AR trail
     receipt: Nightwing matched views define a temporary local witness space,
     Kiyo observations are fit into it, and the output
@@ -238,9 +241,8 @@ invariants:
     `raven-realtk-loopback` now carry the `raven-sync` clock domain from the
     source descriptor, and `MimirSynchronizedBufferPlanner` applies that earned
     correction to every buffer in the same domain, including `raven-display`.
-    Separate Raven SRT audio/video legs therefore have a measured correction
-    path; a single muxed Raven A/V transport remains a future tightening, not a
-    hidden assumption.
+    The LAN Raven path is now one muxed A/V transport; the local split is only
+    a Starfire demux boundary for Mimir's raw video/PCM source adapters.
     `MimirMoveControllerTracker` is the first Mimir-native overlay owner for
     multiple PS Move controllers: it tracks bright sphere observations from
     PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves

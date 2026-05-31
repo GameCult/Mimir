@@ -488,12 +488,15 @@ a named invariant that the native runtime cannot protect yet.
   become one valid FieldEvidence claim/candidate without claiming 6DoF pose.
   `config/mimir-runtime.stream-proof.local.json` names the current stream-proof
   profile: Kiyo Pro AR program view, Leap stereo IR depth root, Raven screen
-  capture on SRT port 5200, Raven Realtek loopback as decoded f32 PCM on SRT
-  port 5202, and Scarlett ASIO channels labeled as shotgun/cardioid/local
+  and Raven Realtek loopback from one muxed Raven NVENC/AAC MPEG-TS SRT stream
+  on port 5200. Starfire demuxes that single Raven transport locally into
+  `raven-display` on port 5210 and `raven-realtk-loopback` f32 PCM on port
+  5212 because Mimir's current source adapters ingest raw video and PCM
+  separately. Scarlett ASIO channels remain labeled as shotgun/cardioid/local
   Raven loopback evidence. Nightwing PS3 Eyes no longer appear as Starfire raw
   video sources in this proof; they publish compact Eye/Move observations.
-  `MimirFfmpegPcmAudioStreamSource` is the network PCM audio owner for Raven
-  Realtek loopback. `config/mimir-runtime.move-stream.local.json` remains a
+  `MimirFfmpegPcmAudioStreamSource` is the network PCM audio owner after local
+  Raven demux. `config/mimir-runtime.move-stream.local.json` remains a
   local/raw-Eye show reference, not the current split-host authority.
   The distributed authority split is now explicit: Nightwing owns the local
   PS3 Eye USB reads, PS Move Bluetooth/HID link, LED schedules, device

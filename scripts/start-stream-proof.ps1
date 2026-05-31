@@ -17,9 +17,9 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 if ($DryRun) {
     Write-Host "MIMIR_RUNTIME_CONFIG=$ConfigPath"
     Write-Host "Would stage Nightwing witness tools to $NightwingHost and start --track-eyes publisher at $WitnessUrl"
+    Write-Host "Would start local Raven A/V demux: scripts\start-raven-av-demux.ps1"
     Write-Host "Would launch: dotnet run --project $repo\src\Mimir.App\Mimir.App.csproj"
-    Write-Host "Raven screen sender: scripts\start-raven-screen-capture-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
-    Write-Host "Raven Realtek sender: scripts\raven-audio.ps1 -TargetHost 192.168.1.66 -Port 5202"
+    Write-Host "Raven muxed A/V sender: scripts\start-raven-av-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
     exit 0
 }
 
@@ -82,6 +82,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "Could not start Nightwing typed witness publisher."
 }
 
+& (Join-Path $repo "scripts\start-raven-av-demux.ps1")
+
 $env:MIMIR_RUNTIME_CONFIG = $ConfigPath
 $args = @("run", "--project", (Join-Path $repo "src\Mimir.App\Mimir.App.csproj"))
 if ($Headless) {
@@ -99,6 +101,5 @@ if ($Headless) {
 
 Write-Host "MIMIR_RUNTIME_CONFIG=$ConfigPath"
 Write-Host "Starting stream proof: Leap + Kiyo Pro + Raven screen/audio, Nightwing Eye/Move witness claims"
-Write-Host "Raven senders expected: scripts\start-raven-screen-capture-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
-Write-Host "Raven audio expected: scripts\raven-audio.ps1 -TargetHost 192.168.1.66 -Port 5202"
+Write-Host "Raven sender expected: scripts\start-raven-av-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
 dotnet @args
