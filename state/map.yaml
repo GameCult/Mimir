@@ -198,6 +198,19 @@ invariants:
     schedule residuals within about 4 ms; `ffplay`/DirectShow audio startup is
     still too soft for final physical latency authority, so native timestamped
     Scarlett playback/capture remains the production timing cut.
+    `tools/music_keyed_move_chirp_sync.py` now writes articulated calibration
+    word plans where one `mimir.music_keyed_move_chirp_plan.v1` owns beat/key
+    selection, symbol sequence, chirp contours, and per-Move sampled RGB visual
+    contours. `tools/sync_sweep.py --music-plan` consumes that same plan as the
+    shared capture authority: it plays/copies the chirp train, sends exact Move
+    contour samples over Nightwing HID, scores RGB camera receipts with a
+    `visual_contour` brightness/color decoder block, and runs Mimir
+    perfect-machine live receipts for local Leap/Kiyos and Raven/Eve configs
+    unless disabled. DirectShow/Nightwing media capture remains an archive and
+    diagnostic path; Leap/Eve presence is now explicit in typed Mimir receipts
+    rather than silently inferred. `tools/crunch_sync_sweep.py` turns a sweep
+    directory into `calibration-observations.json/csv` by merging Nightwing's
+    typed Move observations with local Kiyo frame-derived marker centroids.
     `MimirMoveControllerTracker` is the first Mimir-native overlay owner for
     multiple PS Move controllers: it tracks bright sphere observations from
     PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves

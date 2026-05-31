@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from move_latency_probe import build_events, detect_audio_peaks, fit_schedule, generate_chirp
+from move_latency_probe import build_events, detect_audio_peaks, fit_schedule, generate_chirp, render_chirp_template
 from nightwing_audio_sync_probe import AsioRecorder, estimate_clock_offset_ns, mono_copy_wav, remote_log
 
 
@@ -150,6 +150,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ffmpeg", default=str(DEFAULT_FFMPEG))
     parser.add_argument("--ffplay", default=str(DEFAULT_FFPLAY))
     parser.add_argument("--ffprobe", default=str(DEFAULT_FFPROBE))
+    parser.add_argument("--dotnet", default="dotnet")
     parser.add_argument("--ssh-target", default="nightwing")
     parser.add_argument("--nightwing-mic-device", default="hw:0,0")
     parser.add_argument("--nightwing-rate", type=int, default=48000)
@@ -188,8 +189,91 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chirp-ms", type=float, default=70.0)
     parser.add_argument("--pulse-ms", type=float, default=95.0)
     parser.add_argument("--sample-rate", type=int, default=48000)
+    parser.add_argument(
+        "--music-plan",
+        default=None,
+        help="Use a mimir.music_keyed_move_chirp_plan.v1 JSON as the shared audio/visual gesture authority.",
+    )
+    parser.add_argument(
+        "--music-wav",
+        default=None,
+        help="Optional rendered WAV for --music-plan. Defaults to music-keyed-chirps.wav beside the plan.",
+    )
+    parser.add_argument(
+        "--mimir-live-config",
+        action="append",
+        default=[],
+        help="Also run Mimir.BufferSmoke --perfect-machine-live-smoke with this config as a typed sensor receipt.",
+    )
+    parser.add_argument("--skip-mimir-live", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
+
+
+def load_music_plan(args: argparse.Namespace) -> tuple[dict | None, list[dict] | None, Path | None]:
+    if not args.music_plan:
+        return None, None, None
+    plan_path = Path(args.music_plan)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    if plan.get("kind") != "mimir.music_keyed_move_chirp_plan.v1":
+        raise ValueError(f"unsupported music plan kind: {plan.get('kind')}")
+    events: list[dict] = []
+    for item in plan.get("events", []):
+        offset = float(item["offset_seconds"])
+        events.append({
+            "index": int(item["index"]),
+            "symbol": int(item["symbol"]),
+            "offset": offset,
+            "start_hz": float(item["chirp_start_hz"]),
+            "end_hz": float(item["chirp_end_hz"]),
+            "color": tuple(item.get("move_pulses", [{}])[0].get("base_rgb", (255, 255, 255))),
+            "move_pulses": item.get("move_pulses", []),
+        })
+    if len(events) >= 2:
+        gaps = [events[index + 1]["offset"] - events[index]["offset"] for index in range(len(events) - 1)]
+        args.interval = max(0.001, float(np.median(gaps)))
+    args.pulses = len(events)
+    args.duration = max(args.duration, max(float(event["offset"]) for event in events) + 1.0)
+    wav_path = Path(args.music_wav) if args.music_wav else plan_path.with_name("music-keyed-chirps.wav")
+    return plan, events, wav_path
+
+
+def write_plan_chirp_wav(path: Path, args: argparse.Namespace, events: list[dict], gain: float = 0.35) -> np.ndarray:
+    total = max(1, int(args.duration * args.sample_rate))
+    audio = np.zeros(total, dtype=np.float32)
+    prototype = np.zeros(max(16, int(args.chirp_ms * 0.001 * args.sample_rate)), dtype=np.float32)
+    for event in events:
+        chirp = render_chirp_template(float(event["start_hz"]), float(event["end_hz"]), args)
+        if int(event["index"]) == 0:
+            prototype = chirp.copy()
+        start = int(float(event["offset"]) * args.sample_rate)
+        end = min(total, start + chirp.size)
+        if end > start:
+            audio[start:end] += chirp[: end - start] * gain
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(args.sample_rate)
+        wav.writeframes((np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2").tobytes())
+    return prototype
+
+
+def prepare_schedule(args: argparse.Namespace, out_dir: Path) -> tuple[dict | None, list[dict], Path, np.ndarray]:
+    music_plan, music_events, music_wav = load_music_plan(args)
+    events = music_events if music_events is not None else build_events(args)
+    chirp_path = out_dir / "chirp-train.wav"
+    if music_plan is not None:
+        if music_wav is not None and music_wav.exists():
+            shutil.copy2(music_wav, chirp_path)
+            prototype = render_chirp_template(float(events[0]["start_hz"]), float(events[0]["end_hz"]), args) if events else np.zeros(1, dtype=np.float32)
+        else:
+            prototype = write_plan_chirp_wav(chirp_path, args, events)
+    else:
+        prototype = generate_chirp(chirp_path, args, events)
+    (out_dir / "event-schedule.json").write_text(json.dumps(events, indent=2), encoding="utf-8")
+    if music_plan is not None:
+        (out_dir / "gesture-plan.json").write_text(json.dumps(music_plan, indent=2), encoding="utf-8")
+    return music_plan, events, chirp_path, prototype
 
 
 def move_specs_and_events(args: argparse.Namespace, events: list[dict]) -> tuple[str, str]:
@@ -200,11 +284,33 @@ def move_specs_and_events(args: argparse.Namespace, events: list[dict]) -> tuple
         color_text = color_text.lstrip("#")
         color = tuple(int(color_text[index:index + 2], 16) for index in (0, 2, 4))
         moves.append((name, path, color))  # type: ignore[arg-type]
+    move_by_name = {name: (path, color) for name, path, color in moves}
+    for event in events:
+        for pulse in event.get("move_pulses", []):
+            name = str(pulse.get("name", ""))
+            hidraw = str(pulse.get("hidraw", ""))
+            base_rgb = tuple(int(channel) for channel in pulse.get("base_rgb", (255, 255, 255)))
+            if name and hidraw:
+                move_by_name[name] = (hidraw, base_rgb)  # the gesture plan carries the current Nightwing HID authority
+    moves = [(name, path, color) for name, (path, color) in move_by_name.items()]
     move_specs = ",".join(f"{name}={path}" for name, path, _color in moves)
     lines: list[str] = []
     pulse_s = args.pulse_ms * 0.001
     for event_index, event in enumerate(events):
         offset = float(event["offset"])
+        if event.get("move_pulses"):
+            for pulse in event.get("move_pulses", []):
+                samples = pulse.get("visual_word", {}).get("samples") or [
+                    {"offset_seconds": 0.0, "rgb": pulse.get("base_rgb", (255, 255, 255))},
+                    {"offset_seconds": pulse_s, "rgb": (0, 0, 0)},
+                ]
+                for sample in samples:
+                    r, g, b = sample["rgb"]
+                    lines.append(
+                        f"{offset + float(sample['offset_seconds']):.6f} "
+                        f"{pulse['name']} {int(r)} {int(g)} {int(b)}"
+                    )
+            continue
         for move_index, (name, _path, color) in enumerate(moves):
             scale = 1.0 if move_index == event_index % max(1, len(moves)) else 0.45
             r, g, b = (int(channel * scale) for channel in color)
@@ -318,9 +424,21 @@ def start_nightwing_mic(args: argparse.Namespace, out_dir: Path) -> subprocess.P
     )
 
 
-def start_nightwing_eye(args: argparse.Namespace, sensor: NightwingEye, out_dir: Path) -> subprocess.Popen:
+def move_names_for_events(args: argparse.Namespace, events: list[dict]) -> str:
+    names: list[str] = []
+    for spec in args.move:
+        names.append(spec.split("=", 1)[0])
+    for event in events:
+        for pulse in event.get("move_pulses", []):
+            name = str(pulse.get("name", ""))
+            if name and name not in names:
+                names.append(name)
+    return ",".join(names)
+
+
+def start_nightwing_eye(args: argparse.Namespace, sensor: NightwingEye, out_dir: Path, events: list[dict]) -> subprocess.Popen:
     remote_json = f"/tmp/mimir-sync-sweep-{sensor.name}.json"
-    move_names = ",".join(spec.split("=", 1)[0] for spec in args.move)
+    move_names = move_names_for_events(args, events)
     return subprocess.Popen(
         [
             "ssh",
@@ -490,6 +608,114 @@ def detect_raw_luma_peaks(raw_path: Path, frame_times: list[float], width: int, 
     }
 
 
+def interpolate_rgb(samples: list[dict], relative_seconds: float) -> np.ndarray:
+    if not samples:
+        return np.zeros(3, dtype=np.float32)
+    ordered = sorted(samples, key=lambda item: float(item.get("offset_seconds", 0.0)))
+    if relative_seconds <= float(ordered[0].get("offset_seconds", 0.0)):
+        return np.asarray(ordered[0].get("rgb", (0, 0, 0)), dtype=np.float32)
+    for left, right in zip(ordered, ordered[1:]):
+        lo = float(left.get("offset_seconds", 0.0))
+        hi = float(right.get("offset_seconds", lo))
+        if relative_seconds <= hi:
+            span = max(1e-6, hi - lo)
+            t = max(0.0, min(1.0, (relative_seconds - lo) / span))
+            a = np.asarray(left.get("rgb", (0, 0, 0)), dtype=np.float32)
+            b = np.asarray(right.get("rgb", (0, 0, 0)), dtype=np.float32)
+            return a * (1.0 - t) + b * t
+    return np.asarray(ordered[-1].get("rgb", (0, 0, 0)), dtype=np.float32)
+
+
+def expected_visual_rgb(event: dict, relative_seconds: float) -> np.ndarray:
+    rgb = np.zeros(3, dtype=np.float32)
+    for pulse in event.get("move_pulses", []):
+        samples = pulse.get("visual_word", {}).get("samples") or [
+            {"offset_seconds": 0.0, "rgb": pulse.get("base_rgb", (0, 0, 0))},
+            {"offset_seconds": 0.090, "rgb": (0, 0, 0)},
+        ]
+        rgb += interpolate_rgb(samples, relative_seconds)
+    return np.clip(rgb, 0.0, 255.0)
+
+
+def visual_word_duration(event: dict) -> float:
+    durations: list[float] = []
+    for pulse in event.get("move_pulses", []):
+        word = pulse.get("visual_word", {})
+        if "duration_seconds" in word:
+            durations.append(float(word["duration_seconds"]))
+            continue
+        samples = word.get("samples") or []
+        if samples:
+            durations.append(max(float(sample.get("offset_seconds", 0.0)) for sample in samples))
+    return max(durations, default=0.0)
+
+
+def score_visual_contours(frames_dir: Path, frame_times: list[float], fps: int, events: list[dict]) -> dict:
+    contour_events = [event for event in events if event.get("move_pulses") and visual_word_duration(event) > 0.0]
+    frame_paths = sorted(frames_dir.glob("frame_*.png"))
+    if not contour_events or not frame_paths:
+        return {"visual_contour": {"events": len(contour_events), "frames": len(frame_paths), "matched": 0}}
+    times = frame_times[: len(frame_paths)] or [index / max(1, fps) for index in range(len(frame_paths))]
+    observed_rgb: list[np.ndarray] = []
+    observed_value: list[float] = []
+    for path in frame_paths:
+        arr = np.asarray(Image.open(path).convert("RGB"), dtype=np.float32)
+        luma = arr[:, :, 0] * 0.2126 + arr[:, :, 1] * 0.7152 + arr[:, :, 2] * 0.0722
+        cutoff = float(np.percentile(luma, 99.70))
+        mask = luma >= max(8.0, cutoff)
+        if np.any(mask):
+            rgb = np.mean(arr[mask], axis=0)
+        else:
+            rgb = np.mean(arr.reshape((-1, 3)), axis=0)
+        observed_rgb.append(rgb.astype(np.float32))
+        observed_value.append(float(np.percentile(luma, 99.92)))
+    obs_value = np.asarray(observed_value, dtype=np.float32)
+    matched = 0
+    brightness_corrs: list[float] = []
+    color_errors: list[float] = []
+    event_scores: list[dict] = []
+    for event in contour_events:
+        offset = float(event["offset"])
+        duration = visual_word_duration(event)
+        indices = [index for index, t in enumerate(times) if offset <= t <= offset + duration]
+        if len(indices) < 2:
+            continue
+        expected_rgbs = np.asarray([expected_visual_rgb(event, times[index] - offset) for index in indices], dtype=np.float32)
+        expected_value = np.linalg.norm(expected_rgbs, axis=1)
+        observed_values = obs_value[indices]
+        if float(np.max(expected_value)) <= 1e-6 or float(np.max(observed_values)) <= 1e-6:
+            continue
+        expected_norm = expected_value / max(1e-6, float(np.max(expected_value)))
+        observed_norm = observed_values / max(1e-6, float(np.max(observed_values)))
+        corr = float(np.corrcoef(expected_norm, observed_norm)[0, 1]) if len(indices) > 2 else 0.0
+        obs_rgbs = np.asarray([observed_rgb[index] for index in indices], dtype=np.float32)
+        exp_chroma = expected_rgbs / np.maximum(np.linalg.norm(expected_rgbs, axis=1, keepdims=True), 1e-6)
+        obs_chroma = obs_rgbs / np.maximum(np.linalg.norm(obs_rgbs, axis=1, keepdims=True), 1e-6)
+        weights = np.maximum(expected_norm, 0.05)
+        color_error = float(np.average(np.linalg.norm(exp_chroma - obs_chroma, axis=1), weights=weights))
+        ok = corr >= 0.20 and color_error <= 1.15
+        matched += 1 if ok else 0
+        brightness_corrs.append(corr)
+        color_errors.append(color_error)
+        event_scores.append({
+            "index": int(event["index"]),
+            "symbol": int(event["symbol"]),
+            "frames": len(indices),
+            "brightness_corr": corr,
+            "color_chroma_error": color_error,
+            "ok": ok,
+        })
+    return {
+        "visual_contour": {
+            "events": len(contour_events),
+            "matched": matched,
+            "mean_brightness_corr": float(np.mean(brightness_corrs)) if brightness_corrs else None,
+            "mean_color_chroma_error": float(np.mean(color_errors)) if color_errors else None,
+            "event_scores": event_scores[:32],
+        }
+    }
+
+
 def score_sensor(name: str, kind: str, peaks: list[float], events: list[dict], args: argparse.Namespace, extra: dict | None = None) -> dict:
     shift, matches = fit_schedule(peaks, events, args)
     residuals = [float(match["residual_ms"]) for match in matches if match.get("residual_ms") is not None]
@@ -511,6 +737,55 @@ def score_sensor(name: str, kind: str, peaks: list[float], events: list[dict], a
     return summary
 
 
+def run_mimir_live_receipts(args: argparse.Namespace, out_dir: Path) -> list[dict]:
+    if args.skip_mimir_live:
+        return []
+    configs = list(args.mimir_live_config)
+    if not configs and args.music_plan:
+        configs = [
+            "config/mimir-runtime.perfect-machine.local.json",
+            "config/mimir-runtime.raven-eve.example.json",
+        ]
+    receipts: list[dict] = []
+    for config in configs:
+        config_path = Path(config)
+        name = config_path.stem.replace("mimir-runtime.", "").replace(".local", "")
+        log_path = out_dir / f"mimir-live-{name}.log"
+        cmd = [
+            args.dotnet,
+            "run",
+            "--project",
+            "src/Mimir.BufferSmoke/Mimir.BufferSmoke.csproj",
+            "--",
+            "--perfect-machine-live-smoke",
+            "--seconds",
+            f"{min(max(args.duration, 1.0), 30.0):0.3f}",
+            "--config",
+            str(config_path),
+        ]
+        started = time.time()
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=max(20.0, min(max(args.duration, 1.0), 30.0) + 35.0),
+        )
+        log_path.write_text(proc.stdout, encoding="utf-8", errors="replace")
+        last_line = next((line for line in reversed(proc.stdout.splitlines()) if "perfect-machine-live-smoke" in line), "")
+        receipts.append({
+            "name": f"mimir-live-{name}",
+            "kind": "mimir-runtime-sensor-receipt",
+            "ok": proc.returncode == 0 and "errors=False" in last_line,
+            "config": str(config_path),
+            "path": str(log_path),
+            "elapsed_seconds": time.time() - started,
+            "returncode": proc.returncode,
+            "summary": last_line,
+        })
+    return receipts
+
+
 def main() -> int:
     args = parse_args()
     out_dir = Path(args.out_dir)
@@ -523,19 +798,17 @@ def main() -> int:
     videos = [parse_video(value) for value in args.video]
     nw_eyes = [parse_nw_eye(value) for value in args.nightwing_eye]
     audios = [parse_audio(value) for value in args.audio]
-    events = build_events(args)
-    chirp_path = out_dir / "chirp-train.wav"
-    prototype = generate_chirp(chirp_path, args, events)
-    (out_dir / "event-schedule.json").write_text(json.dumps(events, indent=2), encoding="utf-8")
+    music_plan, events, chirp_path, prototype = prepare_schedule(args, out_dir)
 
     if args.dry_run:
-        print(json.dumps({"out_dir": str(out_dir), "events": events}, indent=2))
+        print(json.dumps({"out_dir": str(out_dir), "plan_kind": music_plan.get("kind") if music_plan else None, "events": events}, indent=2))
         return 0
 
     if nw_eyes or not args.skip_nightwing_mic:
         stage_nightwing_tools(args, out_dir)
 
     sensor_results: list[dict] = []
+    sensor_results.extend(run_mimir_live_receipts(args, out_dir))
     started: list[tuple[str, subprocess.Popen]] = []
     for sensor in videos:
         try:
@@ -558,7 +831,7 @@ def main() -> int:
     nw_eye_procs: list[tuple[NightwingEye, subprocess.Popen]] = []
     for sensor in nw_eyes:
         try:
-            nw_eye_procs.append((sensor, start_nightwing_eye(args, sensor, out_dir)))
+            nw_eye_procs.append((sensor, start_nightwing_eye(args, sensor, out_dir, events)))
         except Exception as ex:
             sensor_results.append({"name": sensor.name, "kind": "nightwing-video", "ok": False, "error": str(ex)})
 
@@ -678,7 +951,8 @@ def main() -> int:
         try:
             frames_dir, times = extract_video_frames(args, out_dir, sensor)
             peaks, stats = detect_video_peaks(frames_dir, times, args.interval, sensor.fps, args.pulses)
-            sensor_results.append(score_sensor(sensor.name, "video", peaks, events, args, {"path": str(path), "stats": stats}))
+            contour = score_visual_contours(frames_dir, times, sensor.fps, events)
+            sensor_results.append(score_sensor(sensor.name, "video", peaks, events, args, {"path": str(path), "stats": stats, **contour}))
         except Exception as ex:
             sensor_results.append({"name": sensor.name, "kind": "video", "ok": False, "error": str(ex)})
 
@@ -699,6 +973,7 @@ def main() -> int:
         "reference": reference.get("name") if reference else None,
         "reference_schedule_shift_ms": reference_shift,
         "events": events,
+        "gesture_plan": str(out_dir / "gesture-plan.json") if music_plan else None,
         "sensors": sensor_results,
         "valid_sensor_count": sum(1 for item in sensor_results if item.get("ok")),
         "note": "Schedule shifts are per-witness receipt fits. Offsets are relative to the selected ASIO witness when available; final runtime calibration still belongs in native timestamped Mimir/Fensalir paths.",

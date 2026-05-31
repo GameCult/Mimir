@@ -197,6 +197,39 @@ accepted a short 80 Hz contour test on Nightwing, but the useful rate is the
 rate cameras can recover cleanly, not merely the rate the controller accepts.
 `--visual-gesture square` remains available as a baseline comparator.
 
+`tools/sync_sweep.py` can now consume that exact plan with `--music-plan`.
+That makes the plan the single authority for audio chirps, sampled Move RGB
+contours, and offline video scoring. The sweep writes `gesture-plan.json`,
+`event-schedule.json`, copied/rendered `chirp-train.wav`, per-sensor captures,
+and `summary.json`. RGB camera receipts include a `visual_contour` block with
+brightness-envelope correlation and color-chroma error against the expected
+Move contour. The old peak-only score is still present as a timing witness; it
+no longer pretends square flashes are the only visual language.
+
+When `--music-plan` is used, the sweep also runs typed Mimir runtime sensor
+receipts unless `--skip-mimir-live` is passed. The default receipts are:
+
+- `config/mimir-runtime.perfect-machine.local.json` for local Leap stereo IR,
+  Kiyo Pro, Kiyo, and local camera texture/depth/field-resource ingress;
+- `config/mimir-runtime.raven-eve.example.json` for Raven display and Eve
+  camera/mic frame-event listeners.
+
+That receipt path is not raw media archival yet. It is the audit hook that
+prevents Leap or Eve from being omitted by a DirectShow/Nightwing-only sweep.
+
+After a sweep, run `tools/crunch_sync_sweep.py` over the sweep directory to
+extract a compact calibration observation table. It merges Nightwing's typed
+Move observations with local Kiyo/Kiyo Pro frame analysis, estimates each
+local video's schedule shift against the event train, and writes
+`calibration-observations.json` plus `calibration-observations.csv`.
+
+Example using an already-written musical plan:
+
+```powershell
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\sync_sweep.py --music-plan artifacts/runtime/music-keyed-move-chirp-sync-live/music-keyed-move-chirp-plan.json --out-dir artifacts/runtime/all-sensor-articulated-sync
+& 'C:\Users\Meta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\tools\crunch_sync_sweep.py artifacts/runtime/all-sensor-articulated-sync
+```
+
 The non-dry run targets the two wireless Nightwing Moves by default:
 `00:07:04:a6:be:5f` on `/dev/hidraw2` and `00:06:f5:23:e2:d1` on
 `/dev/hidraw3`. Nightwing now carries `/etc/udev/rules.d/70-move.rules`, which

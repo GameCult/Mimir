@@ -468,6 +468,17 @@ a named invariant that the native runtime cannot protect yet.
   about 4 ms; `ffplay`/DirectShow audio startup is still too soft for final
   physical latency authority, so native timestamped Scarlett playback/capture
   remains the production timing cut.
+  The music-keyed calibration planner now owns articulated multimodal words:
+  `mimir.music_keyed_move_chirp_plan.v1` carries beat/key analysis, chirp
+  frequency contours, de Bruijn symbols, and per-Move sampled RGB visual
+  contour words. `tools/sync_sweep.py --music-plan` consumes that same plan
+  instead of inventing square flashes, sends the exact RGB samples over
+  Nightwing HID, and writes RGB video `visual_contour` decoder scores
+  (brightness correlation plus color-chroma error) into `summary.json`.
+  With a music plan, the sweep also runs Mimir perfect-machine live receipts
+  for the local Leap/Kiyo runtime and Raven/Eve receiver runtime unless
+  explicitly disabled, so the all-sensor run cannot accidentally omit Leap or
+  Eve merely because FFmpeg cannot archive them directly.
   `MimirMoveControllerTracker` is the first Mimir-native overlay owner for the
   streamable product shape: it tracks bright PS Move sphere observations from
   PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves
