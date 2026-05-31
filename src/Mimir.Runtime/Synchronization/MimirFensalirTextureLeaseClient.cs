@@ -18,7 +18,7 @@ public readonly record struct MimirFensalirTextureLease(
     IntPtr ProducerFenceHandle,
     AquariumFieldResourceDeclaration Declaration)
 {
-    public bool IsValid => NativeHandle != IntPtr.Zero && Frame.NativeHandle != 0 && !string.IsNullOrWhiteSpace(Frame.ResourceKey);
+    public bool IsValid => !string.IsNullOrWhiteSpace(Frame.ResourceKey) && Declaration.HasIdentity;
 }
 
 public sealed class MimirFensalirTextureLeaseClient(IAquariumFieldResourceBroker broker)
@@ -42,8 +42,14 @@ public sealed class MimirFensalirTextureLeaseClient(IAquariumFieldResourceBroker
             FormatForPixelFormat(request.PixelFormat),
             request.ProducerAccess,
             request.Version));
-        if (!engineLease.IsValid || engineLease.NativeHandle == IntPtr.Zero)
+        if (!engineLease.IsValid)
         {
+            if (Environment.GetEnvironmentVariable("MIMIR_TEXTURE_LEASE_DIAG") == "1")
+            {
+                Console.WriteLine(
+                    $"mimir-texture-lease-failed source={request.SourceId} resource={resourceKey} {request.Width}x{request.Height} format={FormatForPixelFormat(request.PixelFormat)} access={request.ProducerAccess} valid={engineLease.IsValid} handle={engineLease.NativeHandle}");
+            }
+
             return false;
         }
 

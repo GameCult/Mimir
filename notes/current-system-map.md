@@ -466,13 +466,24 @@ R16F disparity SurfacePage. `MimirRuntime` merges that Mesh claim into the same
 evidence frame as the Leap stereo-depth lowering. `Mimir.BufferSmoke
 --leap-point-cloud-root-smoke` proves the combined depth/point-cloud contract
 plans as one `SurfacePage` packet and one `Mesh` packet with zero deferred
-requests. Fensalir branch `codex/leap-packed-depth` now has the first render
-lane too. It preserves Mesh `SourceUri=derived-from:*`, allocates generated
-point-list vertex/index buffers as UAV-capable GPU resources, fills them from
-the disparity SurfacePage in `D3D12PointCloudFromDisparityCS`, and renders the
-standard `PositionNormalUvColor` PointList through `D3D12PointCloudPS`. The
-remaining truth gap is live Leap/editor verification, calibrated projection
-constants, full SGM, and a global residual/calibration owner.
+requests. Fensalir branch `codex/leap-packed-depth` now has the first native
+surface-claim lane too. It preserves Mesh `SourceUri=derived-from:*`, allocates
+generated point-list vertex/index buffers as UAV-capable GPU resources, fills
+them from the disparity SurfacePage in `D3D12PointCloudFromDisparityCS`, and
+writes approximated normals, curvature, SDF, PBR, and radiosity reservoirs into
+the existing fractal splat buffers. The point-list draw path is diagnostic-only;
+the verified live presentation path is Fensalir's splat/reservoir resolver.
+The 2026-05-31 live capture
+`artifacts/runtime/mimir-leap-surface-claims-clean.png` proves the clean path:
+LeapUVC frames uploaded through a Fensalir-owned D3D12 texture, packed stereo
+dispatched to R16F disparity, point-cloud compute generated 19,200 surface
+claims, the point-list mesh renderer stayed at `rendered 0`, and the reservoir
+resolver presented visible Leap-derived splats. Reservoir history update is
+still disabled during the proof with `AQUARIUM_DISABLE_RESERVOIR_HISTORY=1`;
+the fallback presentation source now explicitly reads the current resolver
+output instead of the untouched history target. Remaining truth gaps are
+calibrated projection constants, full SGM, reservoir-history shader startup
+repair, and a global residual/calibration owner.
 
 Fensalir must not be treated as a traditional rendering pipeline. Mimir does
 not ask it to "draw a thing" and hope post-processing makes the result true.

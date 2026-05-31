@@ -892,6 +892,7 @@ static int RunKsCameraDriverSmoke(string[] args)
     var fourCc = ParseStringOption(args, "--fourcc", "YUY2");
     var minFps = ParseDoubleOption(args, "--min-fps", 100.0);
     var timeoutMs = ParseIntOption(args, "--timeout-ms", 3000);
+    var dumpFrame = ParseStringOption(args, "--dump-frame", "");
 
     var broker = new FakeFieldResourceBroker();
     using var driver = new MimirKsVideoCaptureDriver(new MimirKsVideoCaptureDriverOptions(
@@ -906,7 +907,10 @@ static int RunKsCameraDriverSmoke(string[] args)
         new MimirStreamDescriptor(sourceId, MimirStreamKind.Video, MimirStreamOrigin.LocalDevice),
         driver,
         static () => StopwatchTicksToNs(Stopwatch.GetTimestamp()));
-    source.AttachTextureLeaseClient(new MimirFensalirTextureLeaseClient(broker));
+    if (string.IsNullOrWhiteSpace(dumpFrame))
+    {
+        source.AttachTextureLeaseClient(new MimirFensalirTextureLeaseClient(broker));
+    }
 
     var deadline = Stopwatch.GetTimestamp() + (long)(timeoutMs / 1000.0 * Stopwatch.Frequency);
     while (Stopwatch.GetTimestamp() < deadline)
@@ -920,6 +924,20 @@ static int RunKsCameraDriverSmoke(string[] args)
         var frame = sample.VideoFrame;
         Console.WriteLine(
             $"ks-camera-driver-smoke source={sample.SourceId} {frame?.Width}x{frame?.Height} format={frame?.PixelFormat} liveBytes={sample.ByteLength} uploadedBytes={source.LastUploadedByteLength} uploaded={broker.UploadedResourceKey} copies={source.LastUploadedCopyCount}");
+        if (!string.IsNullOrWhiteSpace(dumpFrame) && !sample.Data.IsEmpty)
+        {
+            var dumpPath = Path.GetFullPath(dumpFrame);
+            Directory.CreateDirectory(Path.GetDirectoryName(dumpPath) ?? ".");
+            File.WriteAllBytes(dumpPath, sample.Data.ToArray());
+            Console.WriteLine($"ks-camera-driver-dump path={dumpPath} bytes={sample.Data.Length}");
+            return frame != null &&
+                frame.Width == width &&
+                frame.Height == height &&
+                sample.ByteLength > 0
+                ? 0
+                : 1;
+        }
+
         return frame != null &&
             frame.Width == width &&
             frame.Height == height &&
@@ -2620,7 +2638,7 @@ static int RunLeapPointCloudRootSmoke()
         pointResource.Kind == AquariumFieldResourceKind.Mesh &&
         pointResource.Mesh.Topology == AquariumFieldMeshTopology.PointList &&
         pointResource.Mesh.Layout == AquariumFieldMeshLayout.PositionNormalUvColor &&
-        pointResource.Mesh.Vertices.Count == 320 * 120 &&
+        pointResource.Mesh.Vertices.Count == 160 * 120 &&
         pointResource.Mesh.Indices.Count == pointResource.Mesh.Vertices.Count &&
         pointResource.SourceUri == "derived-from:mimir:resource:stereo-depth:leap-stereo-ir:disparity-r16f" &&
         stereoPacket.Backend == AquariumFieldBackendKind.SurfacePage &&

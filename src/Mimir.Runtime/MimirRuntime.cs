@@ -1433,14 +1433,19 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
     private void StartConfiguredSources()
     {
+        var started = 0;
         foreach (var factory in sourceFactories)
         {
             var source = factory.Create();
             if (source != null)
             {
                 synchronization.AddSource(source);
+                started++;
+                Console.WriteLine($"mimir-source-started source={factory.Descriptor.SourceId} kind={factory.Descriptor.Kind}");
             }
         }
+
+        Console.WriteLine($"mimir-source-started total={started} configured={sourceFactories.Count}");
     }
 
     private void EmitTelemetry()
@@ -1454,7 +1459,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             string.Equals(buffer.Descriptor.SourceId, audioSyncSettings.ReferenceSourceId, StringComparison.Ordinal));
         var states = synchronization.AudioSynchronizationStates;
         Console.WriteLine(
-            $"mimir-sync-telemetry t={runtimeSeconds:0.00}s audioSync={audioSyncSettings.Mode} loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} analyzeMs={lastAudioSyncAnalysisMilliseconds:0.0} aligned={DescribeAlignedAudio()}");
+            $"mimir-sync-telemetry t={runtimeSeconds:0.00}s sources={synchronization.SourceCount} lastPoll={lastPollCount} ingested={synchronization.IngestedSamples} audioSync={audioSyncSettings.Mode} loopbackCount={loopback?.Count ?? 0} loopbackEdgeNs={loopback?.EdgeNs ?? 0} reports={lastAudioSynchronizationReports.Count} states={states.Count} analyzeMs={lastAudioSyncAnalysisMilliseconds:0.0} aligned={DescribeAlignedAudio()}");
         if (lastObsStemPublication.ReadyStems.Count > 0 || lastObsStemPublication.MissingStemIds.Count > 0)
         {
             Console.WriteLine(
@@ -1462,6 +1467,12 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
 
         Console.WriteLine($"mimir-sync-buffers {DescribeAudioBuffers()}");
+        foreach (var buffer in synchronization.Buffers.Buffers.Where(static buffer => buffer.Descriptor.Kind == MimirStreamKind.Video))
+        {
+            var frame = buffer.Latest?.VideoFrame;
+            Console.WriteLine(
+                $"mimir-video-buffer {buffer.Descriptor.SourceId} count={buffer.Count} latest={(frame == null ? "none" : $"{frame.Width}x{frame.Height} {frame.PixelFormat} bytes={buffer.Latest?.ByteLength ?? 0} resource={frame.ResourceKey} handle={frame.NativeHandle} kind={frame.NativeHandleKind} fence={frame.ProducerFenceHandle}/{frame.ProducerFenceValue}")}");
+        }
         Console.WriteLine($"mimir-spectrum-frustum {DescribeSpectrumFrustum()}");
         foreach (var spectrum in lastAudioSpectra.OrderBy(snapshot => snapshot.SourceId, StringComparer.Ordinal))
         {

@@ -84,9 +84,17 @@ invariants:
     live Leap stereo-depth claim. `Mimir.BufferSmoke --leap-point-cloud-root-smoke`
     proves one `SurfacePage` packet plus one `Mesh` packet and zero deferred
     requests. Fensalir branch `codex/leap-packed-depth` now owns the matching
-    first render lane: generated PointList Mesh buffers are filled from the
-    disparity SurfacePage on D3D12 and rendered into scene candidate targets.
-    Live-device/editor verification, calibrated projection constants, full SGM,
+    first native surface-claim lane: generated PointList Mesh buffers are
+    filled from the disparity SurfacePage on D3D12 for diagnostics, while the
+    same compute pass writes approximated normals, curvature, SDF, PBR, and
+    radiosity data into Fensalir's splat reservoir buffers. The point-list draw
+    path is diagnostic-only; live presentation goes through Fensalir's
+    splat/reservoir resolver. The live proof
+    `artifacts/runtime/mimir-leap-surface-claims-clean.png` showed LeapUVC
+    frames uploaded through a Fensalir-owned D3D12 texture, packed stereo depth
+    dispatch-ready/dispatched, 19,200 generated surface claims, point-list
+    rendering at `rendered 0`, and visible reservoir-resolved Leap splats.
+    Calibrated projection constants, full SGM, reservoir-history startup repair,
     and global residual/calibration ownership remain open.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
@@ -735,14 +743,17 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Continue the Leap-first visual geometry cut. Mimir now lowers live
-    `LeapStereoIr` packed R/G stereo into a disparity SurfacePage and declares a
-    derived point-cloud Mesh socket. Fensalir now has the first D3D12
-    disparity-to-point render lane. The next implementation is live-device/editor
-    verification, calibrated projection constants, then a global
-    residual/calibration owner that can consume point-cloud alignment error. Do
-    not fan RGB cameras into fake depth: PS3 Eyes are fast motion/feature
-    witnesses, Kiyos and Eve are RGB/context witnesses, and Leap owns the first
-    dense close-range geometry. Keep the Focusrite away from the Leap USB
-    neighborhood. Treat Kiyo Pro as a ~25 fps source until its SuperSpeed
-    negotiation is fixed.
+    Continue the Leap-first visual geometry cut from the verified surface-claim
+    path. Mimir lowers live `LeapStereoIr` packed R/G stereo into a disparity
+    SurfacePage and declares a derived point-cloud Mesh socket. Fensalir now
+    generates Leap surface splats from that disparity, feeds them into the
+    native splat/reservoir resolver, and presents visible Leap-derived points
+    without the diagnostic point-list draw path. Next: replace provisional
+    projection display fit with calibrated Leap intrinsics/extrinsics, repair
+    reservoir-history startup so the temporal pass can stay enabled, then add a
+    global residual/calibration owner that can consume point-cloud alignment
+    error. Do not fan RGB cameras into fake depth: PS3 Eyes are fast
+    motion/feature witnesses, Kiyos and Eve are RGB/context witnesses, and Leap
+    owns the first dense close-range geometry. Keep the Focusrite away from the
+    Leap USB neighborhood. Treat Kiyo Pro as a ~25 fps source until its
+    SuperSpeed negotiation is fixed.

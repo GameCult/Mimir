@@ -10,7 +10,8 @@ public sealed record MimirKsVideoCaptureDriverOptions(
     int Height,
     string FourCc,
     double MinimumFramesPerSecond,
-    int QueueDepth = 8);
+    int QueueDepth = 8,
+    MimirVideoPixelFormat DeclaredPixelFormat = MimirVideoPixelFormat.Unknown);
 
 public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver, IMimirFensalirTextureLeaseReceiver
 {
@@ -19,8 +20,12 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
     private readonly byte[] scratch;
     private readonly string sourceId;
     private readonly string fourCc;
+    private readonly MimirVideoPixelFormat declaredPixelFormat;
     private MimirFensalirTextureLeaseClient? textureLeaseClient;
     private string resourceKey = "";
+    private ulong nativeHandle;
+    private string nativeHandleKind = "";
+    private ulong producerFenceHandle;
     private bool disposed;
 
     public MimirKsVideoCaptureDriver(MimirKsVideoCaptureDriverOptions options)
@@ -43,6 +48,7 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
         native = Native.Load(options.NativeLibraryPath);
         sourceId = options.SourceId;
         fourCc = options.FourCc.Trim();
+        declaredPixelFormat = options.DeclaredPixelFormat;
         capture = native.Create(
             options.PathNeedle,
             options.Width,
@@ -68,6 +74,9 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
     {
         textureLeaseClient = client;
         resourceKey = "";
+        nativeHandle = 0;
+        nativeHandleKind = "";
+        producerFenceHandle = 0;
     }
 
     public bool TryCapture(out MimirVideoFrameDescriptor frame, out ReadOnlyMemory<byte> data)
@@ -92,7 +101,10 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
                 return false;
             }
 
-            var pixelFormat = PixelFormatFromFourCc(FourCcFromBytes(fourCcBytes));
+            var capturedPixelFormat = PixelFormatFromFourCc(FourCcFromBytes(fourCcBytes));
+            var pixelFormat = declaredPixelFormat == MimirVideoPixelFormat.Unknown
+                ? capturedPixelFormat
+                : declaredPixelFormat;
             EnsureLease(width, height, pixelFormat, stride, timestampNs, sequence);
             frame = new MimirVideoFrameDescriptor(
                 width,
@@ -100,7 +112,10 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
                 pixelFormat,
                 stride,
                 timestampNs,
+                NativeHandle: nativeHandle,
+                NativeHandleKind: nativeHandleKind,
                 ResourceKey: resourceKey,
+                ProducerFenceHandle: producerFenceHandle,
                 ProducerFenceValue: sequence);
             data = string.IsNullOrWhiteSpace(resourceKey)
                 ? scratch.AsMemory(0, byteLength).ToArray()
@@ -138,6 +153,9 @@ public sealed unsafe class MimirKsVideoCaptureDriver : IMimirVideoCaptureDriver,
             version), out var lease))
         {
             resourceKey = lease.Frame.ResourceKey;
+            nativeHandle = lease.Frame.NativeHandle;
+            nativeHandleKind = lease.Frame.NativeHandleKind;
+            producerFenceHandle = unchecked((ulong)lease.ProducerFenceHandle.ToInt64());
         }
     }
 

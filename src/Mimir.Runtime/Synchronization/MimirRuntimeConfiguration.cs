@@ -168,9 +168,10 @@ public sealed class MimirRuntimeConfiguration
                     stream.PathNeedle,
                     stream.Width,
                     stream.Height,
-                    stream.PixelFormat,
+                    string.IsNullOrWhiteSpace(stream.InputFormat) ? stream.PixelFormat : stream.InputFormat,
                     stream.MinimumFramesPerSecond,
-                    stream.QueueDepth)),
+                    stream.QueueDepth,
+                    ParsePixelFormat(stream.PixelFormat))),
                 static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
         }
 

@@ -12,7 +12,8 @@
       "pathNeedle": "vid_f182&pid_0003&mi_00",
       "width": 640,
       "height": 240,
-      "pixelFormat": "YUY2",
+      "inputFormat": "YUY2",
+      "pixelFormat": "LeapStereoIr",
       "minimumFramesPerSecond": 100.0,
       "queueDepth": 8
     },

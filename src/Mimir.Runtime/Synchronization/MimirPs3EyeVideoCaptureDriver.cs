@@ -18,6 +18,9 @@ public sealed unsafe class MimirPs3EyeVideoCaptureDriver : IMimirVideoCaptureDri
     private readonly string sourceId;
     private MimirFensalirTextureLeaseClient? textureLeaseClient;
     private string resourceKey = "";
+    private ulong nativeHandle;
+    private string nativeHandleKind = "";
+    private ulong producerFenceHandle;
     private bool disposed;
 
     public MimirPs3EyeVideoCaptureDriver(MimirPs3EyeVideoCaptureDriverOptions options)
@@ -53,6 +56,9 @@ public sealed unsafe class MimirPs3EyeVideoCaptureDriver : IMimirVideoCaptureDri
     {
         textureLeaseClient = client;
         resourceKey = "";
+        nativeHandle = 0;
+        nativeHandleKind = "";
+        producerFenceHandle = 0;
     }
 
     public bool TryCapture(out MimirVideoFrameDescriptor frame, out ReadOnlyMemory<byte> data)
@@ -82,7 +88,10 @@ public sealed unsafe class MimirPs3EyeVideoCaptureDriver : IMimirVideoCaptureDri
                 MimirVideoPixelFormat.Bayer8,
                 stride,
                 timestampNs,
+                NativeHandle: nativeHandle,
+                NativeHandleKind: nativeHandleKind,
                 ResourceKey: resourceKey,
+                ProducerFenceHandle: producerFenceHandle,
                 ProducerFenceValue: sequence);
             data = string.IsNullOrWhiteSpace(resourceKey)
                 ? scratch.AsMemory(0, byteLength).ToArray()
@@ -120,6 +129,9 @@ public sealed unsafe class MimirPs3EyeVideoCaptureDriver : IMimirVideoCaptureDri
             version), out var lease))
         {
             resourceKey = lease.Frame.ResourceKey;
+            nativeHandle = lease.Frame.NativeHandle;
+            nativeHandleKind = lease.Frame.NativeHandleKind;
+            producerFenceHandle = unchecked((ulong)lease.ProducerFenceHandle.ToInt64());
         }
     }
 

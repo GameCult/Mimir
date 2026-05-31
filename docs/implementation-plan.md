@@ -64,11 +64,20 @@ runtime merges that Mesh claim alongside the stereo-depth claim, and
 `Mimir.BufferSmoke --leap-point-cloud-root-smoke` proves the contract plans as
 one `SurfacePage` packet plus one `Mesh` packet with no deferred requests. This
 is the first point-cloud root. Fensalir branch `codex/leap-packed-depth` now has
-the matching first render lane: `D3D12PointCloudFromDisparityCS` fills the
-derived point-list Mesh from the disparity SurfacePage, and
-`D3D12PointCloudPS` renders it through the scene candidate targets. The next
-truth cut is live-device/editor verification plus global residual/calibration
-ownership, not another fake RGB depth path.
+the matching native surface-claim lane: `D3D12PointCloudFromDisparityCS` fills
+the derived point-list Mesh for diagnostics and also writes approximated
+normal/curvature surface splats into Fensalir's existing SDF/PBR/radiosity
+reservoir buffers. The point-list renderer is gated as a diagnostic path; live
+presentation is through the shared splat/reservoir resolver. The live proof is
+`artifacts/runtime/mimir-leap-surface-claims-clean.png`: LeapUVC -> Fensalir
+D3D12 texture lease -> packed stereo disparity -> 19,200 generated surface
+claims -> visible reservoir-resolved splats, with point-list rendering still
+at `rendered 0`. The proof currently runs with
+`AQUARIUM_DISABLE_RESERVOIR_HISTORY=1`; when history is disabled, presentation
+now deliberately reads the current resolver target instead of an unwritten
+history target. The next truth cut is calibrated projection constants,
+reservoir-history startup repair, and global residual/calibration ownership,
+not another fake RGB depth path.
 
 Those claims are not inherently pixel-sized. Pixel-level resolve consumes the
 reservoir, but claim support is chosen from the represented field. Smooth
