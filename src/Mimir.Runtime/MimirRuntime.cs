@@ -857,126 +857,103 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private AquariumUiDocument CreateUi()
     {
         return new AquariumUiDocument()
-            .Surface("mimir.editor.surface", "Mimir Editor", 18.0f, 72.0f, 760.0f, 600.0f, surface =>
+            .Surface("mimir.editor.surface", "Mimir Editor", 18.0f, 56.0f, 1220.0f, 660.0f, surface =>
             {
-                surface.Horizontal("mimir.editor.columns", columns =>
+                surface.Horizontal("mimir.editor.shell", shell =>
                 {
-                    columns.Vertical("mimir.editor.left-column", left =>
+                    shell.Pane("mimir.scene-graph", "Scene Graph", graph =>
                     {
-                        left.Pane("mimir.program", "Program", pane =>
+                        graph.Toggle("scene.editor-view", "Editor View", () => sceneEditor.Enabled, value => sceneEditor.Enabled = value);
+                        graph.Card("scene.tree", tree =>
                         {
-                            pane.Options("video.feed", "Feed", () => presentationControls.SelectedVideoIndex, value => presentationControls.SelectedVideoIndex = value, VideoFeedOptions());
-                            pane.Toggle("video.visible", "Visible", () => presentationControls.SelectedVideo?.Enabled ?? false, value =>
-                            {
-                                if (presentationControls.SelectedVideo is { } feed)
-                                {
-                                    feed.Enabled = value;
-                                }
-                            });
-                            pane.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, value =>
-                            {
-                                if (presentationControls.SelectedVideo is { } feed)
-                                {
-                                    feed.Solo = value;
-                                }
-                            });
-                            pane.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 0.0f, value =>
-                            {
-                                if (presentationControls.SelectedVideo is { } feed)
-                                {
-                                    feed.Opacity = Math.Clamp(value, 0.0f, 1.0f);
-                                }
-                            }, 0.0f, 1.0f, "0.00");
-                            pane.Text("program.composite", DescribeProgramVideo, "caption", weight: 1.4f);
-                            pane.Options("audio.stem", "Stem", () => presentationControls.SelectedAudioIndex, value => presentationControls.SelectedAudioIndex = value, AudioFeedOptions());
-                            pane.Slider("audio.gain", "Gain", () => presentationControls.SelectedAudio?.Gain ?? 0.0f, value =>
-                            {
-                                if (presentationControls.SelectedAudio is { } feed)
-                                {
-                                    feed.Gain = Math.Clamp(value, 0.0f, 2.0f);
-                                }
-                            }, 0.0f, 2.0f, "0.00");
-                            pane.Options("color.lut", "LUT", () => presentationControls.SelectedLutPresetIndex, presentationControls.SelectLutPreset, LutPresetOptions());
-                            pane.Slider("color.lut-strength", "LUT Strength", () => presentationControls.LutStrength, value =>
-                            {
-                                presentationControls.LutStrength = Math.Clamp(value, 0.0f, 1.0f);
-                                presentationControls.RefreshPostprocess();
-                            }, 0.0f, 1.0f, "0.00");
-                        }, weight: 0.46f);
+                            tree.Text("scene.root", "Scene", "strong");
+                            tree.Text("scene.camera", () => $"{(sceneEditor.SelectedNodeId == "editor-camera" ? "> " : "  ")}Editor Camera <Camera>", "mono");
+                            tree.Text("scene.feeds", () => $"{(sceneEditor.IsExpanded("feeds") ? "- " : "+ ")}Sensor Feeds (4)", "mono");
+                            tree.Text("scene.feed-kiyo", "    [eye] Kiyo Pro RGB context <SensorFeed>", "mono");
+                            tree.Text("scene.feed-eve", "    [eye] Eve image/mic pipe <SensorFeed>", "mono");
+                            tree.Text("scene.text", () => $"{(sceneEditor.IsExpanded("text") ? "- " : "+ ")}SDF Text", "mono");
+                            tree.Text("scene.models", () => $"{(sceneEditor.IsExpanded("models") ? "- " : "+ ")}Models", "mono");
+                        }, weight: 1.6f);
+                        graph.Text("scene.hierarchy", sceneEditor.DescribeHierarchy, "mono", weight: 2.8f);
+                        graph.Row("scene.nav", nav =>
+                        {
+                            nav.Button("scene.previous", "Previous", sceneEditor.SelectPrevious);
+                            nav.Button("scene.next", "Next", sceneEditor.SelectNext);
+                        });
+                        graph.Text("scene.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f);
+                    }, weight: 0.85f);
 
-                        left.Pane("mimir.scene", "Scene", pane =>
+                    shell.Vertical("mimir.editor-center", center =>
+                    {
+                        center.Pane("mimir.scene-view", "Scene View", scene =>
                         {
-                            pane.Toggle("scene.editor-view", "Editor View", () => sceneEditor.Enabled, value => sceneEditor.Enabled = value);
-                            pane.Card("scene.tree", card =>
+                            scene.Text("scene.view-camera", () => sceneEditor.Enabled
+                                ? $"Editor camera pos={sceneEditor.CameraPosition.X:0.00},{sceneEditor.CameraPosition.Y:0.00},{sceneEditor.CameraPosition.Z:0.00} target={sceneEditor.CameraTarget.X:0.00},{sceneEditor.CameraTarget.Y:0.00},{sceneEditor.CameraTarget.Z:0.00}"
+                                : "Editor camera disabled; spectrum camera owns the program view.", "caption");
+                            scene.Text("scene.view-program", DescribeProgramVideo, "mono");
+                            scene.Text("scene.view-sync", () => $"{synchronization.Summary()} | {synchronization.SourceCount} sources | poll {lastPollCount} | ingested {synchronization.IngestedSamples}", "caption");
+                            scene.Text("scene.view-audio", () => $"{DescribeAudioSyncState()} | aligned {DescribeAlignedAudio()}", "caption");
+                            scene.Card("scene.view-frame", frame =>
                             {
-                                card.Text("scene.root", "Scene", "strong");
-                                card.Text("scene.camera", () => $"{(sceneEditor.SelectedNodeId == "editor-camera" ? "> " : "  ")}Editor Camera", "caption");
-                                card.Text("scene.feeds", () => $"{(sceneEditor.IsExpanded("feeds") ? "- " : "+ ")}Sensor Feeds", "caption");
-                                card.Text("scene.text", () => $"{(sceneEditor.IsExpanded("text") ? "- " : "+ ")}SDF Text", "caption");
-                                card.Text("scene.models", () => $"{(sceneEditor.IsExpanded("models") ? "- " : "+ ")}Models", "caption");
+                                frame.Text("scene.view-frame-title", "Program Surface", "strong");
+                                frame.Text("scene.view-frame-detail", () =>
+                                {
+                                    var spectra = sceneReady
+                                        ? $"{lastAudioSpectra.Count} spectra fft={lastAudioSpectra.FirstOrDefault()?.FftSize ?? 0}"
+                                        : "waiting for Fensalir scene ready";
+                                    return $"{spectra} | frustum {DescribeSpectrumFrustum()}";
+                                }, "mono");
+                                frame.Text("scene.view-frame-budget", () =>
+                                {
+                                    var dropped = lastDroppedSpectrumSourceLaneCount > 0 ? $" dropped={lastDroppedSpectrumSourceLaneCount}" : "";
+                                    return $"{spectrumHistory.Count}/{SpectrumHistoryWindowCount} age columns x {Math.Min(lastAudioSpectra.Count, spectrumSourceLaneCapacity)}/{spectrumSourceLaneCapacity} lanes x {spectrumTubeSubdivisions} subdivisions{dropped}";
+                                }, "mono");
                             }, weight: 1.4f);
-                            pane.Text("scene.hierarchy", sceneEditor.DescribeHierarchy, "mono", weight: 2.4f);
-                            pane.Row("scene.nav", nav =>
+                            scene.Row("scene.view-actions", actions =>
                             {
-                                nav.Button("scene.previous", "Previous", sceneEditor.SelectPrevious);
-                                nav.Button("scene.next", "Next", sceneEditor.SelectNext);
+                                actions.Button("scene.view-frame-selected", "Frame Selected", sceneEditor.ResetCamera);
+                                actions.Button("scene.view-reset-camera", "Reset Camera", sceneEditor.ResetCamera);
                             });
-                            pane.Text("scene.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f);
-                        }, weight: 0.54f);
-                    }, weight: 1.05f);
+                        }, weight: 1.0f);
 
-                    columns.Vertical("mimir.editor.middle-column", middle =>
-                    {
-                        middle.Pane("mimir.sync", "Sync", pane =>
+                        center.Pane("mimir.assets", "Asset Browser", assets =>
                         {
-                            pane.Text("sync.streams", synchronization.Summary, "strong");
-                            pane.Text("sync.sources", () => $"{synchronization.SourceCount} sources / {lastPollCount} last poll / {synchronization.IngestedSamples} ingested", "caption");
-                            pane.Text("sync.buffers", DescribeBuffers, "caption", weight: 1.6f);
-                            pane.Text("sync.mode", DescribeAudioSync, "caption");
-                            pane.Text("sync.state", DescribeAudioSyncState, "mono", weight: 1.4f);
-                            pane.Text("sync.aligned", DescribeAlignedAudio, "caption");
-                            pane.Text("sync.reference", DescribeChirpletReference, "caption");
-                            pane.Text("sync.spectrum", () => sceneReady
-                                ? $"{lastAudioSpectra.Count} spectra fft={lastAudioSpectra.FirstOrDefault()?.FftSize ?? 0} analyze={lastSpectrumAnalysisMilliseconds:0.00}ms"
-                                : "waiting for Fensalir scene ready", "caption");
-                            pane.Slider("sync.perspective", "Perspective", () => spectrumCameraDistanceMultiplier, value => spectrumCameraDistanceMultiplier = Math.Clamp(value, 1.0f, 80.0f), 1.0f, 80.0f, "0.0x");
-                            pane.Slider("sync.angle", "Angle", () => spectrumCameraAngleDegrees, value => spectrumCameraAngleDegrees = Math.Clamp(value, SpectrumCameraMinimumAngleDegrees, SpectrumCameraMaximumAngleDegrees), SpectrumCameraMinimumAngleDegrees, SpectrumCameraMaximumAngleDegrees, "0.0 deg");
-                            pane.Text("sync.frustum", DescribeSpectrumFrustum, "caption", weight: 1.4f);
-                        }, weight: 0.50f);
-
-                        middle.Pane("mimir.transform", "Transform", pane =>
-                        {
-                            pane.Toggle("transform.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, sceneEditor.SetSelectedVisible);
-                            pane.Toggle("transform.locked", "Locked", () => sceneEditor.SelectedNode?.Locked ?? false, sceneEditor.SetSelectedLocked);
-                            pane.Options("transform.mode", "Mode", () => (int)sceneEditor.GizmoMode, value => sceneEditor.GizmoMode = (MimirSceneEditorGizmoMode)value, SceneEditorGizmoOptions());
-                            pane.Slider("transform.x", "X", () => sceneEditor.SelectedNode?.Transform.Position.X ?? 0.0f, sceneEditor.SetSelectedX, -12.0f, 12.0f, "0.00");
-                            pane.Slider("transform.y", "Y", () => sceneEditor.SelectedNode?.Transform.Position.Y ?? 0.0f, sceneEditor.SetSelectedY, -8.0f, 8.0f, "0.00");
-                            pane.Slider("transform.z", "Z", () => sceneEditor.SelectedNode?.Transform.Position.Z ?? 0.0f, sceneEditor.SetSelectedZ, -8.0f, 8.0f, "0.00");
-                            pane.Slider("transform.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
-                            pane.Slider("transform.scale-x", "Scale X", () => sceneEditor.SelectedNode?.Transform.Scale.X ?? 1.0f, sceneEditor.SetSelectedScaleX, 0.05f, 8.0f, "0.00");
-                            pane.Slider("transform.scale-y", "Scale Y", () => sceneEditor.SelectedNode?.Transform.Scale.Y ?? 1.0f, sceneEditor.SetSelectedScaleY, 0.05f, 8.0f, "0.00");
-                            pane.Row("transform.reset", reset =>
+                            assets.Row("assets.quick", quick =>
                             {
-                                reset.Button("transform.reset-node", "Reset Transform", sceneEditor.ResetSelectedTransform);
-                                reset.Button("transform.reset-camera", "Reset Camera", sceneEditor.ResetCamera);
+                                quick.Button("assets.add-text", "Add SDF Text", sceneEditor.AddSdfTextPanel);
+                                quick.Button("assets.import-model", "Import Model", sceneEditor.ImportModelPlaceholder);
                             });
-                        }, weight: 0.50f);
-                    }, weight: 1.0f);
+                            assets.Text("assets.text", () => $"Text: {sceneEditor.PendingText}", "mono");
+                            assets.Text("assets.model", () => $"Model: {sceneEditor.PendingModelPath}", "mono");
+                        }, weight: 0.72f);
+                    }, weight: 1.75f);
 
-                    columns.Pane("mimir.create", "Create", pane =>
+                    shell.Pane("mimir.inspector", "Inspector", inspector =>
                     {
-                        pane.Text("create.text-label", "Text", "caption");
-                        pane.Text("create.text", () => sceneEditor.PendingText, "mono", weight: 1.6f);
-                        pane.Button("create.add-text", "Add SDF Text", sceneEditor.AddSdfTextPanel);
-                        pane.Text("create.model-label", "Model Path", "caption");
-                        pane.Text("create.model", () => sceneEditor.PendingModelPath, "mono", weight: 1.6f);
-                        pane.Button("create.import-model", "Import Model", sceneEditor.ImportModelPlaceholder);
-                        pane.Text("create.tube-budget", () =>
+                        inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
+                        inspector.Toggle("transform.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, sceneEditor.SetSelectedVisible);
+                        inspector.Toggle("transform.locked", "Locked", () => sceneEditor.SelectedNode?.Locked ?? false, sceneEditor.SetSelectedLocked);
+                        inspector.Options("transform.mode", "Mode", () => (int)sceneEditor.GizmoMode, value => sceneEditor.GizmoMode = (MimirSceneEditorGizmoMode)value, SceneEditorGizmoOptions());
+                        inspector.Slider("transform.x", "X", () => sceneEditor.SelectedNode?.Transform.Position.X ?? 0.0f, sceneEditor.SetSelectedX, -12.0f, 12.0f, "0.00");
+                        inspector.Slider("transform.y", "Y", () => sceneEditor.SelectedNode?.Transform.Position.Y ?? 0.0f, sceneEditor.SetSelectedY, -8.0f, 8.0f, "0.00");
+                        inspector.Slider("transform.z", "Z", () => sceneEditor.SelectedNode?.Transform.Position.Z ?? 0.0f, sceneEditor.SetSelectedZ, -8.0f, 8.0f, "0.00");
+                        inspector.Slider("transform.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
+                        inspector.Slider("transform.scale-x", "Scale X", () => sceneEditor.SelectedNode?.Transform.Scale.X ?? 1.0f, sceneEditor.SetSelectedScaleX, 0.05f, 8.0f, "0.00");
+                        inspector.Slider("transform.scale-y", "Scale Y", () => sceneEditor.SelectedNode?.Transform.Scale.Y ?? 1.0f, sceneEditor.SetSelectedScaleY, 0.05f, 8.0f, "0.00");
+                        inspector.Row("transform.reset", reset =>
                         {
-                            var dropped = lastDroppedSpectrumSourceLaneCount > 0 ? $" dropped={lastDroppedSpectrumSourceLaneCount}" : "";
-                            return $"{spectrumHistory.Count}/{SpectrumHistoryWindowCount} age columns x {Math.Min(lastAudioSpectra.Count, spectrumSourceLaneCapacity)}/{spectrumSourceLaneCapacity} lanes x {spectrumTubeSubdivisions} subdivisions{dropped}";
-                        }, "caption", weight: 1.3f);
-                    }, weight: 0.80f);
+                            reset.Button("transform.reset-node", "Reset Transform", sceneEditor.ResetSelectedTransform);
+                            reset.Button("transform.reset-camera", "Reset Camera", sceneEditor.ResetCamera);
+                        });
+                        inspector.Text("inspector.create-label", "Create", "strong");
+                        inspector.Text("create.text", () => $"Text: {sceneEditor.PendingText}", "mono");
+                        inspector.Text("create.model", () => $"Model: {sceneEditor.PendingModelPath}", "mono");
+                        inspector.Row("inspector.create-actions", actions =>
+                        {
+                            actions.Button("create.add-text", "Add SDF Text", sceneEditor.AddSdfTextPanel);
+                            actions.Button("create.import-model", "Import Model", sceneEditor.ImportModelPlaceholder);
+                        });
+                    }, weight: 0.95f);
                 });
             });
     }
