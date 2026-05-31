@@ -64,7 +64,7 @@ public sealed class MimirSynchronizationHub : IDisposable
         return new MimirSynchronizedBufferPlanner().BuildFrame(
             Buffers.Buffers,
             delay,
-            MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates(audioSynchronizationState.States));
+            MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates(audioSynchronizationState.States, Buffers.Buffers));
     }
 
     public void AddSource(IMimirStreamSource source)

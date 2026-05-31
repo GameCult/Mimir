@@ -57,10 +57,16 @@ public sealed record MimirSynchronizedBufferFrame(
 public sealed class MimirSynchronizedBufferPlanner
 {
     public static IReadOnlyList<MimirSourceTimingCorrection> CorrectionsFromAudioStates(
-        IEnumerable<MimirAudioSynchronizationState> states)
+        IEnumerable<MimirAudioSynchronizationState> states,
+        IEnumerable<MimirRollingStreamBuffer>? buffers = null)
     {
         var corrections = new List<MimirSourceTimingCorrection>();
         var references = new HashSet<string>(StringComparer.Ordinal);
+        var descriptorsBySource = buffers?
+            .Select(static buffer => buffer.Descriptor)
+            .GroupBy(static descriptor => descriptor.SourceId, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal)
+            ?? new Dictionary<string, MimirStreamDescriptor>(StringComparer.Ordinal);
         foreach (var state in states)
         {
             if (state.SampleRate <= 0)
@@ -78,13 +84,15 @@ public sealed class MimirSynchronizedBufferPlanner
                     "reference"));
             }
 
+            descriptorsBySource.TryGetValue(state.SourceId, out var descriptor);
+            var clockDomainId = descriptor?.EffectiveClockDomainId ?? "";
             var offsetNs = checked((long)Math.Round(-state.SmoothedDelaySamples * 1_000_000_000.0 / state.SampleRate));
             corrections.Add(new MimirSourceTimingCorrection(
                 state.SourceId,
-                "",
+                clockDomainId,
                 offsetNs,
                 Math.Clamp(state.Confidence, 0.0, 1.0),
-                "audio-sync"));
+                string.IsNullOrWhiteSpace(clockDomainId) ? "audio-sync" : "audio-sync-clock-domain"));
         }
 
         return corrections;

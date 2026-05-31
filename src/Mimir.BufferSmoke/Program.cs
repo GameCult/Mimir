@@ -3327,27 +3327,29 @@ static int RunSynchronizedBufferPlannerSmoke()
     var display = NewVideoBuffer("raven-display", MimirStreamOrigin.Network, t0 + 10_000_000, 1920, 1080, MimirVideoPixelFormat.Bgra8, 7, "raven-sync");
     var reference = NewAudioBlockBuffer("loopback-scarlett-speakers", t0, sampleRate, 480, 2);
     var delayedMic = NewAudioBlockBuffer("asio-ch0", t0 + 480 * 1_000_000_000L / sampleRate, sampleRate, 480, 3);
+    var ravenAudio = NewAudioBlockBuffer("raven-realtk-loopback", t0 + 10_000_000, sampleRate, 480, 4, MimirStreamOrigin.Network, "raven-sync");
     var state = NewSyncState("asio-ch0", 1920.0, 0.92);
+    var ravenState = NewSyncState("raven-realtk-loopback", 1920.0, 0.88);
 
     var frame = new MimirSynchronizedBufferPlanner().BuildFrame(
-        [camera, display, reference, delayedMic],
+        [camera, display, reference, delayedMic, ravenAudio],
         TimeSpan.Zero,
-        [
-            .. MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates([state]),
-            new MimirSourceTimingCorrection("raven-audio-sync", "raven-sync", -10_000_000, 0.88, "scarlett-raven-audio")
-        ]);
+        MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates([state, ravenState], [camera, display, reference, delayedMic, ravenAudio]));
     var cameraSlice = frame.Slices.First(slice => string.Equals(slice.SourceId, "local-camera-0", StringComparison.Ordinal));
     var displaySlice = frame.Slices.First(slice => string.Equals(slice.SourceId, "raven-display", StringComparison.Ordinal));
     var micSlice = frame.Slices.First(slice => string.Equals(slice.SourceId, "asio-ch0", StringComparison.Ordinal));
+    var ravenAudioSlice = frame.Slices.First(slice => string.Equals(slice.SourceId, "raven-realtk-loopback", StringComparison.Ordinal));
     Console.WriteLine(
         $"synchronized-buffer-planner-smoke presentationNs={frame.PresentationTimeNs} slices={frame.Slices.Count} complete={frame.IsComplete} " +
-        $"camera={cameraSlice.Status} display={displaySlice.Status} displayOrigin={displaySlice.Origin} displayOffsetNs={displaySlice.TimingOffsetNs} micOffsetNs={micSlice.TimingOffsetNs} micStatus={micSlice.Status}");
+        $"camera={cameraSlice.Status} display={displaySlice.Status} displayOrigin={displaySlice.Origin} displayOffsetNs={displaySlice.TimingOffsetNs} displayEvidence={displaySlice.TimingEvidenceKind} ravenAudioOffsetNs={ravenAudioSlice.TimingOffsetNs} micOffsetNs={micSlice.TimingOffsetNs} micStatus={micSlice.Status}");
 
-    return frame.Slices.Count == 4 &&
+    return frame.Slices.Count == 5 &&
         frame.IsComplete &&
         displaySlice.Origin == MimirStreamOrigin.Network &&
         displaySlice.Kind == MimirStreamKind.Video &&
         displaySlice.TimingOffsetNs == -10_000_000 &&
+        ravenAudioSlice.TimingOffsetNs == displaySlice.TimingOffsetNs &&
+        string.Equals(displaySlice.TimingEvidenceKind, "audio-sync-clock-domain", StringComparison.Ordinal) &&
         micSlice.TimingOffsetNs == -10_000_000 &&
         micSlice.Status == MimirSynchronizedSliceStatus.Ready &&
         cameraSlice.Status != MimirSynchronizedSliceStatus.Missing
@@ -3572,15 +3574,17 @@ static MimirRollingStreamBuffer NewAudioBlockBuffer(
     long timestampNs,
     int sampleRate,
     int frameCount,
-    ulong sequence)
+    ulong sequence,
+    MimirStreamOrigin origin = MimirStreamOrigin.LocalDevice,
+    string clockDomainId = "")
 {
-    var descriptor = new MimirStreamDescriptor(sourceId, MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice);
+    var descriptor = new MimirStreamDescriptor(sourceId, MimirStreamKind.Audio, origin, ClockDomainId: clockDomainId);
     var buffer = new MimirRollingStreamBuffer(descriptor, TimeSpan.FromSeconds(5));
     var bytes = new byte[frameCount * sizeof(float)];
     buffer.Append(new MimirStreamSample(
         sourceId,
         MimirStreamKind.Audio,
-        MimirStreamOrigin.LocalDevice,
+        origin,
         timestampNs,
         timestampNs,
         sequence,

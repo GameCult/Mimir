@@ -234,6 +234,13 @@ invariants:
     Kiyo observations are fit into it, and the output
     `mimir.stream_proof_frustum_solve.v1` is calibration evidence for the demo,
     not final metric room truth.
+    Raven display sync is explicit: audio-derived timing states for
+    `raven-realtk-loopback` now carry the `raven-sync` clock domain from the
+    source descriptor, and `MimirSynchronizedBufferPlanner` applies that earned
+    correction to every buffer in the same domain, including `raven-display`.
+    Separate Raven SRT audio/video legs therefore have a measured correction
+    path; a single muxed Raven A/V transport remains a future tightening, not a
+    hidden assumption.
     `MimirMoveControllerTracker` is the first Mimir-native overlay owner for
     multiple PS Move controllers: it tracks bright sphere observations from
     PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves

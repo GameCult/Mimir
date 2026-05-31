@@ -175,6 +175,14 @@ If Raven program audio is also routed into Starfire Scarlett on
 Realtek loopback is now a real network PCM audio source in Mimir, not generic
 stdout bytes.
 
+Raven display sync is not allowed to ride on SRT arrival time. Both
+`raven-display` and `raven-realtk-loopback` are in the `raven-sync` clock
+domain. When audio sync estimates the Realtek loopback offset against the
+Scarlett reference, `MimirSynchronizedBufferPlanner` applies that correction to
+the whole `raven-sync` domain, including the display. A later single muxed
+Raven A/V transport can tighten this further, but the current separate-leg
+profile has an explicit audio-derived correction path.
+
 ## Kiyo AR Trail Receipt
 
 The first offline proof that the Kiyo view can accept Move trails is:
