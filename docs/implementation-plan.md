@@ -393,6 +393,12 @@ a named invariant that the native runtime cannot protect yet.
   correspondence requires coded or otherwise stable LED identity; uncoded
   repeated lights remain curve constraints until the global residual solver
   resolves them.
+  Exposure/gain sweeps must optimize recovered spline quality, not generic
+  contrast or brightness. `MimirLedSplineQualityScorer` scores each setting by
+  detected LED count, curve coverage, spacing coherence, smoothness, exposure
+  fitness, and saturation penalty. `--led-spline-quality-sweep-smoke` proves
+  the selector chooses the balanced setting over both underexposed missing-LED
+  detections and overexposed saturated halos.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

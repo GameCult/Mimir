@@ -619,10 +619,14 @@ samples. `MimirCameraRigCalibrationSolver` is the first higher-level frustum
 fit owner: given stable LED indices and a scene-space LED curve anchor, it
 minimizes ray-to-curve distance and emits bounded camera translation updates.
 Individual cameras do not write calibration state. Rotation, focal length, and
-distortion solving are still future cuts, not hidden behavior. Once the frustum
-fit is coherent, detected surface candidates can be sampled across every
-synchronized view before Fensalir resolves them into 4D Gaussian/surface splat
-claims.
+distortion solving are still future cuts, not hidden behavior. Exposure/gain
+sweeps are scored by the recovered spline, not raw brightness:
+`MimirLedSplineQualityScorer` combines detected LED count, curve coverage,
+spacing coherence, smoothness, exposure fitness, and saturation penalty, and
+`MimirLedSplineSweepSelector` picks the best calibration-usable setting. Once
+the frustum fit is coherent, detected surface candidates can be sampled across
+every synchronized view before Fensalir resolves them into 4D Gaussian/surface
+splat claims.
 
 The current teardown/migration map is
 `docs/fensalir-rendering-rebuild-migration.md`, paired with Fensalir's

@@ -145,6 +145,11 @@ if (args.Any(arg => string.Equals(arg, "--led-spline-calibration-smoke", StringC
     return RunLedSplineCalibrationSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--led-spline-quality-sweep-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunLedSplineQualitySweepSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--fensalir-texture-lease-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunFensalirTextureLeaseSmoke();
@@ -891,6 +896,72 @@ static int RunLedSplineCalibrationSmoke()
             : 1;
 }
 
+static int RunLedSplineQualitySweepSmoke()
+{
+    var scenePoints = new[]
+    {
+        new MimirLedSplineScenePoint(0, new Vector3(-0.20f, 0.30f, 2.20f), 0.95),
+        new MimirLedSplineScenePoint(1, new Vector3(-0.08f, 0.18f, 2.05f), 0.96),
+        new MimirLedSplineScenePoint(2, new Vector3(0.04f, 0.02f, 1.95f), 0.97),
+        new MimirLedSplineScenePoint(3, new Vector3(0.18f, -0.14f, 1.88f), 0.95),
+        new MimirLedSplineScenePoint(4, new Vector3(0.35f, -0.28f, 1.82f), 0.93),
+    };
+    var pose = new MimirCameraPoseEstimate("kiyo-basic", new Vector3(0.24f, 0.02f, -0.03f), Quaternion.Identity, 1.0);
+    var settings = new[]
+    {
+        new MimirCameraExposureGainSetting("underexposed", -10, 0, "LEDs barely clear detector threshold."),
+        new MimirCameraExposureGainSetting("balanced", -8, 8, "LED centroids are bright but not clipped."),
+        new MimirCameraExposureGainSetting("blown-out", -5, 32, "Halos merge and saturated centroids lose precision."),
+    };
+    var curveSolver = new MimirLedSplineCurveSolver();
+    var scorer = new MimirLedSplineQualityScorer();
+    var results = new List<MimirLedSplineSweepResult>(settings.Length);
+    foreach (var setting in settings)
+    {
+        var detections = SyntheticSweepDetections(setting.SettingId, scenePoints, pose, 1920, 1080);
+        var curve = curveSolver.SolveCameraCurve(
+            pose.SourceId,
+            $"{pose.SourceId}:led-spline:{setting.SettingId}",
+            1920,
+            1080,
+            1_000_000_000L,
+            detections);
+        var detectionArray = detections.ToArray();
+        var saturated = detectionArray.Length == 0
+            ? 0.0
+            : detectionArray.Count(static detection => detection.IsSaturated) / (double)detectionArray.Length;
+        var exposureFitness = detectionArray.Length == 0
+            ? 0.0
+            : detectionArray.Average(static detection =>
+            {
+                var peak = Math.Clamp(detection.PeakLuma, 0.0, 1.0);
+                return peak < 0.18 ? peak / 0.18 : peak > 0.92 ? Math.Max(0.0, 1.0 - (peak - 0.92) / 0.08) : 1.0;
+            });
+        results.Add(new MimirLedSplineSweepResult(
+            pose.SourceId,
+            setting,
+            curve,
+            scorer.Score(curve, scenePoints.Length, saturated, exposureFitness)));
+    }
+
+    var best = new MimirLedSplineSweepSelector().SelectBest(results);
+    foreach (var result in results)
+    {
+        Console.WriteLine(
+            $"led-spline-quality source={result.SourceId} setting={result.Setting.SettingId} detected={result.Quality.DetectedLedCount} score={result.Quality.Score:0.000} coverage={result.Quality.CurveCoverage:0.000} spacing={result.Quality.SpacingCoherence:0.000} smooth={result.Quality.Smoothness:0.000} exposure={result.Quality.ExposureFitness:0.000} saturated={result.Quality.SaturatedFraction:0.000} usable={result.Quality.UsableForCalibration}");
+    }
+
+    Console.WriteLine($"led-spline-quality-best setting={best?.Setting.SettingId ?? "none"} score={best?.Quality.Score ?? 0.0:0.000}");
+
+    return best?.Setting.SettingId == "balanced" &&
+        best.Quality.UsableForCalibration &&
+        results.Single(static result => result.Setting.SettingId == "underexposed").Quality.Score < best.Quality.Score &&
+        results.Single(static result => result.Setting.SettingId == "blown-out").Quality.SaturatedFraction > 0.0 &&
+        results.Single(static result => result.Setting.SettingId == "blown-out").Quality.Score < best.Quality.Score
+            ? 0
+            : 1;
+}
+
 static IReadOnlyList<MimirLedPixelDetection> ProjectLedDetections(
     IReadOnlyList<MimirLedSplineScenePoint> scenePoints,
     MimirCameraPoseEstimate pose,
@@ -917,6 +988,52 @@ static IReadOnlyList<MimirLedPixelDetection> ProjectLedDetections(
     }
 
     return output;
+}
+
+static IReadOnlyList<MimirLedPixelDetection> SyntheticSweepDetections(
+    string settingId,
+    IReadOnlyList<MimirLedSplineScenePoint> scenePoints,
+    MimirCameraPoseEstimate pose,
+    int width,
+    int height)
+{
+    var projected = ProjectLedDetections(scenePoints, pose, width, height, radiusPixels: 4.5).ToArray();
+    return settingId switch
+    {
+        "underexposed" => projected
+            .Take(3)
+            .Select((detection, index) => detection with
+            {
+                ImageX = detection.ImageX + (index - 1) * 2.5,
+                ImageY = detection.ImageY + (index - 1) * -1.5,
+                Confidence = 0.32 + index * 0.04,
+                PeakLuma = 0.16 + index * 0.01,
+                LocalContrast = 0.22 + index * 0.03,
+            })
+            .ToArray(),
+        "blown-out" => projected
+            .Select((detection, index) => detection with
+            {
+                ImageX = detection.ImageX + (index % 2 == 0 ? 14.0 : -11.0),
+                ImageY = detection.ImageY + (index % 2 == 0 ? -9.0 : 13.0),
+                RadiusPixels = 13.0 + index,
+                Confidence = 0.56,
+                PeakLuma = 1.0,
+                LocalContrast = 0.50,
+                IsSaturated = true,
+            })
+            .ToArray(),
+        _ => projected
+            .Select((detection, index) => detection with
+            {
+                ImageX = detection.ImageX + (index - 2) * 0.35,
+                ImageY = detection.ImageY + (2 - index) * 0.20,
+                Confidence = 0.90 + index * 0.01,
+                PeakLuma = 0.74 + index * 0.02,
+                LocalContrast = 0.88,
+            })
+            .ToArray(),
+    };
 }
 
 static int RunFensalirTextureLeaseSmoke()

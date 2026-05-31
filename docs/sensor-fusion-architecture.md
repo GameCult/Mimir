@@ -33,6 +33,9 @@ flowchart TD
 - Stable LED index identity requires temporal/color/address coding or another
   correspondence source; uncoded identical lights are spline constraints, not
   metric depth authority.
+- Exposure/gain sweeps optimize recovered spline quality: detected LED count,
+  curve coverage, spacing coherence, smoothness, exposure fitness, and
+  saturation penalty. Bright clipped blobs are not good evidence.
 - The first camera-rig solver fits bounded camera translation updates from a
   scene-anchored LED curve by minimizing ray-to-curve distance. Rotation,
   intrinsics, and distortion are future owners.

@@ -115,7 +115,11 @@ invariants:
     curves from bright detections. `MimirCameraRigCalibrationSolver` consumes
     stable LED indices plus a scene-space LED curve anchor and emits bounded
     camera translation updates by minimizing ray-to-curve distance. Rotation,
-    focal length, and distortion are still future calibration cuts.
+    focal length, and distortion are still future calibration cuts. Exposure
+    and gain sweeps must optimize `MimirLedSplineQualityScorer` output:
+    recovered LED count, curve coverage, spacing coherence, smoothness,
+    exposure fitness, and saturation penalty decide whether a setting is
+    usable for calibration.
   - Fensalir packet payload handles are not authority. Live payload references
     must resolve through declared typed GPU/native resources with shape,
     residency, shader access, validity, version, and handle metadata before

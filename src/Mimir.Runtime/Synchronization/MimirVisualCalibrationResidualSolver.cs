@@ -7,7 +7,10 @@ public readonly record struct MimirLedPixelDetection(
     double ImageX,
     double ImageY,
     double RadiusPixels,
-    double Confidence);
+    double Confidence,
+    double PeakLuma = 1.0,
+    double LocalContrast = 1.0,
+    bool IsSaturated = false);
 
 public sealed record MimirLedSplineCurveFit(
     string SourceId,
@@ -15,6 +18,30 @@ public sealed record MimirLedSplineCurveFit(
     IReadOnlyList<MimirLedSplineObservationPoint> Points,
     double CurveLengthPixels,
     double Confidence);
+
+public sealed record MimirLedSplineQualityReport(
+    string SourceId,
+    string ObservationKey,
+    int DetectedLedCount,
+    double CurveCoverage,
+    double SpacingCoherence,
+    double Smoothness,
+    double ExposureFitness,
+    double SaturatedFraction,
+    double Score,
+    bool UsableForCalibration);
+
+public sealed record MimirCameraExposureGainSetting(
+    string SettingId,
+    int Exposure,
+    int Gain,
+    string Notes);
+
+public sealed record MimirLedSplineSweepResult(
+    string SourceId,
+    MimirCameraExposureGainSetting Setting,
+    MimirLedSplineCurveFit Curve,
+    MimirLedSplineQualityReport Quality);
 
 public enum MimirVisualCalibrationResidualStatus
 {
@@ -197,6 +224,134 @@ public sealed class MimirLedSplineCurveSolver
 
     private static double Clamp01(double value) =>
         double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.0;
+}
+
+public sealed class MimirLedSplineQualityScorer
+{
+    public MimirLedSplineQualityReport Score(
+        MimirLedSplineCurveFit curve,
+        int expectedLedCount,
+        double saturatedFraction = 0.0,
+        double exposureFitness = 1.0)
+    {
+        var points = curve.Points
+            .OrderBy(static point => point.CurveT)
+            .ToArray();
+        if (points.Length == 0 || expectedLedCount <= 0)
+        {
+            return new MimirLedSplineQualityReport(
+                curve.SourceId,
+                curve.ObservationKey,
+                points.Length,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                Clamp01(saturatedFraction),
+                0.0,
+                UsableForCalibration: false);
+        }
+
+        var coverage = Clamp01(points.Length / (double)Math.Max(1, expectedLedCount));
+        var spacing = SpacingCoherence(points);
+        var smoothness = Smoothness(points);
+        var pointConfidence = points.Average(static point => Clamp01(point.Confidence));
+        var saturationPenalty = 1.0 - Clamp01(saturatedFraction);
+        var exposure = Clamp01(exposureFitness);
+        var score = coverage *
+            (0.28 * spacing + 0.22 * smoothness + 0.25 * pointConfidence + 0.25 * exposure) *
+            saturationPenalty;
+        return new MimirLedSplineQualityReport(
+            curve.SourceId,
+            curve.ObservationKey,
+            points.Length,
+            coverage,
+            spacing,
+            smoothness,
+            exposure,
+            Clamp01(saturatedFraction),
+            Clamp01(score),
+            UsableForCalibration: points.Length >= 3 && coverage >= 0.60 && score >= 0.55);
+    }
+
+    private static double SpacingCoherence(IReadOnlyList<MimirLedSplineObservationPoint> points)
+    {
+        if (points.Count < 3)
+        {
+            return points.Count >= 2 ? 0.75 : 0.0;
+        }
+
+        var distances = new double[points.Count - 1];
+        for (var index = 1; index < points.Count; index++)
+        {
+            var dx = points[index].ImageX - points[index - 1].ImageX;
+            var dy = points[index].ImageY - points[index - 1].ImageY;
+            distances[index - 1] = Math.Sqrt(dx * dx + dy * dy);
+        }
+
+        var mean = distances.Average();
+        if (mean <= 1.0e-9)
+        {
+            return 0.0;
+        }
+
+        var variance = distances.Average(distance =>
+        {
+            var delta = distance - mean;
+            return delta * delta;
+        });
+        var coefficient = Math.Sqrt(variance) / mean;
+        return 1.0 / (1.0 + coefficient * 3.0);
+    }
+
+    private static double Smoothness(IReadOnlyList<MimirLedSplineObservationPoint> points)
+    {
+        if (points.Count < 3)
+        {
+            return points.Count >= 2 ? 0.75 : 0.0;
+        }
+
+        var turnSum = 0.0;
+        var turns = 0;
+        for (var index = 1; index < points.Count - 1; index++)
+        {
+            var ax = points[index].ImageX - points[index - 1].ImageX;
+            var ay = points[index].ImageY - points[index - 1].ImageY;
+            var bx = points[index + 1].ImageX - points[index].ImageX;
+            var by = points[index + 1].ImageY - points[index].ImageY;
+            var aLength = Math.Sqrt(ax * ax + ay * ay);
+            var bLength = Math.Sqrt(bx * bx + by * by);
+            if (aLength <= 1.0e-9 || bLength <= 1.0e-9)
+            {
+                continue;
+            }
+
+            var dot = Math.Clamp((ax * bx + ay * by) / (aLength * bLength), -1.0, 1.0);
+            turnSum += Math.Acos(dot);
+            turns++;
+        }
+
+        if (turns == 0)
+        {
+            return 0.0;
+        }
+
+        var meanTurn = turnSum / turns;
+        return 1.0 / (1.0 + meanTurn);
+    }
+
+    private static double Clamp01(double value) =>
+        double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.0;
+}
+
+public sealed class MimirLedSplineSweepSelector
+{
+    public MimirLedSplineSweepResult? SelectBest(IEnumerable<MimirLedSplineSweepResult> results) =>
+        results
+            .Where(static result => result.Quality.UsableForCalibration)
+            .OrderByDescending(static result => result.Quality.Score)
+            .ThenBy(static result => result.Quality.SaturatedFraction)
+            .FirstOrDefault();
 }
 
 public sealed class MimirVisualCalibrationResidualSolver
