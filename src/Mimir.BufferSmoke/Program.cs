@@ -170,6 +170,11 @@ if (args.Any(arg => string.Equals(arg, "--ps3eye-tracking-smoke", StringComparis
     return RunPs3EyeTrackingSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-controller-overlay-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveControllerOverlaySmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--ps3eye-tracking-live", StringComparison.OrdinalIgnoreCase)))
 {
     return RunPs3EyeTrackingLive(args);
@@ -1160,6 +1165,65 @@ static int RunPs3EyeTrackingSmoke()
     return latest.StableTrackCount >= 8 &&
         latest.Confidence > 0.50 &&
         evidence.Claims.Count == 1 &&
+        !validation.HasErrors
+            ? 0
+            : 1;
+}
+
+static int RunMoveControllerOverlaySmoke()
+{
+    const int width = 320;
+    const int height = 240;
+    var tracker = new MimirMoveControllerTracker(new MimirMoveControllerTrackerOptions(
+        MaxHistoryPointsPerController: 12,
+        MinimumLuma: 0.45,
+        MinimumBlobPixels: 4.0));
+    MimirMoveControllerTrackFrame latest = default!;
+    var controllers = new[]
+    {
+        ("move-00-06-f5-23-e2-d1", new MimirMoveControllerColor(255, 0, 64)),
+        ("move-00-06-f5-24-aa-10", new MimirMoveControllerColor(0, 160, 255)),
+    };
+    for (var frameIndex = 0; frameIndex < 10; frameIndex++)
+    {
+        foreach (var (controllerId, color) in controllers)
+        {
+            var luma = new byte[width * height];
+            var x = controllerId.EndsWith("10", StringComparison.Ordinal)
+                ? 250 - frameIndex * 5
+                : 40 + frameIndex * 7;
+            var y = controllerId.EndsWith("10", StringComparison.Ordinal)
+                ? 70 + frameIndex * 4
+                : 150 - frameIndex * 3;
+            StampBlob(luma, width, height, x, y, radius: 5, peak: 245);
+            latest = tracker.Update(
+                "ps3-eye-0",
+                controllerId,
+                color,
+                width,
+                height,
+                luma,
+                1_000_000_000L + (frameIndex * controllers.Length) * 5_350_000L);
+        }
+    }
+
+    var candidate = tracker.ToFeatureTrackCandidate(latest);
+    var evidence = new MimirFensalirFieldLowering().BuildFeatureTrackCandidateFrame([candidate]);
+    var validation = AquariumFieldEvidenceValidator.Validate(evidence);
+    var controllerCount = latest.Points.Select(static point => point.ControllerId).Distinct(StringComparer.Ordinal).Count();
+    Console.WriteLine(
+        $"move-controller-overlay-smoke controllers={controllerCount} history={latest.Points.Count} confidence={latest.Confidence:0.000} claims={evidence.Claims.Count} candidates={evidence.Candidates.Count} errors={validation.HasErrors}");
+    foreach (var group in latest.Points.GroupBy(static point => point.ControllerId, StringComparer.Ordinal))
+    {
+        var newest = group.OrderBy(static point => point.AgeFrames).Last();
+        Console.WriteLine(
+            $"move-controller-track controller={group.Key} color={newest.ExpectedColor.Hex} points={group.Count()} latest=({newest.ImageX:0.0},{newest.ImageY:0.0}) velocity=({newest.VelocityXPerSecond:0.0},{newest.VelocityYPerSecond:0.0}) confidence={newest.Confidence:0.000}");
+    }
+
+    return controllerCount == 2 &&
+        latest.Points.Count >= 20 &&
+        evidence.Claims.Count == 1 &&
+        evidence.Candidates.Count == 1 &&
         !validation.HasErrors
             ? 0
             : 1;

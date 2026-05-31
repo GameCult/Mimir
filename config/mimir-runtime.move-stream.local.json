@@ -1,0 +1,108 @@
+{
+  "bufferSeconds": 5.0,
+  "audioSync": {
+    "mode": "passive",
+    "referenceSourceId": "asio-ch2",
+    "calibrationGain": 0.0,
+    "watermarkGain": 0.0,
+    "complexContourChannelModelPath": "../calibration/bioacoustic/complex-contour-channel-model.json",
+    "enableComplexContourRuntime": true
+  },
+  "streams": [
+    {
+      "sourceId": "focusrite-asio",
+      "displayName": "Starfire Scarlett ASIO",
+      "kind": "Audio",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "asio",
+      "command": "../native/asio_capture/build/Release/mimir_asio_capture.dll",
+      "sampleRate": 192000,
+      "acceptSourceIds": [
+        "asio-ch0",
+        "asio-ch1",
+        "asio-ch2",
+        "asio-ch3"
+      ],
+      "sourceLabels": {
+        "asio-ch0": "Shotgun hero mic",
+        "asio-ch1": "Cardioid hero mic",
+        "asio-ch2": "Raven program loopback L",
+        "asio-ch3": "Raven program loopback R"
+      }
+    },
+    {
+      "sourceId": "kiyo-pro-rgb",
+      "displayName": "Kiyo Pro program view",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ks-camera",
+      "command": "../native/camera_capture/build/Release/mimir_camera_capture.dll",
+      "pathNeedle": "vid_1532&pid_0e05&mi_00",
+      "width": 640,
+      "height": 480,
+      "inputFormat": "YUY2",
+      "pixelFormat": "YUY2",
+      "minimumFramesPerSecond": 25.0,
+      "queueDepth": 8
+    },
+    {
+      "sourceId": "ps3-eye-0",
+      "displayName": "PS3 Eye 0 Move tracker",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ps3eye",
+      "command": "../native/camera_capture/build/Release/mimir_ps3eye_capture.dll",
+      "cameraIndex": 0,
+      "width": 320,
+      "height": 240,
+      "framesPerSecond": 187
+    },
+    {
+      "sourceId": "ps3-eye-1",
+      "displayName": "PS3 Eye 1 Move tracker",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ps3eye",
+      "command": "../native/camera_capture/build/Release/mimir_ps3eye_capture.dll",
+      "cameraIndex": 1,
+      "width": 320,
+      "height": 240,
+      "framesPerSecond": 187
+    },
+    {
+      "sourceId": "raven-display",
+      "displayName": "Raven screen capture",
+      "clockDomainId": "raven-sync",
+      "kind": "Video",
+      "origin": "Network",
+      "enabled": true,
+      "adapter": "ffmpeg-rawvideo",
+      "command": "ffmpeg",
+      "width": 1920,
+      "height": 1080,
+      "pixelFormat": "Bgra8",
+      "arguments": [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "warning",
+        "-fflags",
+        "nobuffer",
+        "-flags",
+        "low_delay",
+        "-i",
+        "srt://0.0.0.0:5200?mode=listener&latency=120000&timeout=5000000",
+        "-an",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "bgra",
+        "-"
+      ]
+    }
+  ]
+}

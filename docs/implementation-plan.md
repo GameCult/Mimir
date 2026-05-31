@@ -468,6 +468,17 @@ a named invariant that the native runtime cannot protect yet.
   about 4 ms; `ffplay`/DirectShow audio startup is still too soft for final
   physical latency authority, so native timestamped Scarlett playback/capture
   remains the production timing cut.
+  `MimirMoveControllerTracker` is the first Mimir-native overlay owner for the
+  streamable product shape: it tracks bright PS Move sphere observations from
+  PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves
+  the commanded/expected RGB identity for multiple controllers, and lowers the
+  histories through the existing Feature evidence path. Synthetic smoke
+  `--move-controller-overlay-smoke` proves two independent controller histories
+  become one valid FieldEvidence claim/candidate without claiming 6DoF pose.
+  `config/mimir-runtime.move-stream.local.json` names the first show profile:
+  Kiyo Pro program view, both PS3 Eyes as Move trackers, Scarlett ASIO channels
+  labeled as shotgun/cardioid/Raven loopback, and Raven screen capture on SRT
+  port 5200.
   Next useful cut is direct report decoding plus optical sphere observations
   from PS3 Eyes/Kiyos entering the same calibration-evidence path as LED
   spline constraints.

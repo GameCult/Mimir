@@ -192,6 +192,17 @@ invariants:
     schedule residuals within about 4 ms; `ffplay`/DirectShow audio startup is
     still too soft for final physical latency authority, so native timestamped
     Scarlett playback/capture remains the production timing cut.
+    `MimirMoveControllerTracker` is the first Mimir-native overlay owner for
+    multiple PS Move controllers: it tracks bright sphere observations from
+    PS3 Eye luma frames, keeps a bounded history per `controllerId`, preserves
+    the commanded expected RGB identity for each controller, and lowers those
+    histories into Feature evidence without claiming solved 6DoF pose.
+    `Mimir.BufferSmoke --move-controller-overlay-smoke` proves two distinct
+    controller histories produce one valid FieldEvidence claim/candidate.
+    `config/mimir-runtime.move-stream.local.json` is the first show profile:
+    Kiyo Pro program view, both PS3 Eyes as Move trackers, Scarlett ASIO
+    labeled as shotgun/cardioid/Raven loopback, and Raven display over SRT
+    port 5200.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,
