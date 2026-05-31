@@ -149,6 +149,46 @@ public sealed record MimirEveDashboardNodeSnapshot(
     [property: Key(13)] string? Command,
     [property: Key(14)] string? Endpoint);
 
+[CultDocument("mimir.eve_dashboard_command", "mimir.eve_dashboard_command.v1")]
+[MessagePackObject]
+public sealed record MimirEveDashboardCommandDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string CommandId,
+    [property: Key(1)] string DeviceId,
+    [property: Key(2)] string ClientId,
+    [property: Key(3)] string ProviderId,
+    [property: Key(4)] string Type,
+    [property: Key(5)] string NodeId,
+    [property: Key(6)] double? X,
+    [property: Key(7)] double? Y,
+    [property: Key(8)] double? Rotation,
+    [property: Key(9)] double? Scale,
+    [property: Key(10)] bool? Visible,
+    [property: Key(11)] long Sequence,
+    [property: Key(12)] long DeviceTimestampNs);
+
+[CultDocument("mimir.eve_sensor_observation", "mimir.eve_sensor_observation.v1")]
+[MessagePackObject]
+public sealed record MimirEveSensorObservationDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string ObservationId,
+    [property: Key(1)] string DeviceId,
+    [property: Key(2)] string StreamId,
+    [property: Key(3)] string Kind,
+    [property: Key(4)] long Sequence,
+    [property: Key(5)] long SensorTimestampNs,
+    [property: Key(6)] long ElapsedRealtimeNs,
+    [property: Key(7)] string WallClockUtc,
+    [property: Key(8)] string ClockDomainId,
+    [property: Key(9)] double[] Values,
+    [property: Key(10)] string? Action,
+    [property: Key(11)] int? PointerCount,
+    [property: Key(12)] double? X,
+    [property: Key(13)] double? Y,
+    [property: Key(14)] int? Accuracy);
+
 public static class MimirCultMeshContractFactory
 {
     public static MimirBioacousticCodebookState CreateCodebookState(

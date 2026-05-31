@@ -49,6 +49,12 @@ EveCanvas connects to:
 ws://192.168.1.66:8795/eve/deck
 ```
 
+Periwinkle's Android Eve client uses the binary CultMesh lane:
+
+```text
+ws://192.168.1.66:8795/eve/deck/cultmesh
+```
+
 The compatibility endpoint remains:
 
 ```text
@@ -116,6 +122,9 @@ The broker smoke on 2026-05-31 verified:
   CultMesh dashboard document name.
 - `/eve/deck/providers` returns the built-in provider manifests.
 - WebSocket `/eve/deck` sends the switchboard snapshot.
+- WebSocket `/eve/deck/cultmesh` sends the same provider state as
+  `mimir.eve_dashboard_state.v1` MessagePack and accepts
+  `mimir.eve_dashboard_command.v1` MessagePack command documents.
 - `open-provider` switches to `mimir.stream.layout` and broadcasts that
   provider state.
 - `open-provider` switches to `voidbot.swarm`, which emits VoidBot's swarm

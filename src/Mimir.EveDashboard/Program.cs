@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MessagePack;
+using Mimir.Runtime.Synchronization;
 
 var port = ParseInt(args, "--port", 8795);
 var voidBotSwarmStatePath = ParseString(args, "--voidbot-swarm-state", @"E:\Projects\VoidBot\.voidbot\status\swarm-state.json");
@@ -117,7 +119,7 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
             return;
         }
 
-        if (!IsDashboardPath(request.Path, out var requestedProviderId) ||
+        if (!IsDashboardPath(request.Path, out var requestedProviderId, out var cultMeshBinary) ||
             !request.Headers.TryGetValue("Sec-WebSocket-Key", out var key))
         {
             await WriteHttpResponseAsync(stream, "404 Not Found", "text/plain", Encoding.UTF8.GetBytes("not found")).ConfigureAwait(false);
@@ -131,7 +133,7 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
 
         await WriteWebSocketHandshakeAsync(stream, key).ConfigureAwait(false);
         var id = Guid.NewGuid();
-        var socket = new DashboardSocket(tcpClient, stream);
+        var socket = new DashboardSocket(tcpClient, stream, cultMeshBinary);
         clients[id] = socket;
         await SendStateAsync(socket).ConfigureAwait(false);
         try
@@ -143,6 +145,16 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
                 {
                     await WriteCloseFrameAsync(stream).ConfigureAwait(false);
                     break;
+                }
+
+                if (frame.Opcode == 0x2 && cultMeshBinary)
+                {
+                    if (ApplyCultMeshCommand(frame.Payload))
+                    {
+                        await BroadcastStateAsync().ConfigureAwait(false);
+                    }
+
+                    continue;
                 }
 
                 if (frame.Opcode != 0x1)
@@ -163,9 +175,24 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         }
     }
 
-    private static bool IsDashboardPath(string path, out string providerId)
+    private static bool IsDashboardPath(string path, out string providerId, out bool cultMeshBinary)
     {
         providerId = "";
+        cultMeshBinary = false;
+        if (path == "/eve/deck/cultmesh")
+        {
+            cultMeshBinary = true;
+            return true;
+        }
+
+        const string cultMeshProviderPrefix = "/eve/deck/cultmesh/";
+        if (path.StartsWith(cultMeshProviderPrefix, StringComparison.Ordinal))
+        {
+            providerId = Uri.UnescapeDataString(path[cultMeshProviderPrefix.Length..]);
+            cultMeshBinary = true;
+            return !string.IsNullOrWhiteSpace(providerId);
+        }
+
         if (path == "/eve/dashboard" || path == "/eve/deck")
         {
             return true;
@@ -179,6 +206,33 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         }
 
         return false;
+    }
+
+    private bool ApplyCultMeshCommand(byte[] payload)
+    {
+        MimirEveDashboardCommandDocument? commandDocument;
+        try
+        {
+            commandDocument = MessagePackSerializer.Deserialize<MimirEveDashboardCommandDocument>(payload);
+        }
+        catch
+        {
+            return false;
+        }
+
+        var command = new DashboardCommand
+        {
+            Type = commandDocument.Type,
+            NodeId = commandDocument.NodeId,
+            ProviderId = commandDocument.ProviderId,
+            X = commandDocument.X,
+            Y = commandDocument.Y,
+            Rotation = commandDocument.Rotation,
+            Scale = commandDocument.Scale,
+            Visible = commandDocument.Visible,
+        };
+
+        return ApplyCommand(JsonSerializer.Serialize(command, JsonOptions));
     }
 
     private bool ApplyCommand(string text)
@@ -233,6 +287,35 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
     private async Task SendStateAsync(DashboardSocket socket)
     {
         var state = providers.Get(activeProviderId).State;
+        if (socket.CultMeshBinary)
+        {
+            var document = new MimirEveDashboardStateDocument(
+                state.ProviderId,
+                state.Title,
+                state.Version,
+                state.UpdatedAt.ToString("O"),
+                state.SelectedNodeId,
+                state.LutPreset,
+                state.Nodes.Select(static node => new MimirEveDashboardNodeSnapshot(
+                    node.Id,
+                    node.Label,
+                    node.Kind,
+                    node.Visible,
+                    node.X,
+                    node.Y,
+                    node.Z,
+                    node.Rotation,
+                    node.Scale,
+                    node.Width,
+                    node.Height,
+                    node.Health,
+                    node.ProviderId,
+                    node.Command,
+                    node.Endpoint)).ToArray());
+            await SendBinaryFrameAsync(socket.Stream, MessagePackSerializer.Serialize(document)).ConfigureAwait(false);
+            return;
+        }
+
         await SendTextFrameAsync(socket.Stream, JsonSerializer.Serialize(state, JsonOptions)).ConfigureAwait(false);
     }
 
@@ -337,6 +420,36 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
 
         await stream.WriteAsync(header.ToArray()).ConfigureAwait(false);
         await stream.WriteAsync(payload).ConfigureAwait(false);
+    }
+
+    private static async Task SendBinaryFrameAsync(NetworkStream stream, byte[] payload)
+    {
+        var header = BuildFrameHeader(0x82, payload.Length);
+        await stream.WriteAsync(header).ConfigureAwait(false);
+        await stream.WriteAsync(payload).ConfigureAwait(false);
+    }
+
+    private static byte[] BuildFrameHeader(byte opcode, int payloadLength)
+    {
+        var header = new List<byte> { opcode };
+        if (payloadLength < 126)
+        {
+            header.Add((byte)payloadLength);
+        }
+        else if (payloadLength <= ushort.MaxValue)
+        {
+            header.Add(126);
+            header.Add((byte)(payloadLength >> 8));
+            header.Add((byte)payloadLength);
+        }
+        else
+        {
+            header.Add(127);
+            var length = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((long)payloadLength));
+            header.AddRange(length);
+        }
+
+        return header.ToArray();
     }
 
     private static async Task<WebSocketFrame> ReceiveFrameAsync(NetworkStream stream)
@@ -1258,7 +1371,7 @@ internal sealed record HttpRequest(string Path, IReadOnlyDictionary<string, stri
 
 internal sealed record WebSocketFrame(int Opcode, byte[] Payload);
 
-internal sealed record DashboardSocket(TcpClient Client, NetworkStream Stream);
+internal sealed record DashboardSocket(TcpClient Client, NetworkStream Stream, bool CultMeshBinary);
 
 internal sealed record DashboardProviderCatalogDocument(IReadOnlyList<DashboardProviderManifest> Providers);
 

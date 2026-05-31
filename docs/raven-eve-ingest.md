@@ -106,3 +106,13 @@ The Eve sensor receiver can be checked without launching the whole runtime:
 ```powershell
 dotnet run --project .\src\Mimir.EveSensorReceiver\Mimir.EveSensorReceiver.csproj -- --port 8793 --path /eve/camera --source-id eve-camera --type video-frame
 ```
+
+Periwinkle's Android Eve client publishes binary CultMesh sensor observations:
+
+```powershell
+dotnet run --project .\src\Mimir.EveSensorReceiver\Mimir.EveSensorReceiver.csproj -- --port 8796 --path /eve/periwinkle --source-id periwinkle-accelerometer --type cultmesh-observation
+```
+
+The receiver accepts `mimir.eve_sensor_observation.v1` MessagePack packets on
+that lane. The device remains an observation source; Mimir owns synchronization
+and interpretation.

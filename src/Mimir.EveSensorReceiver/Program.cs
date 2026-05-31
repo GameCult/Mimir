@@ -3,6 +3,8 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using MessagePack;
+using Mimir.Runtime.Synchronization;
 
 var options = EveSensorReceiverOptions.Parse(args);
 using var receiver = new EveSensorReceiver(options);
@@ -92,6 +94,17 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
                 break;
             }
 
+            if (frame.Opcode == 0x2)
+            {
+                if (TryValidateCultMeshObservation(frame.Payload, out var normalizedObservation))
+                {
+                    Console.WriteLine(normalizedObservation);
+                    Console.Out.Flush();
+                }
+
+                continue;
+            }
+
             if (frame.Opcode != 0x1)
             {
                 continue;
@@ -129,6 +142,46 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
             return true;
         }
         catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private bool TryValidateCultMeshObservation(byte[] payload, out string normalized)
+    {
+        normalized = "";
+        try
+        {
+            var observation = MessagePackSerializer.Deserialize<MimirEveSensorObservationDocument>(payload);
+            if (!string.Equals(observation.StreamId, options.SourceId, StringComparison.Ordinal) &&
+                !string.Equals(options.ExpectedType, "cultmesh-observation", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            normalized = JsonSerializer.Serialize(new
+            {
+                type = "cultmesh-observation",
+                document = "mimir.eve_sensor_observation.v1",
+                observation.ObservationId,
+                observation.DeviceId,
+                observation.StreamId,
+                observation.Kind,
+                observation.Sequence,
+                observation.SensorTimestampNs,
+                observation.ElapsedRealtimeNs,
+                observation.WallClockUtc,
+                observation.ClockDomainId,
+                observation.Values,
+                observation.Action,
+                observation.PointerCount,
+                observation.X,
+                observation.Y,
+                observation.Accuracy,
+            });
+            return true;
+        }
+        catch
         {
             return false;
         }

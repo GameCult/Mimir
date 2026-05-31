@@ -9,4 +9,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\CultLib\src\GameCult.Caching.MessagePack\GameCult.Caching.MessagePack.csproj" />
+    <ProjectReference Include="..\Mimir.Runtime\Mimir.Runtime.csproj" />
+  </ItemGroup>
+
 </Project>
