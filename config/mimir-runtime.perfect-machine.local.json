@@ -1,0 +1,85 @@
+{
+  "bufferSeconds": 5.0,
+  "audioSync": {
+    "mode": "passive",
+    "referenceSourceId": "loopback-scarlett-speakers",
+    "calibrationGain": 0.0,
+    "watermarkGain": 0.0
+  },
+  "streams": [
+    {
+      "sourceId": "leap-stereo-ir",
+      "displayName": "LeapUVC stereo IR packed R/G",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ks-camera",
+      "command": "../native/camera_capture/build/Release/mimir_camera_capture.dll",
+      "pathNeedle": "vid_f182&pid_0003&mi_00",
+      "width": 640,
+      "height": 240,
+      "inputFormat": "YUY2",
+      "pixelFormat": "LeapStereoIr",
+      "minimumFramesPerSecond": 100.0,
+      "queueDepth": 8
+    },
+    {
+      "sourceId": "ps3-eye-0",
+      "displayName": "PS3 Eye 0 high-rate tracking",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ps3eye",
+      "command": "../native/camera_capture/build/Release/mimir_ps3eye_capture.dll",
+      "cameraIndex": 0,
+      "width": 320,
+      "height": 240,
+      "framesPerSecond": 187
+    },
+    {
+      "sourceId": "ps3-eye-1",
+      "displayName": "PS3 Eye 1 high-rate tracking",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ps3eye",
+      "command": "../native/camera_capture/build/Release/mimir_ps3eye_capture.dll",
+      "cameraIndex": 1,
+      "width": 320,
+      "height": 240,
+      "framesPerSecond": 187
+    },
+    {
+      "sourceId": "kiyo-pro-rgb",
+      "displayName": "Kiyo Pro RGB context",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ks-camera",
+      "command": "../native/camera_capture/build/Release/mimir_camera_capture.dll",
+      "pathNeedle": "vid_1532&pid_0e05&mi_00",
+      "width": 640,
+      "height": 480,
+      "inputFormat": "YUY2",
+      "pixelFormat": "YUY2",
+      "minimumFramesPerSecond": 25.0,
+      "queueDepth": 8
+    },
+    {
+      "sourceId": "kiyo-basic-rgb",
+      "displayName": "Kiyo RGB context",
+      "kind": "Video",
+      "origin": "LocalDevice",
+      "enabled": true,
+      "adapter": "ks-camera",
+      "command": "../native/camera_capture/build/Release/mimir_camera_capture.dll",
+      "pathNeedle": "vid_1532&pid_0e03&mi_00",
+      "width": 640,
+      "height": 480,
+      "inputFormat": "YUY2",
+      "pixelFormat": "YUY2",
+      "minimumFramesPerSecond": 25.0,
+      "queueDepth": 8
+    }
+  ]
+}

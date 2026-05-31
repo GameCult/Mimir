@@ -546,6 +546,15 @@ WinUSB/libusb capture, emitting Bayer8 frames through the common upload lane.
 Driver smokes have pulled and uploaded real frames for LeapUVC 640x240 YUY2,
 both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular Kiyo
 640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
+`config/mimir-runtime.perfect-machine.local.json` is the current local
+all-sensor runtime profile: Leap packed stereo IR, both PS3 Eyes at
+320x240@187, Kiyo Pro RGB, and regular Kiyo RGB. `Mimir.BufferSmoke
+--perfect-machine-live-smoke` opens all five video sources through the runtime,
+attaches Fensalir texture leases, and requires five camera Texture2D resources,
+one Leap stereo-depth lowering, one disparity SurfacePage, and one derived
+point-cloud Mesh. It prints the remaining deferred generic camera Feature
+claims so the gap stays visible: PS3/Kiyo/Leap texture feature extraction is
+still a Fensalir D3D12 compute owner, not a CPU tracker hidden in the hot path.
 `MimirMediaFoundationGpuVideoCaptureDriver` plus
 `native/camera_capture/mimir_mf_gpu_capture.dll` is the compressed camera path:
 Media Foundation SourceReader runs with a D3D11 device manager, decodes MJPG or
@@ -645,7 +654,13 @@ camera Feature claims through Fensalir field evidence. A one-second live pass
 at 320x240@187 with sensitive defaults returned 160 live tracks from each Eye:
 160 stable tracks from `ps3-eye-0` and 156 stable tracks from `ps3-eye-1`.
 This is a CPU diagnostic owner; the hot production path remains Fensalir D3D12
-feature extraction. Once the frustum fit is coherent, detected
+feature extraction. A full 2026-05-31 Fensalir headless run using the
+all-sensor profile started all five video sources, declared eight field
+resources, resolved six Texture2D resources, dispatched one packed-Leap
+stereo-depth kernel, generated one point-cloud/surface stream, reported 19,200
+visible reservoir splats, and captured
+`artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`. Once the
+frustum fit is coherent, detected
 surface candidates can be sampled across every synchronized view before
 Fensalir resolves them into 4D Gaussian/surface splat claims.
 

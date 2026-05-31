@@ -343,6 +343,15 @@ a named invariant that the native runtime cannot protect yet.
   Current direct-driver smokes prove real-frame upload for LeapUVC 640x240
   YUY2, both PS3 Eyes at 320x240 Bayer8, Kiyo Pro 1920x1080 YUY2, and regular
   Kiyo 640x480 YUY2. Regular Kiyo 1280x720 YUY2 did not open.
+  `config/mimir-runtime.perfect-machine.local.json` is the current local
+  all-sensor blast profile: Leap packed stereo IR, both PS3 Eyes at
+  320x240@187, Kiyo Pro RGB, and regular Kiyo RGB. `Mimir.BufferSmoke
+  --perfect-machine-live-smoke` opens all five configured video sources,
+  attaches Fensalir texture leases, and passes only when at least five live
+  camera textures, a Leap stereo-depth lowering, a disparity SurfacePage, and a
+  derived point-cloud Mesh are present. It prints deferred camera texture
+  Feature requests explicitly; those are not capture failures, they are the
+  future Fensalir D3D12 feature-extraction cut.
   `MimirMediaFoundationGpuVideoCaptureDriver` is the first compressed camera
   path: `native/camera_capture/mimir_mf_gpu_capture.dll` uses Media Foundation
   SourceReader with a D3D11 device manager, selects MJPG/H264 camera modes,
@@ -426,6 +435,14 @@ a named invariant that the native runtime cannot protect yet.
   stable tracks at 320x240@187: with sensitive wide tracking defaults, each Eye
   returned 160 live tracks from each Eye in a one-second pass, with 160 stable
   tracks from `ps3-eye-0` and 156 stable tracks from `ps3-eye-1`.
+  A full Fensalir headless proof using that all-sensor profile now runs the
+  actual D3D12 host path. The 2026-05-31 run started all five video sources,
+  declared eight field resources, resolved six Texture2D resources, dispatched
+  one packed-Leap stereo-depth kernel, generated one point-cloud/surface stream,
+  and reported 19,200 visible reservoir splats. The captured proof is
+  `artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`. Generic
+  camera Feature claims still defer; live PS3/Kiyo feature extraction remains a
+  Fensalir compute shader owner, not the CPU tracker.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

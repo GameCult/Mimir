@@ -99,6 +99,21 @@ invariants:
     `AQUARIUM_DISABLE_RESERVOIR_HISTORY`: Fensalir now compiles a dedicated lean
     `D3D12ReservoirHistoryUpdate.hlsl` for current-sample history/resolved
     output instead of compiling the monolithic post shader as a compute entry.
+    The 2026-05-31 all-sensor proof uses
+    `config/mimir-runtime.perfect-machine.local.json`: Leap packed stereo IR,
+    both PS3 Eyes at 320x240@187, Kiyo Pro RGB, and regular Kiyo RGB all open
+    through `MimirRuntime` and enter as Fensalir texture leases.
+    `Mimir.BufferSmoke --perfect-machine-live-smoke` now requires five live
+    camera Texture2D resources, one Leap stereo-depth lowering, one disparity
+    SurfacePage, and one derived point-cloud Mesh. The Fensalir headless run
+    started all five sources, declared eight field resources, resolved six
+    Texture2D resources, dispatched the packed-Leap stereo-depth kernel,
+    generated one point-cloud/surface stream, reported 19,200 visible reservoir
+    splats, and captured
+    `artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`.
+    Generic camera Feature claims still defer because PS3/Kiyo/Leap texture
+    feature extraction belongs to a future Fensalir D3D12 compute lowering, not
+    the CPU diagnostic tracker.
     Calibrated projection constants, full SGM, temporal/spatial reservoir reuse
     in a compilable shader, and global residual/calibration ownership remain
     open.
@@ -563,9 +578,13 @@ accepted_design:
     or GPU bridge-copy work.
     `Mimir.BufferSmoke --fensalir-camera-observation-smoke`
     verifies the split, and `--fensalir-texture-lease-smoke` verifies the
-    engine-owned lease path. Camera image claims stay debug-view-only for now;
-    production visual fusion/feature extraction lowerings are deferred until
-    the renderer and audio work are fixed. Fensalir now owns the first in-process
+    engine-owned lease path. `config/mimir-runtime.perfect-machine.local.json`
+    is the current local all-sensor runtime profile, and
+    `--perfect-machine-live-smoke` proves the five camera texture leases plus
+    Leap depth/page/mesh sockets are present in one live frame. Camera image
+    claims stay debug-view-only for now; production visual fusion/feature
+    extraction lowerings are deferred until Fensalir owns the D3D12 feature
+    shader. Fensalir now owns the first in-process
     D3D12 field resource registry: declared shared structured/curve buffers
     import/alias GPU-resident resources by handle, while Fensalir-owned
     resources allocate GPU slots only when Fensalir is the producer.

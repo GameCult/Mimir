@@ -40,6 +40,14 @@ flowchart TD
   now: it opens direct sensor feeds, applies KS/UVC manual exposure/gain where
   supported, scores actual luma frames, and reports the best setting per
   source. PS3 Eye and Leap-specific controls still need native control cuts.
+- The current all-sensor GPU proof is
+  `config/mimir-runtime.perfect-machine.local.json` plus
+  `Mimir.BufferSmoke --perfect-machine-live-smoke`: Leap, both PS3 Eyes, Kiyo
+  Pro, and regular Kiyo all enter the runtime as Fensalir texture leases. The
+  smoke requires five live camera Texture2D resources, one Leap stereo-depth
+  lowering, one disparity SurfacePage, and one derived point-cloud Mesh.
+  Deferred generic camera Feature requests are printed as the selected future
+  shader work, not hidden as capture success.
 - PS3 Eyes own high-rate sparse tracking evidence before they own depth:
   `MimirSparseFeatureTracker` turns live Bayer/luma frames into stable
   sensor-local feature tracks, and `MimirFeatureTrackFieldCandidate` lowers

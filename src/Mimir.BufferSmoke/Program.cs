@@ -120,6 +120,11 @@ if (args.Any(arg => string.Equals(arg, "--perfect-machine-profile-smoke", String
     return RunPerfectMachineProfileSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--perfect-machine-live-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunPerfectMachineLiveSmoke(args);
+}
+
 if (args.Any(arg => string.Equals(arg, "--eve-program-output-contract-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunEveProgramOutputContractSmoke();
@@ -3693,6 +3698,79 @@ static int RunPerfectMachineProfileSmoke()
         clock is { AnchorCount: >= 4, Confidence: > 0.70 }
             ? 0
             : 1;
+}
+
+static int RunPerfectMachineLiveSmoke(string[] args)
+{
+    var configPath = Path.GetFullPath(ParseStringOption(
+        args,
+        "--config",
+        "config/mimir-runtime.perfect-machine.local.json"));
+    var seconds = Math.Max(0.25, ParseDoubleOption(args, "--seconds", 1.5));
+    var previousConfig = Environment.GetEnvironmentVariable("MIMIR_RUNTIME_CONFIG");
+    Environment.SetEnvironmentVariable("MIMIR_RUNTIME_CONFIG", configPath);
+    try
+    {
+        var configuration = MimirRuntimeConfiguration.Load();
+        var broker = new FakeFieldResourceBroker();
+        using var runtime = new MimirRuntime(
+            new AquariumRuntimeOptions(Headless: true, CultCachePath: null),
+            configuration);
+        runtime.AttachServices(new AquariumRuntimeServices(broker));
+        runtime.OnSceneReady();
+        var input = new InputState();
+        var stopwatch = Stopwatch.StartNew();
+        var updates = 0;
+        while (stopwatch.Elapsed.TotalSeconds < seconds)
+        {
+            runtime.Update(1.0f / 60.0f, input);
+            updates++;
+            Thread.Sleep(1);
+        }
+
+        var field = runtime.Frame.Scene.FieldEvidenceFrame;
+        var validation = AquariumFieldEvidenceValidator.Validate(field);
+        var plan = AquariumFieldLoweringPlanner.Plan(field);
+        var videoResources = field.Resources
+            .Where(static resource =>
+                resource.Kind == AquariumFieldResourceKind.Texture2D &&
+                resource.Residency is AquariumFieldResourceResidency.SharedGpu or AquariumFieldResourceResidency.GpuResident)
+            .ToArray();
+        var cameraTextures = videoResources
+            .Where(static resource => resource.ResourceKey.StartsWith("mimir:resource:camera:", StringComparison.Ordinal))
+            .ToArray();
+        var surfacePages = field.Resources.Count(static resource => resource.Kind == AquariumFieldResourceKind.SurfacePage);
+        var meshResources = field.Resources.Count(static resource => resource.Kind == AquariumFieldResourceKind.Mesh);
+        var stereoLowerings = field.StereoDepthLowerings.Count;
+        var resourceClaims = field.Claims.Count(static claim =>
+            claim.Encoding is AquariumFieldEncoding.Radiance or AquariumFieldEncoding.Feature or AquariumFieldEncoding.Height or AquariumFieldEncoding.Mesh);
+        Console.WriteLine(
+            $"perfect-machine-live-smoke config={configPath} updates={updates} resources={field.Resources.Count} gpuTextures={videoResources.Length} cameraTextures={cameraTextures.Length} claims={field.Claims.Count} resourceClaims={resourceClaims} stereoLowerings={stereoLowerings} meshResources={meshResources} surfacePages={surfacePages} planned={plan.Packets.Count} deferred={plan.DeferredRequests.Count} uploaded={broker.UploadedResourceKey} committed={broker.CommittedResourceKey} errors={validation.HasErrors}");
+        foreach (var resource in videoResources.OrderBy(static resource => resource.ResourceKey, StringComparer.Ordinal))
+        {
+            Console.WriteLine(
+                $"perfect-machine-resource key={resource.ResourceKey} {resource.Width}x{resource.Height} format={resource.Format} residency={resource.Residency} handle={resource.NativeHandle} kind={resource.NativeHandleKind} version={resource.Version}");
+        }
+
+        foreach (var deferred in plan.DeferredRequests.OrderBy(static request => request.RequestKey, StringComparer.Ordinal))
+        {
+            Console.WriteLine(
+                $"perfect-machine-deferred request={deferred.RequestKey} claim={deferred.ClaimKey} domain={deferred.DomainKey} encoding={deferred.Encoding} proposal={deferred.ProposalKind} payload={deferred.PayloadHandle}");
+        }
+
+        return cameraTextures.Length >= 5 &&
+            stereoLowerings >= 1 &&
+            meshResources >= 1 &&
+            surfacePages >= 1 &&
+            plan.Packets.Count >= 2 &&
+            !validation.HasErrors
+                ? 0
+                : 1;
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable("MIMIR_RUNTIME_CONFIG", previousConfig);
+    }
 }
 
 static MimirAudioSynchronizationReport? EstimateBioacousticDelay(float[] reference, float[] candidate, int sampleRate)
