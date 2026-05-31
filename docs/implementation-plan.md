@@ -449,9 +449,11 @@ a named invariant that the native runtime cannot protect yet.
   normalization, and warm-up/refractory gating. It fits a provisional
   fundamental, folds spectral bin energy into one octave around that
   fundamental, and streams dark-idle, high-saturation RGB report `0x06` bursts
-  over SSH to Nightwing's hidraw writer. A peak-picked strike against the top
-  of the adaptive delta range forces full LED brightness; steady-state material
-  falls back toward black between strikes.
+  over SSH to Nightwing's hidraw writer. The current whitened-delta broadband
+  rise is ranked against a recent rolling history, and onset brightness is
+  `percentile^exponent` so exponent `2` maps a median notable frame to 25%
+  brightness while top recent-window rises approach full brightness.
+  Steady-state material falls back toward black between emitted peak frames.
   Next useful cut is direct report decoding plus optical sphere observations
   from PS3 Eyes/Kiyos entering the same calibration-evidence path as LED
   spline constraints.

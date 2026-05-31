@@ -174,9 +174,11 @@ invariants:
     Perlines-style adaptive-whitened spectral-delta novelty function, fitting
     a provisional fundamental, folding spectral bin energy into one octave
     around that fundamental for RGB balance, and streaming LED report `0x06`
-    frames over SSH to Nightwing's hidraw writer. The LED idles near black, and
-    a peak-picked strike against the top of the adaptive delta range forces
-    full brightness.
+    frames over SSH to Nightwing's hidraw writer. The LED idles near black.
+    Onset amplitude ranks the current whitened-delta broadband flux against a
+    recent rolling history and emits `percentile^exponent`, so exponent `2`
+    makes a median notable frame 25% brightness while the strongest recent
+    rises approach full brightness.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,
