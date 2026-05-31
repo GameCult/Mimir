@@ -240,6 +240,29 @@ public sealed record MimirEveSensorObservationDocument(
     [property: Key(13)] double? Y,
     [property: Key(14)] int? Accuracy);
 
+[CultDocument("mimir.eve_media_observation", "mimir.eve_media_observation.v1")]
+[MessagePackObject]
+public sealed record MimirEveMediaObservationDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string ObservationId,
+    [property: Key(1)] string DeviceId,
+    [property: Key(2)] string StreamId,
+    [property: Key(3)] string Kind,
+    [property: Key(4)] long Sequence,
+    [property: Key(5)] long SensorTimestampNs,
+    [property: Key(6)] long ElapsedRealtimeNs,
+    [property: Key(7)] string WallClockUtc,
+    [property: Key(8)] string ClockDomainId,
+    [property: Key(9)] string Format,
+    [property: Key(10)] int? Width,
+    [property: Key(11)] int? Height,
+    [property: Key(12)] int? SampleRate,
+    [property: Key(13)] int? Channels,
+    [property: Key(14)] int? FrameCount,
+    [property: Key(15)] string PayloadEncoding,
+    [property: Key(16)] byte[] Payload);
+
 public static class MimirCultMeshContractFactory
 {
     public static MimirBioacousticCodebookState CreateCodebookState(

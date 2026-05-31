@@ -116,3 +116,10 @@ dotnet run --project .\src\Mimir.EveSensorReceiver\Mimir.EveSensorReceiver.cspro
 The receiver accepts `mimir.eve_sensor_observation.v1` MessagePack packets on
 that lane. The device remains an observation source; Mimir owns synchronization
 and interpretation.
+
+The same receiver also accepts `mimir.eve_media_observation.v1` MessagePack
+packets. Periwinkle publishes low-rate camera luma frames as
+`periwinkle-camera` and microphone PCM blocks as `periwinkle-mic` on the
+CultMesh observation lane. The legacy iPad Eve camera and mic uplinks have
+matching binary media document support while their existing `eve-camera` and
+`eve-mic` ports remain usable.

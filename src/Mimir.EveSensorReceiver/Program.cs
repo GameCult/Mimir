@@ -96,7 +96,8 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
 
             if (frame.Opcode == 0x2)
             {
-                if (TryValidateCultMeshObservation(frame.Payload, out var normalizedObservation))
+                if (TryValidateCultMeshObservation(frame.Payload, out var normalizedObservation)
+                    || TryValidateCultMeshMediaObservation(frame.Payload, out normalizedObservation))
                 {
                     Console.WriteLine(normalizedObservation);
                     Console.Out.Flush();
@@ -178,6 +179,48 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
                 observation.X,
                 observation.Y,
                 observation.Accuracy,
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool TryValidateCultMeshMediaObservation(byte[] payload, out string normalized)
+    {
+        normalized = "";
+        try
+        {
+            var observation = MessagePackSerializer.Deserialize<MimirEveMediaObservationDocument>(payload);
+            if (!string.Equals(observation.StreamId, options.SourceId, StringComparison.Ordinal) &&
+                !string.Equals(options.ExpectedType, "cultmesh-observation", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            normalized = JsonSerializer.Serialize(new
+            {
+                type = "cultmesh-media-observation",
+                document = "mimir.eve_media_observation.v1",
+                observation.ObservationId,
+                observation.DeviceId,
+                observation.StreamId,
+                observation.Kind,
+                observation.Sequence,
+                observation.SensorTimestampNs,
+                observation.ElapsedRealtimeNs,
+                observation.WallClockUtc,
+                observation.ClockDomainId,
+                observation.Format,
+                observation.Width,
+                observation.Height,
+                observation.SampleRate,
+                observation.Channels,
+                observation.FrameCount,
+                observation.PayloadEncoding,
+                PayloadBytes = observation.Payload.Length,
             });
             return true;
         }
