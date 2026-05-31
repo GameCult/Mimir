@@ -116,8 +116,14 @@ invariants:
     samples LeapStereoIr plus both Bayer8 PS3 Eyes, generates 49,152 sparse
     gaussians at about 0.059 ms/frame sensor-fusion GPU time, and captured
     `artifacts/runtime/mimir-perfect-machine-gpu-feature-extraction-headless.png`.
-    Kiyo YUY2 claims are selected but skipped until Fensalir owns an explicit
-    YUY2 conversion/feature shader; packed video must not masquerade as RGBA.
+    The follow-up YUY2 decode proof samples LeapStereoIr, both Bayer8 PS3 Eyes,
+    Kiyo Pro YUY2, and regular Kiyo YUY2; it dispatches five camera textures
+    with zero unsupported field textures, generates 81,920 sparse gaussians at
+    about 0.08 ms/frame sensor-fusion GPU time, and captured
+    `artifacts/runtime/mimir-perfect-machine-yuy2-gpu-feature-extraction-headless.png`.
+    Packed video must not masquerade as ordinary RGBA: Fensalir binds
+    `DXGI_FORMAT_YUY2` through the documented `R8G8B8A8_UNORM` SRV view and
+    decodes `Y0/U/Y1/V` in compute.
     Calibrated projection constants, full SGM, temporal/spatial reservoir reuse
     in a compilable shader, and global residual/calibration ownership remain
     open.
@@ -586,9 +592,9 @@ accepted_design:
     is the current local all-sensor runtime profile, and
     `--perfect-machine-live-smoke` proves the five camera texture leases plus
     Leap depth/page/mesh sockets are present in one live frame. Camera image
-    claims now select Fensalir's D3D12 `GpuSensorFusion` backend; Leap and PS3
-    Eye formats dispatch today, while Kiyo YUY2 needs a format-aware conversion
-    cut before RGB feature extraction is true. Fensalir now owns the first in-process
+    claims now select Fensalir's D3D12 `GpuSensorFusion` backend; Leap, both
+    PS3 Eyes, Kiyo Pro, and regular Kiyo dispatch today, with YUY2 decoded in
+    compute from the declared packed format. Fensalir now owns the first in-process
     D3D12 field resource registry: declared shared structured/curve buffers
     import/alias GPU-resident resources by handle, while Fensalir-owned
     resources allocate GPU slots only when Fensalir is the producer.

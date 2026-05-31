@@ -555,9 +555,11 @@ one Leap stereo-depth lowering, one disparity SurfacePage, and one derived
 point-cloud Mesh. Fensalir now plans those camera Feature/SensorObservation
 claims through its `GpuSensorFusion` backend instead of deferring them, then
 derives compute input metadata and SRVs from resolved FieldEvidence Texture2D
-resources. The first dispatch samples LeapStereoIr plus both Bayer8 PS3 Eyes.
-Kiyo YUY2 claims are selected but skipped until Fensalir owns an explicit YUY2
-conversion/feature lane; they are not silently treated as RGBA.
+resources. The current dispatch samples LeapStereoIr, both Bayer8 PS3 Eyes,
+Kiyo Pro YUY2, and regular Kiyo YUY2. Fensalir binds YUY2 through the
+Microsoft-documented `R8G8B8A8_UNORM` SRV view over `DXGI_FORMAT_YUY2` and
+decodes `Y0/U/Y1/V` in compute; packed camera video is not silently treated as
+ordinary RGBA.
 `MimirMediaFoundationGpuVideoCaptureDriver` plus
 `native/camera_capture/mimir_mf_gpu_capture.dll` is the compressed camera path:
 Media Foundation SourceReader runs with a D3D11 device manager, decodes MJPG or
@@ -668,6 +670,10 @@ requests, dispatched sensor fusion over three sampleable camera textures,
 generated 49,152 sparse gaussians at about 0.059 ms/frame sensor-fusion GPU
 time, and captured
 `artifacts/runtime/mimir-perfect-machine-gpu-feature-extraction-headless.png`.
+The YUY2 decode proof then dispatched all five camera textures with zero
+unsupported field textures, generated 81,920 sparse gaussians at about 0.08
+ms/frame sensor-fusion GPU time, and captured
+`artifacts/runtime/mimir-perfect-machine-yuy2-gpu-feature-extraction-headless.png`.
 Once the
 frustum fit is coherent, detected
 surface candidates can be sampled across every synchronized view before

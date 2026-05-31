@@ -351,9 +351,10 @@ a named invariant that the native runtime cannot protect yet.
   camera textures, a Leap stereo-depth lowering, a disparity SurfacePage, and a
   derived point-cloud Mesh are present. Fensalir now plans the camera texture
   Feature requests through its `GpuSensorFusion` backend instead of deferring
-  them. The current dispatch samples LeapStereoIr plus both Bayer8 PS3 Eyes;
-  Kiyo YUY2 claims are selected but skipped by the shader inlet until Fensalir
-  owns an explicit YUY2 conversion/feature lane.
+  them. The current dispatch samples LeapStereoIr, both Bayer8 PS3 Eyes, Kiyo
+  Pro YUY2, and regular Kiyo YUY2. Fensalir binds YUY2 through the
+  Microsoft-documented `R8G8B8A8_UNORM` SRV view over `DXGI_FORMAT_YUY2` and
+  decodes `Y0/U/Y1/V` in compute before scoring features.
   `MimirMediaFoundationGpuVideoCaptureDriver` is the first compressed camera
   path: `native/camera_capture/mimir_mf_gpu_capture.dll` uses Media Foundation
   SourceReader with a D3D11 device manager, selects MJPG/H264 camera modes,
@@ -447,8 +448,12 @@ a named invariant that the native runtime cannot protect yet.
   `artifacts/runtime/mimir-perfect-machine-gpu-feature-extraction-headless.png`:
   Mimir planned 12 FieldEvidence packets with zero deferred requests, and
   Fensalir dispatched GPU sensor fusion over three sampleable live camera
-  textures, generating 49,152 sparse gaussians. Kiyo YUY2 support remains the
-  next format-aware shader cut.
+  textures, generating 49,152 sparse gaussians. The YUY2 follow-up proof
+  captured
+  `artifacts/runtime/mimir-perfect-machine-yuy2-gpu-feature-extraction-headless.png`:
+  all five camera textures dispatched with zero unsupported field textures,
+  producing 81,920 sparse gaussians at about 0.08 ms/frame sensor-fusion GPU
+  time.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

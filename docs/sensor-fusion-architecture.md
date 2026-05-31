@@ -48,8 +48,10 @@ flowchart TD
   lowering, one disparity SurfacePage, and one derived point-cloud Mesh.
   Camera Feature/SensorObservation claims now plan through Fensalir's
   `GpuSensorFusion` backend instead of deferring. The current compute dispatch
-  samples LeapStereoIr plus both Bayer8 PS3 Eyes; Kiyo YUY2 texture claims are
-  selected but wait for a format-aware YUY2 conversion/feature lane.
+  samples LeapStereoIr, both Bayer8 PS3 Eyes, Kiyo Pro YUY2, and regular Kiyo
+  YUY2. Fensalir binds YUY2 through the documented `R8G8B8A8_UNORM` SRV view
+  over `DXGI_FORMAT_YUY2` and decodes `Y0/U/Y1/V` in compute before scoring
+  features.
 - PS3 Eyes own high-rate sparse tracking evidence before they own depth:
   `MimirSparseFeatureTracker` turns live Bayer/luma frames into stable
   sensor-local feature tracks, and `MimirFeatureTrackFieldCandidate` lowers
