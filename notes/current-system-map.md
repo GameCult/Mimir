@@ -552,9 +552,12 @@ all-sensor runtime profile: Leap packed stereo IR, both PS3 Eyes at
 --perfect-machine-live-smoke` opens all five video sources through the runtime,
 attaches Fensalir texture leases, and requires five camera Texture2D resources,
 one Leap stereo-depth lowering, one disparity SurfacePage, and one derived
-point-cloud Mesh. It prints the remaining deferred generic camera Feature
-claims so the gap stays visible: PS3/Kiyo/Leap texture feature extraction is
-still a Fensalir D3D12 compute owner, not a CPU tracker hidden in the hot path.
+point-cloud Mesh. Fensalir now plans those camera Feature/SensorObservation
+claims through its `GpuSensorFusion` backend instead of deferring them, then
+derives compute input metadata and SRVs from resolved FieldEvidence Texture2D
+resources. The first dispatch samples LeapStereoIr plus both Bayer8 PS3 Eyes.
+Kiyo YUY2 claims are selected but skipped until Fensalir owns an explicit YUY2
+conversion/feature lane; they are not silently treated as RGBA.
 `MimirMediaFoundationGpuVideoCaptureDriver` plus
 `native/camera_capture/mimir_mf_gpu_capture.dll` is the compressed camera path:
 Media Foundation SourceReader runs with a D3D11 device manager, decodes MJPG or
@@ -659,7 +662,13 @@ all-sensor profile started all five video sources, declared eight field
 resources, resolved six Texture2D resources, dispatched one packed-Leap
 stereo-depth kernel, generated one point-cloud/surface stream, reported 19,200
 visible reservoir splats, and captured
-`artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`. Once the
+`artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`. The
+follow-up GPU feature-extraction proof planned 12 packets with zero deferred
+requests, dispatched sensor fusion over three sampleable camera textures,
+generated 49,152 sparse gaussians at about 0.059 ms/frame sensor-fusion GPU
+time, and captured
+`artifacts/runtime/mimir-perfect-machine-gpu-feature-extraction-headless.png`.
+Once the
 frustum fit is coherent, detected
 surface candidates can be sampled across every synchronized view before
 Fensalir resolves them into 4D Gaussian/surface splat claims.

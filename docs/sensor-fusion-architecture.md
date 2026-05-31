@@ -46,8 +46,10 @@ flowchart TD
   Pro, and regular Kiyo all enter the runtime as Fensalir texture leases. The
   smoke requires five live camera Texture2D resources, one Leap stereo-depth
   lowering, one disparity SurfacePage, and one derived point-cloud Mesh.
-  Deferred generic camera Feature requests are printed as the selected future
-  shader work, not hidden as capture success.
+  Camera Feature/SensorObservation claims now plan through Fensalir's
+  `GpuSensorFusion` backend instead of deferring. The current compute dispatch
+  samples LeapStereoIr plus both Bayer8 PS3 Eyes; Kiyo YUY2 texture claims are
+  selected but wait for a format-aware YUY2 conversion/feature lane.
 - PS3 Eyes own high-rate sparse tracking evidence before they own depth:
   `MimirSparseFeatureTracker` turns live Bayer/luma frames into stable
   sensor-local feature tracks, and `MimirFeatureTrackFieldCandidate` lowers

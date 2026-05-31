@@ -349,9 +349,11 @@ a named invariant that the native runtime cannot protect yet.
   --perfect-machine-live-smoke` opens all five configured video sources,
   attaches Fensalir texture leases, and passes only when at least five live
   camera textures, a Leap stereo-depth lowering, a disparity SurfacePage, and a
-  derived point-cloud Mesh are present. It prints deferred camera texture
-  Feature requests explicitly; those are not capture failures, they are the
-  future Fensalir D3D12 feature-extraction cut.
+  derived point-cloud Mesh are present. Fensalir now plans the camera texture
+  Feature requests through its `GpuSensorFusion` backend instead of deferring
+  them. The current dispatch samples LeapStereoIr plus both Bayer8 PS3 Eyes;
+  Kiyo YUY2 claims are selected but skipped by the shader inlet until Fensalir
+  owns an explicit YUY2 conversion/feature lane.
   `MimirMediaFoundationGpuVideoCaptureDriver` is the first compressed camera
   path: `native/camera_capture/mimir_mf_gpu_capture.dll` uses Media Foundation
   SourceReader with a D3D11 device manager, selects MJPG/H264 camera modes,
@@ -440,9 +442,13 @@ a named invariant that the native runtime cannot protect yet.
   declared eight field resources, resolved six Texture2D resources, dispatched
   one packed-Leap stereo-depth kernel, generated one point-cloud/surface stream,
   and reported 19,200 visible reservoir splats. The captured proof is
-  `artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`. Generic
-  camera Feature claims still defer; live PS3/Kiyo feature extraction remains a
-  Fensalir compute shader owner, not the CPU tracker.
+  `artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`. The
+  follow-up Fensalir compute proof captured
+  `artifacts/runtime/mimir-perfect-machine-gpu-feature-extraction-headless.png`:
+  Mimir planned 12 FieldEvidence packets with zero deferred requests, and
+  Fensalir dispatched GPU sensor fusion over three sampleable live camera
+  textures, generating 49,152 sparse gaussians. Kiyo YUY2 support remains the
+  next format-aware shader cut.
   Phase 6 program-output receipts are also structurally complete: Fensalir
   publishes the final program surface through named shared D3D12 texture/fence
   resources, the OBS plugin consumes that surface with an explicit D3D12-to-

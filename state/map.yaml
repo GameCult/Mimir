@@ -111,9 +111,13 @@ invariants:
     generated one point-cloud/surface stream, reported 19,200 visible reservoir
     splats, and captured
     `artifacts/runtime/mimir-perfect-machine-all-sensors-headless.png`.
-    Generic camera Feature claims still defer because PS3/Kiyo/Leap texture
-    feature extraction belongs to a future Fensalir D3D12 compute lowering, not
-    the CPU diagnostic tracker.
+    Generic camera Feature/SensorObservation claims now plan through Fensalir's
+    `GpuSensorFusion` backend with zero deferred requests. The first dispatch
+    samples LeapStereoIr plus both Bayer8 PS3 Eyes, generates 49,152 sparse
+    gaussians at about 0.059 ms/frame sensor-fusion GPU time, and captured
+    `artifacts/runtime/mimir-perfect-machine-gpu-feature-extraction-headless.png`.
+    Kiyo YUY2 claims are selected but skipped until Fensalir owns an explicit
+    YUY2 conversion/feature shader; packed video must not masquerade as RGBA.
     Calibrated projection constants, full SGM, temporal/spatial reservoir reuse
     in a compilable shader, and global residual/calibration ownership remain
     open.
@@ -582,9 +586,9 @@ accepted_design:
     is the current local all-sensor runtime profile, and
     `--perfect-machine-live-smoke` proves the five camera texture leases plus
     Leap depth/page/mesh sockets are present in one live frame. Camera image
-    claims stay debug-view-only for now; production visual fusion/feature
-    extraction lowerings are deferred until Fensalir owns the D3D12 feature
-    shader. Fensalir now owns the first in-process
+    claims now select Fensalir's D3D12 `GpuSensorFusion` backend; Leap and PS3
+    Eye formats dispatch today, while Kiyo YUY2 needs a format-aware conversion
+    cut before RGB feature extraction is true. Fensalir now owns the first in-process
     D3D12 field resource registry: declared shared structured/curve buffers
     import/alias GPU-resident resources by handle, while Fensalir-owned
     resources allocate GPU slots only when Fensalir is the producer.
