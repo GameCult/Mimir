@@ -454,6 +454,20 @@ a named invariant that the native runtime cannot protect yet.
   `percentile^exponent` so exponent `2` maps a median notable frame to 25%
   brightness while top recent-window rises approach full brightness.
   Steady-state material falls back toward black between emitted peak frames.
+  The ASIO reader drains the native capture queue to the newest loopback blocks
+  before each LED frame; stale queued audio was the plausible cause of
+  multi-second music-pulse lag, not Bluetooth or the hidraw LED command path.
+  `tools/move_latency_probe.py` is the current diagnostic latency receipt:
+  PS3 Eye is the default fast visual witness, Scarlett cardioid is the default
+  chirp timing witness, and the event train uses an order-3 de Bruijn schedule
+  with symbol-coded chirp bands, LED colors, and small variable gaps. It writes
+  `event-schedule.json`, arms the Nightwing LED script before playback, fits
+  detected audio/video events back to the known schedule, and marks receipts
+  invalid when the Move sphere is not sufficiently visible. A live encoded
+  PS3 Eye run recovered all eight visual events with schedule residuals within
+  about 4 ms; `ffplay`/DirectShow audio startup is still too soft for final
+  physical latency authority, so native timestamped Scarlett playback/capture
+  remains the production timing cut.
   Next useful cut is direct report decoding plus optical sphere observations
   from PS3 Eyes/Kiyos entering the same calibration-evidence path as LED
   spline constraints.

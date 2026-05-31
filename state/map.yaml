@@ -178,7 +178,20 @@ invariants:
     Onset amplitude ranks the current whitened-delta broadband flux against a
     recent rolling history and emits `percentile^exponent`, so exponent `2`
     makes a median notable frame 25% brightness while the strongest recent
-    rises approach full brightness.
+    rises approach full brightness. The ASIO reader now drains the native
+    capture queue to the newest loopback blocks before each LED frame, because
+    stale queued audio was the plausible seconds-late music-pulse cause.
+    `tools/move_latency_probe.py` is the diagnostic PS Move latency receipt:
+    PS3 Eyes are the default fast visual witnesses, Scarlett cardioid is the
+    default chirp timing witness, and the event train uses an order-3 de Bruijn
+    schedule with symbol-coded chirp bands, LED colors, and small variable
+    gaps. The probe writes `event-schedule.json`, arms Nightwing's LED script
+    before playback, fits audio/video detections back to the known schedule,
+    and marks receipts invalid when the Move sphere is not visible enough.
+    Live encoded Eye/Scarlett testing recovered all eight visual events with
+    schedule residuals within about 4 ms; `ffplay`/DirectShow audio startup is
+    still too soft for final physical latency authority, so native timestamped
+    Scarlett playback/capture remains the production timing cut.
   - PS3 Eyes now have a first sparse tracking surface instead of only cadence
     proof. `MimirSparseFeatureTracker` detects Bayer/luma corner features,
     links them into sensor-local tracks with clipspace position, velocity, age,

@@ -102,6 +102,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gain", type=float, default=0.25, help="Sustain/body gain under onset bursts.")
     parser.add_argument("--floor", type=float, default=0.008, help="Noise floor.")
     parser.add_argument("--fft-size", type=int, default=512, help="Tiny FFT size for onset flux.")
+    parser.add_argument("--drain-blocks", type=int, default=4096, help="Maximum ASIO blocks to drain per LED frame.")
     parser.add_argument("--onset-gain", type=float, default=1.0, help="Scale applied after percentile onset amplitude.")
     parser.add_argument("--onset-decay", type=float, default=0.22, help="Per-frame onset decay.")
     parser.add_argument("--onset-threshold", type=float, default=0.58, help="Minimum recent-window percentile that can emit a peak.")
@@ -204,32 +205,45 @@ class AsioOnsetReader:
         onset_history_ms: float,
         onset_cooldown_ms: float,
         warmup_ms: float,
+        drain_blocks: int,
     ) -> tuple[float, float, tuple[float, float, float], float, float, float] | None:
         channel = ctypes.c_int()
         timestamp_ns = ctypes.c_longlong()
         sequence = ctypes.c_ulonglong()
         frame_count = ctypes.c_int()
         while time.monotonic() < deadline:
-            ok = self.dll.mimir_asio_read(
-                self.handle,
-                ctypes.byref(channel),
-                ctypes.byref(timestamp_ns),
-                ctypes.byref(sequence),
-                ctypes.byref(frame_count),
-                self.buffer,
-                self.max_frames,
-            )
-            if not ok:
+            drained: list[float] = []
+            reads = 0
+            while reads < max(1, drain_blocks):
+                ok = self.dll.mimir_asio_read(
+                    self.handle,
+                    ctypes.byref(channel),
+                    ctypes.byref(timestamp_ns),
+                    ctypes.byref(sequence),
+                    ctypes.byref(frame_count),
+                    self.buffer,
+                    self.max_frames,
+                )
+                if not ok:
+                    break
+                reads += 1
+                frames = max(0, min(int(frame_count.value), self.max_frames))
+                if int(channel.value) not in self.channels or frames == 0:
+                    continue
+                drained.extend(float(self.buffer[index]) for index in range(frames))
+                keep = self.fft_size * 4
+                if len(drained) > keep:
+                    del drained[: len(drained) - keep]
+            if not drained:
                 time.sleep(0.001)
                 continue
-            frames = max(0, min(int(frame_count.value), self.max_frames))
-            if int(channel.value) not in self.channels or frames == 0:
-                continue
-            for index in range(frames):
-                self.pending.append(float(self.buffer[index]))
+            self.pending.extend(drained)
+            keep_pending = self.fft_size * 6
+            if len(self.pending) > keep_pending:
+                del self.pending[: len(self.pending) - keep_pending]
             if len(self.pending) >= self.fft_size:
-                frame = np.asarray(self.pending[: self.fft_size], dtype=np.float32)
-                del self.pending[: self.fft_size // 2]
+                frame = np.asarray(self.pending[-self.fft_size :], dtype=np.float32)
+                self.pending.clear()
                 rms = float(np.sqrt(np.mean(frame * frame)))
                 spectrum = np.abs(np.fft.rfft(frame * self.window)).astype(np.float32)
                 spectrum = np.sqrt(np.maximum(spectrum, 0.0)).astype(np.float32)
@@ -452,6 +466,7 @@ def main() -> int:
                     args.onset_history_ms,
                     args.onset_cooldown_ms,
                     args.warmup_ms,
+                    args.drain_blocks,
                 )
                 if onset is None:
                     continue
