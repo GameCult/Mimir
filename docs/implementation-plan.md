@@ -503,10 +503,14 @@ a named invariant that the native runtime cannot protect yet.
   confidence. The same solver accepts `MimirFeatureTrackFieldCandidate` plus
   scene-space `TrackId` anchors, so PS Move sphere histories, sparse Eye
   tracks, and Eve-local marker tracks use the same Starfire frustum authority
-  as the LED strip. Synthetic smoke `--frustum-calibration-smoke` solves both
+  as the LED strip. `mimir.local_frustum_hint_state.v1` is the compact CultMesh
+  state document for local witness solves: producer node, calibration id,
+  marker set id, per-camera pose/frustum snapshot, residual, point count, and
+  confidence. Synthetic smoke `--frustum-calibration-smoke` solves both
   LED-spline and feature-track frustums for both Eyes, Kiyo Pro, Leap stereo
-  IR, and Eve camera, establishing the first fusion-ready frustum state before
-  dense surface fusion.
+  IR, and Eve camera, then emits the feature-track solve as a local frustum
+  hint state, establishing the first fusion-ready frustum surface before dense
+  surface fusion.
   Next useful cut is direct report decoding plus optical sphere observations
   from PS3 Eyes/Kiyos/Eve entering the same calibration-evidence path as LED
   spline constraints.

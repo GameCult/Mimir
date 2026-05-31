@@ -236,9 +236,15 @@ invariants:
     `MimirFeatureTrackFieldCandidate` plus scene-space `TrackId` anchors, so
     PS Move sphere histories, Eye feature tracks, and Eve-local marker tracks
     can enter the frustum solve without becoming a separate authority.
+    `mimir.local_frustum_hint_state.v1` is the typed CultMesh document for
+    publishing those local solved hints: producer node, calibration id,
+    candidate key, marker set id, per-camera pose/frustum snapshot, residual,
+    point count, and confidence. Starfire may ingest this as evidence; it is
+    still not canonical placement until the global solve accepts it.
     `Mimir.BufferSmoke --frustum-calibration-smoke` proves five LED-spline
     frustums and five feature-track frustums for both Eyes, Kiyo Pro, Leap
-    stereo IR, and Eve camera.
+    stereo IR, and Eve camera, then lowers the feature-track solve into a
+    `mimir.local_frustum_hint_state.v1` document.
     The Eyes have physically moved to Nightwing and Linux sees them as stock
     `ov534`/`gspca` V4L2 cameras on `/dev/video2` and `/dev/video3`. A
     repo-owned `tools/nightwing_v4l2_cadence_probe.py` copied to Nightwing

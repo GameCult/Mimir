@@ -1160,9 +1160,13 @@ static int RunFrustumCalibrationSmoke()
         markerSetId: "move-and-eve-feature-markers",
         maximumDeltaMeters: 0.20,
         maximumRotationDeltaDegrees: 12.0);
+    var featureHint = MimirCultMeshContractFactory.CreateLocalFrustumHintState(
+        "eve-nightwing-local-frustum-hints",
+        "starfire-calibration-smoke",
+        featureFrame);
 
     Console.WriteLine(
-        $"frustum-calibration-smoke ledUpdates={frame.FrustumUpdates.Count} featureUpdates={featureFrame.FrustumUpdates.Count} confidence={frame.Confidence:0.000}/{featureFrame.Confidence:0.000} meanClipError={frame.MeanReprojectionErrorClip:0.000000}/{featureFrame.MeanReprojectionErrorClip:0.000000} sources={string.Join(",", frame.FrustumUpdates.Select(static update => $"{update.SourceId}:{update.UsedPointCount}/{update.RotationDeltaDegrees:0.00}deg/{update.HorizontalTanHalfFov:0.000}x{update.VerticalTanHalfFov:0.000}"))}");
+        $"frustum-calibration-smoke ledUpdates={frame.FrustumUpdates.Count} featureUpdates={featureFrame.FrustumUpdates.Count} hintFrustums={featureHint.Frustums.Length} confidence={frame.Confidence:0.000}/{featureFrame.Confidence:0.000} meanClipError={frame.MeanReprojectionErrorClip:0.000000}/{featureFrame.MeanReprojectionErrorClip:0.000000} sources={string.Join(",", frame.FrustumUpdates.Select(static update => $"{update.SourceId}:{update.UsedPointCount}/{update.RotationDeltaDegrees:0.00}deg/{update.HorizontalTanHalfFov:0.000}x{update.VerticalTanHalfFov:0.000}"))}");
 
     return frame.HasFrustumUpdate &&
         featureFrame.HasFrustumUpdate &&
@@ -1172,6 +1176,9 @@ static int RunFrustumCalibrationSmoke()
         featureFrame.FrustumUpdates.All(update => update.UsedPointCount == scenePoints.Length) &&
         frame.FrustumUpdates.All(static update => update.MeanReprojectionErrorClip < 0.010) &&
         featureFrame.FrustumUpdates.All(static update => update.MeanReprojectionErrorClip < 0.010) &&
+        featureHint.MarkerSetId == "move-and-eve-feature-markers" &&
+        featureHint.Frustums.Length == truth.Length &&
+        featureHint.Frustums.Any(static frustum => frustum.SourceId == "eve-camera") &&
         frame.Confidence >= 0.70 &&
         featureFrame.Confidence >= 0.70
             ? 0

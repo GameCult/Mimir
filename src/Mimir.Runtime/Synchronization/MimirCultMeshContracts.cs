@@ -263,6 +263,37 @@ public sealed record MimirEveMediaObservationDocument(
     [property: Key(15)] string PayloadEncoding,
     [property: Key(16)] byte[] Payload);
 
+[CultDocument("mimir.local_frustum_hint_state", "mimir.local_frustum_hint_state.v1")]
+[MessagePackObject]
+public sealed record MimirLocalFrustumHintStateDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string HintId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string ProducerNodeId,
+    [property: Key(3)] string CalibrationId,
+    [property: Key(4)] string CandidateKey,
+    [property: Key(5)] string MarkerSetId,
+    [property: Key(6)] double MeanReprojectionErrorClip,
+    [property: Key(7)] double Confidence,
+    [property: Key(8)] MimirLocalFrustumSnapshot[] Frustums);
+
+[MessagePackObject]
+public sealed record MimirLocalFrustumSnapshot(
+    [property: Key(0)] string SourceId,
+    [property: Key(1)] float PositionX,
+    [property: Key(2)] float PositionY,
+    [property: Key(3)] float PositionZ,
+    [property: Key(4)] float RotationX,
+    [property: Key(5)] float RotationY,
+    [property: Key(6)] float RotationZ,
+    [property: Key(7)] float RotationW,
+    [property: Key(8)] double HorizontalTanHalfFov,
+    [property: Key(9)] double VerticalTanHalfFov,
+    [property: Key(10)] int UsedPointCount,
+    [property: Key(11)] double MeanReprojectionErrorClip,
+    [property: Key(12)] double Confidence);
+
 public static class MimirCultMeshContractFactory
 {
     public static MimirBioacousticCodebookState CreateCodebookState(
@@ -332,6 +363,38 @@ public static class MimirCultMeshContractFactory
             command.FaustControls
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => new MimirFaustControlSnapshot(pair.Key, pair.Value))
+                .ToArray());
+
+    public static MimirLocalFrustumHintStateDocument CreateLocalFrustumHintState(
+        string hintId,
+        string producerNodeId,
+        MimirCameraFrustumSolveFrame frame,
+        DateTimeOffset? updatedAt = null) =>
+        new(
+            hintId,
+            (updatedAt ?? DateTimeOffset.UtcNow).ToString("O"),
+            producerNodeId,
+            frame.CalibrationId,
+            frame.CandidateKey,
+            frame.MarkerSetId,
+            frame.MeanReprojectionErrorClip,
+            frame.Confidence,
+            frame.FrustumUpdates
+                .OrderBy(update => update.SourceId, StringComparer.Ordinal)
+                .Select(update => new MimirLocalFrustumSnapshot(
+                    update.SourceId,
+                    update.EstimatedPositionMeters.X,
+                    update.EstimatedPositionMeters.Y,
+                    update.EstimatedPositionMeters.Z,
+                    update.EstimatedCameraToWorldRotation.X,
+                    update.EstimatedCameraToWorldRotation.Y,
+                    update.EstimatedCameraToWorldRotation.Z,
+                    update.EstimatedCameraToWorldRotation.W,
+                    update.HorizontalTanHalfFov,
+                    update.VerticalTanHalfFov,
+                    update.UsedPointCount,
+                    update.MeanReprojectionErrorClip,
+                    update.Confidence))
                 .ToArray());
 
     private static MimirBioacousticDecoderConfigurationSnapshot Snapshot(MimirBioacousticDecoderConfiguration configuration) =>
