@@ -55,6 +55,18 @@ Default V4L2 cadence is only 30 fps, but explicitly setting
 at 320x240 with zero sequence gaps. The witness worker must set frame interval;
 otherwise Linux will quietly look worse than it is.
 
+Nightwing also has a typed witness publisher staged as
+`~/.local/bin/nightwing_typed_witness_publisher.py`. The repo source is
+`tools/nightwing_typed_witness_publisher.py`. It sends binary MessagePack
+`mimir.eve_sensor_observation.v1` records to `Mimir.EveSensorReceiver` on
+`ws://192.168.1.66:8796/eve/periwinkle`; the receiver normalizes them into the
+Mimir observation ledger, Odin projects them as `observation-stream` nodes, and
+Nightwing's Eve TUI lowers those nodes in the `CultMesh Witness Streams` panel.
+The current status records are camera-device receipts for `/dev/video*` and a
+`nightwing-leap-tracking` placeholder that is intentionally `0` until real Leap
+tracking owns that signal. Values are `[present, videoIndex, isPs3Eye]` for
+camera-device receipts.
+
 ## Runtime Profile
 
 Use:
