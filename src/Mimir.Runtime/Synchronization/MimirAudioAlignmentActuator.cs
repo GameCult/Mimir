@@ -17,6 +17,23 @@ public sealed record MimirAlignmentActuatorProfile(
         GainControlFormat: "source{0}/gain");
 }
 
+public sealed record MimirDialogueCleanerProfile(
+    string Id,
+    string FaustDspPath,
+    int SourceCount,
+    IReadOnlyList<Aquarium.Engine.Audio.AquariumStreamingDspOutputStem> OutputStems)
+{
+    public static MimirDialogueCleanerProfile DualMicFaust { get; } = new(
+        "dual-mic-dialogue-cleaner",
+        "faust/mimir_dual_mic_dialogue_cleaner.dsp",
+        SourceCount: 2,
+        OutputStems:
+        [
+            new(0, "host_voice", "Dialogue composite", "scarlett-dual-mic"),
+            new(1, "ambient", "Rejected residual", "scarlett-dual-mic")
+        ]);
+}
+
 public sealed record MimirActuatorCommand(
     string SourceId,
     double TargetDelaySamples,

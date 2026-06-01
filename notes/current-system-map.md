@@ -327,11 +327,16 @@ has 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC composite
 audio; the composite report estimated channel-1 delay at about -141.019 samples
 (-2937.889 us). After user listening feedback, the bridge tightened audition
 defaults: measured-band boost is capped at 1.18x, incoherent calibrated bands
-are suppressed harder, and a residual envelope expander demotes the low-level
-post-sum bed. Reprocessing the same raw ASIO/Kiyo receipt lowered composite RMS
-from 0.046805 to 0.034400 while preserving the same delay estimate. This is a
-better listenable proof, not a claim that sparse-band C# has become the final
-studio denoiser.
+are suppressed harder, and the choppy residual expander is not enabled by
+default. The actual denoise authority is moving to Faust:
+`faust/mimir_dual_mic_dialogue_cleaner.dsp` compiles as a two-input/two-output
+aligned shotgun/cardioid dialogue cleaner with smooth multiband voice shaping,
+witness subtraction, and slow downward expansion. `MimirRuntime` queues it as
+`dual-mic-dialogue-cleaner` with `host_voice` and residual `ambient` output
+stems. It is fed from the alignment actuator's published `aligned_source_*`
+stem frame, not from raw mic buffers, so Faust alignment is a real structural
+precursor to cleanup. This is the first hot-lane cleaner socket, not proof that
+the final studio denoiser is solved.
 `MimirTargetedBioacousticProbePlanner` is the matching "ask the room a better
 question" owner. It consumes per-source spectral residuals and optional source
 pathology notes, then emits gain-bounded shaped probe bands for the

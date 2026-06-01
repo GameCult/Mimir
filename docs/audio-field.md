@@ -157,11 +157,17 @@ that WAV with the Kiyo video. The 2026-06-01 receipt at
 contains 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC from the
 computed composite. After listening feedback, the bridge tightened its audition
 defaults: measured-band gain is capped at `1.18x`, incoherent calibrated bands
-are suppressed more aggressively, and an optional residual envelope expander
-demotes the low-level post-sum noise bed. Reprocessing the same raw ASIO/Kiyo
-receipt lowered composite RMS from `0.046805` to `0.034400` while preserving the
-same `-141.019` sample mic-delay estimate. Treat it as a bridge proof of
-audibility/sync and a denoise scorer, not the final native live DSP path.
+are suppressed more aggressively, and the choppy post-sum residual expander is
+not enabled by default. The next hot owner is
+`faust/mimir_dual_mic_dialogue_cleaner.dsp`: a two-input/two-output Faust graph
+for aligned shotgun/cardioid witnesses that emits a dialogue composite stem and
+a rejected residual witness using smooth multiband voice shaping, witness
+subtraction, and slow downward expansion. `MimirRuntime` now queues that Faust
+program as `dual-mic-dialogue-cleaner` with `host_voice` and residual `ambient`
+output stems, but only feeds it from the alignment actuator's published
+`aligned_source_*` stem frame. Alignment is therefore a structural precursor to
+cleanup, not an optional sidecar. Treat the C# bridge as an audition/scoring
+receipt, not the final native live DSP path.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`;
 it renders the bioacoustic timeline, decodes direct word anchors, and requires a

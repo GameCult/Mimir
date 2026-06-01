@@ -819,8 +819,12 @@ a named invariant that the native runtime cannot protect yet.
    renders the channels 0/1 composite WAV with `--asio-dual-mic-composite-wav`,
    and muxes the computed mono composite into the Kiyo MP4. The bridge defaults
    now cap measured-band boost at 1.18x, apply stronger incoherent-band
-   suppression, and enable a residual envelope expander so low-level post-sum
-   noise does not ride along as loudly in audition receipts. Treat that as the
+   suppression, and do not enable the choppy C# residual expander by default.
+   The Faust hot-lane target now exists as
+   `faust/mimir_dual_mic_dialogue_cleaner.dsp`; Mimir queues it as
+   `dual-mic-dialogue-cleaner`, consuming the alignment actuator's published
+   `aligned_source_*` stem frame rather than raw mic buffers, and emitting
+   `host_voice` plus a rejected residual witness. Treat the C# bridge as the
    contract and offline scorer for the
    native/Faust implementation, not as a parallel live mixer authority. The
    next matching probe loop also exists as

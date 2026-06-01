@@ -87,6 +87,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private long spectrumHistorySequence;
     private long audioActuatorFrameSequence;
     private bool audioActuatorProgramQueued;
+    private bool dialogueCleanerProgramQueued;
     private readonly Queue<MimirSpectrumHistoryFrame> spectrumHistory = new();
     private AquariumRuntimeServices runtimeServices = AquariumRuntimeServices.Empty;
     private MimirActuatorFrame lastAudioActuatorFrame = MimirActuatorFrame.Empty;
@@ -1333,6 +1334,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
 
         QueueAudioActuatorProgram();
+        QueueDialogueCleanerProgram();
         audio.EnqueueControlFrame(new AquariumAudioControlFrame(
             MimirAlignmentActuatorProfile.SixSourceFaust.Id,
             frame.ReferenceSourceId,
@@ -1377,6 +1379,30 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     $"Aligned source {index}"))
                 .ToArray()));
         audioActuatorProgramQueued = true;
+    }
+
+    private void QueueDialogueCleanerProgram()
+    {
+        if (dialogueCleanerProgramQueued)
+        {
+            return;
+        }
+
+        var profile = MimirDialogueCleanerProfile.DualMicFaust;
+        var path = ResolveRuntimeAssetPath(profile.FaustDspPath);
+        if (path == null)
+        {
+            Console.WriteLine($"Mimir dialogue cleaner DSP not queued; `{profile.FaustDspPath}` was not found.");
+            return;
+        }
+
+        audio.EnqueueStreamingDspProgram(new AquariumStreamingDspProgram(
+            profile.Id,
+            "mimir_dual_mic_dialogue_cleaner",
+            File.ReadAllText(path),
+            unchecked((int)File.GetLastWriteTimeUtc(path).Ticks),
+            OutputStems: profile.OutputStems));
+        dialogueCleanerProgramQueued = true;
     }
 
     private void QueueStreamingActuatorAudioBlock(MimirActuatorFrame frame, long sequence)
@@ -1450,6 +1476,77 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             sequence));
     }
 
+    private void QueueStreamingDialogueCleanerAudioBlock(AquariumAudioStemFrame alignedFrame)
+    {
+        if (!string.Equals(alignedFrame.ProfileId, MimirAlignmentActuatorProfile.SixSourceFaust.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var candidates = alignedFrame.Channels
+            .OrderBy(channel => DialogueCleanerSourceRank(channel.SourceId))
+            .ThenBy(channel => channel.SourceId, StringComparer.Ordinal)
+            .Take(MimirDialogueCleanerProfile.DualMicFaust.SourceCount)
+            .ToArray();
+        if (candidates.Length < MimirDialogueCleanerProfile.DualMicFaust.SourceCount)
+        {
+            return;
+        }
+
+        var channels = new List<AquariumStreamingAudioChannel>(MimirDialogueCleanerProfile.DualMicFaust.SourceCount);
+        var frameCount = alignedFrame.FrameCount;
+        var sampleRate = alignedFrame.SampleRate;
+        for (var index = 0; index < candidates.Length; index++)
+        {
+            var samples = ApplyGain(candidates[index].Samples, presentationControls.AudioGain(candidates[index].SourceId));
+            if (samples.Length == 0)
+            {
+                return;
+            }
+
+            frameCount = Math.Min(frameCount, samples.Length);
+            channels.Add(new AquariumStreamingAudioChannel(index, candidates[index].SourceId, samples));
+        }
+
+        if (frameCount <= 0 || sampleRate <= 0)
+        {
+            return;
+        }
+
+        if (channels.Any(channel => channel.Samples.Length != frameCount))
+        {
+            channels = channels
+                .Select(channel => channel.Samples.Length == frameCount
+                    ? channel
+                    : channel with { Samples = channel.Samples.AsSpan(0, frameCount).ToArray() })
+                .ToList();
+        }
+
+        audio.EnqueueStreamingAudioBlock(new AquariumStreamingAudioBlock(
+            MimirDialogueCleanerProfile.DualMicFaust.Id,
+            channels,
+            frameCount,
+            sampleRate,
+            alignedFrame.Sequence));
+    }
+
+    private static int DialogueCleanerSourceRank(string sourceId)
+    {
+        if (sourceId.Contains("asio-ch0", StringComparison.OrdinalIgnoreCase) ||
+            sourceId.Contains("shotgun", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (sourceId.Contains("asio-ch1", StringComparison.OrdinalIgnoreCase) ||
+            sourceId.Contains("cardioid", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return 100;
+    }
+
     private IReadOnlyDictionary<string, float> ApplyPresentationGain(MimirActuatorCommand command)
     {
         var gain = presentationControls.AudioGain(command.SourceId);
@@ -1467,8 +1564,12 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         var consumed = false;
         foreach (var stemFrame in runtimeServices.AudioStems.DrainPublishedFrames())
         {
-            obsStemPublication.Consume(stemFrame);
-            consumed = true;
+            if (string.Equals(stemFrame.ProfileId, MimirAlignmentActuatorProfile.SixSourceFaust.Id, StringComparison.Ordinal))
+            {
+                QueueStreamingDialogueCleanerAudioBlock(stemFrame);
+                obsStemPublication.Consume(stemFrame);
+                consumed = true;
+            }
         }
 
         if (consumed)

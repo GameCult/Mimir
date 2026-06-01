@@ -659,12 +659,14 @@ accepted_design:
     audio; the composite report estimated channel-1 delay at about -141.019
     samples (-2937.889 us). After listening feedback, the bridge audition
     defaults now cap measured-band boost at 1.18x, suppress incoherent
-    calibrated bands harder, and enable a residual envelope expander to demote
-    the low-level post-sum noise bed. Reprocessing the same raw ASIO/Kiyo
-    receipt lowered composite RMS from 0.046805 to 0.034400 while preserving the
-    same delay estimate.
-    Faust/native DSP still owns the production hot lane; this C# path is a
-    contract, scorer, and offline diagnostic, not a competing live mixer.
+    calibrated bands harder, and leave the choppy residual expander disabled by
+    default. Faust/native DSP now has the first actual cleaner socket:
+    `faust/mimir_dual_mic_dialogue_cleaner.dsp` compiles as a smooth two-input
+    shotgun/cardioid dialogue cleaner and Mimir queues it as
+    `dual-mic-dialogue-cleaner`, fed from the alignment actuator's published
+    `aligned_source_*` stem frame rather than raw mic buffers, emitting
+    `host_voice` plus a rejected residual witness. The C# path is a contract,
+    scorer, and offline diagnostic, not a competing live mixer.
     `MimirTargetedBioacousticProbePlanner` is now the residual-driven probe
     planner for improving that calibration instead of blindly EQing harder. It
     consumes per-source spectral residuals plus optional source pathology notes

@@ -3531,11 +3531,7 @@ static int RunAsioDualMicCompositeWave(
         MaximumBandGain: 1.18,
         NoiseFloorRms: 1.0e-5,
         MinimumCoherence: 0.48,
-        IncoherentBandSuppression: 0.78,
-        EnableResidualNoiseExpander: true,
-        ResidualNoiseFloorMultiplier: 2.8,
-        ResidualNoiseMinimumGain: 0.16,
-        ResidualNoiseExpansionPower: 2.4)).Build(
+        IncoherentBandSuppression: 0.78)).Build(
         [
             NewCompositeSourceFromResponses("asio-ch0-shotgun", shotgun, sampleRate, delaySamples: 0.0, confidence: 0.90, shotgunResponses, NoiseEstimate(shotgun)),
             NewCompositeSourceFromResponses("asio-ch1-cardioid", cardioid, sampleRate, delaySamples: delay, confidence: 0.90, cardioidResponses, NoiseEstimate(cardioid)),
