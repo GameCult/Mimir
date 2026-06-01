@@ -160,6 +160,12 @@ namespace Mimir {
                 Check(audioClient.Start(), "Start");
                 DateTime end = seconds > 0 ? DateTime.UtcNow.AddSeconds(seconds) : DateTime.MaxValue;
                 byte[] pcm = new byte[8192];
+                int sourceRate = Math.Max(1, (int)fmt.nSamplesPerSec);
+                double sourceFramesPerTargetFrame = sourceRate / (double)Math.Max(1, targetRate);
+                long sourceFramesSeen = 0;
+                double nextOutputSourceFrame = 0.0;
+                float[] previousFrame = new float[Math.Max(1, targetChannels)];
+                bool hasPreviousFrame = false;
                 try {
                     while (DateTime.UtcNow < end) {
                         uint packetFrames;
@@ -180,24 +186,40 @@ namespace Mimir {
                             int sourceBits = (int)fmt.wBitsPerSample;
                             int sourceBytesPerSample = Math.Max(1, sourceBits / 8);
                             int frameBytes = targetChannels * 4;
-                            int needed = checked((int)frames * frameBytes);
+                            long packetStart = sourceFramesSeen;
+                            long packetEnd = packetStart + frames;
+                            int outputFrames = 0;
+                            double countCursor = nextOutputSourceFrame;
+                            while (countCursor < packetEnd) {
+                                outputFrames++;
+                                countCursor += sourceFramesPerTargetFrame;
+                            }
+                            int needed = checked(outputFrames * frameBytes);
                             if (pcm.Length < needed) pcm = new byte[needed];
                             int dst = 0;
-                            for (int frame = 0; frame < frames; frame++) {
+                            float[] left = new float[targetChannels];
+                            float[] right = new float[targetChannels];
+                            while (nextOutputSourceFrame < packetEnd) {
+                                long leftAbsolute = (long)Math.Floor(nextOutputSourceFrame);
+                                long rightAbsolute = Math.Min(packetEnd - 1, leftAbsolute + 1);
+                                double fraction = nextOutputSourceFrame - leftAbsolute;
+                                ReadFrame(leftAbsolute, packetStart, data, flags, sourceChannels, sourceBytesPerFrame, sourceBytesPerSample, sourceBits, fmt.wFormatTag, activeFormatPtr, previousFrame, hasPreviousFrame, left);
+                                ReadFrame(rightAbsolute, packetStart, data, flags, sourceChannels, sourceBytesPerFrame, sourceBytesPerSample, sourceBits, fmt.wFormatTag, activeFormatPtr, previousFrame, hasPreviousFrame, right);
                                 for (int ch = 0; ch < targetChannels; ch++) {
-                                    float sample = 0f;
-                                    if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) == 0) {
-                                        int srcCh = Math.Min(ch, sourceChannels - 1);
-                                        IntPtr src = IntPtr.Add(data, frame * sourceBytesPerFrame + srcCh * sourceBytesPerSample);
-                                        sample = ReadSample(src, sourceBits, fmt.wFormatTag, mixFormatPtr);
-                                    }
+                                    float sample = (float)(left[ch] + (right[ch] - left[ch]) * fraction);
                                     byte[] bytes = BitConverter.GetBytes(sample);
                                     Buffer.BlockCopy(bytes, 0, pcm, dst, 4);
                                     dst += 4;
                                 }
+                                nextOutputSourceFrame += sourceFramesPerTargetFrame;
+                            }
+                            if (frames > 0) {
+                                ReadFrame(packetEnd - 1, packetStart, data, flags, sourceChannels, sourceBytesPerFrame, sourceBytesPerSample, sourceBits, fmt.wFormatTag, activeFormatPtr, previousFrame, false, previousFrame);
+                                hasPreviousFrame = true;
                             }
                             output.Write(pcm, 0, needed);
                             output.Flush();
+                            sourceFramesSeen = packetEnd;
                         }
                         finally {
                             Check(captureClient.ReleaseBuffer(frames), "ReleaseBuffer");
@@ -223,6 +245,24 @@ namespace Mimir {
         static bool IsStdoutPath(string outputPath) {
             return String.Equals(outputPath, "-", StringComparison.Ordinal) ||
                 String.Equals(outputPath, "stdout", StringComparison.OrdinalIgnoreCase);
+        }
+
+        static void ReadFrame(long absoluteFrame, long packetStart, IntPtr data, uint flags, int sourceChannels, int sourceBytesPerFrame, int sourceBytesPerSample, int sourceBits, ushort tag, IntPtr formatPtr, float[] previousFrame, bool hasPreviousFrame, float[] target) {
+            if (absoluteFrame < packetStart) {
+                for (int ch = 0; ch < target.Length; ch++) target[ch] = hasPreviousFrame ? previousFrame[ch] : 0f;
+                return;
+            }
+
+            int packetFrame = checked((int)(absoluteFrame - packetStart));
+            for (int ch = 0; ch < target.Length; ch++) {
+                float sample = 0f;
+                if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) == 0) {
+                    int srcCh = Math.Min(ch, sourceChannels - 1);
+                    IntPtr src = IntPtr.Add(data, packetFrame * sourceBytesPerFrame + srcCh * sourceBytesPerSample);
+                    sample = ReadSample(src, sourceBits, tag, formatPtr);
+                }
+                target[ch] = sample;
+            }
         }
 
         static void Check(int hr, string stage) {
