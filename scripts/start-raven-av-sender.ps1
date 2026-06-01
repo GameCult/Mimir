@@ -15,6 +15,7 @@ param(
     [string]$VideoBitrate = "12000k",
     [string]$AudioBitrate = "192k",
     [string]$LogRoot = "C:\Meta\Mimir\logs",
+    [string]$WasapiLoopbackPath = "",
     [switch]$DryRun
 )
 
@@ -37,6 +38,21 @@ $endpoint = if ($Transport -eq "tcp-listener") {
 $videoSize = "${Width}x${Height}"
 $gop = [Math]::Max(1, $Framerate * 2)
 $captureScript = Join-Path $repo "scripts\wasapi-loopback-capture.ps1"
+$loopbackExe = if ([string]::IsNullOrWhiteSpace($WasapiLoopbackPath)) {
+    Join-Path $repo "tools\Mimir.WasapiLoopback\Mimir.WasapiLoopback.exe"
+} else {
+    $WasapiLoopbackPath
+}
+$audioCaptureCommand = if (Test-Path $loopbackExe) {
+    (Quote-CmdArgument $loopbackExe) +
+        " --output stdout --sample-rate $AudioSampleRate --channels $AudioChannels"
+} else {
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " +
+        (Quote-CmdArgument $captureScript) +
+        " -Output " +
+        (Quote-CmdArgument "stdout") +
+        " -SampleRate $AudioSampleRate -Channels $AudioChannels"
+}
 
 $ffmpegArgs = @(
     "-hide_banner",
@@ -69,11 +85,8 @@ $ffmpegArgs = @(
     $endpoint
 )
 $quotedFfmpegArgs = $ffmpegArgs | ForEach-Object { Quote-CmdArgument $_ }
-$command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " +
-    (Quote-CmdArgument $captureScript) +
-    " -Output " +
-    (Quote-CmdArgument "stdout") +
-    " -SampleRate $AudioSampleRate -Channels $AudioChannels | " +
+$command = $audioCaptureCommand +
+    " | " +
     (Quote-CmdArgument $FfmpegPath) +
     " " +
     ($quotedFfmpegArgs -join " ")
@@ -84,6 +97,7 @@ Write-Host "  target: $endpoint"
 Write-Host "  transport: $Transport"
 Write-Host "  video: $Source $videoSize@$Framerate via h264_nvenc"
 Write-Host "  audio: Raven Realtek/default render loopback ${AudioChannels}ch ${AudioSampleRate}Hz f32 -> AAC"
+Write-Host "  loopback: $(if (Test-Path $loopbackExe) { $loopbackExe } else { "$captureScript (diagnostic fallback)" })"
 Write-Host "  sync role: Raven Realtek is co-streamer game/program loopback packaged with NVENC; Starfire Realtek owns chirp emission"
 Write-Host "  stdout: $stdoutLog"
 Write-Host "  stderr: $stderrLog"
@@ -95,7 +109,7 @@ if ($DryRun) {
 
 Start-Process `
     -FilePath "cmd.exe" `
-    -ArgumentList @("/d", "/c", $command) `
+    -ArgumentList ("/d /s /c `"$command`"") `
     -WindowStyle Hidden `
     -RedirectStandardOutput $stdoutLog `
     -RedirectStandardError $stderrLog `

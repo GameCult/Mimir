@@ -7,6 +7,7 @@
     <Project Path="src/Mimir.EveDashboard/Mimir.EveDashboard.csproj" />
     <Project Path="src/Mimir.EveSensorReceiver/Mimir.EveSensorReceiver.csproj" />
     <Project Path="src/Mimir.PsMoveProbe/Mimir.PsMoveProbe.csproj" />
+    <Project Path="src/Mimir.WasapiLoopback/Mimir.WasapiLoopback.csproj" />
     <Project Path="src/Mimir.Runtime/Mimir.Runtime.csproj" />
     <Project Path="src/Mimir.BufferSmoke/Mimir.BufferSmoke.csproj" />
   </Folder>
