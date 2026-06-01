@@ -195,6 +195,18 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Native program-output recording/streaming should replace those actuators
   behind the same owner.
 - OBS receives final program surfaces; it does not own synchronization.
+- The first online Verse capture daemon pair exists. `Mimir.EveSensorReceiver`
+  now has a subscriber WebSocket path beside its observation ingest path, and
+  `Mimir.VerseRecorder` writes subscribed observations to
+  `C:\Users\Meta\Videos\Mimir\VerseCaptures\<session>\session.json` plus
+  `observations.jsonl`. `scripts/start-online-verse-daemons.ps1` supervises
+  the local relay, recorder, Nightwing typed Eyes/Move witness, the
+  music-synced Move gesture worker, and a Starfire `Mimir.BufferSmoke`
+  runtime capture host for the MVP Leap/Eyes/Kiyo config. Treat this as the
+  typed observation/witness ledger. The next coherent cut is a
+  `MimirSynchronizationHub` publisher that emits aligned source windows, stem
+  descriptors, sync states, and actuator state into the same Verse surface
+  instead of leaving raw media/stem truth in local process memory only.
 
 ## Current Pressure
 

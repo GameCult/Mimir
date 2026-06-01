@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -14,7 +15,8 @@ internal sealed record EveSensorReceiverOptions(
     int Port,
     string Path,
     string SourceId,
-    string ExpectedType)
+    string ExpectedType,
+    string SubscribePath)
 {
     public static EveSensorReceiverOptions Parse(string[] args)
     {
@@ -22,7 +24,8 @@ internal sealed record EveSensorReceiverOptions(
             ParseInt(args, "--port", 8793),
             ParseString(args, "--path", "/eve/camera"),
             ParseString(args, "--source-id", "eve-camera"),
-            ParseString(args, "--type", "video-frame"));
+            ParseString(args, "--type", "video-frame"),
+            ParseString(args, "--subscribe-path", ParseString(args, "--path", "/eve/camera") + "/subscribe"));
     }
 
     private static string ParseString(IReadOnlyList<string> args, string name, string fallback)
@@ -48,6 +51,8 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
 {
     private readonly TcpListener listener = new(IPAddress.Any, options.Port);
     private readonly CancellationTokenSource stopping = new();
+    private readonly ConcurrentDictionary<int, WebSocketSubscriber> subscribers = new();
+    private int nextSubscriberId;
 
     public async Task RunAsync()
     {
@@ -72,8 +77,18 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
                 options.SourceId,
                 options.ExpectedType,
                 options.Path,
+                options.SubscribePath,
+                Subscribers = subscribers.Count,
             });
             await WriteHttpResponseAsync(stream, "200 OK", "application/json", Encoding.UTF8.GetBytes(health)).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(request.Path, options.SubscribePath, StringComparison.Ordinal)
+            && request.Headers.TryGetValue("Sec-WebSocket-Key", out var subscriberKey))
+        {
+            await WriteWebSocketHandshakeAsync(stream, subscriberKey).ConfigureAwait(false);
+            await SubscribeAsync(stream).ConfigureAwait(false);
             return;
         }
 
@@ -101,6 +116,7 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
                 {
                     Console.WriteLine(normalizedObservation);
                     Console.Out.Flush();
+                    await BroadcastAsync(normalizedObservation).ConfigureAwait(false);
                 }
 
                 continue;
@@ -116,6 +132,71 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
             {
                 Console.WriteLine(normalized);
                 Console.Out.Flush();
+                await BroadcastAsync(normalized).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task SubscribeAsync(NetworkStream stream)
+    {
+        var id = Interlocked.Increment(ref nextSubscriberId);
+        var subscriber = new WebSocketSubscriber(id, stream);
+        subscribers[id] = subscriber;
+        Console.Error.WriteLine($"Eve sensor receiver subscriber {id} connected on {options.SubscribePath}.");
+        try
+        {
+            await subscriber.SendTextAsync(JsonSerializer.Serialize(new
+            {
+                type = "mimir-verse-subscription",
+                status = "connected",
+                options.Path,
+                options.SubscribePath,
+                options.SourceId,
+                options.ExpectedType,
+            })).ConfigureAwait(false);
+
+            while (!stopping.IsCancellationRequested)
+            {
+                var frame = await ReceiveFrameAsync(stream).ConfigureAwait(false);
+                if (frame.Opcode == 0x8)
+                {
+                    await WriteCloseFrameAsync(stream).ConfigureAwait(false);
+                    break;
+                }
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (SocketException)
+        {
+        }
+        finally
+        {
+            subscribers.TryRemove(id, out _);
+            Console.Error.WriteLine($"Eve sensor receiver subscriber {id} disconnected.");
+        }
+    }
+
+    private async Task BroadcastAsync(string normalized)
+    {
+        foreach (var pair in subscribers.ToArray())
+        {
+            try
+            {
+                await pair.Value.SendTextAsync(normalized).ConfigureAwait(false);
+            }
+            catch (IOException)
+            {
+                subscribers.TryRemove(pair.Key, out _);
+            }
+            catch (SocketException)
+            {
+                subscribers.TryRemove(pair.Key, out _);
+            }
+            catch (ObjectDisposedException)
+            {
+                subscribers.TryRemove(pair.Key, out _);
             }
         }
     }
@@ -374,3 +455,46 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
 internal sealed record HttpRequest(string Path, IReadOnlyDictionary<string, string> Headers);
 
 internal sealed record WebSocketFrame(int Opcode, byte[] Payload);
+
+internal sealed class WebSocketSubscriber(int id, NetworkStream stream)
+{
+    private readonly SemaphoreSlim writeLock = new(1, 1);
+
+    public int Id => id;
+
+    public async Task SendTextAsync(string text)
+    {
+        var payload = Encoding.UTF8.GetBytes(text);
+        var header = new List<byte> { 0x81 };
+        if (payload.Length < 126)
+        {
+            header.Add((byte)payload.Length);
+        }
+        else if (payload.Length <= ushort.MaxValue)
+        {
+            header.Add(126);
+            header.Add((byte)(payload.Length >> 8));
+            header.Add((byte)(payload.Length & 0xff));
+        }
+        else
+        {
+            header.Add(127);
+            for (var shift = 56; shift >= 0; shift -= 8)
+            {
+                header.Add((byte)(((ulong)payload.Length >> shift) & 0xff));
+            }
+        }
+
+        await writeLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await stream.WriteAsync(header.ToArray()).ConfigureAwait(false);
+            await stream.WriteAsync(payload).ConfigureAwait(false);
+            await stream.FlushAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
+}

@@ -569,6 +569,20 @@ a named invariant that the native runtime cannot protect yet.
   typed `mimir.move_controller_observation_state`,
   `mimir.camera_feature_track_state`, and `mimir.visual_marker_state` rather
   than becoming a raw-media or camera-placement authority.
+  `Mimir.EveSensorReceiver` is now the first always-on typed observation relay
+  for that split. It accepts Eve/CultMesh-compatible witness observations on
+  `/eve/periwinkle`, normalizes them for the existing text ledger, and also
+  serves a WebSocket subscriber lane on `/eve/periwinkle/subscribe`.
+  `Mimir.VerseRecorder` subscribes to that lane and writes a timestamped
+  `session.json` plus `observations.jsonl` under
+  `C:\Users\Meta\Videos\Mimir\VerseCaptures` by default. The online supervisor
+  `scripts/start-online-verse-daemons.ps1` starts the relay, recorder,
+  Nightwing Eyes/Move witness, music-synced Move gesture worker, and a local
+  Starfire `Mimir.BufferSmoke` runtime capture worker from
+  `config/mimir-runtime.mvp-leap-eyes-kiyo.local.json`. This cut records typed
+  observation evidence and keeps local rolling capture alive; raw camera/audio
+  payloads, aligned source windows, and stem descriptors still need a runtime
+  publisher bridge from `MimirSynchronizationHub` into the same Verse surface.
   Eve now follows the same rule for its own device body:
   `MimirDistributedWitnessConfigurations.EveLocalSensors` and the
   `eve-local-sensors` Perfect Machine profile make Eve responsible for local

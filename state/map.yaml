@@ -308,6 +308,17 @@ invariants:
     Machine profile emit typed Move observation, camera feature-track, and
     visual marker state; raw Eye media from Nightwing is diagnostic only and
     Nightwing does not own camera placement or the canonical clock.
+    `Mimir.EveSensorReceiver` now has the first subscriber lane for this
+    witness stream: `/eve/periwinkle` ingests typed observations and
+    `/eve/periwinkle/subscribe` broadcasts normalized records to live
+    subscribers. `Mimir.VerseRecorder` subscribes and writes a session manifest
+    plus JSONL observation ledger under `C:\Users\Meta\Videos\Mimir\VerseCaptures`.
+    `scripts/start-online-verse-daemons.ps1` supervises relay, recorder,
+    Nightwing Eyes/Move witness publication, music-synced Move gestures, and a
+    local `Mimir.BufferSmoke` runtime capture worker. This owns observation
+    capture, not raw aligned media/stem publication yet; the next owner cut is
+    a `MimirSynchronizationHub` Verse publisher for aligned source windows,
+    sync states, stems, and actuator state.
     Eve follows the same distributed-witness rule for its own body:
     `eve-local-sensor-witness` / `eve-local-sensors` owns Eve camera, Eve mic,
     local flash/chirp decode, feature tracks, visual markers, and local frustum
