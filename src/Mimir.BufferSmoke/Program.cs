@@ -85,6 +85,17 @@ if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-smoke", Str
     return RunTargetedBioacousticProbeSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-live", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunTargetedBioacousticProbeLive(
+        ParseStringOption(args, "--probe", "native/probes/asio_audio_cadence/build/Release/asio_audio_cadence.exe"),
+        ParseStringOption(args, "--output", "artifacts/asio/targeted-bioacoustic-live"),
+        ParseIntOption(args, "--sample-rate", 192_000),
+        ParseDoubleOption(args, "--gain", 1.0),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--reference-channel", 2));
+}
+
 if (args.Any(arg => string.Equals(arg, "--synchronized-buffer-planner-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunSynchronizedBufferPlannerSmoke();
@@ -3421,6 +3432,88 @@ static int RunTargetedBioacousticProbeSmoke()
             : 1;
 }
 
+static int RunTargetedBioacousticProbeLive(
+    string probePath,
+    string outputDirectory,
+    int sampleRate,
+    double gain,
+    int channels,
+    int referenceChannel)
+{
+    var residuals = ScarlettProfessionalMicProbeResiduals();
+    var pathologies = ScarlettProfessionalMicPathologies();
+    var plan = new MimirTargetedBioacousticProbePlanner(new MimirTargetedBioacousticProbeOptions(SampleRate: sampleRate)).Plan(
+        residuals,
+        ["asio-ch0-shotgun", "asio-ch1-cardioid"],
+        pathologies);
+    if (plan.Bands.Count == 0)
+    {
+        Console.Error.WriteLine("targeted bioacoustic live failed: planner emitted no probe bands");
+        return 1;
+    }
+
+    var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+    var runDirectory = Path.Combine(outputDirectory, stamp);
+    Directory.CreateDirectory(runDirectory);
+    var renderPath = Path.Combine(runDirectory, "targeted-probe-f32.raw");
+    var capturePath = Path.Combine(runDirectory, "scarlett-targeted-probe-f32.raw");
+    var samples = RenderTargetedProbePlan(plan);
+    WriteFloat32(renderPath, samples);
+    Console.WriteLine(
+        $"targeted-bioacoustic-live-plan dir={runDirectory} sampleRate={sampleRate} samples={samples.Length} bands={plan.Bands.Count} selected={string.Join(",", plan.Bands.Select(band => $"{band.CenterHz:0}Hz/{band.Reason}/{band.Gain:0.000}"))}");
+
+    var captureSeconds = samples.Length / (double)sampleRate + 0.35;
+    var captureExit = RunAsioProbeCapture(probePath, renderPath, capturePath, sampleRate, captureSeconds, gain);
+    if (captureExit != 0)
+    {
+        Console.Error.WriteLine($"targeted bioacoustic live failed: ASIO probe exited {captureExit}");
+        return captureExit;
+    }
+
+    if (!File.Exists(capturePath))
+    {
+        Console.Error.WriteLine($"targeted bioacoustic live failed: capture file missing {capturePath}");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(capturePath, channels, out var frameCount);
+    if (frameCount == 0 || referenceChannel < 0 || referenceChannel >= channels)
+    {
+        Console.Error.WriteLine($"targeted bioacoustic live failed: invalid capture frames={frameCount} channels={channels} reference={referenceChannel}");
+        return 1;
+    }
+
+    Console.WriteLine($"targeted-bioacoustic-live-capture path={capturePath} frames={frameCount} seconds={frameCount / (double)sampleRate:0.000} reference=asio-ch{referenceChannel}");
+    var failures = 0;
+    foreach (var channel in new[] { 0, 1 })
+    {
+        if (channel >= channels)
+        {
+            failures++;
+            continue;
+        }
+
+        var label = channel == 0 ? "shotgun" : "cardioid";
+        var stats = SignalStats(channelSamples[channel]);
+        var low = BandLimitedStats(channelSamples[channel], sampleRate, 80.0, 1000.0);
+        var high = BandLimitedStats(channelSamples[channel], sampleRate, 8000.0, 24000.0);
+        var tiltDb = 20.0 * Math.Log10(Math.Max(1.0e-9, low.Rms) / Math.Max(1.0e-9, high.Rms));
+        Console.WriteLine(
+            $"targeted-bioacoustic-live-source ch={channel} label={label} rms={stats.Rms:0.000000} peak={stats.Peak:0.000000} lowHighTiltDb={tiltDb:0.000}");
+        foreach (var band in plan.Bands)
+        {
+            var referenceEnergy = ToneEnergy(channelSamples[referenceChannel], sampleRate, band.CenterHz);
+            var candidateEnergy = ToneEnergy(channelSamples[channel], sampleRate, band.CenterHz);
+            var ratioDb = 20.0 * Math.Log10(Math.Max(1.0e-12, candidateEnergy) / Math.Max(1.0e-12, referenceEnergy));
+            var bandConfidence = candidateEnergy / (candidateEnergy + Math.Max(1.0e-9, stats.Rms * 0.20));
+            Console.WriteLine(
+                $"targeted-bioacoustic-live-band ch={channel} label={label} centerHz={band.CenterHz:0.0} reason={band.Reason} refEnergy={referenceEnergy:0.000000} micEnergy={candidateEnergy:0.000000} ratioDb={ratioDb:0.000} confidence={bandConfidence:0.000}");
+        }
+    }
+
+    return failures == 0 ? 0 : 1;
+}
+
 static int RunSynchronizedBufferPlannerSmoke()
 {
     const long t0 = 1_000_000_000;
@@ -3696,6 +3789,113 @@ static MimirCalibratedAudioCompositeSource NewCompositeSource(
         10,
         10);
     return new MimirCalibratedAudioCompositeSource(sourceId, 48_000, samples, state, responses, noiseRms);
+}
+
+static MimirAudioCalibrationBandResidual[] ScarlettProfessionalMicProbeResiduals() =>
+[
+    new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 240.0, 0.91, 0.4, ResponseEnergy: 0.62),
+    new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 240.0, 0.87, 0.6, ResponseEnergy: 0.58),
+    new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 890.0, 0.52, 4.8, DelayResidualMicroseconds: 11.0, ResponseEnergy: 0.30),
+    new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 910.0, 0.47, 5.2, DelayResidualMicroseconds: 14.0, ResponseEnergy: 0.27),
+    new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 3_600.0, 0.44, -6.4, PhaseResidualRadians: 1.4, ResponseEnergy: 0.11),
+    new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 3_690.0, 0.41, -5.8, PhaseResidualRadians: 1.2, ResponseEnergy: 0.09),
+    new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 9_800.0, 0.28, -9.5, PhaseResidualRadians: 2.0, ResponseEnergy: 0.035),
+    new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 9_950.0, 0.22, -10.2, PhaseResidualRadians: 1.8, ResponseEnergy: 0.030),
+    new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 18_500.0, 0.03, -18.0, DelayResidualMicroseconds: 34.0, PhaseResidualRadians: 2.7, ResponseEnergy: 0.0),
+    new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 18_700.0, 0.02, -16.0, DelayResidualMicroseconds: 28.0, PhaseResidualRadians: 2.4, ResponseEnergy: 0.0),
+];
+
+static MimirAudioCalibrationSourcePathology[] ScarlettProfessionalMicPathologies() =>
+[
+    new MimirAudioCalibrationSourcePathology(
+        "asio-ch0-shotgun",
+        NoiseFloorRms: 0.055,
+        LowHighTiltDb: 17.0,
+        HighBandConfidenceBias: 0.35),
+    new MimirAudioCalibrationSourcePathology(
+        "asio-ch1-cardioid",
+        NoiseFloorRms: 0.018,
+        LowHighTiltDb: 4.0),
+];
+
+static float[] RenderTargetedProbePlan(MimirTargetedBioacousticProbePlan plan)
+{
+    const double preRollSeconds = 0.08;
+    const double chirpSeconds = 0.090;
+    const double gapSeconds = 0.035;
+    var totalSeconds = preRollSeconds + plan.Bands.Count * (chirpSeconds + gapSeconds) + 0.12;
+    var samples = new float[Math.Max(1, (int)Math.Round(totalSeconds * plan.SampleRate))];
+    var cursorSeconds = preRollSeconds;
+    foreach (var band in plan.Bands)
+    {
+        AddTargetedProbeChirp(samples, plan.SampleRate, cursorSeconds, chirpSeconds, band.StartHz, band.EndHz, band.Gain);
+        cursorSeconds += chirpSeconds + gapSeconds;
+    }
+
+    return samples;
+}
+
+static void AddTargetedProbeChirp(
+    float[] samples,
+    int sampleRate,
+    double startSeconds,
+    double durationSeconds,
+    double startHz,
+    double endHz,
+    double gain)
+{
+    var start = Math.Max(0, (int)Math.Round(startSeconds * sampleRate));
+    var count = Math.Max(1, (int)Math.Round(durationSeconds * sampleRate));
+    var end = Math.Min(samples.Length, start + count);
+    var phase = 0.0;
+    var previousHz = startHz;
+    for (var index = start; index < end; index++)
+    {
+        var t = (index - start) / (double)Math.Max(1, count - 1);
+        var curve = t * t * (3.0 - 2.0 * t);
+        var hz = startHz + (endHz - startHz) * curve;
+        phase += Math.Tau * (previousHz + hz) * 0.5 / sampleRate;
+        previousHz = hz;
+        var envelope = Math.Sin(Math.PI * t);
+        var shaped = Math.Sin(phase) + 0.22 * Math.Sin(phase * 2.0 + 0.31) + 0.08 * Math.Sin(phase * 3.0 + 0.77);
+        samples[index] += (float)(gain * envelope * shaped);
+    }
+}
+
+static void WriteFloat32(string outputPath, float[] samples)
+{
+    var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+    if (!string.IsNullOrWhiteSpace(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+
+    var bytes = new byte[samples.Length * sizeof(float)];
+    Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
+    File.WriteAllBytes(outputPath, bytes);
+}
+
+static double ToneEnergy(ReadOnlySpan<float> samples, int sampleRate, double centerHz)
+{
+    if (samples.Length == 0)
+    {
+        return 0.0;
+    }
+
+    var omega = Math.Tau * centerHz / sampleRate;
+    var sine = 0.0;
+    var cosine = 0.0;
+    var step = Math.Max(1, samples.Length / 262_144);
+    var count = 0;
+    for (var index = 0; index < samples.Length; index += step)
+    {
+        var phase = omega * index;
+        sine += samples[index] * Math.Sin(phase);
+        cosine += samples[index] * Math.Cos(phase);
+        count++;
+    }
+
+    return Math.Sqrt(sine * sine + cosine * cosine) * 2.0 / Math.Max(1, count);
 }
 
 static float[] RenderCalibrationToneStack(

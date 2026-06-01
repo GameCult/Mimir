@@ -656,6 +656,23 @@ accepted_design:
     residual. Use the two good mics first; every connected mic can become room
     field evidence later, but it should not dilute the initial direct-path
     calibration loop.
+    The first live targeted probe ran through Focusrite ASIO at 192 kHz. Gain
+    1.0 artifact `artifacts/asio/targeted-bioacoustic-live/20260601-030836`
+    measured shotgun low/high tilt 20.199 dB and cardioid 15.082 dB. Gain 2.0
+    artifact `artifacts/asio/targeted-bioacoustic-live/20260601-030857`
+    doubled loopback energy but did not make 18.6 kHz usable in the physical
+    mics: shotgun stayed -51.475 dB vs loopback and cardioid -56.585 dB. 910 Hz
+    was the strongest physical probe band, with shotgun at -21.994 dB. Current
+    high-band acoustic path is therefore weak or absent until speaker/mic
+    placement, output device, or probe shape changes.
+    Louder follow-ups kept the signal honest: gain 4 artifact
+    `artifacts/asio/targeted-bioacoustic-live/20260601-031030` still did not
+    clip, and gain 8 artifact
+    `artifacts/asio/targeted-bioacoustic-live/20260601-031051` reached only
+    shotgun peak 0.140715 and cardioid peak 0.027774. Even there, 18.6 kHz
+    stayed unusable at shotgun -54.910 dB and cardioid -63.258 dB relative to
+    loopback. The current physical path should bias usable low/mid anchors
+    while treating ultrasonic/high-band probes as failed-path evidence.
     A fresh live Scarlett proof is preserved at
     `calibration/bioacoustic/complex-contour-live-20260525-063229.md`:
     Focusrite ASIO playback/capture measured Loopback 1 -> Loopback 2 at

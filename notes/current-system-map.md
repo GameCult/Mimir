@@ -319,6 +319,19 @@ then about 9.9 kHz weak response, 3.6 kHz phase instability, and 910 Hz
 magnitude residual. This is the intended first physical strategy: improve
 shotgun/cardioid confidence at 192 kHz before asking every connected mic to
 help solve the room field.
+The first live run preserves two artifacts:
+`artifacts/asio/targeted-bioacoustic-live/20260601-030836` at playback gain
+1.0 and `artifacts/asio/targeted-bioacoustic-live/20260601-030857` at gain
+2.0. Loopback energy scaled, but 18.6 kHz stayed nearly absent in the physical
+mics; the second pass measured shotgun -51.475 dB and cardioid -56.585 dB
+relative to loopback at that band. The 910 Hz probe was strongest physically,
+especially shotgun at -21.994 dB relative to loopback. Current high-band
+probing should be treated as failed path evidence, not a calibration win.
+Louder follow-ups at gain 4 and gain 8 stayed below clipping; gain 8 reached
+shotgun peak 0.140715 and cardioid peak 0.027774. Even then, 18.6 kHz remained
+unusable at shotgun -54.910 dB and cardioid -63.258 dB relative to loopback.
+Bias the next probe language toward usable low/mid anchors unless the speaker,
+mic placement, or output path changes enough to make high-band evidence real.
 That real-world proof now has a first receipt:
 `calibration/bioacoustic/complex-contour-live-20260525-063229.md`. A freshly
 rendered canary-packet witness was played through Focusrite ASIO and captured
