@@ -26,11 +26,6 @@ from pathlib import Path
 
 import numpy as np
 
-try:
-    from nightwing_psmove_music_pulse import AsioOnsetReader
-except Exception:  # pragma: no cover - optional live hardware path
-    AsioOnsetReader = None  # type: ignore[assignment]
-
 PITCH_NAMES = ("C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
 MAJOR_KEY_PROFILE = np.asarray([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88], dtype=np.float32)
 MINOR_KEY_PROFILE = np.asarray([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17], dtype=np.float32)
@@ -211,7 +206,7 @@ class OnlineAnalyzer:
         dt = max(0.0, now - self.last_t)
         self.last_t = now
         self.beat_phase = (self.beat_phase + dt * self.bpm / 60.0) % 1.0
-        f0, color = self._estimate_fundamental_and_color(mag)
+        f0, color, spectral_hue, spectral_concentration = self._estimate_fundamental_and_color(mag)
         chroma, key_name, key_mode, key_confidence, chord_name, chord_confidence, chord_root = self._estimate_chroma_key_chord(mag)
         return {
             "flux": flux,
@@ -227,6 +222,8 @@ class OnlineAnalyzer:
             "beat_phase": self.beat_phase,
             "fundamental_hz": f0,
             "color_balance": color,
+            "spectral_hue": spectral_hue,
+            "spectral_concentration": spectral_concentration,
             "chroma": tuple(float(value) for value in chroma),
             "key_name": key_name,
             "key_mode": key_mode,
@@ -265,7 +262,7 @@ class OnlineAnalyzer:
         self.bpm = 0.88 * self.bpm + 0.12 * best_bpm
         self.bpm_confidence = max(0.0, min(1.0, best_score))
 
-    def _estimate_fundamental_and_color(self, mag: np.ndarray) -> tuple[float, tuple[float, float, float]]:
+    def _estimate_fundamental_and_color(self, mag: np.ndarray) -> tuple[float, tuple[float, float, float], float, float]:
         freqs = np.fft.rfftfreq(self.fft_size, 1.0 / self.rate)
         lo = max(1, int(np.searchsorted(freqs, self.args.fundamental_min)))
         hi = min(len(freqs) - 1, int(np.searchsorted(freqs, self.args.fundamental_max)))
@@ -284,18 +281,27 @@ class OnlineAnalyzer:
                 best_score = score
                 best_f0 = float(f0)
         bands = np.zeros(3, dtype=np.float32)
+        hue_x = 0.0
+        hue_y = 0.0
+        hue_weight = 0.0
         for f, m in zip(freqs[2:], mag[2:]):
             if f <= 0:
                 continue
             octave = (math.log2(max(f, 1e-6) / max(best_f0, 1e-6)) % 1.0)
-            bands[int(octave * 3.0) % 3] += float(m)
+            energy = float(m)
+            bands[int(octave * 3.0) % 3] += energy
+            hue_x += math.cos(math.tau * octave) * energy
+            hue_y += math.sin(math.tau * octave) * energy
+            hue_weight += energy
         total = float(np.sum(bands))
         if total <= 1e-6:
-            return best_f0, (0.25, 0.20, 0.55)
+            return best_f0, (0.25, 0.20, 0.55), 0.66, 0.0
+        spectral_hue = (math.atan2(hue_y, hue_x) / math.tau) % 1.0 if hue_weight > 1e-6 else 0.66
+        spectral_concentration = min(1.0, math.sqrt(hue_x * hue_x + hue_y * hue_y) / max(1e-6, hue_weight))
         bands /= total
         bands = np.power(np.maximum(bands, 0.0), self.args.color_contrast)
         bands /= max(1e-6, float(np.max(bands)))
-        return best_f0, (float(bands[0]), float(bands[1]), float(bands[2]))
+        return best_f0, (float(bands[0]), float(bands[1]), float(bands[2])), float(spectral_hue), float(spectral_concentration)
 
     def _estimate_chroma_key_chord(self, mag: np.ndarray) -> tuple[np.ndarray, str, str, float, str, float, int]:
         freqs = np.fft.rfftfreq(self.fft_size, 1.0 / self.rate)
@@ -598,28 +604,67 @@ class ScoreGestureScheduler:
         self.args = args
         self.envelopes = [0.0 for _ in range(move_count)]
         self.last_slots = [-1 for _ in range(move_count)]
+        self.last_score_slot = -1
+        self.score_slot_counter = 0
+        self.pending_strikes: list[dict[str, object]] = []
+        self.voice_contours = [
+            {
+                "active": False,
+                "previous_note": 0.0,
+                "target_note": 0.0,
+                "current_note": 0.0,
+                "glide": 1.0,
+                "vibrato": 0.0,
+                "harmonic": 1.0,
+                "intensity": 0.0,
+            }
+            for _ in range(move_count)
+        ]
+        self.vibrato_phases = [0.0 for _ in range(move_count)]
 
     def update(self, state: dict[str, object]) -> tuple[float, ...]:
+        self.pending_strikes = []
         beat = float(state.get("beat_phase", 0.0))
         slot_count = max(1, int(self.args.score_subdivisions))
         slot = int(math.floor((beat % 1.0) * slot_count))
+        if slot != self.last_score_slot:
+            self.last_score_slot = slot
+            self.score_slot_counter += 1
+        self._advance_voice_contours()
         loudness_rank = float(state.get("loudness_percentile", 0.0))
         loudness_gate = float(state.get("loudness_gate", 0.0))
         hit = float(state.get("hit", 0.0))
         confidence = float(state.get("bpm_confidence", 0.0))
-        can_play = (
+        key_confidence = float(state.get("key_confidence", 0.0))
+        chord_confidence = float(state.get("chord_confidence", 0.0))
+        chord_root = int(state.get("chord_root", 0))
+        key_mode = str(state.get("key_mode", "major"))
+        flux_rank = float(state.get("percentile", 0.0))
+        onset_intensity = max(flux_rank ** self.args.syrinx_onset_exponent, hit, loudness_gate * self.args.score_loudness_weight)
+        score_lock = min(1.0, confidence * 0.45 + key_confidence * 0.35 + chord_confidence * 0.20)
+        loudness_can_play = (
             loudness_rank >= self.args.score_loudness_threshold
             and loudness_gate >= self.args.score_min_loudness_gate
-            and confidence >= self.args.score_min_tempo_confidence
         )
+        onset_can_play = (
+            flux_rank >= self.args.score_min_flux_percentile
+            or onset_intensity >= self.args.score_min_onset_intensity
+        )
+        can_play = score_lock >= self.args.score_min_music_confidence and (loudness_can_play or onset_can_play)
         loud_span = max(1e-6, 1.0 - self.args.score_loudness_threshold)
         loud_accent = max(0.0, min(1.0, (loudness_rank - self.args.score_loudness_threshold) / loud_span))
-        rise_accent = max(loud_accent, loudness_gate)
-        onset_accent = 0.5 + 0.5 * min(1.0, hit + loudness_gate * self.args.score_loudness_weight)
+        rise_accent = max(loud_accent, loudness_gate, onset_intensity * (0.45 + 0.55 * score_lock))
+        onset_accent = 0.35 + 0.65 * min(1.0, hit + onset_intensity * score_lock)
         ensemble_accent = (
             can_play
-            and loudness_rank >= self.args.score_ensemble_loudness_threshold
-            and loudness_gate >= self.args.score_ensemble_min_loudness_gate
+            and score_lock >= self.args.score_ensemble_min_music_confidence
+            and (
+                (
+                    loudness_rank >= self.args.score_ensemble_loudness_threshold
+                    and loudness_gate >= self.args.score_ensemble_min_loudness_gate
+                )
+                or onset_intensity >= self.args.score_ensemble_min_onset_intensity
+            )
         )
         for index in range(len(self.envelopes)):
             self.envelopes[index] *= self.args.score_release
@@ -630,6 +675,8 @@ class ScoreGestureScheduler:
                 continue
             if not ensemble_accent and not self._slot_belongs_to_instrument(slot, index):
                 continue
+            if not ensemble_accent and not self._improv_allows(slot, index, score_lock, onset_intensity):
+                continue
             accent = (rise_accent ** self.args.score_loudness_exponent) * onset_accent
             if ensemble_accent:
                 accent = max(accent, self.args.score_ensemble_min_accent)
@@ -637,6 +684,7 @@ class ScoreGestureScheduler:
                 continue
             lane_scale = 1.0 if ensemble_accent else (0.72 + 0.28 * debruijn_accent(beat, index, self.args))
             self.envelopes[index] = max(self.envelopes[index], min(self.args.score_max_envelope, accent * lane_scale))
+            self._strike_voice(index, chord_root, key_mode, score_lock, onset_intensity, ensemble_accent)
         return tuple(float(value) for value in self.envelopes)
 
     def _slot_belongs_to_instrument(self, slot: int, move_index: int) -> bool:
@@ -647,8 +695,76 @@ class ScoreGestureScheduler:
         spacing = max(1, int(self.args.score_instrument_spacing))
         return (slot + move_index) % spacing == 0
 
+    def _improv_allows(self, slot: int, move_index: int, score_lock: float, onset_intensity: float) -> bool:
+        if slot == 0 and onset_intensity >= self.args.score_downbeat_min_onset:
+            return True
+        move_count = max(1, len(self.envelopes))
+        if onset_intensity >= self.args.score_call_response_min_onset:
+            return (self.score_slot_counter + move_index) % move_count == 0
+        density = self.args.score_min_improv_density + (self.args.score_max_improv_density - self.args.score_min_improv_density) * score_lock
+        density *= 0.45 + 0.55 * max(0.0, min(1.0, onset_intensity))
+        cursor = math.sin((slot + 1) * 12.9898 + (move_index + 1) * 78.233) * 43758.5453
+        return (cursor - math.floor(cursor)) < max(0.0, min(1.0, density))
+
+    def _advance_voice_contours(self) -> None:
+        glide_step = max(0.001, self.args.voice_glide_rate / max(1.0, self.args.fps))
+        for index, contour in enumerate(self.voice_contours):
+            contour["glide"] = min(1.0, float(contour["glide"]) + glide_step)
+            contour["intensity"] = max(0.0, float(contour["intensity"]) * self.args.score_release)
+            self.vibrato_phases[index] = (self.vibrato_phases[index] + self.args.voice_vibrato_hz / max(1.0, self.args.fps)) % 1.0
+            glide = smoothstep(float(contour["glide"]))
+            previous_note = float(contour["previous_note"])
+            target_note = float(contour["target_note"])
+            vibrato = math.sin(2.0 * math.pi * self.vibrato_phases[index])
+            contour["vibrato"] = vibrato
+            contour["current_note"] = previous_note + (target_note - previous_note) * glide + (self.args.voice_vibrato_cents / 100.0) * vibrato
+            contour["active"] = bool(float(contour["intensity"]) > 0.001)
+
+    def _strike_voice(
+        self,
+        move_index: int,
+        chord_root: int,
+        key_mode: str,
+        score_lock: float,
+        onset_intensity: float,
+        ensemble_accent: bool,
+    ) -> None:
+        major_degrees = (0, 2, 4, 7, 9, 11, 14)
+        minor_degrees = (0, 3, 5, 7, 10, 12, 15)
+        degrees = minor_degrees if key_mode == "minor" else major_degrees
+        phrase_step = self.score_slot_counter + move_index * 2
+        degree = degrees[phrase_step % len(degrees)]
+        octave = 12 * ((phrase_step // len(degrees)) % 2)
+        target = float(chord_root + degree + octave)
+        contour = self.voice_contours[move_index]
+        contour["previous_note"] = float(contour["current_note"])
+        contour["target_note"] = target
+        contour["glide"] = 0.0
+        contour["harmonic"] = self.args.harmonic_base ** (move_index / max(1, len(self.envelopes))) * (2.0 if ensemble_accent else 1.0)
+        contour["intensity"] = max(float(contour["intensity"]), min(1.0, onset_intensity * (0.55 + 0.45 * score_lock)))
+        contour["active"] = True
+        self.pending_strikes.append(
+            {
+                "kind": "mimir.syrinx_move_witness_event.v1",
+                "move_index": move_index,
+                "score_slot": self.score_slot_counter,
+                "target_note": target,
+                "previous_note": contour["previous_note"],
+                "harmonic": contour["harmonic"],
+                "intensity": contour["intensity"],
+                "score_lock": score_lock,
+                "onset_intensity": onset_intensity,
+                "ensemble": ensemble_accent,
+            }
+        )
+
 
 DEBRUIJN_2_3 = "00010111"
+
+
+def smoothstep(value: float) -> float:
+    x = max(0.0, min(1.0, value))
+    return x * x * (3.0 - 2.0 * x)
 
 
 def debruijn_accent(frame_phase: float, move_index: int, args: argparse.Namespace) -> float:
@@ -673,13 +789,35 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
     base_h, base_s, _ = rgb_to_hsv01(move.base_rgb)
     spectral = state["color_balance"]
     assert isinstance(spectral, tuple)
+    spectral_hue = float(state.get("spectral_hue", base_h))
+    spectral_concentration = float(state.get("spectral_concentration", 0.0))
+    voice_contours = state.get("score_voice_contours", ())
+    voice = voice_contours[move_index] if isinstance(voice_contours, list) and move_index < len(voice_contours) else {}
     harmonic = args.harmonic_base ** (move_index / max(1, move_count))
     micro = 2.0 ** ((move_index - (move_count - 1) * 0.5) * args.microtonal_cents / 1200.0)
     phase = (beat * harmonic * micro + move_index / max(1, move_count)) % 1.0
     poly = debruijn_accent(beat, move_index, args)
     gesture = poly * (0.42 + 0.58 * (0.5 + 0.5 * math.sin(2.0 * math.pi * phase)) ** 2.1)
-    accent = min(1.0, score_envelope * max(0.35, loudness_gate) * (0.32 + level * gesture + hit * (0.22 + 0.08 * poly)))
-    hue = (base_h + args.hue_bend * math.sin(2.0 * math.pi * phase) + math.log2(harmonic * micro) * 0.0833) % 1.0
+    score_lock = min(
+        1.0,
+        float(state.get("bpm_confidence", 0.0)) * 0.45
+        + float(state.get("key_confidence", 0.0)) * 0.35
+        + float(state.get("chord_confidence", 0.0)) * 0.20,
+    )
+    onset_intensity = max(float(state.get("percentile", 0.0)) ** args.syrinx_onset_exponent, hit, loudness_gate * 0.72) * (0.35 + 0.65 * score_lock)
+    accent = min(1.0, score_envelope * max(0.24, onset_intensity) * (0.42 + level * gesture + hit * (0.22 + 0.08 * poly)))
+    lane_offset = (move_index - (move_count - 1) * 0.5) * args.syrinx_lane_hue_spread
+    hue = (
+        spectral_hue
+        + lane_offset
+        + args.hue_bend * spectral_concentration * math.sin(2.0 * math.pi * phase)
+        + math.log2(harmonic * micro) * 0.0417
+    ) % 1.0
+    if isinstance(voice, dict) and voice.get("active"):
+        current_note = float(voice.get("current_note", 0.0))
+        note_hue = (current_note % 12.0) / 12.0
+        hue = mix_hue(hue, note_hue, args.voice_note_hue_mix)
+        hue = (hue + args.voice_vibrato_hue_width * float(voice.get("vibrato", 0.0))) % 1.0
     chord_confidence = float(state.get("chord_confidence", 0.0))
     chord_root = int(state.get("chord_root", 0))
     if chord_confidence > args.chord_hue_threshold:
@@ -688,17 +826,23 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
         pitch_hue = pitch_class / 12.0
         mix = min(args.chord_hue_mix, chord_confidence * args.chord_hue_mix)
         hue = mix_hue(hue, pitch_hue, mix)
-    sat = min(1.0, max(0.72, base_s) + 0.22 * loudness_gate + 0.08 * hit)
-    if loudness_gate <= 0.0:
+    voice_intensity = float(voice.get("intensity", 0.0)) if isinstance(voice, dict) else 0.0
+    sat = min(1.0, max(0.78, base_s) + 0.16 * spectral_concentration + 0.10 * onset_intensity + 0.08 * voice_intensity)
+    if onset_intensity <= 0.0:
         val = 0.0
     else:
         val = min(args.max_brightness, max(args.quiet_brightness, accent ** args.brightness_exponent))
-        if loudness_percentile < args.loudness_threshold:
+        if loudness_percentile < args.loudness_threshold and onset_intensity < args.score_min_onset_intensity:
             val = min(val, args.quiet_brightness)
     rr, gg, bb = colorsys.hsv_to_rgb(hue, sat, val)
     r = rr * (0.45 + 0.55 * float(spectral[0]))
     g = gg * (0.45 + 0.55 * float(spectral[1]))
     b = bb * (0.45 + 0.55 * float(spectral[2]))
+    if isinstance(voice, dict) and voice.get("active"):
+        harmonic_content = min(1.0, abs(math.sin(float(voice.get("harmonic", 1.0)) * math.pi * phase)))
+        r *= 0.86 + 0.14 * harmonic_content
+        g *= 0.90 + 0.10 * (1.0 - harmonic_content)
+        b *= 0.84 + 0.16 * harmonic_content
     white = score_envelope * loudness_gate * max(0.0, hit - 0.97) / 0.03
     return (
         int(min(255, 255 * r + 18 * white)),
@@ -710,6 +854,87 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
 def mix_hue(a: float, b: float, amount: float) -> float:
     delta = ((b - a + 0.5) % 1.0) - 0.5
     return (a + delta * max(0.0, min(1.0, amount))) % 1.0
+
+
+class BioacousticRealtekTrigger:
+    def __init__(self, args: argparse.Namespace, out_dir: Path) -> None:
+        self.args = args
+        self.out_dir = out_dir
+        self.render_path = out_dir / "bioacoustic-syrinx-f32.raw"
+        self.processes: deque[subprocess.Popen[bytes]] = deque()
+        self.last_trigger = 0.0
+        self.stdout = (out_dir / "bioacoustic-realtk.out.log").open("ab")
+        self.stderr = (out_dir / "bioacoustic-realtk.err.log").open("ab")
+
+    @classmethod
+    def create(cls, args: argparse.Namespace, out_dir: Path) -> "BioacousticRealtekTrigger | None":
+        if not args.emit_bioacoustic_realtk:
+            return None
+        trigger = cls(args, out_dir)
+        render_cmd = [
+            "dotnet",
+            "run",
+            "--project",
+            str(Path(__file__).resolve().parents[1] / "src" / "Mimir.BufferSmoke" / "Mimir.BufferSmoke.csproj"),
+            "--",
+            "--render-contestant-f32",
+            "--output",
+            str(trigger.render_path),
+            "--sample-rate",
+            str(args.sample_rate),
+            "--seconds",
+            str(args.bioacoustic_loop_seconds),
+            "--song",
+            args.bioacoustic_song,
+        ]
+        render = subprocess.run(render_cmd, cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
+        (out_dir / "bioacoustic-render.out.log").write_text(render.stdout, encoding="utf-8")
+        (out_dir / "bioacoustic-render.err.log").write_text(render.stderr, encoding="utf-8")
+        if render.returncode != 0 or not trigger.render_path.exists():
+            trigger.close()
+            print(f"bioacoustic Realtek trigger disabled: render failed code={render.returncode}", file=sys.stderr, flush=True)
+            return None
+        return trigger
+
+    def trigger(self, event: dict[str, object], now: float) -> bool:
+        self._reap()
+        if now - self.last_trigger < self.args.bioacoustic_min_interval_seconds:
+            return False
+        self.last_trigger = now
+        gain = float(self.args.bioacoustic_gain) * max(0.12, min(1.0, float(event.get("intensity", 0.0))))
+        cmd = [
+            str(Path(self.args.wasapi).resolve()),
+            "--play-f32-mono",
+            "--input",
+            str(self.render_path.resolve()),
+            "--device",
+            self.args.bioacoustic_device,
+            "--sample-rate",
+            str(int(self.args.sample_rate)),
+            "--gain",
+            f"{gain:.4f}",
+        ]
+        proc = subprocess.Popen(cmd, cwd=Path(__file__).resolve().parents[1], stdout=self.stdout, stderr=self.stderr)
+        self.processes.append(proc)
+        while len(self.processes) > self.args.bioacoustic_max_active_calls:
+            old = self.processes.popleft()
+            if old.poll() is None:
+                old.terminate()
+        return True
+
+    def _reap(self) -> None:
+        self.processes = deque(proc for proc in self.processes if proc.poll() is None)
+
+    def close(self) -> None:
+        for proc in list(self.processes):
+            if proc.poll() is None:
+                proc.terminate()
+        time.sleep(0.05)
+        for proc in list(self.processes):
+            if proc.poll() is None:
+                proc.kill()
+        self.stdout.close()
+        self.stderr.close()
 
 
 def main() -> int:
@@ -747,10 +972,19 @@ def main() -> int:
     parser.add_argument("--score-min-loudness-gate", type=float, default=0.08)
     parser.add_argument("--score-loudness-exponent", type=float, default=1.8)
     parser.add_argument("--score-loudness-weight", type=float, default=0.28)
+    parser.add_argument("--score-min-flux-percentile", type=float, default=0.92)
+    parser.add_argument("--score-min-onset-intensity", type=float, default=0.42)
+    parser.add_argument("--score-min-music-confidence", type=float, default=0.30)
+    parser.add_argument("--score-min-improv-density", type=float, default=0.04)
+    parser.add_argument("--score-max-improv-density", type=float, default=0.22)
+    parser.add_argument("--score-downbeat-min-onset", type=float, default=0.62)
+    parser.add_argument("--score-call-response-min-onset", type=float, default=0.48)
     parser.add_argument("--score-min-accent", type=float, default=0.025)
     parser.add_argument("--score-max-envelope", type=float, default=0.78)
     parser.add_argument("--score-ensemble-loudness-threshold", type=float, default=0.96)
     parser.add_argument("--score-ensemble-min-loudness-gate", type=float, default=0.25)
+    parser.add_argument("--score-ensemble-min-onset-intensity", type=float, default=0.86)
+    parser.add_argument("--score-ensemble-min-music-confidence", type=float, default=0.55)
     parser.add_argument("--score-ensemble-min-accent", type=float, default=0.30)
     parser.add_argument("--score-min-tempo-confidence", type=float, default=0.0)
     parser.add_argument("--onset-decay", type=float, default=0.18)
@@ -782,12 +1016,27 @@ def main() -> int:
     parser.add_argument("--harmonic-base", type=float, default=1.5)
     parser.add_argument("--microtonal-cents", type=float, default=17.0)
     parser.add_argument("--hue-bend", type=float, default=0.075)
+    parser.add_argument("--syrinx-onset-exponent", type=float, default=1.55)
+    parser.add_argument("--syrinx-lane-hue-spread", type=float, default=0.055)
+    parser.add_argument("--voice-glide-rate", type=float, default=3.4)
+    parser.add_argument("--voice-vibrato-hz", type=float, default=5.2)
+    parser.add_argument("--voice-vibrato-cents", type=float, default=18.0)
+    parser.add_argument("--voice-note-hue-mix", type=float, default=0.46)
+    parser.add_argument("--voice-vibrato-hue-width", type=float, default=0.012)
+    parser.add_argument("--emit-bioacoustic-realtk", action="store_true", help="Loop a rendered Mimir bioacoustic/Syrinx call on the Realtek output so the Well decoders can place it on the timeline.")
+    parser.add_argument("--bioacoustic-song", default="aquasynth-formant-weaver")
+    parser.add_argument("--bioacoustic-device", default="Realtek")
+    parser.add_argument("--bioacoustic-gain", type=float, default=1.05)
+    parser.add_argument("--bioacoustic-loop-seconds", type=float, default=0.42)
+    parser.add_argument("--bioacoustic-min-interval-seconds", type=float, default=0.18)
+    parser.add_argument("--bioacoustic-max-active-calls", type=int, default=3)
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     moves = [parse_move(value) for value in args.move]
     (out_dir / "moves.json").write_text(json.dumps([move.__dict__ for move in moves], indent=2), encoding="utf-8")
+    bioacoustic_trigger = BioacousticRealtekTrigger.create(args, out_dir)
 
     remote_b64 = base64.b64encode(REMOTE_MULTI_RECEIVER.encode("utf-8")).decode("ascii")
     move_specs = ",".join(f"{move.name}={move.hidraw}" for move in moves)
@@ -864,11 +1113,22 @@ def main() -> int:
                         asio_reader = None
                 state = fuse_music_sources(state, auxiliary_states)
                 state["score_gesture_envelopes"] = score_scheduler.update(state)
+                state["score_voice_contours"] = score_scheduler.voice_contours
+                score_voice_events = [dict(event) for event in score_scheduler.pending_strikes]
+                emitted_audio_events = []
+                if bioacoustic_trigger is not None:
+                    for event in score_voice_events:
+                        if bioacoustic_trigger.trigger(event, now):
+                            emitted_audio_events.append(event)
                 rgbs = {}
                 for index, move in enumerate(moves):
                     rgb = move_rgb(move, index, len(moves), state, args)
                     rgbs[move.name] = rgb
                     ssh.stdin.write(f"{move.name} {rgb[0]} {rgb[1]} {rgb[2]}\n".encode("ascii"))
+                for event in score_voice_events:
+                    move_index = int(event["move_index"])
+                    if 0 <= move_index < len(moves):
+                        event["move_name"] = moves[move_index].name
                 ssh.stdin.flush()
                 frames += 1
                 record = {
@@ -881,6 +1141,9 @@ def main() -> int:
                     "chroma": list(state["chroma"]),  # type: ignore[index]
                     "music_sources": state["music_sources"],
                     "score_gesture_envelopes": list(state["score_gesture_envelopes"]),  # type: ignore[index]
+                    "score_voice_contours": state["score_voice_contours"],
+                    "score_voice_events": score_voice_events,
+                    "emitted_audio_event_count": len(emitted_audio_events),
                     "moves": {name: list(rgb) for name, rgb in rgbs.items()},
                 }
                 trace.write(json.dumps(record, sort_keys=True) + "\n")
@@ -905,6 +1168,8 @@ def main() -> int:
         for proc in (wasapi, ssh):
             if proc.poll() is None:
                 proc.terminate()
+        if bioacoustic_trigger is not None:
+            bioacoustic_trigger.close()
         time.sleep(0.2)
         for proc in (wasapi, ssh):
             if proc.poll() is None:

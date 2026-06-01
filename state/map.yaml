@@ -251,10 +251,21 @@ invariants:
     `starfire-loopback-l`, `starfire-loopback-r-or-synth`). Each source emits
     tempo confidence, onset/level/loudness strength, f0, chroma, key, and chord
     evidence into `music_sources`; the fused score chooses shared BPM/f0
-    without erasing source-level evidence. AquaSynth Syrinx voices are the
-    correct Realtek audio-signal target, and MIDI keyboard notes should later
-    enter as an explicit typed score source, but today AquaSynth is observed
-    through whatever audio channel carries its rendered voice.
+    without erasing source-level evidence. The Move/Syrinx witness invariant is
+    that a Move pulse and a Realtek Syrinx call are two channels of one score
+    gesture, not independent performers. `ScoreGestureScheduler` owns sparse
+    score strikes, note targets, glide, vibrato, harmonic lane, and intensity;
+    `BioacousticRealtekTrigger` renders the AquaSynth Syrinx call once and
+    fires a short Realtek playback only when a score strike is accepted. The
+    JSONL trace writes `score_voice_contours`, `score_voice_events`, and
+    `emitted_audio_event_count` so Mimir Well/offline timeline kernels can
+    correlate the intended audiovisual witness against every camera/mic stream.
+    Live run `artifacts/runtime/move-syrinx-witness-20260601-224705` rendered a
+    0.42s Syrinx call and, in a 1764-frame poll, produced 79 visual voice
+    events, 69 emitted Realtek calls, and participation from all three Moves.
+    MIDI keyboard notes should later enter as an explicit typed score source,
+    but today AquaSynth is observed through whatever audio channel carries its
+    rendered voice.
     `tools/move_latency_probe.py` is the diagnostic PS Move latency receipt:
     PS3 Eyes are the default fast visual witnesses, Scarlett cardioid is the
     default chirp timing witness, and the event train uses an order-3 de Bruijn

@@ -190,16 +190,43 @@ if (-not $SkipMoves) {
         "--score-loudness-threshold", "0.90",
         "--score-min-loudness-gate", "0.08",
         "--score-loudness-exponent", "1.8",
+        "--score-min-flux-percentile", "0.92",
+        "--score-min-onset-intensity", "0.42",
+        "--score-min-music-confidence", "0.30",
+        "--score-min-improv-density", "0.04",
+        "--score-max-improv-density", "0.22",
+        "--score-downbeat-min-onset", "0.62",
+        "--score-call-response-min-onset", "0.48",
         "--score-min-accent", "0.025",
         "--score-max-envelope", "0.78",
         "--score-ensemble-loudness-threshold", "0.96",
         "--score-ensemble-min-loudness-gate", "0.25",
+        "--score-ensemble-min-onset-intensity", "0.86",
+        "--score-ensemble-min-music-confidence", "0.55",
         "--score-ensemble-min-accent", "0.30",
         "--score-min-tempo-confidence", "0.0",
         "--debruijn-polyrhythm",
         "--harmonic-base", "1.5",
-        "--microtonal-cents", "17"
+        "--microtonal-cents", "17",
+        "--voice-glide-rate", "3.4",
+        "--voice-vibrato-hz", "5.2",
+        "--voice-vibrato-cents", "18.0",
+        "--voice-note-hue-mix", "0.46",
+        "--voice-vibrato-hue-width", "0.012"
     )
+    $moveArgs += "--emit-bioacoustic-realtk"
+    $moveArgs += "--bioacoustic-song"
+    $moveArgs += "aquasynth-formant-weaver"
+    $moveArgs += "--bioacoustic-device"
+    $moveArgs += "Realtek"
+    $moveArgs += "--bioacoustic-gain"
+    $moveArgs += "1.05"
+    $moveArgs += "--bioacoustic-loop-seconds"
+    $moveArgs += "0.42"
+    $moveArgs += "--bioacoustic-min-interval-seconds"
+    $moveArgs += "0.18"
+    $moveArgs += "--bioacoustic-max-active-calls"
+    $moveArgs += "3"
     foreach ($spec in $Move) {
         $moveArgs += "--move"
         $moveArgs += $spec
