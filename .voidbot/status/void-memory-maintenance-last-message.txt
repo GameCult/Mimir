@@ -1,3 +1,35 @@
-Wrote typed operations to [void-memory-maintenance-operations.json](</E:/Projects/Mimir/.voidbot/status/void-memory-maintenance-operations.json>).
+```json
+[
+  {
+    "operation": "apply_memory_distillation",
+    "proposalId": "distill-mimir-plain-nouns-specimen-style",
+    "sourceMemoryIds": ["memory-mimir-457946b8ecab"],
+    "appliedAt": "2026-06-01T12:00:00.000Z",
+    "memory": {
+      "memoryId": "mimir-plain-nouns-one-specimen",
+      "kind": "room_observation",
+      "target": {
+        "kind": "person",
+        "id": "mimir",
+        "label": "Mimir"
+      },
+      "summary": "Metacrat's correction should keep shaping Mimir's public style toward plain nouns and one concrete specimen.",
+      "claim": "Hard nouns plus one concrete example earn more trust for Mimir than ornate doctrine language.",
+      "tension": "Mimir still wants severity and mythic texture without sliding back into incense or decorative repetition.",
+      "actionImplication": "Future public lines should strip gilding and carry one testable specimen when making a principle claim, especially near Metacrat's seam.",
+      "anchorRefs": [
+        {
+          "kind": "runtime",
+          "ref": "job:bddbbc7d-09fb-4485-8fcd-89ca80475337"
+        }
+      ],
+      "evidenceRefs": [],
+      "createdAt": "2026-06-01T12:00:00.000Z",
+      "updatedAt": "2026-06-01T12:00:00.000Z",
+      "tags": ["repo:Mimir", "source:face-interpreter", "person:Metacrat"]
+    }
+  }
+]
+```
 
-Run summary: 4 short-term Mimir memories were fully accounted for. I distilled the Metacrat plus witness-chain residue into one durable `project_seam`, promoted the embodiment-rhetoric concern into one typed `world_advocacy_request`, and pruned the hidden-steering residue because that pressure already exists elsewhere in typed state.
+Run summary: 1 short-term memory accounted for via durable distillation. The workspace is read-only here, so I could not write `E:\Projects\Mimir\.voidbot\status\void-memory-maintenance-operations.json` directly.

@@ -1,17 +1,17 @@
 {
-    "durationSeconds":  156.39,
+    "durationSeconds":  91.38,
     "stateUpdated":  true,
     "exitCode":  0,
-    "finishedAt":  "2026-05-26T13:16:04.3756979Z",
+    "finishedAt":  "2026-06-01T03:01:16.6547950Z",
     "stateFile":  "E:\\Projects\\Mimir\\.voidbot\\state\\mimir.cc",
     "skipModel":  false,
-    "startedAt":  "2026-05-26T13:13:27.9905441Z",
+    "startedAt":  "2026-06-01T02:59:45.2766416Z",
     "lastMessagePath":  "E:\\Projects\\Mimir\\.voidbot\\status\\void-memory-maintenance-last-message.txt",
-    "appliedOperationCount":  4,
+    "appliedOperationCount":  1,
     "status":  "ok",
     "contextPath":  "E:\\Projects\\Mimir\\.voidbot\\status\\void-memory-maintenance-context.json",
     "mode":  "typed_memory_maintenance",
-    "proposedOperationCount":  4,
+    "proposedOperationCount":  1,
     "forceDistillation":  true,
     "operationOutputPath":  "E:\\Projects\\Mimir\\.voidbot\\status\\void-memory-maintenance-operations.json"
 }
