@@ -119,7 +119,9 @@ $recorderArgs = @(
     (Join-Path $repo "src\Mimir.VerseRecorder\Mimir.VerseRecorder.csproj"),
     "--",
     "--url", $SubscribeUrl,
-    "--out-dir", $RecorderRoot
+    "--out-dir", $RecorderRoot,
+    "--write-bodies", "true",
+    "--body-page-bytes", "134217728"
 )
 if ($DurationSeconds -gt 0) {
     $recorderArgs += "--seconds"
@@ -274,7 +276,11 @@ if (-not $SkipRuntime) {
             "--visual-expected-leds", "38",
             "--visual-minimum-luma", "0.55",
             "--visual-setting-seconds", "0.75",
-            "--visual-resweep-seconds", "12.0"
+            "--visual-resweep-seconds", "12.0",
+            "--capture-pages", "true",
+            "--capture-ms", "250",
+            "--capture-max-body-bytes", "4194304",
+            "--capture-inline-bodies", "true"
         ) `
         -Environment @{
             "MIMIR_RUNTIME_CONFIG" = $ConfigPath

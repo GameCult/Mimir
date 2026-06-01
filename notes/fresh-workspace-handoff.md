@@ -199,12 +199,21 @@ Get-Content .\state\evidence.jsonl -Tail 8
   WebSocket path beside its observation ingest path, and `Mimir.VerseRecorder`
   writes subscribed observations to
   `C:\Users\Meta\Videos\Mimir\VerseCaptures\<session>\session.json` plus
-  `observations.jsonl`. `Mimir.Well` loads
+  `observations.jsonl`. Recorder now also recognizes
+  `mimir.well_capture_page.v1`, strips inline base64 sample bodies into
+  `bodies/page-*.bin`, and records `mimir.recorder_body_index.v1` refs in
+  `bodies/index.jsonl` so offline reconstruction tools can resolve payloads
+  without treating JSONL as the body store. `Mimir.Well` loads
   `config/mimir-runtime.well.local.json`, starts every configured source it
   can, polls `MimirSynchronizationHub` with a bounded per-source budget, updates
   audio sync/probe state, and publishes `mimir.well_snapshot.v1` records with
   source buffers, composite controls, publication/stem contract, and sync
-  status. `scripts/start-online-verse-daemons.ps1` supervises the relay,
+  status. It also publishes bounded `mimir.well_capture_page.v1` records for
+  synchronized frame slices with timing metadata, configured composite state,
+  and inline source bodies when CPU bytes exist and fit the configured body
+  limit. GPU-handle-only samples remain metadata/body-handle evidence until
+  Fensalir/native program-output recording owns rendered composite bodies.
+  `scripts/start-online-verse-daemons.ps1` supervises the relay,
   recorder, Nightwing typed Eyes/Move/builtin-camera/builtin-mic witness, the
   music-synced de-Bruijn/microtonal Move gesture worker, and `Mimir.Well`.
   Current live proof `online-verse-daemons-20260601-212502` wrote Well,

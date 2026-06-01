@@ -396,17 +396,28 @@ invariants:
     witness stream: `/eve/periwinkle` ingests typed observations and
     `/eve/periwinkle/subscribe` broadcasts normalized records to live
     subscribers. `Mimir.VerseRecorder` subscribes and writes a session manifest
-    plus JSONL observation ledger under `C:\Users\Meta\Videos\Mimir\VerseCaptures`.
+    plus JSONL observation ledger under `C:\Users\Meta\Videos\Mimir\VerseCaptures`;
+    when it sees `mimir.well_capture_page.v1`, it strips inline base64 sample
+    bodies into `bodies/page-*.bin` and records `mimir.recorder_body_index.v1`
+    refs in `bodies/index.jsonl` so offline reconstruction jobs can resolve
+    source payloads without bloating the observation ledger.
     `Mimir.Well` is the Starfire Well daemon: it loads the broad Well runtime
     profile, starts every configured source it can, polls `MimirSynchronizationHub`
     with a bounded daemon budget, updates audio sync/probe state, and publishes
     `mimir.well_snapshot.v1` records containing buffer health, composite
-    controls, publication/stem contract, and sync status. The online supervisor
+    controls, publication/stem contract, and sync status. It also publishes
+    bounded `mimir.well_capture_page.v1` records for synchronized frame slices:
+    each page carries timing metadata, configured composite state, and inline
+    source sample bodies when a sample has CPU bytes and stays under the
+    configured body limit. GPU-handle-only samples remain metadata/body-handle
+    evidence until a Fensalir/native readback or direct program-output recorder
+    owns rendered composite bodies. The online supervisor
     now starts relay, recorder, Nightwing Eyes/Move/builtin-camera/builtin-mic
     witness publication, conservative de-Bruijn/microtonal music-synced Move
     gestures with Realtek plus opportunistic ASIO music evidence, and
-    `Mimir.Well`. This owns typed state publication, not raw CultMesh media
-    payloads yet. The live timestamp-domain scar is explicit: ASIO device time
+    `Mimir.Well` with capture-page/body-paging enabled. This owns a first local
+    paged-recording ABI, not the final CultCache shard engine yet. The live
+    timestamp-domain scar is explicit: ASIO device time
     and camera driver time are not in one canonical timeline, so sync frame
     publication is degraded until a camera-clock/global-time correction owner
     exists.

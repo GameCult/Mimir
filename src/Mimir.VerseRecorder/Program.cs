@@ -1,6 +1,8 @@
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 var options = VerseRecorderOptions.Parse(args);
 Directory.CreateDirectory(options.OutputDirectory);
@@ -9,6 +11,9 @@ var runDirectory = Path.Combine(options.OutputDirectory, runId);
 Directory.CreateDirectory(runDirectory);
 var jsonlPath = Path.Combine(runDirectory, "observations.jsonl");
 var sessionPath = Path.Combine(runDirectory, "session.json");
+var bodyPager = options.WriteBodies
+    ? new MimirRecorderBodyPager(runId, runDirectory, options.BodyPageBytes)
+    : null;
 
 await File.WriteAllTextAsync(
     sessionPath,
@@ -21,6 +26,16 @@ await File.WriteAllTextAsync(
             startedAt = DateTimeOffset.Now.ToString("O"),
             options.Seconds,
             observations = jsonlPath,
+            bodies = bodyPager is null
+                ? null
+                : new
+                {
+                    enabled = true,
+                    pageBytes = options.BodyPageBytes,
+                    directory = bodyPager.BodyDirectory,
+                    index = bodyPager.IndexPath,
+                    document = "mimir.recorder_body_index.v1",
+                },
         },
         new JsonSerializerOptions { WriteIndented = true }));
 
@@ -57,7 +72,10 @@ while (!stopping.IsCancellationRequested)
                 break;
             }
 
-            await output.WriteLineAsync(text);
+            var storedText = bodyPager is null
+                ? text
+                : await bodyPager.PageBodiesAsync(text, stopping.Token).ConfigureAwait(false);
+            await output.WriteLineAsync(storedText);
             count++;
             if (DateTimeOffset.UtcNow - lastMeter >= TimeSpan.FromSeconds(options.MeterSeconds))
             {
@@ -86,6 +104,11 @@ while (!stopping.IsCancellationRequested)
 }
 
 await output.FlushAsync();
+if (bodyPager is not null)
+{
+    await bodyPager.DisposeAsync().ConfigureAwait(false);
+}
+
 Console.Error.WriteLine($"verse-recorder complete observations={count} path={jsonlPath}");
 
 static async Task<string?> ReceiveTextAsync(ClientWebSocket socket, CancellationToken stopping)
@@ -113,7 +136,9 @@ internal sealed record VerseRecorderOptions(
     string OutputDirectory,
     double Seconds,
     double ReconnectSeconds,
-    double MeterSeconds)
+    double MeterSeconds,
+    bool WriteBodies,
+    long BodyPageBytes)
 {
     public static VerseRecorderOptions Parse(string[] args)
     {
@@ -126,7 +151,9 @@ internal sealed record VerseRecorderOptions(
             ParseString(args, "--out-dir", defaultOutput),
             ParseDouble(args, "--seconds", 0.0),
             ParseDouble(args, "--reconnect-seconds", 2.0),
-            ParseDouble(args, "--meter-seconds", 5.0));
+            ParseDouble(args, "--meter-seconds", 5.0),
+            ParseBool(args, "--write-bodies", true),
+            ParseLong(args, "--body-page-bytes", 128L * 1024L * 1024L));
     }
 
     private static string ParseString(IReadOnlyList<string> args, string name, string fallback)
@@ -147,5 +174,192 @@ internal sealed record VerseRecorderOptions(
         return double.TryParse(ParseString(args, name, ""), out var value)
             ? value
             : fallback;
+    }
+
+    private static long ParseLong(IReadOnlyList<string> args, string name, long fallback)
+    {
+        return long.TryParse(ParseString(args, name, ""), out var value)
+            ? value
+            : fallback;
+    }
+
+    private static bool ParseBool(IReadOnlyList<string> args, string name, bool fallback)
+    {
+        for (var index = 0; index < args.Count; index++)
+        {
+            if (!string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (index == args.Count - 1 ||
+                args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return bool.TryParse(args[index + 1], out var value) ? value : fallback;
+        }
+
+        return fallback;
+    }
+}
+
+internal sealed class MimirRecorderBodyPager : IAsyncDisposable
+{
+    private readonly string runId;
+    private readonly long pageByteLimit;
+    private readonly StreamWriter indexWriter;
+    private FileStream? currentPage;
+    private long currentPageBytes;
+    private int pageIndex;
+
+    public MimirRecorderBodyPager(string runId, string runDirectory, long pageByteLimit)
+    {
+        this.runId = runId;
+        this.pageByteLimit = Math.Max(1024 * 1024, pageByteLimit);
+        BodyDirectory = Path.Combine(runDirectory, "bodies");
+        Directory.CreateDirectory(BodyDirectory);
+        IndexPath = Path.Combine(BodyDirectory, "index.jsonl");
+        indexWriter = new StreamWriter(new FileStream(IndexPath, FileMode.Create, FileAccess.Write, FileShare.Read), Encoding.UTF8);
+    }
+
+    public string BodyDirectory { get; }
+
+    public string IndexPath { get; }
+
+    public async Task<string> PageBodiesAsync(string text, CancellationToken stopping)
+    {
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(text);
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
+
+        if (root is not JsonObject rootObject ||
+            !string.Equals(rootObject["document"]?.GetValue<string>(), "mimir.well_capture_page.v1", StringComparison.Ordinal) ||
+            rootObject["samples"] is not JsonArray samples)
+        {
+            return text;
+        }
+
+        var wroteAny = false;
+        foreach (var sampleNode in samples)
+        {
+            if (sampleNode is not JsonObject sampleObject ||
+                sampleObject["body"] is not JsonObject bodyObject ||
+                !string.Equals(bodyObject["status"]?.GetValue<string>(), "inline", StringComparison.Ordinal) ||
+                !string.Equals(bodyObject["encoding"]?.GetValue<string>(), "base64", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var encoded = bodyObject["data"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(encoded))
+            {
+                continue;
+            }
+
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(encoded);
+            }
+            catch (FormatException)
+            {
+                continue;
+            }
+
+            var bodyId = sampleObject["bodyId"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
+            var bodyRef = await WriteBodyAsync(bodyId, bytes, sampleObject, stopping).ConfigureAwait(false);
+            sampleObject.Remove("body");
+            sampleObject["bodyRef"] = bodyRef;
+            wroteAny = true;
+        }
+
+        return wroteAny
+            ? rootObject.ToJsonString()
+            : text;
+    }
+
+    private async Task<JsonObject> WriteBodyAsync(
+        string bodyId,
+        byte[] bytes,
+        JsonObject sampleObject,
+        CancellationToken stopping)
+    {
+        await EnsurePageAsync(bytes.LongLength, stopping).ConfigureAwait(false);
+        var pageName = $"page-{pageIndex:000000}.bin";
+        var offset = currentPageBytes;
+        await currentPage!.WriteAsync(bytes, stopping).ConfigureAwait(false);
+        currentPageBytes += bytes.LongLength;
+
+        var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var bodyRef = new JsonObject
+        {
+            ["storage"] = "mimir-recorder-page",
+            ["document"] = "mimir.recorder_body_ref.v1",
+            ["bodyId"] = bodyId,
+            ["runId"] = runId,
+            ["page"] = $"bodies/{pageName}",
+            ["offset"] = offset,
+            ["byteLength"] = bytes.LongLength,
+            ["sha256"] = hash,
+            ["encoding"] = "raw",
+        };
+
+        var indexRecord = new JsonObject
+        {
+            ["document"] = "mimir.recorder_body_index.v1",
+            ["bodyId"] = bodyId,
+            ["runId"] = runId,
+            ["page"] = $"bodies/{pageName}",
+            ["offset"] = offset,
+            ["byteLength"] = bytes.LongLength,
+            ["sha256"] = hash,
+            ["sourceId"] = sampleObject["sample"]?["SourceId"]?.GetValue<string>(),
+            ["kind"] = sampleObject["sample"]?["Kind"]?.GetValue<string>(),
+            ["origin"] = sampleObject["sample"]?["Origin"]?.GetValue<string>(),
+            ["sequence"] = sampleObject["sample"]?["Sequence"]?.GetValue<ulong>(),
+            ["timestampNs"] = sampleObject["sample"]?["TimestampNs"]?.GetValue<long>(),
+        };
+        await indexWriter.WriteLineAsync(indexRecord.ToJsonString()).ConfigureAwait(false);
+        return bodyRef;
+    }
+
+    private async Task EnsurePageAsync(long nextBodyBytes, CancellationToken stopping)
+    {
+        if (currentPage is not null && currentPageBytes + nextBodyBytes <= pageByteLimit)
+        {
+            return;
+        }
+
+        if (currentPage is not null)
+        {
+            await currentPage.FlushAsync(stopping).ConfigureAwait(false);
+            await currentPage.DisposeAsync().ConfigureAwait(false);
+            currentPage = null;
+            pageIndex++;
+            currentPageBytes = 0;
+        }
+
+        var pagePath = Path.Combine(BodyDirectory, $"page-{pageIndex:000000}.bin");
+        currentPage = new FileStream(pagePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (currentPage is not null)
+        {
+            await currentPage.FlushAsync().ConfigureAwait(false);
+            await currentPage.DisposeAsync().ConfigureAwait(false);
+        }
+
+        await indexWriter.FlushAsync().ConfigureAwait(false);
+        await indexWriter.DisposeAsync().ConfigureAwait(false);
     }
 }

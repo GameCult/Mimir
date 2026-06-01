@@ -48,8 +48,10 @@ await using var publisher = new MimirWellPublisher(options.PublishUrl);
 await publisher.ConnectAsync(stopping.Token).ConfigureAwait(false);
 
 var sequence = 0L;
+var captureSequence = 0L;
 var startedAt = DateTimeOffset.UtcNow;
 var nextPublish = DateTimeOffset.MinValue;
+var nextCapture = DateTimeOffset.MinValue;
 var nextSync = DateTimeOffset.MinValue;
 var nextVisualCalibration = DateTimeOffset.MinValue;
 var presentation = new MimirPresentationControlState();
@@ -105,6 +107,18 @@ while (!stopping.IsCancellationRequested)
             ++sequence,
             startedAt);
         await publisher.PublishAsync(snapshot, stopping.Token).ConfigureAwait(false);
+        if (options.CapturePagesEnabled && now >= nextCapture)
+        {
+            var capturePage = MimirWellCapturePage.Build(
+                options,
+                presentation,
+                frame,
+                ++captureSequence,
+                startedAt);
+            await publisher.PublishAsync(capturePage, stopping.Token).ConfigureAwait(false);
+            nextCapture = now + TimeSpan.FromMilliseconds(options.CaptureIntervalMs);
+        }
+
         if (sequence % Math.Max(1, options.MeterEvery) == 0)
         {
             Console.Error.WriteLine(
@@ -162,6 +176,10 @@ internal sealed record MimirWellOptions(
     double VisualMinimumLuma,
     double VisualSettingSeconds,
     double VisualResweepSeconds,
+    bool CapturePagesEnabled,
+    int CaptureIntervalMs,
+    int CaptureMaxBodyBytes,
+    bool CaptureInlineBodies,
     int MeterEvery)
 {
     public static MimirWellOptions Parse(string[] args) => new(
@@ -180,6 +198,10 @@ internal sealed record MimirWellOptions(
         ParseDouble(args, "--visual-minimum-luma", 0.55),
         ParseDouble(args, "--visual-setting-seconds", 0.75),
         ParseDouble(args, "--visual-resweep-seconds", 12.0),
+        ParseBool(args, "--capture-pages", true),
+        ParseInt(args, "--capture-ms", 250),
+        ParseInt(args, "--capture-max-body-bytes", 4 * 1024 * 1024),
+        ParseBool(args, "--capture-inline-bodies", true),
         ParseInt(args, "--meter-every", 20));
 
     private static string ParseString(IReadOnlyList<string> args, string name, string fallback)
@@ -254,6 +276,161 @@ internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
         }
 
         socket.Dispose();
+    }
+}
+
+internal static class MimirWellCapturePage
+{
+    public static object Build(
+        MimirWellOptions options,
+        MimirPresentationControlState presentation,
+        MimirSynchronizedBufferFrame frame,
+        long captureSequence,
+        DateTimeOffset startedAt) => new
+    {
+        type = "cultmesh-observation",
+        document = "mimir.well_capture_page.v1",
+        sourceId = "mimir-well",
+        nodeId = options.NodeId,
+        captureSequence,
+        wallClockUtc = DateTimeOffset.UtcNow.ToString("O"),
+        elapsedSeconds = (DateTimeOffset.UtcNow - startedAt).TotalSeconds,
+        frame = new
+        {
+            frame.PresentationTimeNs,
+            frame.WindowStartNs,
+            frame.WindowEndNs,
+            PresentationDelayMs = frame.PresentationDelay.TotalMilliseconds,
+            frame.IsComplete,
+        },
+        storage = new
+        {
+            bodyTransport = options.CaptureInlineBodies ? "inline-base64" : "metadata-only",
+            maxInlineBodyBytes = options.CaptureMaxBodyBytes,
+            intendedSink = "mimir-recorder-paged-cultcache",
+        },
+        configuredComposite = new
+        {
+            video = presentation.VideoFeeds.Select(feed => new
+            {
+                feed.SourceId,
+                feed.DisplayName,
+                feed.Enabled,
+                feed.Solo,
+                feed.Opacity,
+                feed.Layer,
+            }).ToArray(),
+            audio = presentation.AudioFeeds.Select(feed => new
+            {
+                feed.SourceId,
+                feed.DisplayName,
+                feed.Muted,
+                feed.Solo,
+                feed.Gain,
+            }).ToArray(),
+            postprocess = presentation.Postprocess,
+            renderedProgramBody = new
+            {
+                status = "not-published-yet",
+                reason = "Fensalir/OBS program-output capture is a separate producer; this page records the configured composite contract and synchronized source bodies.",
+            },
+        },
+        samples = frame.Slices
+            .Where(slice => slice.Sample.HasValue)
+            .Select(slice => CaptureSample(options, captureSequence, slice))
+            .ToArray(),
+    };
+
+    private static object CaptureSample(
+        MimirWellOptions options,
+        long captureSequence,
+        MimirSynchronizedStreamSlice slice)
+    {
+        var sample = slice.Sample!.Value;
+        var bodyId = $"{options.NodeId}:{captureSequence}:{sample.SourceId}:{sample.Sequence}";
+        return new
+        {
+            bodyId,
+            slice = new
+            {
+                slice.SourceId,
+                Kind = slice.Kind.ToString(),
+                Origin = slice.Origin.ToString(),
+                Status = slice.Status.ToString(),
+                slice.SourceTimestampNs,
+                slice.CanonicalStartNs,
+                slice.CanonicalEndNs,
+                slice.PresentationTimeNs,
+                slice.TimingOffsetNs,
+                slice.DistanceFromPresentationNs,
+                slice.TimingConfidence,
+                slice.TimingEvidenceKind,
+            },
+            sample = SampleMetadata(sample),
+            body = CaptureBody(options, sample),
+        };
+    }
+
+    private static object SampleMetadata(MimirStreamSample sample) => new
+    {
+        sample.SourceId,
+        Kind = sample.Kind.ToString(),
+        Origin = sample.Origin.ToString(),
+        sample.TimestampNs,
+        sample.ArrivalNs,
+        sample.Sequence,
+        sample.PayloadHandle,
+        sample.ByteLength,
+        video = sample.VideoFrame is null ? null : new
+        {
+            sample.VideoFrame.Width,
+            sample.VideoFrame.Height,
+            PixelFormat = sample.VideoFrame.PixelFormat.ToString(),
+            sample.VideoFrame.StrideBytes,
+            sample.VideoFrame.DeviceTimestampNs,
+            sample.VideoFrame.NativeHandle,
+            sample.VideoFrame.NativeHandleKind,
+            sample.VideoFrame.ResourceKey,
+            sample.VideoFrame.ProducerFenceHandle,
+            sample.VideoFrame.ProducerFenceValue,
+            sample.VideoFrame.UnavoidableCopyCount,
+        },
+        audio = sample.AudioBlock is null ? null : new
+        {
+            sample.AudioBlock.SampleRate,
+            sample.AudioBlock.Channels,
+            SampleFormat = sample.AudioBlock.SampleFormat.ToString(),
+            sample.AudioBlock.FrameCount,
+            sample.AudioBlock.DeviceTimestampNs,
+            sample.AudioBlock.NativeHandle,
+            sample.AudioBlock.NativeHandleKind,
+        },
+    };
+
+    private static object CaptureBody(MimirWellOptions options, MimirStreamSample sample)
+    {
+        if (!options.CaptureInlineBodies)
+        {
+            return new { status = "not-inline", sample.ByteLength };
+        }
+
+        if (sample.Data.IsEmpty || sample.ByteLength <= 0)
+        {
+            return new { status = "empty", sample.ByteLength };
+        }
+
+        if (sample.ByteLength > options.CaptureMaxBodyBytes)
+        {
+            return new { status = "too-large", sample.ByteLength };
+        }
+
+        return new
+        {
+            status = "inline",
+            encoding = "base64",
+            byteLength = sample.ByteLength,
+            data = Convert.ToBase64String(sample.Data.Span),
+        };
     }
 }
 
