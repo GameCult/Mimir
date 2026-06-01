@@ -162,7 +162,10 @@ contains 10.000 s of 640x480 30 fps Kiyo video and 10.000 s of mono AAC from the
 Faust dialogue stem. Run `20260601-051044` estimated the cardioid 359.398
 samples late at 48 kHz (7487.452 us), applied holdback 359.398/0.000 samples to
 shotgun/cardioid before cleanup, wrote a residual WAV, and reported dialogue
-RMS `0.002678`. The hot owner is
+RMS `0.002678` before receipt normalization. The first muxed receipt was almost
+inaudible because `NormalizePeak` only attenuated hot samples; the regenerated
+latest MP4 now peaks the dialogue WAV at -0.724 dBFS with RMS -14.202 dBFS. The
+hot owner is
 `faust/mimir_dual_mic_dialogue_cleaner.dsp`: a two-input/two-output Faust graph
 for aligned shotgun/cardioid witnesses that emits a dialogue composite stem and
 a rejected residual witness using smooth multiband voice shaping, witness

@@ -662,7 +662,10 @@ accepted_design:
     has 10.000 s of 640x480 30 fps Kiyo video and 10.000 s of 48 kHz mono AAC
     from the Faust dialogue stem; the report estimated the cardioid 359.398
     samples late (7487.452 us), applied holdback 359.398/0.000 samples to
-    shotgun/cardioid, and wrote both dialogue and residual WAVs.
+    shotgun/cardioid, and wrote both dialogue and residual WAVs. The first mux
+    was nearly silent because `NormalizePeak` only attenuated hot samples; after
+    fixing it to amplify quiet receipts too, the regenerated dialogue WAV peaks
+    at -0.724 dBFS with RMS -14.202 dBFS.
     Faust/native DSP now has the first actual cleaner socket:
     `faust/mimir_dual_mic_dialogue_cleaner.dsp` compiles as a smooth two-input
     shotgun/cardioid dialogue cleaner and Mimir queues it as

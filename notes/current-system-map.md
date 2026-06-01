@@ -331,7 +331,10 @@ receipt. The fresh 2026-06-01 receipt at
 has 10.000 s of 640x480 30 fps Kiyo video and 10.000 s of 48 kHz mono AAC from
 the Faust dialogue stem. It estimated the cardioid 359.398 samples late
 (7487.452 us), applied holdback 359.398/0.000 samples to shotgun/cardioid, and
-wrote both dialogue and residual WAVs. The actual denoise authority is Faust:
+wrote both dialogue and residual WAVs. The first muxed receipt was nearly
+silent because `NormalizePeak` only attenuated hot samples; after the helper was
+fixed to amplify quiet receipts too, the regenerated dialogue WAV peaks at
+-0.724 dBFS with RMS -14.202 dBFS. The actual denoise authority is Faust:
 `faust/mimir_dual_mic_dialogue_cleaner.dsp` compiles as a two-input/two-output
 aligned shotgun/cardioid dialogue cleaner with smooth multiband voice shaping,
 witness subtraction, and slow downward expansion. `MimirRuntime` queues it as

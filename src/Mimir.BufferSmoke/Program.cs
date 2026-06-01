@@ -4868,7 +4868,7 @@ static double NoiseEstimate(IReadOnlyList<float> samples)
 static float[] NormalizePeak(IReadOnlyList<float> samples, float peak)
 {
     var max = samples.Select(static sample => Math.Abs(sample)).DefaultIfEmpty(0.0f).Max();
-    if (max <= peak || max <= 1.0e-9f)
+    if (max <= 1.0e-9f)
     {
         return samples.ToArray();
     }
