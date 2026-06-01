@@ -1425,7 +1425,17 @@ internal sealed class MimirLiveStatsSnapshot
 
             var envelopes = ArrayItems(TryGetAny(root, "score_gesture_envelopes")).Select(JsonNumber).DefaultIfEmpty(0.0).ToArray();
             var sources = ArrayItems(TryGetAny(root, "music_sources"))
-                .Select(static source => $"{JsonStringAny(source, "source") ?? "source"} {JsonNumberAny(source, "bpm"):0.0}/{JsonNumberAny(source, "bpm_confidence"):0.00}")
+                .Select(static source =>
+                {
+                    var name = JsonStringAny(source, "source") ?? "source";
+                    var strength = JsonNumberAny(source, "score_strength", "onset", "hit", "loudness_gate");
+                    var key = JsonStringAny(source, "key_name") ?? "";
+                    var mode = JsonStringAny(source, "key_mode") ?? "";
+                    var harmonic = string.IsNullOrWhiteSpace(key)
+                        ? $"f0 {JsonNumberAny(source, "fundamental_hz"):0}"
+                        : $"{key} {mode}".Trim();
+                    return $"{name} {JsonNumberAny(source, "bpm"):0.0}/{JsonNumberAny(source, "bpm_confidence"):0.00} s={strength:0.00} {harmonic}";
+                })
                 .ToArray();
             return new MimirMoveMusicStat(
                 trace.FullName,

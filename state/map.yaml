@@ -237,10 +237,24 @@ invariants:
     `artifacts/runtime/move-music-score-20260601-220807/online-sync.jsonl`
     showed `max_env=0.4`, `max_rgb=4`, and only 9 lit frames in an 824-frame
     short-window poll, which is the intended conservative instrument behavior.
-    AquaSynth Syrinx voices are the correct Realtek audio-signal target, but
-    the live emitter is still the Mimir bioacoustic/Move script until the
-    Realtek path is explicitly routed through AquaSynth.Faust/Syrinx patch
-    compilation.
+    The live 2026-06-01 follow-up made this less timid: strong score accents
+    now open an ensemble gesture across every connected Move while preserving
+    per-controller hue/phase identity, and the brightness cap/exponent/release
+    are tuned for visible dance instead of near-black diagnostics. The current
+    worker `artifacts/runtime/move-music-ensemble-20260601-222102/online-sync.jsonl`
+    showed 134 lit frames and 88 all-Move-lit frames in a 1168-frame poll, with
+    `max_env=0.78` and `max_rgb=86`.
+    Score estimation now treats each configured audio stream as its own
+    musical witness. Realtek loopback remains the primary program analyzer,
+    while one native ASIO handle feeds per-channel `OnlineAnalyzer` instances
+    named by the launcher (`shotgun-mic`, `cardioid-mic`,
+    `starfire-loopback-l`, `starfire-loopback-r-or-synth`). Each source emits
+    tempo confidence, onset/level/loudness strength, f0, chroma, key, and chord
+    evidence into `music_sources`; the fused score chooses shared BPM/f0
+    without erasing source-level evidence. AquaSynth Syrinx voices are the
+    correct Realtek audio-signal target, and MIDI keyboard notes should later
+    enter as an explicit typed score source, but today AquaSynth is observed
+    through whatever audio channel carries its rendered voice.
     `tools/move_latency_probe.py` is the diagnostic PS Move latency receipt:
     PS3 Eyes are the default fast visual witnesses, Scarlett cardioid is the
     default chirp timing witness, and the event train uses an order-3 de Bruijn

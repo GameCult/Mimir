@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import base64
 import colorsys
+import ctypes
 import json
 import math
 import errno
@@ -104,6 +105,16 @@ def parse_move(value: str) -> Move:
         raise ValueError(f"invalid move color: {value}")
     rgb = (int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16))
     return Move(name=name, hidraw=hidraw, base_rgb=rgb)
+
+
+def parse_channel_names(values: list[str] | None) -> dict[int, str]:
+    names: dict[int, str] = {}
+    for value in values or []:
+        if not value:
+            continue
+        channel_text, name = value.split("=", 1)
+        names[int(channel_text.strip())] = name.strip()
+    return names
 
 
 def rgb_to_hsv01(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
@@ -365,9 +376,11 @@ class AuxiliaryOnsetStream:
         self.last_estimate_t = 0.0
         self.last_state: dict[str, object] = {
             "source": name,
+            "role": "aux-audio",
             "hit": 0.0,
             "body": 0.0,
             "percentile": 0.0,
+            "score_strength": 0.0,
             "fundamental_hz": 0.0,
             "bpm": self.bpm,
             "bpm_confidence": self.confidence,
@@ -390,10 +403,12 @@ class AuxiliaryOnsetStream:
             self.last_estimate_t = now
         self.last_state = {
             "source": self.name,
+            "role": "aux-audio",
             "hit": float(hit),
             "body": float(body),
             "percentile": float(percentile),
             "onset": float(onset),
+            "score_strength": max(float(hit), float(onset), float(body)),
             "fundamental_hz": float(fundamental_hz),
             "color_balance": tuple(float(value) for value in color_balance),
             "bpm": self.bpm,
@@ -423,9 +438,137 @@ class AuxiliaryOnsetStream:
         self.confidence = max(0.0, min(1.0, best_score))
 
 
+class MultiAsioScoreReader:
+    def __init__(self, dll_path: str, clsid: str, sample_rate: int, channels: list[int], fps: float, fft_size: int, args: argparse.Namespace) -> None:
+        self.channels = sorted(set(channels))
+        self.args = args
+        self.pending = {channel: [] for channel in self.channels}
+        self.analyzers: dict[int, OnlineAnalyzer] = {}
+        self.dll = ctypes.WinDLL(dll_path)
+        self.dll.mimir_asio_create.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_double,
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        self.dll.mimir_asio_create.restype = ctypes.c_void_p
+        self.dll.mimir_asio_start.argtypes = [ctypes.c_void_p]
+        self.dll.mimir_asio_start.restype = ctypes.c_int
+        self.dll.mimir_asio_read.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_longlong),
+            ctypes.POINTER(ctypes.c_ulonglong),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+        ]
+        self.dll.mimir_asio_read.restype = ctypes.c_int
+        self.dll.mimir_asio_destroy.argtypes = [ctypes.c_void_p]
+        self.dll.mimir_asio_destroy.restype = None
+
+        actual_rate = ctypes.c_int()
+        input_count = ctypes.c_int()
+        max_frames = ctypes.c_int()
+        self.handle = self.dll.mimir_asio_create(
+            clsid.encode("utf-8"),
+            float(sample_rate),
+            ctypes.byref(actual_rate),
+            ctypes.byref(input_count),
+            ctypes.byref(max_frames),
+        )
+        if not self.handle:
+            raise RuntimeError("Could not create Mimir ASIO capture source")
+        self.sample_rate = int(actual_rate.value)
+        self.input_count = int(input_count.value)
+        self.max_frames = max(1, int(max_frames.value))
+        self.buffer = (ctypes.c_float * self.max_frames)()
+        if not self.dll.mimir_asio_start(self.handle):
+            self.close()
+            raise RuntimeError("Could not start Mimir ASIO capture source")
+        self.analyzers = {channel: OnlineAnalyzer(self.sample_rate, fps, fft_size, args) for channel in self.channels}
+
+    def read_scores(self, deadline: float, drain_blocks: int, source_names: dict[int, str]) -> list[dict[str, object]]:
+        channel = ctypes.c_int()
+        timestamp_ns = ctypes.c_longlong()
+        sequence = ctypes.c_ulonglong()
+        frame_count = ctypes.c_int()
+        reads = 0
+        while reads < max(1, drain_blocks) and time.monotonic() < deadline:
+            ok = self.dll.mimir_asio_read(
+                self.handle,
+                ctypes.byref(channel),
+                ctypes.byref(timestamp_ns),
+                ctypes.byref(sequence),
+                ctypes.byref(frame_count),
+                self.buffer,
+                self.max_frames,
+            )
+            if not ok:
+                time.sleep(0.001)
+                continue
+            reads += 1
+            source_channel = int(channel.value)
+            if source_channel not in self.pending:
+                continue
+            frames = max(0, min(int(frame_count.value), self.max_frames))
+            if frames == 0:
+                continue
+            pending = self.pending[source_channel]
+            pending.extend(float(self.buffer[index]) for index in range(frames))
+            keep = self.args.fft_size * 8
+            if len(pending) > keep:
+                del pending[: len(pending) - keep]
+
+        now = time.monotonic()
+        states: list[dict[str, object]] = []
+        for source_channel in self.channels:
+            pending = self.pending[source_channel]
+            if len(pending) < self.args.fft_size:
+                continue
+            frame = np.asarray(pending[-self.args.fft_size :], dtype=np.float32)
+            pending.clear()
+            state = self.analyzers[source_channel].analyze(frame, now)
+            strength = max(float(state["hit"]), float(state["loudness_gate"]), float(state["level"]))
+            state.update(
+                {
+                    "source": source_names.get(source_channel, f"scarlett-asio-ch{source_channel}"),
+                    "role": "audio-score-stream",
+                    "channel": source_channel,
+                    "score_strength": strength,
+                }
+            )
+            states.append(state)
+        return states
+
+    def close(self) -> None:
+        if getattr(self, "handle", None):
+            self.dll.mimir_asio_destroy(self.handle)
+            self.handle = None
+
+
 def fuse_music_sources(primary: dict[str, object], source_states: list[dict[str, object]]) -> dict[str, object]:
+    primary_source = {
+        "source": "realtek-loopback",
+        "role": "program-loopback",
+        "bpm": primary["bpm"],
+        "bpm_confidence": primary["bpm_confidence"],
+        "hit": primary["hit"],
+        "body": primary["body"],
+        "loudness_gate": primary["loudness_gate"],
+        "loudness_percentile": primary["loudness_percentile"],
+        "fundamental_hz": primary["fundamental_hz"],
+        "key_name": primary["key_name"],
+        "key_mode": primary["key_mode"],
+        "key_confidence": primary["key_confidence"],
+        "chord_name": primary["chord_name"],
+        "chord_confidence": primary["chord_confidence"],
+        "score_strength": max(float(primary["hit"]), float(primary["loudness_gate"])),
+    }
     if not source_states:
-        primary["music_sources"] = [{"source": "realtek-loopback", "bpm": primary["bpm"], "bpm_confidence": primary["bpm_confidence"]}]
+        primary["music_sources"] = [primary_source]
+        primary["score_source_count"] = 1
         return primary
     weighted_bpm = float(primary["bpm"]) * (0.25 + float(primary["bpm_confidence"]))
     weight_sum = 0.25 + float(primary["bpm_confidence"])
@@ -443,10 +586,10 @@ def fuse_music_sources(primary: dict[str, object], source_states: list[dict[str,
     fundamental_weight = sum(weight for _, weight in fundamentals)
     if fundamental_weight > 1e-6:
         primary["fundamental_hz"] = sum(freq * weight for freq, weight in fundamentals) / fundamental_weight
-    primary["music_sources"] = [
-        {"source": "realtek-loopback", "bpm": primary["bpm"], "bpm_confidence": primary["bpm_confidence"]},
-        *source_states,
-    ]
+    primary_source["bpm"] = primary["bpm"]
+    primary_source["bpm_confidence"] = primary["bpm_confidence"]
+    primary["music_sources"] = [primary_source, *source_states]
+    primary["score_source_count"] = len(primary["music_sources"])
     return primary
 
 
@@ -473,6 +616,11 @@ class ScoreGestureScheduler:
         loud_accent = max(0.0, min(1.0, (loudness_rank - self.args.score_loudness_threshold) / loud_span))
         rise_accent = max(loud_accent, loudness_gate)
         onset_accent = 0.5 + 0.5 * min(1.0, hit + loudness_gate * self.args.score_loudness_weight)
+        ensemble_accent = (
+            can_play
+            and loudness_rank >= self.args.score_ensemble_loudness_threshold
+            and loudness_gate >= self.args.score_ensemble_min_loudness_gate
+        )
         for index in range(len(self.envelopes)):
             self.envelopes[index] *= self.args.score_release
             if slot == self.last_slots[index]:
@@ -480,12 +628,15 @@ class ScoreGestureScheduler:
             self.last_slots[index] = slot
             if not can_play:
                 continue
-            if not self._slot_belongs_to_instrument(slot, index):
+            if not ensemble_accent and not self._slot_belongs_to_instrument(slot, index):
                 continue
             accent = (rise_accent ** self.args.score_loudness_exponent) * onset_accent
+            if ensemble_accent:
+                accent = max(accent, self.args.score_ensemble_min_accent)
             if accent < self.args.score_min_accent:
                 continue
-            self.envelopes[index] = max(self.envelopes[index], min(self.args.score_max_envelope, accent))
+            lane_scale = 1.0 if ensemble_accent else (0.72 + 0.28 * debruijn_accent(beat, index, self.args))
+            self.envelopes[index] = max(self.envelopes[index], min(self.args.score_max_envelope, accent * lane_scale))
         return tuple(float(value) for value in self.envelopes)
 
     def _slot_belongs_to_instrument(self, slot: int, move_index: int) -> bool:
@@ -527,7 +678,7 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
     phase = (beat * harmonic * micro + move_index / max(1, move_count)) % 1.0
     poly = debruijn_accent(beat, move_index, args)
     gesture = poly * (0.42 + 0.58 * (0.5 + 0.5 * math.sin(2.0 * math.pi * phase)) ** 2.1)
-    accent = min(1.0, score_envelope * loudness_gate * (level * gesture + hit * (0.22 + 0.08 * poly)))
+    accent = min(1.0, score_envelope * max(0.35, loudness_gate) * (0.32 + level * gesture + hit * (0.22 + 0.08 * poly)))
     hue = (base_h + args.hue_bend * math.sin(2.0 * math.pi * phase) + math.log2(harmonic * micro) * 0.0833) % 1.0
     chord_confidence = float(state.get("chord_confidence", 0.0))
     chord_root = int(state.get("chord_root", 0))
@@ -572,6 +723,7 @@ def main() -> int:
     parser.add_argument("--asio-dll", default=str(Path(__file__).resolve().parents[1] / "native" / "asio_capture" / "build" / "Release" / "mimir_asio_capture.dll"))
     parser.add_argument("--asio-clsid", default="{AC4D0455-50D7-4498-B3CD-9A41D130B759}")
     parser.add_argument("--asio-music-channels", default="", help="Optional comma-separated Scarlett ASIO channels to fold into music evidence.")
+    parser.add_argument("--asio-music-source-name", action="append", default=[], help="Optional ASIO channel source label, as channel=name.")
     parser.add_argument("--asio-drain-blocks", type=int, default=1024)
     parser.add_argument("--fps", type=float, default=60.0)
     parser.add_argument("--fft-size", type=int, default=512)
@@ -586,17 +738,20 @@ def main() -> int:
     parser.add_argument("--loudness-floor", type=float, default=0.006)
     parser.add_argument("--loudness-exponent", type=float, default=2.4)
     parser.add_argument("--quiet-brightness", type=float, default=0.0)
-    parser.add_argument("--max-brightness", type=float, default=0.18)
-    parser.add_argument("--brightness-exponent", type=float, default=1.15)
+    parser.add_argument("--max-brightness", type=float, default=0.34)
+    parser.add_argument("--brightness-exponent", type=float, default=0.88)
     parser.add_argument("--score-subdivisions", type=int, default=8)
-    parser.add_argument("--score-instrument-spacing", type=int, default=3)
-    parser.add_argument("--score-release", type=float, default=0.54)
-    parser.add_argument("--score-loudness-threshold", type=float, default=0.965)
-    parser.add_argument("--score-min-loudness-gate", type=float, default=0.16)
-    parser.add_argument("--score-loudness-exponent", type=float, default=2.8)
+    parser.add_argument("--score-instrument-spacing", type=int, default=2)
+    parser.add_argument("--score-release", type=float, default=0.68)
+    parser.add_argument("--score-loudness-threshold", type=float, default=0.90)
+    parser.add_argument("--score-min-loudness-gate", type=float, default=0.08)
+    parser.add_argument("--score-loudness-exponent", type=float, default=1.8)
     parser.add_argument("--score-loudness-weight", type=float, default=0.28)
-    parser.add_argument("--score-min-accent", type=float, default=0.035)
-    parser.add_argument("--score-max-envelope", type=float, default=0.45)
+    parser.add_argument("--score-min-accent", type=float, default=0.025)
+    parser.add_argument("--score-max-envelope", type=float, default=0.78)
+    parser.add_argument("--score-ensemble-loudness-threshold", type=float, default=0.96)
+    parser.add_argument("--score-ensemble-min-loudness-gate", type=float, default=0.25)
+    parser.add_argument("--score-ensemble-min-accent", type=float, default=0.30)
     parser.add_argument("--score-min-tempo-confidence", type=float, default=0.0)
     parser.add_argument("--onset-decay", type=float, default=0.18)
     parser.add_argument("--onset-threshold", type=float, default=0.62)
@@ -664,20 +819,19 @@ def main() -> int:
     analyzer = OnlineAnalyzer(args.sample_rate, args.fps, args.fft_size, args)
     score_scheduler = ScoreGestureScheduler(len(moves), args)
     asio_reader = None
-    asio_tracker = None
+    asio_source_names = parse_channel_names(args.asio_music_source_name)
     if args.asio_music_channels.strip():
-        if AsioOnsetReader is None:
-            print("asio-music disabled: nightwing_psmove_music_pulse.AsioOnsetReader is unavailable", file=sys.stderr, flush=True)
-        else:
-            try:
-                asio_channels = {int(part.strip()) for part in args.asio_music_channels.split(",") if part.strip()}
-                asio_reader = AsioOnsetReader(args.asio_dll, args.asio_clsid, args.sample_rate, asio_channels, args.fft_size)
-                asio_tracker = AuxiliaryOnsetStream("scarlett-asio", args.fps, args)
-                print(f"asio-music enabled channels={sorted(asio_channels)}", file=sys.stderr, flush=True)
-            except Exception as ex:
-                print(f"asio-music disabled: {ex}", file=sys.stderr, flush=True)
-                asio_reader = None
-                asio_tracker = None
+        try:
+            asio_channels = [int(part.strip()) for part in args.asio_music_channels.split(",") if part.strip()]
+            asio_reader = MultiAsioScoreReader(args.asio_dll, args.asio_clsid, args.sample_rate, asio_channels, args.fps, args.fft_size, args)
+            print(
+                f"asio-music enabled channels={asio_reader.channels} sampleRate={asio_reader.sample_rate} inputs={asio_reader.input_count}",
+                file=sys.stderr,
+                flush=True,
+            )
+        except Exception as ex:
+            print(f"asio-music disabled: {ex}", file=sys.stderr, flush=True)
+            asio_reader = None
     frame_samples = max(args.fft_size, int(args.sample_rate / args.fps))
     frame_bytes = frame_samples * args.channels * 4
     trace_path = out_dir / "online-sync.jsonl"
@@ -694,29 +848,13 @@ def main() -> int:
                 now = time.monotonic()
                 state = analyzer.analyze(mono, now)
                 auxiliary_states: list[dict[str, object]] = []
-                if asio_reader is not None and asio_tracker is not None:
+                if asio_reader is not None:
                     try:
-                        asio_result = asio_reader.read_onset(
-                            floor=args.loudness_floor,
-                            gain=1.0,
+                        auxiliary_states.extend(asio_reader.read_scores(
                             deadline=time.monotonic() + (0.35 / args.fps),
-                            whiten_fast=args.whiten_fast,
-                            whiten_slow=args.whiten_slow,
-                            whiten_delta_fast=args.whiten_delta_fast,
-                            whiten_delta_slow=args.whiten_delta_slow,
-                            whiten_decay=args.whiten_decay,
-                            whiten_contrast=args.whiten_contrast,
-                            fundamental_min=args.fundamental_min,
-                            fundamental_max=args.fundamental_max,
-                            onset_percentile_threshold=0.0,
-                            onset_exponent=args.onset_exponent,
-                            onset_history_ms=args.onset_history_seconds * 1000.0,
-                            onset_cooldown_ms=args.onset_cooldown_seconds * 1000.0,
-                            warmup_ms=args.warmup_seconds * 1000.0,
                             drain_blocks=args.asio_drain_blocks,
-                        )
-                        if asio_result is not None:
-                            auxiliary_states.append(asio_tracker.update(now, *asio_result))
+                            source_names=asio_source_names,
+                        ))
                     except Exception as ex:
                         print(f"asio-music disabled during read: {ex}", file=sys.stderr, flush=True)
                         try:
@@ -724,7 +862,6 @@ def main() -> int:
                         except Exception:
                             pass
                         asio_reader = None
-                        asio_tracker = None
                 state = fuse_music_sources(state, auxiliary_states)
                 state["score_gesture_envelopes"] = score_scheduler.update(state)
                 rgbs = {}
