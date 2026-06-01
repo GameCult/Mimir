@@ -4227,6 +4227,15 @@ static int RunSceneEditorSmoke()
     editor.SetSelectedProgramY(0.45f);
     editor.SetSelectedProgramWidth(0.36f);
     editor.SetSelectedProgramHeight(0.28f);
+    var aspectPlacement = editor.PlacementForSource("raven-display");
+    var aspectLocked = aspectPlacement.HasValue &&
+        Math.Abs(aspectPlacement.Value.Width - aspectPlacement.Value.Height) < 0.001f;
+    editor.SetSelectedProgramX(0.006f);
+    editor.SetSelectedProgramY(0.994f);
+    var snappedPlacement = editor.PlacementForSource("raven-display");
+    var snappedToBounds = snappedPlacement.HasValue &&
+        Math.Abs(snappedPlacement.Value.CenterX - snappedPlacement.Value.Width * 0.5f) < 0.001f &&
+        Math.Abs(snappedPlacement.Value.CenterY - (1.0f - snappedPlacement.Value.Height * 0.5f)) < 0.001f;
     editor.CenterSelectedProgramLayer();
     editor.MoveSelectedLayer(-1);
 
@@ -4241,13 +4250,15 @@ static int RunSceneEditorSmoke()
     Console.WriteLine(
         $"scene-editor-smoke nodes={editor.Nodes.Count} feeds={editor.Nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)} " +
         $"preview={previewItems.Count} selected={editor.SelectedNode?.DisplayName} hasDisplay={hasDisplay} cameraPreview={hasCameraPreview} " +
-        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered}");
+        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered} aspectLocked={aspectLocked} snapped={snappedToBounds}");
 
     return editor.Nodes.Count == 3 &&
         hasDisplay &&
         hasOnlyVideoPreview &&
         !hasCameraPreview &&
-        programCentered
+        programCentered &&
+        aspectLocked &&
+        snappedToBounds
             ? 0
             : 1;
 }

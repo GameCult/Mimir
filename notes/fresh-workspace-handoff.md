@@ -50,6 +50,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   canvas, and a Unity-style Inspector on the right for the selected layer's
   properties. The center preview requests Fensalir's current output-buffer blit
   as its background and overlays Mimir's normalized layer placements on top.
+  Placement commits snap near frame edges/center and preserve source aspect
+  while resizing.
   Camera/SDF/model editor affordances have no live UI authority, and editor
   camera/SDF/spline output no longer contributes to the runtime frame. Smoke
   with `--scene-editor-smoke`.

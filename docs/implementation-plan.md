@@ -301,7 +301,9 @@ a named invariant that the native runtime cannot protect yet.
   The center preview now asks Fensalir's CultUI preview contract to blit the
   current renderer output buffer behind Mimir's normalized placement overlays,
   so the app preview is a live program-surface witness rather than a symbolic
-  rectangle diagram.
+  rectangle diagram. Placement commits keep video layers inside the program
+  frame, snap near edges/center, and preserve the source aspect ratio while
+  resizing through sliders or the scale gizmo.
   See [[scene-editor-control-surface|Mimir Scene Editor Control Surface]].
   `Mimir.BufferSmoke --scene-editor-smoke` proves the graph/control/gizmo owner
   path. World SDF text glyph rendering, ASSIMP-style mesh import/upload, and

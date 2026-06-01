@@ -59,7 +59,9 @@ invariants:
     runtime frame. The center preview requests a Fensalir-owned blit of the
     current output buffer, then draws those normalized placement items on top;
     the preview observes the program surface without becoming composition
-    authority.
+    authority. Placement commits keep layers inside the frame, snap near
+    edges/center, and preserve source aspect while resizing through sliders or
+    the scale gizmo.
   - `MimirProgramRecorder` owns the first app-level recording control. The Video
     Sources rail exposes `Record` / `Stop`, status text, latest output path, and
     process-tree shutdown. Its current actuator delegates to

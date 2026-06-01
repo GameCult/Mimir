@@ -10,6 +10,9 @@ public sealed class MimirSceneEditorState
 {
     private const float ProgramWorldWidth = 12.8f;
     private const float ProgramWorldHeight = 7.2f;
+    private const float ProgramAspect = ProgramWorldWidth / ProgramWorldHeight;
+    private const float MinProgramExtent = 0.01f;
+    private const float ProgramSnapThreshold = 0.015f;
     private readonly List<MimirSceneEditorNode> nodes = [];
     private readonly HashSet<string> configuredProgramSources = new(StringComparer.Ordinal);
     private bool selectedConfiguredSource;
@@ -97,6 +100,7 @@ public sealed class MimirSceneEditorState
             {
                 Layer = index,
                 SourceId = buffer.Descriptor.SourceId,
+                ProgramAspectRatio = ProgramAspectRatioFor(buffer),
             });
         }
 
@@ -303,7 +307,7 @@ public sealed class MimirSceneEditorState
     {
         if (SelectedNode is { } selected)
         {
-            SetNodeProgramPlacement(selected, PlacementForNode(selected) with { Width = value });
+            SetNodeProgramPlacement(selected, ResizeProgramPlacement(selected, PlacementForNode(selected), value, resizeWidth: true));
         }
     }
 
@@ -311,7 +315,7 @@ public sealed class MimirSceneEditorState
     {
         if (SelectedNode is { } selected)
         {
-            SetNodeProgramPlacement(selected, PlacementForNode(selected) with { Height = value });
+            SetNodeProgramPlacement(selected, ResizeProgramPlacement(selected, PlacementForNode(selected), value, resizeWidth: false));
         }
     }
 
@@ -331,17 +335,16 @@ public sealed class MimirSceneEditorState
         }
 
         var placement = PlacementForNode(selected);
-        var aspect = Math.Clamp(placement.Width / Math.Max(placement.Height, 0.001f), 0.05f, 32.0f);
-        const float programAspect = 16.0f / 9.0f;
+        var aspect = ProgramPlacementAspectFor(selected);
         var width = 1.0f;
         var height = 1.0f;
-        if (aspect > programAspect)
+        if (aspect > 1.0f)
         {
-            height = programAspect / aspect;
+            height = 1.0f / aspect;
         }
         else
         {
-            width = aspect / programAspect;
+            width = aspect;
         }
 
         SetNodeProgramPlacement(selected, placement with
@@ -361,8 +364,8 @@ public sealed class MimirSceneEditorState
             {
                 CenterX = 0.5f,
                 CenterY = 0.5f,
-                Width = 1.0f,
-                Height = 1.0f,
+                Width = ProgramPlacementAspectFor(selected) >= 1.0f ? 1.0f : ProgramPlacementAspectFor(selected),
+                Height = ProgramPlacementAspectFor(selected) >= 1.0f ? 1.0f / ProgramPlacementAspectFor(selected) : 1.0f,
             });
         }
     }
@@ -551,10 +554,12 @@ public sealed class MimirSceneEditorState
         switch (GizmoMode)
         {
             case MimirSceneEditorGizmoMode.Translate:
-                selected.Transform = selected.Transform with
+                var placement = PlacementForNode(selected);
+                SetNodeProgramPlacement(selected, placement with
                 {
-                    Position = selected.Transform.Position + new Vector3(worldDelta, 0.0f),
-                };
+                    CenterX = placement.CenterX + worldDelta.X / ProgramWorldWidth,
+                    CenterY = placement.CenterY - worldDelta.Y / ProgramWorldHeight,
+                });
                 break;
             case MimirSceneEditorGizmoMode.Rotate:
                 selected.Transform = selected.Transform with
@@ -564,10 +569,8 @@ public sealed class MimirSceneEditorState
                 break;
             case MimirSceneEditorGizmoMode.Scale:
                 var scaleDelta = MathF.Exp((screenDelta.X - screenDelta.Y) * 0.006f);
-                selected.Transform = selected.Transform with
-                {
-                    Scale = Vector2.Clamp(selected.Transform.Scale * scaleDelta, new Vector2(0.05f), new Vector2(8.0f)),
-                };
+                var current = PlacementForNode(selected);
+                SetNodeProgramPlacement(selected, ResizeProgramPlacement(selected, current, current.Width * scaleDelta, resizeWidth: true));
                 break;
         }
     }
@@ -651,6 +654,49 @@ public sealed class MimirSceneEditorState
     private static string FeedNodeId(string sourceId) =>
         $"feed:{sourceId}";
 
+    private static float ProgramAspectRatioFor(MimirRollingStreamBuffer buffer)
+    {
+        var frame = buffer.Latest?.VideoFrame;
+        if (frame is { Width: > 0, Height: > 0 })
+        {
+            return Math.Clamp(frame.Width / (float)frame.Height / ProgramAspect, 0.05f, 32.0f);
+        }
+
+        return 1.0f;
+    }
+
+    private static float ProgramPlacementAspectFor(MimirSceneEditorNode node) =>
+        Math.Clamp(node.ProgramAspectRatio, 0.05f, 32.0f);
+
+    private static MimirCompositorPlacement ResizeProgramPlacement(MimirSceneEditorNode node, MimirCompositorPlacement placement, float value, bool resizeWidth)
+    {
+        var aspect = ProgramPlacementAspectFor(node);
+        var width = placement.Width;
+        var height = placement.Height;
+        if (resizeWidth)
+        {
+            width = Math.Clamp(value, MinProgramExtent, 1.0f);
+            height = width / aspect;
+            if (height > 1.0f)
+            {
+                height = 1.0f;
+                width = height * aspect;
+            }
+        }
+        else
+        {
+            height = Math.Clamp(value, MinProgramExtent, 1.0f);
+            width = height * aspect;
+            if (width > 1.0f)
+            {
+                width = 1.0f;
+                height = width / aspect;
+            }
+        }
+
+        return placement with { Width = width, Height = height };
+    }
+
     private MimirSceneEditorNode? NodeForSource(string sourceId) =>
         nodes.FirstOrDefault(node =>
             node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel &&
@@ -662,8 +708,8 @@ public sealed class MimirSceneEditorState
         return new MimirCompositorPlacement(
             CenterX: Math.Clamp(0.5f + transform.Position.X / ProgramWorldWidth, 0.0f, 1.0f),
             CenterY: Math.Clamp(0.5f - transform.Position.Y / ProgramWorldHeight, 0.0f, 1.0f),
-            Width: Math.Clamp(transform.Scale.X / ProgramWorldWidth, 0.01f, 1.0f),
-            Height: Math.Clamp(transform.Scale.Y / ProgramWorldHeight, 0.01f, 1.0f),
+            Width: Math.Clamp(transform.Scale.X / ProgramWorldWidth, MinProgramExtent, 1.0f),
+            Height: Math.Clamp(transform.Scale.Y / ProgramWorldHeight, MinProgramExtent, 1.0f),
             RotationRadians: transform.RotationRadians,
             Layer: node.Layer);
     }
@@ -675,16 +721,52 @@ public sealed class MimirSceneEditorState
             return;
         }
 
-        var centerX = Math.Clamp(placement.CenterX, 0.0f, 1.0f);
-        var centerY = Math.Clamp(placement.CenterY, 0.0f, 1.0f);
-        var width = Math.Clamp(placement.Width, 0.01f, 1.0f);
-        var height = Math.Clamp(placement.Height, 0.01f, 1.0f);
+        var normalized = NormalizeProgramPlacement(placement);
         node.Transform = node.Transform with
         {
-            Position = new Vector3((centerX - 0.5f) * ProgramWorldWidth, (0.5f - centerY) * ProgramWorldHeight, node.Transform.Position.Z),
-            Scale = new Vector2(width * ProgramWorldWidth, height * ProgramWorldHeight),
-            RotationRadians = placement.RotationRadians,
+            Position = new Vector3((normalized.CenterX - 0.5f) * ProgramWorldWidth, (0.5f - normalized.CenterY) * ProgramWorldHeight, node.Transform.Position.Z),
+            Scale = new Vector2(normalized.Width * ProgramWorldWidth, normalized.Height * ProgramWorldHeight),
+            RotationRadians = normalized.RotationRadians,
         };
+    }
+
+    private static MimirCompositorPlacement NormalizeProgramPlacement(MimirCompositorPlacement placement)
+    {
+        var width = SnapExtent(Math.Clamp(placement.Width, MinProgramExtent, 1.0f));
+        var height = SnapExtent(Math.Clamp(placement.Height, MinProgramExtent, 1.0f));
+        var centerX = SnapCenter(Math.Clamp(placement.CenterX, width * 0.5f, 1.0f - width * 0.5f), width);
+        var centerY = SnapCenter(Math.Clamp(placement.CenterY, height * 0.5f, 1.0f - height * 0.5f), height);
+        return placement with
+        {
+            CenterX = centerX,
+            CenterY = centerY,
+            Width = width,
+            Height = height,
+        };
+    }
+
+    private static float SnapExtent(float value) =>
+        MathF.Abs(1.0f - value) <= ProgramSnapThreshold ? 1.0f : value;
+
+    private static float SnapCenter(float center, float extent)
+    {
+        var half = extent * 0.5f;
+        if (MathF.Abs(center - 0.5f) <= ProgramSnapThreshold)
+        {
+            return 0.5f;
+        }
+
+        if (MathF.Abs(center - half) <= ProgramSnapThreshold)
+        {
+            return half;
+        }
+
+        if (MathF.Abs(1.0f - half - center) <= ProgramSnapThreshold)
+        {
+            return 1.0f - half;
+        }
+
+        return center;
     }
 }
 
@@ -714,6 +796,8 @@ public sealed class MimirSceneEditorNode(
     public int Layer { get; set; }
 
     public string SourceId { get; init; } = "";
+
+    public float ProgramAspectRatio { get; init; } = Math.Clamp(defaultTransform.Scale.X / Math.Max(defaultTransform.Scale.Y, 0.001f), 0.05f, 32.0f);
 
     public string Text { get; set; } = "";
 
