@@ -54,6 +54,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   while resizing through direct preview handles, sliders, or the scale gizmo.
   Explicit source/transform controls are inspector-only and only visible when a
   program source is selected.
+  Hover/active handle state, snap guides, empty-canvas deselect, keyboard
+  nudging, PageUp/PageDown layer ordering, and selected-source
+  contain/cover/stretch fit mode are wired through `MimirSceneEditorState`.
   Camera/SDF/model editor affordances have no live UI authority, and editor
   camera/SDF/spline output no longer contributes to the runtime frame. Smoke
   with `--scene-editor-smoke`.

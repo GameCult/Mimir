@@ -15,6 +15,17 @@ public sealed class MimirSceneEditorState
     private const float ProgramSnapThreshold = 0.015f;
     private readonly List<MimirSceneEditorNode> nodes = [];
     private readonly HashSet<string> configuredProgramSources = new(StringComparer.Ordinal);
+    private readonly AquariumUiOption[] fitModeOptions =
+    [
+        new(0, "Contain"),
+        new(1, "Cover"),
+        new(2, "Stretch"),
+    ];
+    private IReadOnlyList<AquariumUiPreviewGuide> previewGuides = [];
+    private string hoverItemId = "";
+    private string hoverHandle = "";
+    private string activeItemId = "";
+    private string activeHandle = "";
     private bool selectedConfiguredSource;
     private Vector2? previousMousePosition;
 
@@ -45,6 +56,12 @@ public sealed class MimirSceneEditorState
     public IReadOnlyList<MimirSceneEditorNode> VisibleNodes =>
         nodes.Where(node => node.Visible).ToArray();
 
+    public AquariumUiPreviewState PreviewState => new(hoverItemId, hoverHandle, activeItemId, activeHandle);
+
+    public IReadOnlyList<AquariumUiPreviewGuide> PreviewGuides => previewGuides;
+
+    public IReadOnlyList<AquariumUiOption> FitModeOptions => fitModeOptions;
+
     public IReadOnlyList<AquariumUiPreviewItem> PreviewItems =>
         nodes
             .Where(static node => node.Visible && node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)
@@ -52,9 +69,15 @@ public sealed class MimirSceneEditorState
             .Select(node =>
             {
                 var placement = PlacementForNode(node);
+                var fit = node.FitMode switch
+                {
+                    MimirProgramLayerFitMode.Cover => "cover",
+                    MimirProgramLayerFitMode.Stretch => "stretch",
+                    _ => "contain",
+                };
                 return new AquariumUiPreviewItem(
                     node.Id,
-                    node.DisplayName,
+                    $"{node.DisplayName}  lock {fit}",
                     placement.CenterX - placement.Width * 0.5f,
                     placement.CenterY - placement.Height * 0.5f,
                     placement.Width,
@@ -168,11 +191,51 @@ public sealed class MimirSceneEditorState
 
         if (input.IsKeyPressed(KeyCode.LeftArrow))
         {
-            SelectPrevious();
+            if (input.IsKeyDown(KeyCode.Control))
+            {
+                MoveSelectedLayer(-1);
+            }
+            else if (HasSelectedProgramSource)
+            {
+                NudgeSelectedProgramLayer(-1.0f, 0.0f, input.IsKeyDown(KeyCode.Shift));
+            }
+            else
+            {
+                SelectPrevious();
+            }
         }
         else if (input.IsKeyPressed(KeyCode.RightArrow))
         {
-            SelectNext();
+            if (input.IsKeyDown(KeyCode.Control))
+            {
+                MoveSelectedLayer(1);
+            }
+            else if (HasSelectedProgramSource)
+            {
+                NudgeSelectedProgramLayer(1.0f, 0.0f, input.IsKeyDown(KeyCode.Shift));
+            }
+            else
+            {
+                SelectNext();
+            }
+        }
+
+        if (input.IsKeyPressed(KeyCode.UpArrow) && HasSelectedProgramSource)
+        {
+            NudgeSelectedProgramLayer(0.0f, -1.0f, input.IsKeyDown(KeyCode.Shift));
+        }
+        else if (input.IsKeyPressed(KeyCode.DownArrow) && HasSelectedProgramSource)
+        {
+            NudgeSelectedProgramLayer(0.0f, 1.0f, input.IsKeyDown(KeyCode.Shift));
+        }
+
+        if (input.IsKeyPressed(KeyCode.PageUp))
+        {
+            MoveSelectedLayer(-1);
+        }
+        else if (input.IsKeyPressed(KeyCode.PageDown))
+        {
+            MoveSelectedLayer(1);
         }
 
         if (input.IsKeyPressed(KeyCode.Home))
@@ -228,6 +291,23 @@ public sealed class MimirSceneEditorState
     public void SelectNext() => SelectRelative(1);
 
     public void SelectPrevious() => SelectRelative(-1);
+
+    public void NudgeSelectedProgramLayer(float xSteps, float ySteps, bool fine)
+    {
+        if (SelectedNode is not { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
+        {
+            return;
+        }
+
+        var step = fine ? 0.0025f : 0.01f;
+        var placement = PlacementForNode(selected);
+        SetNodeProgramPlacement(selected, placement with
+        {
+            CenterX = placement.CenterX + xSteps * step,
+            CenterY = placement.CenterY + ySteps * step,
+        }, snap: false);
+        previewGuides = GuidesForPlacement(PlacementForNode(selected));
+    }
 
     public void SetSelectedVisible(bool visible)
     {
@@ -372,6 +452,18 @@ public sealed class MimirSceneEditorState
         }
     }
 
+    public int SelectedFitModeIndex => SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected
+        ? (int)selected.FitMode
+        : 0;
+
+    public void SetSelectedFitModeIndex(int value)
+    {
+        if (SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
+        {
+            selected.FitMode = (MimirProgramLayerFitMode)Math.Clamp(value, 0, 2);
+        }
+    }
+
     public void MoveSelectedLayer(int delta)
     {
         if (SelectedNode is not { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
@@ -406,6 +498,31 @@ public sealed class MimirSceneEditorState
 
     public void HandlePreviewInteraction(AquariumUiPreviewInteraction interaction)
     {
+        hoverItemId = interaction.Phase == "hover" ? interaction.ItemId : hoverItemId;
+        hoverHandle = interaction.Phase == "hover" ? interaction.Handle : hoverHandle;
+        if (interaction.Phase == "end")
+        {
+            activeItemId = "";
+            activeHandle = "";
+            previewGuides = [];
+            return;
+        }
+
+        if (interaction.Phase == "begin")
+        {
+            activeItemId = interaction.ItemId;
+            activeHandle = interaction.Handle;
+        }
+
+        if (interaction.Handle == "canvas" && interaction.Phase == "begin")
+        {
+            SelectedNodeId = "editor-camera";
+            activeItemId = "";
+            activeHandle = "";
+            previewGuides = [];
+            return;
+        }
+
         if (nodes.FirstOrDefault(node => string.Equals(node.Id, interaction.ItemId, StringComparison.Ordinal)) is not { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } node ||
             node.Locked)
         {
@@ -426,10 +543,12 @@ public sealed class MimirSceneEditorState
                 CenterX = placement.CenterX + interaction.DeltaX,
                 CenterY = placement.CenterY + interaction.DeltaY,
             });
+            previewGuides = GuidesForPlacement(PlacementForNode(node));
             return;
         }
 
         SetNodeProgramPlacement(node, ResizeProgramPlacementFromHandle(node, placement, interaction.Handle, interaction.DeltaX, interaction.DeltaY));
+        previewGuides = GuidesForPlacement(PlacementForNode(node));
     }
 
     public bool IncludesVideoSource(string sourceId) =>
@@ -488,7 +607,7 @@ public sealed class MimirSceneEditorState
         }
 
         var placement = PlacementForNode(selected);
-        return $"{selected.Layer + 1}. {selected.DisplayName} source={selected.SourceId} frame={placement.CenterX:0.000},{placement.CenterY:0.000} {placement.Width:0.000}x{placement.Height:0.000}";
+        return $"{selected.Layer + 1}. {selected.DisplayName} source={selected.SourceId} {selected.FitMode} frame={placement.CenterX:0.000},{placement.CenterY:0.000} {placement.Width:0.000}x{placement.Height:0.000}";
     }
 
     public AquariumSplineFrame BuildEditorSplineFrame()
@@ -782,14 +901,14 @@ public sealed class MimirSceneEditorState
             Layer: node.Layer);
     }
 
-    private static void SetNodeProgramPlacement(MimirSceneEditorNode node, MimirCompositorPlacement placement)
+    private static void SetNodeProgramPlacement(MimirSceneEditorNode node, MimirCompositorPlacement placement, bool snap = true)
     {
         if (node.Locked)
         {
             return;
         }
 
-        var normalized = NormalizeProgramPlacement(placement);
+        var normalized = NormalizeProgramPlacement(placement, snap);
         node.Transform = node.Transform with
         {
             Position = new Vector3((normalized.CenterX - 0.5f) * ProgramWorldWidth, (0.5f - normalized.CenterY) * ProgramWorldHeight, node.Transform.Position.Z),
@@ -798,12 +917,24 @@ public sealed class MimirSceneEditorState
         };
     }
 
-    private static MimirCompositorPlacement NormalizeProgramPlacement(MimirCompositorPlacement placement)
+    private static MimirCompositorPlacement NormalizeProgramPlacement(MimirCompositorPlacement placement, bool snap)
     {
-        var width = SnapExtent(Math.Clamp(placement.Width, MinProgramExtent, 1.0f));
-        var height = SnapExtent(Math.Clamp(placement.Height, MinProgramExtent, 1.0f));
-        var centerX = SnapCenter(Math.Clamp(placement.CenterX, width * 0.5f, 1.0f - width * 0.5f), width);
-        var centerY = SnapCenter(Math.Clamp(placement.CenterY, height * 0.5f, 1.0f - height * 0.5f), height);
+        var width = Math.Clamp(placement.Width, MinProgramExtent, 1.0f);
+        var height = Math.Clamp(placement.Height, MinProgramExtent, 1.0f);
+        if (snap)
+        {
+            width = SnapExtent(width);
+            height = SnapExtent(height);
+        }
+
+        var centerX = Math.Clamp(placement.CenterX, width * 0.5f, 1.0f - width * 0.5f);
+        var centerY = Math.Clamp(placement.CenterY, height * 0.5f, 1.0f - height * 0.5f);
+        if (snap)
+        {
+            centerX = SnapCenter(centerX, width);
+            centerY = SnapCenter(centerY, height);
+        }
+
         return placement with
         {
             CenterX = centerX,
@@ -811,6 +942,26 @@ public sealed class MimirSceneEditorState
             Width = width,
             Height = height,
         };
+    }
+
+    private static IReadOnlyList<AquariumUiPreviewGuide> GuidesForPlacement(MimirCompositorPlacement placement)
+    {
+        var guides = new List<AquariumUiPreviewGuide>(6);
+        AddGuide(guides, "x", placement.CenterX, 0.5f, "cool");
+        AddGuide(guides, "y", placement.CenterY, 0.5f, "cool");
+        AddGuide(guides, "x", placement.CenterX - placement.Width * 0.5f, 0.0f, "warm");
+        AddGuide(guides, "x", placement.CenterX + placement.Width * 0.5f, 1.0f, "warm");
+        AddGuide(guides, "y", placement.CenterY - placement.Height * 0.5f, 0.0f, "warm");
+        AddGuide(guides, "y", placement.CenterY + placement.Height * 0.5f, 1.0f, "warm");
+        return guides;
+    }
+
+    private static void AddGuide(List<AquariumUiPreviewGuide> guides, string axis, float value, float target, string tone)
+    {
+        if (MathF.Abs(value - target) <= ProgramSnapThreshold + 0.0001f)
+        {
+            guides.Add(new AquariumUiPreviewGuide(axis, target, tone));
+        }
     }
 
     private static float SnapExtent(float value) =>
@@ -867,6 +1018,8 @@ public sealed class MimirSceneEditorNode(
 
     public float ProgramAspectRatio { get; init; } = Math.Clamp(defaultTransform.Scale.X / Math.Max(defaultTransform.Scale.Y, 0.001f), 0.05f, 32.0f);
 
+    public MimirProgramLayerFitMode FitMode { get; set; } = MimirProgramLayerFitMode.Contain;
+
     public string Text { get; set; } = "";
 
     public string ModelPath { get; init; } = "";
@@ -890,4 +1043,11 @@ public enum MimirSceneEditorGizmoMode
     Translate,
     Rotate,
     Scale,
+}
+
+public enum MimirProgramLayerFitMode
+{
+    Contain = 0,
+    Cover = 1,
+    Stretch = 2,
 }

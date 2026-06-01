@@ -4249,6 +4249,19 @@ static int RunSceneEditorSmoke()
     var previewHandleAspectLocked = handlePlacement.HasValue &&
         Math.Abs(handlePlacement.Value.Width - handlePlacement.Value.Height) < 0.001f &&
         handlePlacement.Value.Width > draggedPlacement?.Width;
+    editor.HandlePreviewInteraction(new AquariumUiPreviewInteraction(displayNode.Id, "se", "hover", 0.75f, 0.75f, 0.0f, 0.0f));
+    var hoverTracked = editor.PreviewState.HoverItemId == displayNode.Id && editor.PreviewState.HoverHandle == "se";
+    editor.SetSelectedProgramX(0.5f);
+    editor.HandlePreviewInteraction(new AquariumUiPreviewInteraction(displayNode.Id, "move", "drag", 0.5f, 0.75f, 0.0f, 0.0f));
+    var guideVisible = editor.PreviewGuides.Any(guide => guide.Axis == "x" && Math.Abs(guide.Position - 0.5f) < 0.001f);
+    editor.SetSelectedFitModeIndex(1);
+    var fitModeSet = editor.SelectedFitModeIndex == 1 && editor.DescribeSelection().Contains("Cover", StringComparison.Ordinal);
+    editor.NudgeSelectedProgramLayer(1.0f, 0.0f, fine: false);
+    var nudgedPlacement = editor.PlacementForSource("raven-display");
+    var nudgeHandled = nudgedPlacement.HasValue && Math.Abs(nudgedPlacement.Value.CenterX - 0.51f) < 0.001f;
+    editor.HandlePreviewInteraction(new AquariumUiPreviewInteraction("", "canvas", "begin", 0.02f, 0.02f, 0.0f, 0.0f));
+    var emptyClickDeselected = !editor.HasSelectedProgramSource;
+    editor.SelectNode(displayNode.Id);
     editor.CenterSelectedProgramLayer();
     editor.MoveSelectedLayer(-1);
 
@@ -4267,7 +4280,7 @@ static int RunSceneEditorSmoke()
     Console.WriteLine(
         $"scene-editor-smoke nodes={editor.Nodes.Count} feeds={editor.Nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)} " +
         $"preview={previewItems.Count} selected={editor.SelectedNode?.DisplayName} hasDisplay={hasDisplay} cameraPreview={hasCameraPreview} " +
-        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered} aspectLocked={aspectLocked} snapped={snappedToBounds} previewMove={previewMoveHandled} previewHandle={previewHandleAspectLocked} cameraSource={editor.HasSelectedProgramSource}");
+        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered} aspectLocked={aspectLocked} snapped={snappedToBounds} previewMove={previewMoveHandled} previewHandle={previewHandleAspectLocked} hover={hoverTracked} guide={guideVisible} fit={fitModeSet} nudge={nudgeHandled} empty={emptyClickDeselected} cameraSource={editor.HasSelectedProgramSource}");
 
     return editor.Nodes.Count == 3 &&
         hasDisplay &&
@@ -4278,6 +4291,11 @@ static int RunSceneEditorSmoke()
         snappedToBounds &&
         previewMoveHandled &&
         previewHandleAspectLocked &&
+        hoverTracked &&
+        guideVisible &&
+        fitModeSet &&
+        nudgeHandled &&
+        emptyClickDeselected &&
         cameraIsNotProgramSource
             ? 0
             : 1;

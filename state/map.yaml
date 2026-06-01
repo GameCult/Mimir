@@ -65,7 +65,11 @@ invariants:
     body/corner-handle gestures wired to the same placement owner; sliders are
     fallback/precision controls, not the primary compositor surface. Explicit
     source/transform controls are inspector-only and visible only while a
-    program source is selected.
+    program source is selected. Empty-canvas clicks clear source selection;
+    hover/active handle state and snap guides are supplied through Fensalir's
+    CultUI preview state; keyboard arrows nudge selected layers without
+    snapping, PageUp/PageDown reorder layers, and the inspector owns the
+    selected source contain/cover/stretch fit mode.
   - `MimirProgramRecorder` owns the first app-level recording control. The Video
     Sources rail exposes `Record` / `Stop`, status text, latest output path, and
     process-tree shutdown. Its current actuator delegates to

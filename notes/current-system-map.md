@@ -551,7 +551,10 @@ layers inside the program frame, snaps near edges/center, and preserves source
 aspect while resizing through direct preview handles, sliders, or the scale
 gizmo. Explicit transform/source controls are inspector-only and gated to a
 selected program source; the center canvas handles are the primary compositor
-edit path. World SDF glyph rendering, ASSIMP-style
+edit path. Empty-canvas clicks clear source selection; hover/active handles and
+snap guides come from the Fensalir CultUI preview state; arrows nudge the
+selected layer, PageUp/PageDown reorder layers, and the inspector owns the
+selected source contain/cover/stretch fit mode. World SDF glyph rendering, ASSIMP-style
 mesh decoding/upload, and pixel-accurate gizmo hit-testing are explicit
 Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].

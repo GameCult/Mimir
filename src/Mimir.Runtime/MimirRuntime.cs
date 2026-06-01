@@ -893,7 +893,15 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
                     shell.Vertical("mimir.editor-center", center =>
                     {
-                        center.Preview("scene.view-preview", "", () => sceneEditor.PreviewItems, weight: 2.2f, blitOutputBuffer: true, handleInteraction: sceneEditor.HandlePreviewInteraction);
+                        center.Preview(
+                            "scene.view-preview",
+                            "",
+                            () => sceneEditor.PreviewItems,
+                            weight: 2.2f,
+                            blitOutputBuffer: true,
+                            handleInteraction: sceneEditor.HandlePreviewInteraction,
+                            readState: () => sceneEditor.PreviewState,
+                            readGuides: () => sceneEditor.PreviewGuides);
                         center.Pane("mimir.audio-mixer", "Audio Mixer", mixer =>
                         {
                             mixer.Horizontal("audio.channel-bank", bank =>
@@ -933,6 +941,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                             source.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
                             source.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
                             source.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
+                            source.Options("program.fit-mode", "Fit", () => sceneEditor.SelectedFitModeIndex, sceneEditor.SetSelectedFitModeIndex, sceneEditor.FitModeOptions);
                             source.Row("program.fit", fit =>
                             {
                                 fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer);

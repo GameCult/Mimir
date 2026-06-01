@@ -306,6 +306,10 @@ a named invariant that the native runtime cannot protect yet.
   resizing through direct preview handles, sliders, or the scale gizmo. Explicit
   transform/source controls are inspector-only and only appear while a program
   source is selected; the compositor canvas handles are the primary edit path.
+  Empty-canvas clicks clear source selection, hover/active handles and snap
+  guides are visible through the Fensalir CultUI preview state, keyboard arrows
+  nudge selected layers, PageUp/PageDown reorder layers, and the inspector owns
+  the selected source's contain/cover/stretch fit mode.
   See [[scene-editor-control-surface|Mimir Scene Editor Control Surface]].
   `Mimir.BufferSmoke --scene-editor-smoke` proves the graph/control/gizmo owner
   path. World SDF text glyph rendering, ASSIMP-style mesh import/upload, and
