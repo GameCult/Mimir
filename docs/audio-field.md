@@ -100,6 +100,22 @@ is the live hub surface; `MimirRuntime` prints
 operators can watch confidence climb as probes are spent. The scheduler owns
 when to spend active sound. It does not own the output device: Starfire Realtek
 still must be selected explicitly by the eventual live renderer.
+The first explicit Realtek renderer proof now lives in the repo tooling:
+`Mimir.WasapiLoopback` can enumerate render endpoints, select one by friendly
+name substring, and play mono Float32 probe audio through shared-mode WASAPI.
+`Mimir.BufferSmoke --targeted-bioacoustic-probe-realtk-live` renders a targeted
+probe plan, starts Scarlett ASIO capture, plays the probe through
+`Speakers (Realtek(R) Audio)`, and scores the captured shotgun/cardioid bands.
+The targeted probe planner now caps default acoustic probe selection at 12 kHz
+and mildly biases low/mid measurable bands, because commodity speakers and the
+current Scarlett mics have little reason to carry useful calibration evidence
+above that range. The 2026-06-01 proof at gain `0.75` selected the Realtek speaker endpoint and
+captured `artifacts/wasapi/targeted-bioacoustic-realtk-live/20260601-033851`.
+The physical mics heard the burst, but the scored confidence still concentrated
+in low/mid evidence: shotgun peak `0.407887`, cardioid peak `0.074494`, 18.6 kHz
+confidence near zero, and the best reported band was cardioid 3.6 kHz at
+confidence `0.098`. Treat high-band probes as poor questions for this route
+until a better speaker/mic/path proves otherwise.
 The receiver must consume persisted models to weight reliable symbols,
 downweight dead bands, apply phase-coherence weighting, apply first-order
 group-delay correction, and search joint global delay/frequency-shift hypotheses

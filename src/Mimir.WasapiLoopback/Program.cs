@@ -9,20 +9,37 @@ internal static class Program
     private const int EMultimedia = 1;
     private const int ECommunications = 2;
     private const int ClsctxAll = 23;
+    private const uint DeviceStateActive = 0x00000001;
     private const uint AudclntSharemodeShared = 0;
     private const uint AudclntStreamflagsLoopback = 0x00020000;
     private const int AudclntBufferflagsSilent = 0x2;
     private static readonly Guid IidAudioClient = new("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2");
     private static readonly Guid IidAudioCaptureClient = new("C8ADBD64-E71E-48a0-A4DE-185C395CD317");
+    private static readonly Guid IidAudioRenderClient = new("F294ACFC-3146-4483-A7BF-ADDCA7C260E2");
     private static readonly Guid PcmSubformat = new("00000001-0000-0010-8000-00aa00389b71");
     private static readonly Guid FloatSubformat = new("00000003-0000-0010-8000-00aa00389b71");
+    private static readonly PropertyKey DeviceFriendlyNameKey = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
 
     public static int Main(string[] args)
     {
         try
         {
             var options = Options.Parse(args);
-            Capture(options);
+            if (options.ListDevices)
+            {
+                ListRenderDevices();
+                return 0;
+            }
+
+            if (options.Mode == RunMode.PlayF32Mono)
+            {
+                PlayF32Mono(options);
+            }
+            else
+            {
+                Capture(options);
+            }
+
             return 0;
         }
         catch (Exception ex)
@@ -41,7 +58,7 @@ internal static class Program
 
         using var outputLifetime = outputIsStdout ? null : output;
         IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumerator();
-        Check(enumerator.GetDefaultAudioEndpoint(ERender, RoleFromName(options.Role), out var device), "GetDefaultAudioEndpoint");
+        var device = ResolveRenderDevice(enumerator, options.Role, options.Device);
 
         var audioClientId = IidAudioClient;
         Check(device.Activate(ref audioClientId, ClsctxAll, IntPtr.Zero, out var audioClient), "Activate IAudioClient");
@@ -56,7 +73,8 @@ internal static class Program
         Check(init, "Initialize loopback");
 
         var captureClientId = IidAudioCaptureClient;
-        Check(audioClient.GetService(ref captureClientId, out var captureClient), "GetService IAudioCaptureClient");
+        Check(audioClient.GetService(ref captureClientId, out var captureService), "GetService IAudioCaptureClient");
+        var captureClient = (IAudioCaptureClient)captureService;
         Check(audioClient.Start(), "Start");
 
         try
@@ -72,6 +90,125 @@ internal static class Program
             Marshal.ReleaseComObject(device);
             Marshal.ReleaseComObject(enumerator);
         }
+    }
+
+    private static void PlayF32Mono(Options options)
+    {
+        if (string.IsNullOrWhiteSpace(options.InputPath))
+        {
+            throw new ArgumentException("--input is required for --play-f32-mono");
+        }
+
+        var inputBytes = File.ReadAllBytes(options.InputPath);
+        if (inputBytes.Length < sizeof(float))
+        {
+            throw new InvalidOperationException("Input file contains no Float32 samples: " + options.InputPath);
+        }
+
+        var inputSamples = new float[inputBytes.Length / sizeof(float)];
+        Buffer.BlockCopy(inputBytes, 0, inputSamples, 0, inputSamples.Length * sizeof(float));
+
+        IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumerator();
+        var device = ResolveRenderDevice(enumerator, options.Role, options.Device);
+        var audioClientId = IidAudioClient;
+        Check(device.Activate(ref audioClientId, ClsctxAll, IntPtr.Zero, out var audioClient), "Activate IAudioClient");
+        Check(audioClient.GetMixFormat(out var mixFormatPtr), "GetMixFormat");
+
+        var fmt = Marshal.PtrToStructure<WaveFormatEx>(mixFormatPtr);
+        var sampleFormat = SampleFormat.From(mixFormatPtr);
+        LogFormat("RenderMixFormat", fmt, sampleFormat);
+
+        var hnsBuffer = Math.Max(100_000L, (long)Math.Round(10_000_000.0 * Math.Min(0.25, Math.Max(0.02, options.RenderBufferSeconds))));
+        Check(audioClient.Initialize(AudclntSharemodeShared, 0, hnsBuffer, 0, mixFormatPtr, IntPtr.Zero), "Initialize render");
+        Check(audioClient.GetBufferSize(out var bufferFrames), "GetBufferSize");
+
+        var renderClientId = IidAudioRenderClient;
+        Check(audioClient.GetService(ref renderClientId, out var renderService), "GetService IAudioRenderClient");
+        var renderClient = (IAudioRenderClient)renderService;
+        Check(audioClient.Start(), "Start");
+
+        try
+        {
+            PumpRender(options, inputSamples, audioClient, renderClient, fmt, sampleFormat, bufferFrames);
+        }
+        finally
+        {
+            audioClient.Stop();
+            Marshal.FreeCoTaskMem(mixFormatPtr);
+            Marshal.ReleaseComObject(renderClient);
+            Marshal.ReleaseComObject(audioClient);
+            Marshal.ReleaseComObject(device);
+            Marshal.ReleaseComObject(enumerator);
+        }
+    }
+
+    private static void PumpRender(
+        Options options,
+        float[] inputSamples,
+        IAudioClient audioClient,
+        IAudioRenderClient renderClient,
+        WaveFormatEx fmt,
+        SampleFormat sampleFormat,
+        uint bufferFrames)
+    {
+        var renderChannels = Math.Max(1, (int)fmt.Channels);
+        var renderRate = Math.Max(1, (int)fmt.SamplesPerSec);
+        var bytesPerFrame = fmt.BlockAlign;
+        var bytesPerSample = Math.Max(1, sampleFormat.ContainerBits / 8);
+        var sourceFramesPerRenderFrame = options.SampleRate / (double)renderRate;
+        var sourceFrame = 0.0;
+        var framesWritten = 0L;
+        var peak = inputSamples.Select(Math.Abs).DefaultIfEmpty(0f).Max();
+        var gain = Math.Clamp(options.Gain, 0.0, 8.0);
+        var nextMeter = DateTime.UtcNow.AddSeconds(1);
+
+        while (sourceFrame < inputSamples.Length)
+        {
+            Check(audioClient.GetCurrentPadding(out var padding), "GetCurrentPadding");
+            var available = bufferFrames > padding ? bufferFrames - padding : 0;
+            if (available == 0)
+            {
+                Thread.Sleep(2);
+                continue;
+            }
+
+            var frames = (uint)Math.Min(available, Math.Ceiling((inputSamples.Length - sourceFrame) / sourceFramesPerRenderFrame));
+            if (frames == 0)
+            {
+                break;
+            }
+
+            Check(renderClient.GetBuffer(frames, out var data), "Render GetBuffer");
+            try
+            {
+                for (var frame = 0; frame < frames; frame++)
+                {
+                    var sample = (float)Math.Clamp(ReadInterpolated(inputSamples, sourceFrame) * gain, -1.0, 1.0);
+                    for (var ch = 0; ch < renderChannels; ch++)
+                    {
+                        var target = IntPtr.Add(data, frame * bytesPerFrame + ch * bytesPerSample);
+                        WriteSample(target, sample, sampleFormat);
+                    }
+
+                    sourceFrame += sourceFramesPerRenderFrame;
+                }
+            }
+            finally
+            {
+                Check(renderClient.ReleaseBuffer(frames, 0), "Render ReleaseBuffer");
+            }
+
+            framesWritten += frames;
+            if (DateTime.UtcNow >= nextMeter)
+            {
+                Console.Error.WriteLine("RenderMeter frames={0} source={1:0}/{2} peak={3:0.000000} gain={4:0.000}", framesWritten, sourceFrame, inputSamples.Length, peak, gain);
+                nextMeter = DateTime.UtcNow.AddSeconds(1);
+            }
+        }
+
+        var drainMs = Math.Max(40, (int)Math.Round(options.RenderDrainSeconds * 1000.0));
+        Thread.Sleep(drainMs);
+        Console.Error.WriteLine("RenderComplete frames={0} seconds={1:0.000} inputSamples={2} inputRate={3}", framesWritten, framesWritten / (double)renderRate, inputSamples.Length, options.SampleRate);
     }
 
     private static void Pump(
@@ -265,6 +402,71 @@ internal static class Program
         return value;
     }
 
+    private static float ReadInterpolated(IReadOnlyList<float> samples, double frame)
+    {
+        if (samples.Count == 0)
+        {
+            return 0f;
+        }
+
+        if (frame <= 0.0)
+        {
+            return samples[0];
+        }
+
+        var left = (int)Math.Floor(frame);
+        if (left >= samples.Count - 1)
+        {
+            return samples[^1];
+        }
+
+        var fraction = frame - left;
+        return (float)(samples[left] + (samples[left + 1] - samples[left]) * fraction);
+    }
+
+    private static void WriteSample(IntPtr target, float sample, SampleFormat format)
+    {
+        if (format.Kind == SampleKind.IeeeFloat && format.ContainerBits == 32)
+        {
+            Marshal.StructureToPtr(sample, target, false);
+            return;
+        }
+
+        if (format.Kind != SampleKind.Pcm)
+        {
+            return;
+        }
+
+        sample = Math.Clamp(sample, -1f, 1f);
+        switch (format.ContainerBits)
+        {
+            case 16:
+                Marshal.WriteInt16(target, (short)Math.Clamp(Math.Round(sample * 32767.0), short.MinValue, short.MaxValue));
+                break;
+            case 24:
+                WritePacked24(target, (int)Math.Clamp(Math.Round(sample * 8388607.0), -8388608.0, 8388607.0));
+                break;
+            case 32:
+                var bits = format.ValidBits is > 0 and < 32 ? format.ValidBits : 32;
+                var max = Math.Pow(2.0, bits - 1) - 1.0;
+                var value = (int)Math.Clamp(Math.Round(sample * max), -max - 1.0, max);
+                if (bits < 32)
+                {
+                    value <<= 32 - bits;
+                }
+
+                Marshal.WriteInt32(target, value);
+                break;
+        }
+    }
+
+    private static void WritePacked24(IntPtr target, int value)
+    {
+        Marshal.WriteByte(target, 0, (byte)(value & 0xff));
+        Marshal.WriteByte(target, 1, (byte)((value >> 8) & 0xff));
+        Marshal.WriteByte(target, 2, (byte)((value >> 16) & 0xff));
+    }
+
     private static void LogFormat(string label, WaveFormatEx fmt, SampleFormat sampleFormat)
     {
         Console.Error.WriteLine(
@@ -302,20 +504,137 @@ internal static class Program
         };
     }
 
-    private sealed record Options(string OutputPath, double Seconds, int SampleRate, int Channels, string Role)
+    private static void ListRenderDevices()
+    {
+        IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumerator();
+        Check(enumerator.EnumAudioEndpoints(ERender, DeviceStateActive, out var devices), "EnumAudioEndpoints");
+        Check(devices.GetCount(out var count), "GetCount");
+        for (uint index = 0; index < count; index++)
+        {
+            Check(devices.Item(index, out var device), "Item");
+            try
+            {
+                Console.WriteLine("{0}: {1}", index, DeviceFriendlyName(device));
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(device);
+            }
+        }
+
+        Marshal.ReleaseComObject(devices);
+        Marshal.ReleaseComObject(enumerator);
+    }
+
+    private static IMMDevice ResolveRenderDevice(IMMDeviceEnumerator enumerator, string role, string deviceSubstring)
+    {
+        if (string.IsNullOrWhiteSpace(deviceSubstring))
+        {
+            Check(enumerator.GetDefaultAudioEndpoint(ERender, RoleFromName(role), out var defaultDevice), "GetDefaultAudioEndpoint");
+            Console.Error.WriteLine("SelectedRenderDevice default role={0} name=\"{1}\"", role, DeviceFriendlyName(defaultDevice));
+            return defaultDevice;
+        }
+
+        Check(enumerator.EnumAudioEndpoints(ERender, DeviceStateActive, out var devices), "EnumAudioEndpoints");
+        Check(devices.GetCount(out var count), "GetCount");
+        IMMDevice? selected = null;
+        var selectedName = "";
+        try
+        {
+            for (uint index = 0; index < count; index++)
+            {
+                Check(devices.Item(index, out var device), "Item");
+                var name = DeviceFriendlyName(device);
+                if (name.Contains(deviceSubstring, StringComparison.OrdinalIgnoreCase))
+                {
+                    selected = device;
+                    selectedName = name;
+                    break;
+                }
+
+                Marshal.ReleaseComObject(device);
+            }
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(devices);
+        }
+
+        if (selected == null)
+        {
+            throw new InvalidOperationException("No active render endpoint matched --device \"" + deviceSubstring + "\"");
+        }
+
+        Console.Error.WriteLine("SelectedRenderDevice match=\"{0}\" name=\"{1}\"", deviceSubstring, selectedName);
+        return selected;
+    }
+
+    private static string DeviceFriendlyName(IMMDevice device)
+    {
+        Check(device.OpenPropertyStore(0, out var store), "OpenPropertyStore");
+        try
+        {
+            var key = DeviceFriendlyNameKey;
+            Check(store.GetValue(ref key, out var value), "GetValue FriendlyName");
+            try
+            {
+                return value.ValueType == 31 && value.Pointer != IntPtr.Zero
+                    ? Marshal.PtrToStringUni(value.Pointer) ?? ""
+                    : "";
+            }
+            finally
+            {
+                PropVariantClear(ref value);
+            }
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(store);
+        }
+    }
+
+    private sealed record Options(
+        RunMode Mode,
+        string InputPath,
+        string OutputPath,
+        double Seconds,
+        int SampleRate,
+        int Channels,
+        string Role,
+        string Device,
+        double Gain,
+        double RenderBufferSeconds,
+        double RenderDrainSeconds,
+        bool ListDevices)
     {
         public static Options Parse(string[] args)
         {
+            var mode = RunMode.Capture;
+            var input = "";
             var output = "stdout";
             var seconds = 0.0;
             var sampleRate = 48000;
             var channels = 2;
             var role = "Console";
+            var device = "";
+            var gain = 1.0;
+            var renderBufferSeconds = 0.06;
+            var renderDrainSeconds = 0.20;
+            var listDevices = false;
 
             for (var i = 0; i < args.Length; i++)
             {
                 switch (args[i])
                 {
+                    case "--list-devices":
+                        listDevices = true;
+                        break;
+                    case "--play-f32-mono":
+                        mode = RunMode.PlayF32Mono;
+                        break;
+                    case "--input":
+                        input = ReadValue(args, ref i);
+                        break;
                     case "--output":
                         output = ReadValue(args, ref i);
                         break;
@@ -331,9 +650,21 @@ internal static class Program
                     case "--role":
                         role = ReadValue(args, ref i);
                         break;
+                    case "--device":
+                        device = ReadValue(args, ref i);
+                        break;
+                    case "--gain":
+                        gain = double.Parse(ReadValue(args, ref i), System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                    case "--render-buffer-seconds":
+                        renderBufferSeconds = double.Parse(ReadValue(args, ref i), System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                    case "--render-drain-seconds":
+                        renderDrainSeconds = double.Parse(ReadValue(args, ref i), System.Globalization.CultureInfo.InvariantCulture);
+                        break;
                     case "--help":
                     case "-h":
-                        Console.Error.WriteLine("Usage: Mimir.WasapiLoopback --output stdout --sample-rate 48000 --channels 2 [--seconds 10] [--role Console]");
+                        Console.Error.WriteLine("Usage: Mimir.WasapiLoopback [--list-devices] [--device Realtek] [--output stdout --sample-rate 48000 --channels 2 --seconds 10] [--play-f32-mono --input probe.raw --sample-rate 48000 --gain 1]");
                         Environment.Exit(0);
                         break;
                     default:
@@ -341,7 +672,7 @@ internal static class Program
                 }
             }
 
-            return new Options(output, seconds, sampleRate, channels, role);
+            return new Options(mode, input, output, seconds, sampleRate, channels, role, device, gain, renderBufferSeconds, renderDrainSeconds, listDevices);
         }
 
         private static string ReadValue(string[] args, ref int index)
@@ -354,6 +685,12 @@ internal static class Program
             index++;
             return args[index];
         }
+    }
+
+    private enum RunMode
+    {
+        Capture,
+        PlayF32Mono
     }
 
     private readonly struct SampleFormat
@@ -443,10 +780,22 @@ internal static class Program
     private interface IMMDeviceEnumerator
     {
         [PreserveSig]
-        int EnumAudioEndpoints(int dataFlow, uint stateMask, out IntPtr devices);
+        int EnumAudioEndpoints(int dataFlow, uint stateMask, out IMMDeviceCollection devices);
 
         [PreserveSig]
         int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
+    }
+
+    [ComImport]
+    [Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IMMDeviceCollection
+    {
+        [PreserveSig]
+        int GetCount(out uint count);
+
+        [PreserveSig]
+        int Item(uint index, out IMMDevice device);
     }
 
     [ComImport]
@@ -456,6 +805,15 @@ internal static class Program
     {
         [PreserveSig]
         int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, out IAudioClient audioClient);
+
+        [PreserveSig]
+        int OpenPropertyStore(uint access, out IPropertyStore properties);
+
+        [PreserveSig]
+        int GetId(out IntPtr id);
+
+        [PreserveSig]
+        int GetState(out uint state);
     }
 
     [ComImport]
@@ -497,7 +855,7 @@ internal static class Program
         int SetEventHandle(IntPtr eventHandle);
 
         [PreserveSig]
-        int GetService(ref Guid iid, out IAudioCaptureClient captureClient);
+        int GetService(ref Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object service);
     }
 
     [ComImport]
@@ -514,4 +872,58 @@ internal static class Program
         [PreserveSig]
         int GetNextPacketSize(out uint frames);
     }
+
+    [ComImport]
+    [Guid("F294ACFC-3146-4483-A7BF-ADDCA7C260E2")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IAudioRenderClient
+    {
+        [PreserveSig]
+        int GetBuffer(uint frames, out IntPtr data);
+
+        [PreserveSig]
+        int ReleaseBuffer(uint frames, uint flags);
+    }
+
+    [ComImport]
+    [Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        [PreserveSig]
+        int GetCount(out uint propertyCount);
+
+        [PreserveSig]
+        int GetAt(uint propertyIndex, out PropertyKey key);
+
+        [PreserveSig]
+        int GetValue(ref PropertyKey key, out PropVariant value);
+
+        [PreserveSig]
+        int SetValue(ref PropertyKey key, ref PropVariant value);
+
+        [PreserveSig]
+        int Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct PropertyKey(Guid formatId, uint propertyId)
+    {
+        public readonly Guid FormatId = formatId;
+        public readonly uint PropertyId = propertyId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PropVariant
+    {
+        public ushort ValueType;
+        public ushort Reserved1;
+        public ushort Reserved2;
+        public ushort Reserved3;
+        public IntPtr Pointer;
+        public int Int32Value;
+    }
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref PropVariant variant);
 }

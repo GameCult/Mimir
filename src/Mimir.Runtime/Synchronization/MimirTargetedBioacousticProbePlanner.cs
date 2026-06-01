@@ -28,7 +28,7 @@ public sealed record MimirTargetedBioacousticProbeOptions(
     int SampleRate = 192_000,
     int MaxProbeBands = 8,
     double MinFrequencyHz = 120.0,
-    double MaxFrequencyHz = 42_000.0,
+    double MaxFrequencyHz = 12_000.0,
     double TargetConfidence = 0.82,
     double ResidualDbBudget = 1.5,
     double WeakResponseThreshold = 0.08,
@@ -168,6 +168,12 @@ public sealed class MimirTargetedBioacousticProbePlanner(MimirTargetedBioacousti
         var phasePressure = Math.Max(0.0, Math.Abs(residual.PhaseResidualRadians) - options.PhaseResidualBudgetRadians) / Math.PI;
         var delayPressure = Math.Min(1.0, Math.Abs(residual.DelayResidualMicroseconds) / 25.0);
         var pathologyPressure = 0.0;
+        var nearSpeechBand = residual.CenterHz is >= 250.0 and <= 5_500.0
+            ? 0.22
+            : 0.0;
+        var upperPresenceBand = residual.CenterHz is > 5_500.0 and <= 12_000.0
+            ? 0.08
+            : 0.0;
         if (pathologyBySource.TryGetValue(residual.SourceId, out var pathology))
         {
             var highBand = residual.CenterHz >= 3_000.0
@@ -175,10 +181,18 @@ public sealed class MimirTargetedBioacousticProbePlanner(MimirTargetedBioacousti
                 : 0.0;
             var noisePressure = Math.Clamp(pathology.NoiseFloorRms / 0.050, 0.0, 1.0);
             var tiltPressure = Math.Clamp(pathology.LowHighTiltDb / 18.0, 0.0, 1.0);
-            pathologyPressure = highBand * (noisePressure * 0.35 + tiltPressure * 0.75 + Math.Clamp(pathology.HighBandConfidenceBias, 0.0, 1.0));
+            var measurableHighBand = Math.Clamp(1.0 - Math.Max(0.0, residual.CenterHz - 10_000.0) / 8_000.0, 0.0, 1.0);
+            pathologyPressure = highBand * measurableHighBand * (noisePressure * 0.35 + tiltPressure * 0.75 + Math.Clamp(pathology.HighBandConfidenceBias, 0.0, 1.0));
         }
 
-        return confidenceGap * 1.20 + residualPressure + weakResponse * 0.85 + phasePressure * 0.75 + delayPressure * 0.40 + pathologyPressure;
+        return confidenceGap * 1.20 +
+            residualPressure +
+            weakResponse * 0.85 +
+            phasePressure * 0.75 +
+            delayPressure * 0.40 +
+            pathologyPressure +
+            nearSpeechBand +
+            upperPresenceBand;
     }
 
     private MimirBioacousticProbeReason ReasonFor(MimirAudioCalibrationBandResidual residual)

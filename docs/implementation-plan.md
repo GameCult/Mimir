@@ -142,6 +142,15 @@ a named invariant that the native runtime cannot protect yet.
   for aggregate confidence, deltas, source probe counts, and weak-band pressure.
   The scheduler is output-device neutral; a later renderer must explicitly
   target Starfire Realtek for physical chirp emission in the current routing.
+- `Mimir.WasapiLoopback` now has the first explicit Starfire Realtek render
+  edge: it can list active render endpoints, select `Speakers (Realtek(R)
+  Audio)` by friendly-name substring, and play mono Float32 probe audio through
+  WASAPI shared mode. `Mimir.BufferSmoke
+  --targeted-bioacoustic-probe-realtk-live` couples that renderer with Scarlett
+  ASIO capture and scores the physical mic response for the scheduled probe.
+  The targeted probe planner defaults to a 12 kHz ceiling and low/mid-band bias
+  because the current Realtek/speaker/Scarlett-mic path does not provide useful
+  high-band calibration evidence.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
   empty declared sensor buffer should fail the run. Use `--bioacoustic-self-test`

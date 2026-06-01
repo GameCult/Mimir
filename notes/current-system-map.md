@@ -334,6 +334,22 @@ climb: simulated probe feedback raises sync confidence from 0.360 to 0.920 and
 frequency-response confidence from 0.558 to 0.955 over four scheduled probes.
 The scheduler is not the output-device authority; in the current physical
 routing the eventual live renderer must explicitly select Starfire Realtek.
+That Realtek renderer now exists as a tooling edge. `Mimir.WasapiLoopback`
+targets `net10.0-windows`, enumerates active render endpoints, selects by
+friendly-name substring, and can play mono Float32 probe audio through the
+matched WASAPI render endpoint. `Mimir.BufferSmoke
+--targeted-bioacoustic-probe-realtk-live` renders a targeted probe, starts
+Scarlett ASIO capture, plays it through the selected Realtek speaker endpoint,
+then scores the captured shotgun/cardioid response. The first proof selected
+`Speakers (Realtek(R) Audio)` and wrote
+`artifacts/wasapi/targeted-bioacoustic-realtk-live/20260601-033851`; at gain
+0.75 the shotgun peak was 0.407887 and cardioid peak was 0.074494, but 18.6 kHz
+remained near-zero confidence while cardioid 3.6 kHz was the strongest printed
+band at 0.098 confidence. Realtek emission is now real; high-band probe choice
+is still a bad physical question for this room/speaker path. The default
+targeted probe planner now caps selection at 12 kHz and biases measurable
+low/mid bands instead of favoring ultrasonic-ish uncertainty that ordinary
+speakers and mics cannot answer well.
 The first live run preserves two artifacts:
 `artifacts/asio/targeted-bioacoustic-live/20260601-030836` at playback gain
 1.0 and `artifacts/asio/targeted-bioacoustic-live/20260601-030857` at gain

@@ -101,6 +101,18 @@ if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-live", Stri
         ParseIntOption(args, "--reference-channel", 2));
 }
 
+if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-realtk-live", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunTargetedBioacousticProbeRealtekLive(
+        ParseStringOption(args, "--wasapi", "src/Mimir.WasapiLoopback/bin/Debug/net10.0-windows/Mimir.WasapiLoopback.exe"),
+        ParseStringOption(args, "--probe", "native/probes/asio_audio_cadence/build/Release/asio_audio_cadence.exe"),
+        ParseStringOption(args, "--output", "artifacts/wasapi/targeted-bioacoustic-realtk-live"),
+        ParseStringOption(args, "--device", "Realtek"),
+        ParseIntOption(args, "--sample-rate", 48_000),
+        ParseDoubleOption(args, "--gain", 0.45),
+        ParseIntOption(args, "--channels", 4));
+}
+
 if (args.Any(arg => string.Equals(arg, "--synchronized-buffer-planner-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunSynchronizedBufferPlannerSmoke();
@@ -3418,7 +3430,7 @@ static int RunTargetedBioacousticProbeSmoke()
     var top = plan.Bands.FirstOrDefault();
     var hasLowBand = plan.Bands.Any(band => band.CenterHz is > 800.0 and < 1_000.0);
     var hasMidBand = plan.Bands.Any(band => band.CenterHz is > 3_300.0 and < 3_900.0);
-    var hasHighBand = plan.Bands.Any(band => band.CenterHz is > 17_000.0 and < 20_000.0);
+    var hasUpperBand = plan.Bands.Any(band => band.CenterHz is > 8_000.0 and < 12_000.0);
     Console.WriteLine(
         $"targeted-bioacoustic-probe-smoke sampleRate={plan.SampleRate} sources={string.Join(",", plan.MeasurementSourceIds)} bands={plan.Bands.Count} " +
         $"duration={plan.EstimatedDurationSeconds:0.000} top={top?.CenterHz:0}Hz reason={top?.Reason} gain={top?.Gain:0.000} priority={top?.Priority:0.000} " +
@@ -3429,9 +3441,10 @@ static int RunTargetedBioacousticProbeSmoke()
         plan.Bands.Count >= 3 &&
         hasLowBand &&
         hasMidBand &&
-        hasHighBand &&
-        top is { CenterHz: > 17_000.0 and < 20_000.0 } &&
-        top.Reason is MimirBioacousticProbeReason.UnmeasuredBand or MimirBioacousticProbeReason.WeakResponse or MimirBioacousticProbeReason.PhaseUnstable &&
+        hasUpperBand &&
+        top is { CenterHz: > 8_000.0 and < 12_000.0 } &&
+        top.Reason is MimirBioacousticProbeReason.WeakResponse or MimirBioacousticProbeReason.PhaseUnstable &&
+        plan.Bands.All(band => band.CenterHz <= 12_000.0) &&
         plan.Bands.All(band => band.Gain is >= 0.018 and <= 0.085)
             ? 0
             : 1;
@@ -3585,6 +3598,97 @@ static int RunTargetedBioacousticProbeLive(
     }
 
     return failures == 0 ? 0 : 1;
+}
+
+static int RunTargetedBioacousticProbeRealtekLive(
+    string wasapiPath,
+    string probePath,
+    string outputDirectory,
+    string device,
+    int sampleRate,
+    double gain,
+    int channels)
+{
+    var residuals = ScarlettProfessionalMicProbeResiduals();
+    var pathologies = ScarlettProfessionalMicPathologies();
+    var plan = new MimirTargetedBioacousticProbePlanner(new MimirTargetedBioacousticProbeOptions(SampleRate: sampleRate)).Plan(
+        residuals,
+        ["asio-ch0-shotgun", "asio-ch1-cardioid"],
+        pathologies);
+    if (plan.Bands.Count == 0)
+    {
+        Console.Error.WriteLine("targeted Realtek bioacoustic live failed: planner emitted no probe bands");
+        return 1;
+    }
+
+    var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+    var runDirectory = Path.Combine(outputDirectory, stamp);
+    Directory.CreateDirectory(runDirectory);
+    var renderPath = Path.Combine(runDirectory, "targeted-realtk-probe-f32.raw");
+    var capturePath = Path.Combine(runDirectory, "scarlett-realtk-probe-f32.raw");
+    var samples = RenderTargetedProbePlan(plan);
+    WriteFloat32(renderPath, samples);
+    Console.WriteLine(
+        $"targeted-bioacoustic-realtk-live-plan dir={runDirectory} device=\"{device}\" sampleRate={sampleRate} gain={gain:0.000} samples={samples.Length} bands={plan.Bands.Count} selected={string.Join(",", plan.Bands.Select(band => $"{band.CenterHz:0}Hz/{band.Reason}/{band.Gain:0.000}"))}");
+
+    var captureSeconds = samples.Length / (double)sampleRate + 0.65;
+    var capture = StartAsioCaptureOnly(probePath, capturePath, sampleRate, captureSeconds);
+    if (capture == null)
+    {
+        return 1;
+    }
+
+    using (capture)
+    {
+        Thread.Sleep(180);
+        var renderExit = RunWasapiRender(wasapiPath, renderPath, device, sampleRate, gain);
+        capture.WaitForExit();
+        if (renderExit != 0)
+        {
+            Console.Error.WriteLine($"targeted Realtek bioacoustic live failed: WASAPI renderer exited {renderExit}");
+            return renderExit;
+        }
+
+        if (capture.ExitCode != 0)
+        {
+            Console.Error.WriteLine($"targeted Realtek bioacoustic live failed: ASIO capture exited {capture.ExitCode}");
+            return capture.ExitCode;
+        }
+    }
+
+    if (!File.Exists(capturePath))
+    {
+        Console.Error.WriteLine($"targeted Realtek bioacoustic live failed: capture file missing {capturePath}");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(capturePath, channels, out var frameCount);
+    if (frameCount == 0)
+    {
+        Console.Error.WriteLine($"targeted Realtek bioacoustic live failed: invalid capture frames={frameCount}");
+        return 1;
+    }
+
+    Console.WriteLine($"targeted-bioacoustic-realtk-live-capture path={capturePath} frames={frameCount} seconds={frameCount / (double)sampleRate:0.000}");
+    for (var channel = 0; channel < Math.Min(2, channels); channel++)
+    {
+        var label = channel == 0 ? "shotgun" : "cardioid";
+        var stats = SignalStats(channelSamples[channel]);
+        var low = BandLimitedStats(channelSamples[channel], sampleRate, 80.0, 1000.0);
+        var high = BandLimitedStats(channelSamples[channel], sampleRate, 8000.0, Math.Min(24000.0, sampleRate * 0.45));
+        var tiltDb = 20.0 * Math.Log10(Math.Max(1.0e-9, low.Rms) / Math.Max(1.0e-9, high.Rms));
+        Console.WriteLine(
+            $"targeted-bioacoustic-realtk-live-source ch={channel} label={label} rms={stats.Rms:0.000000} peak={stats.Peak:0.000000} lowHighTiltDb={tiltDb:0.000}");
+        foreach (var band in plan.Bands)
+        {
+            var candidateEnergy = ToneEnergy(channelSamples[channel], sampleRate, band.CenterHz);
+            var bandConfidence = candidateEnergy / (candidateEnergy + Math.Max(1.0e-9, stats.Rms * 0.20));
+            Console.WriteLine(
+                $"targeted-bioacoustic-realtk-live-band ch={channel} label={label} centerHz={band.CenterHz:0.0} reason={band.Reason} micEnergy={candidateEnergy:0.000000} confidence={bandConfidence:0.000}");
+        }
+    }
+
+    return 0;
 }
 
 static int RunSynchronizedBufferPlannerSmoke()
@@ -6122,6 +6226,103 @@ static int RunAsioProbeCapture(
     if (process == null)
     {
         Console.Error.WriteLine($"chirp-bin calibration failed: could not start ASIO probe {probePath}");
+        return 1;
+    }
+
+    process.OutputDataReceived += (_, e) =>
+    {
+        if (e.Data != null)
+        {
+            Console.WriteLine(e.Data);
+        }
+    };
+    process.ErrorDataReceived += (_, e) =>
+    {
+        if (e.Data != null)
+        {
+            Console.Error.WriteLine(e.Data);
+        }
+    };
+    process.BeginOutputReadLine();
+    process.BeginErrorReadLine();
+    process.WaitForExit();
+    return process.ExitCode;
+}
+
+static Process? StartAsioCaptureOnly(
+    string probePath,
+    string capturePath,
+    int sampleRate,
+    double seconds)
+{
+    var startInfo = new ProcessStartInfo(Path.GetFullPath(probePath))
+    {
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true,
+    };
+    startInfo.ArgumentList.Add("--set-sample-rate");
+    startInfo.ArgumentList.Add(sampleRate.ToString());
+    startInfo.ArgumentList.Add("--record-f32-interleaved");
+    startInfo.ArgumentList.Add(Path.GetFullPath(capturePath));
+    startInfo.ArgumentList.Add("--capture-seconds");
+    startInfo.ArgumentList.Add(seconds.ToString("0.###"));
+
+    var process = Process.Start(startInfo);
+    if (process == null)
+    {
+        Console.Error.WriteLine($"ASIO capture failed: could not start {probePath}");
+        return null;
+    }
+
+    process.OutputDataReceived += (_, e) =>
+    {
+        if (e.Data != null)
+        {
+            Console.WriteLine(e.Data);
+        }
+    };
+    process.ErrorDataReceived += (_, e) =>
+    {
+        if (e.Data != null)
+        {
+            Console.Error.WriteLine(e.Data);
+        }
+    };
+    process.BeginOutputReadLine();
+    process.BeginErrorReadLine();
+    return process;
+}
+
+static int RunWasapiRender(
+    string wasapiPath,
+    string renderPath,
+    string device,
+    int sampleRate,
+    double gain)
+{
+    var startInfo = new ProcessStartInfo(Path.GetFullPath(wasapiPath))
+    {
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true,
+    };
+    startInfo.ArgumentList.Add("--play-f32-mono");
+    startInfo.ArgumentList.Add("--device");
+    startInfo.ArgumentList.Add(device);
+    startInfo.ArgumentList.Add("--input");
+    startInfo.ArgumentList.Add(Path.GetFullPath(renderPath));
+    startInfo.ArgumentList.Add("--sample-rate");
+    startInfo.ArgumentList.Add(sampleRate.ToString());
+    startInfo.ArgumentList.Add("--gain");
+    startInfo.ArgumentList.Add(gain.ToString("0.#####"));
+
+    using var process = Process.Start(startInfo);
+    if (process == null)
+    {
+        Console.Error.WriteLine($"WASAPI render failed: could not start {wasapiPath}");
         return 1;
     }
 

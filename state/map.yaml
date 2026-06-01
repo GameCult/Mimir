@@ -666,6 +666,21 @@ accepted_design:
     0.360 to 0.920 and frequency-response confidence from 0.558 to 0.955 over
     four scheduled probes. The scheduler owns cadence and telemetry only; it
     does not override the Realtek routing authority for physical emission.
+    The Realtek physical emission edge now exists in tooling:
+    `Mimir.WasapiLoopback` targets `net10.0-windows`, can list active render
+    endpoints, select by friendly-name substring, and play mono Float32 probes
+    through the selected WASAPI render endpoint. `Mimir.BufferSmoke
+    --targeted-bioacoustic-probe-realtk-live` couples that renderer with
+    Scarlett ASIO capture and scores the mic response. The first proof selected
+    `Speakers (Realtek(R) Audio)` and wrote
+    `artifacts/wasapi/targeted-bioacoustic-realtk-live/20260601-033851`; at
+    gain 0.75 the shotgun peak was 0.407887 and cardioid peak was 0.074494,
+    but 18.6 kHz remained near-zero confidence and the strongest printed band
+    was cardioid 3.6 kHz at 0.098 confidence. Realtek emission is proven; high
+    bands remain poor physical probe candidates for this route. The targeted
+    probe planner now defaults to a 12 kHz ceiling and biases measurable low/mid
+    bands so the scheduler asks questions the current speakers and mics can
+    plausibly answer.
     The first live targeted probe ran through Focusrite ASIO at 192 kHz. Gain
     1.0 artifact `artifacts/asio/targeted-bioacoustic-live/20260601-030836`
     measured shotgun low/high tilt 20.199 dB and cardioid 15.082 dB. Gain 2.0
