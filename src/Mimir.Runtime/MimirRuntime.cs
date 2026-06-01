@@ -893,7 +893,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
                     shell.Vertical("mimir.editor-center", center =>
                     {
-                        center.Preview("scene.view-preview", "", () => sceneEditor.PreviewItems, weight: 2.2f, blitOutputBuffer: true);
+                        center.Preview("scene.view-preview", "", () => sceneEditor.PreviewItems, weight: 2.2f, blitOutputBuffer: true, handleInteraction: sceneEditor.HandlePreviewInteraction);
                         center.Pane("mimir.audio-mixer", "Audio Mixer", mixer =>
                         {
                             mixer.Horizontal("audio.channel-bank", bank =>

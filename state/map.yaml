@@ -61,7 +61,9 @@ invariants:
     the preview observes the program surface without becoming composition
     authority. Placement commits keep layers inside the frame, snap near
     edges/center, and preserve source aspect while resizing through sliders or
-    the scale gizmo.
+    the scale gizmo. The center preview now has direct Fensalir CultUI
+    body/corner-handle gestures wired to the same placement owner; sliders are
+    fallback/precision controls, not the primary compositor surface.
   - `MimirProgramRecorder` owns the first app-level recording control. The Video
     Sources rail exposes `Record` / `Stop`, status text, latest output path, and
     process-tree shutdown. Its current actuator delegates to

@@ -402,6 +402,34 @@ public sealed class MimirSceneEditorState
         }
     }
 
+    public void HandlePreviewInteraction(AquariumUiPreviewInteraction interaction)
+    {
+        if (nodes.FirstOrDefault(node => string.Equals(node.Id, interaction.ItemId, StringComparison.Ordinal)) is not { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } node ||
+            node.Locked)
+        {
+            return;
+        }
+
+        SelectedNodeId = node.Id;
+        if (interaction.Phase != "drag")
+        {
+            return;
+        }
+
+        var placement = PlacementForNode(node);
+        if (interaction.Handle == "move")
+        {
+            SetNodeProgramPlacement(node, placement with
+            {
+                CenterX = placement.CenterX + interaction.DeltaX,
+                CenterY = placement.CenterY + interaction.DeltaY,
+            });
+            return;
+        }
+
+        SetNodeProgramPlacement(node, ResizeProgramPlacementFromHandle(node, placement, interaction.Handle, interaction.DeltaX, interaction.DeltaY));
+    }
+
     public bool IncludesVideoSource(string sourceId) =>
         NodeForSource(sourceId) is not { } node || node.Visible;
 
@@ -695,6 +723,44 @@ public sealed class MimirSceneEditorState
         }
 
         return placement with { Width = width, Height = height };
+    }
+
+    private static MimirCompositorPlacement ResizeProgramPlacementFromHandle(
+        MimirSceneEditorNode node,
+        MimirCompositorPlacement placement,
+        string handle,
+        float deltaX,
+        float deltaY)
+    {
+        var west = handle.Contains('w', StringComparison.Ordinal);
+        var east = handle.Contains('e', StringComparison.Ordinal);
+        var north = handle.Contains('n', StringComparison.Ordinal);
+        var south = handle.Contains('s', StringComparison.Ordinal);
+        if ((!west && !east) || (!north && !south))
+        {
+            return placement;
+        }
+
+        var l = placement.CenterX - placement.Width * 0.5f;
+        var r = placement.CenterX + placement.Width * 0.5f;
+        var t = placement.CenterY - placement.Height * 0.5f;
+        var b = placement.CenterY + placement.Height * 0.5f;
+        var targetWidthFromX = placement.Width + (east ? deltaX : -deltaX);
+        var targetHeightFromY = placement.Height + (south ? deltaY : -deltaY);
+        var aspect = ProgramPlacementAspectFor(node);
+        var xChange = MathF.Abs(targetWidthFromX - placement.Width);
+        var yChange = MathF.Abs(targetHeightFromY - placement.Height);
+        var targetWidth = xChange >= yChange
+            ? targetWidthFromX
+            : targetHeightFromY * aspect;
+        var resized = ResizeProgramPlacement(node, placement, targetWidth, resizeWidth: true);
+        var centerX = west ? r - resized.Width * 0.5f : l + resized.Width * 0.5f;
+        var centerY = north ? b - resized.Height * 0.5f : t + resized.Height * 0.5f;
+        return resized with
+        {
+            CenterX = centerX,
+            CenterY = centerY,
+        };
     }
 
     private MimirSceneEditorNode? NodeForSource(string sourceId) =>

@@ -548,7 +548,8 @@ Fensalir-owned blit of the current output buffer, then draws Mimir's normalized
 placement overlays on top. This editor is not the OBS program output authority;
 it is a live program-surface witness. The placement commit primitive keeps
 layers inside the program frame, snaps near edges/center, and preserves source
-aspect while resizing through sliders or the scale gizmo. World SDF glyph rendering, ASSIMP-style
+aspect while resizing through direct preview handles, sliders, or the scale
+gizmo. World SDF glyph rendering, ASSIMP-style
 mesh decoding/upload, and pixel-accurate gizmo hit-testing are explicit
 Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].

@@ -8,6 +8,7 @@ using Aquarium.Engine;
 using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
+using Aquarium.Engine.Ui;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
 using MessagePack;
@@ -4237,6 +4238,18 @@ static int RunSceneEditorSmoke()
         Math.Abs(snappedPlacement.Value.CenterX - snappedPlacement.Value.Width * 0.5f) < 0.001f &&
         Math.Abs(snappedPlacement.Value.CenterY - (1.0f - snappedPlacement.Value.Height * 0.5f)) < 0.001f;
     editor.CenterSelectedProgramLayer();
+    editor.HandlePreviewInteraction(new AquariumUiPreviewInteraction(displayNode.Id, "move", "begin", 0.5f, 0.5f, 0.0f, 0.0f));
+    editor.HandlePreviewInteraction(new AquariumUiPreviewInteraction(displayNode.Id, "move", "drag", 0.6f, 0.6f, 0.1f, 0.05f));
+    var draggedPlacement = editor.PlacementForSource("raven-display");
+    var previewMoveHandled = draggedPlacement.HasValue &&
+        Math.Abs(draggedPlacement.Value.CenterX - 0.6f) < 0.001f &&
+        Math.Abs(draggedPlacement.Value.CenterY - 0.55f) < 0.001f;
+    editor.HandlePreviewInteraction(new AquariumUiPreviewInteraction(displayNode.Id, "se", "drag", 0.75f, 0.75f, 0.08f, 0.02f));
+    var handlePlacement = editor.PlacementForSource("raven-display");
+    var previewHandleAspectLocked = handlePlacement.HasValue &&
+        Math.Abs(handlePlacement.Value.Width - handlePlacement.Value.Height) < 0.001f &&
+        handlePlacement.Value.Width > draggedPlacement?.Width;
+    editor.CenterSelectedProgramLayer();
     editor.MoveSelectedLayer(-1);
 
     var hierarchy = editor.DescribeHierarchy();
@@ -4250,7 +4263,7 @@ static int RunSceneEditorSmoke()
     Console.WriteLine(
         $"scene-editor-smoke nodes={editor.Nodes.Count} feeds={editor.Nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)} " +
         $"preview={previewItems.Count} selected={editor.SelectedNode?.DisplayName} hasDisplay={hasDisplay} cameraPreview={hasCameraPreview} " +
-        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered} aspectLocked={aspectLocked} snapped={snappedToBounds}");
+        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered} aspectLocked={aspectLocked} snapped={snappedToBounds} previewMove={previewMoveHandled} previewHandle={previewHandleAspectLocked}");
 
     return editor.Nodes.Count == 3 &&
         hasDisplay &&
@@ -4258,7 +4271,9 @@ static int RunSceneEditorSmoke()
         !hasCameraPreview &&
         programCentered &&
         aspectLocked &&
-        snappedToBounds
+        snappedToBounds &&
+        previewMoveHandled &&
+        previewHandleAspectLocked
             ? 0
             : 1;
 }
