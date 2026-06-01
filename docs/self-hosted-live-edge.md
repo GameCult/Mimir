@@ -77,13 +77,13 @@ The current routing contract is explicit:
 - Starfire Realtek/default render is the chirp/speaker emission lane.
 - Raven Realtek/default render loopback is the co-streamer game/program lane.
   It is packaged with Raven's NVENC video feed back to Starfire.
-- Starfire Scarlett carries the monitored final mix/return. The streamer hears
-  that on direct monitor/headphones, and Raven's Scarlett monitor return is
-  routed into Starfire Scarlett channel 1.
+- Starfire Scarlett carries the hero mic capture and monitored local mix for
+  judgment. Raven's Scarlett is only routing the remote shotgun into Starfire
+  Scarlett, currently on channel 1.
 - The proof recording is allowed to mix those lanes for human sync judgment, but
   it must not collapse their authority. Starfire Realtek proves chirp emission,
   Raven Realtek proves the co-streamer/game program path, and Scarlett proves
-  the monitored return path.
+  the hero mic/shotgun capture path.
 
 This is a bridge recording, not public broadcast truth. It exists so humans can
 judge audio/video sync and tell Mimir which offsets to apply before the RTMP/HLS
