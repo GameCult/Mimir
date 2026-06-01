@@ -124,7 +124,7 @@ Wait-LoggedProcess $asio ($DurationSeconds + 15) "ASIO capture"
 Wait-LoggedProcess $kiyo ($DurationSeconds + 15) "Kiyo capture"
 
 dotnet run --project (Join-Path $repo "src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj") -- `
-    --asio-dual-mic-composite-wav `
+    --asio-dual-mic-faust-cleaner-wav `
     --input $asioRaw `
     --output $compositeWav `
     --sample-rate $SampleRate `

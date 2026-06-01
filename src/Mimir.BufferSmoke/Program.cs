@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using AquaSynth.Faust;
 using Aquarium.Engine;
 using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
@@ -88,6 +89,17 @@ if (args.Any(arg => string.Equals(arg, "--dual-mic-coherence-cancellation-smoke"
 if (args.Any(arg => string.Equals(arg, "--asio-dual-mic-composite-wav", StringComparison.OrdinalIgnoreCase)))
 {
     return RunAsioDualMicCompositeWave(
+        ParseStringOption(args, "--input", ""),
+        ParseStringOption(args, "--output", ""),
+        ParseIntOption(args, "--sample-rate", 48_000),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--shotgun-channel", 0),
+        ParseIntOption(args, "--cardioid-channel", 1));
+}
+
+if (args.Any(arg => string.Equals(arg, "--asio-dual-mic-faust-cleaner-wav", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunAsioDualMicFaustCleanerWave(
         ParseStringOption(args, "--input", ""),
         ParseStringOption(args, "--output", ""),
         ParseIntOption(args, "--sample-rate", 48_000),
@@ -3563,6 +3575,160 @@ static int RunAsioDualMicCompositeWave(
         $"asio-dual-mic-composite-wav input={inputPath} output={outputPath} report={reportPath} frames={frameCount} " +
         $"delaySamples={delay:0.000} delayUs={delay * 1_000_000.0 / sampleRate:0.000} bands={result.BandReports.Count} rms={result.CompositeRms:0.000000}");
     return 0;
+}
+
+static int RunAsioDualMicFaustCleanerWave(
+    string inputPath,
+    string outputPath,
+    int sampleRate,
+    int channels,
+    int shotgunChannel,
+    int cardioidChannel)
+{
+    if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
+    {
+        Console.Error.WriteLine("asio-dual-mic-faust-cleaner-wav failed: --input must name an existing f32 interleaved ASIO capture.");
+        return 1;
+    }
+
+    if (string.IsNullOrWhiteSpace(outputPath))
+    {
+        Console.Error.WriteLine("asio-dual-mic-faust-cleaner-wav failed: --output is required.");
+        return 1;
+    }
+
+    if (shotgunChannel < 0 || cardioidChannel < 0 || shotgunChannel >= channels || cardioidChannel >= channels)
+    {
+        Console.Error.WriteLine($"asio-dual-mic-faust-cleaner-wav failed: channel indices must fit 0..{channels - 1}.");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
+    if (frameCount == 0)
+    {
+        Console.Error.WriteLine("asio-dual-mic-faust-cleaner-wav failed: capture has no frames.");
+        return 1;
+    }
+
+    var shotgun = channelSamples[shotgunChannel];
+    var cardioid = channelSamples[cardioidChannel];
+    var delay = EstimateRelativeDelaySamples(shotgun, cardioid, maxLagSamples: Math.Min(sampleRate / 100, 960));
+    var referenceHoldback = Math.Max(0.0, Math.Max(0.0, delay));
+    var shotgunHoldback = Math.Max(0.0, referenceHoldback);
+    var cardioidHoldback = Math.Max(0.0, referenceHoldback - delay);
+    if (delay < 0.0)
+    {
+        shotgunHoldback = 0.0;
+        cardioidHoldback = -delay;
+    }
+
+    if (!TryRunFaustCleaner(shotgun, cardioid, frameCount, sampleRate, shotgunHoldback, cardioidHoldback, out var dialogue, out var residual, out var error))
+    {
+        Console.Error.WriteLine($"asio-dual-mic-faust-cleaner-wav failed: {error}");
+        return 1;
+    }
+
+    var normalized = NormalizePeak(dialogue, peak: 0.92f);
+    WriteWave(outputPath, normalized, sampleRate);
+    var residualPath = Path.Combine(
+        Path.GetDirectoryName(outputPath) ?? ".",
+        $"{Path.GetFileNameWithoutExtension(outputPath)}-residual.wav");
+    WriteWave(residualPath, residual, sampleRate);
+    var reportPath = Path.ChangeExtension(outputPath, ".json");
+    var report = new
+    {
+        input = Path.GetFullPath(inputPath),
+        output = Path.GetFullPath(outputPath),
+        residual = Path.GetFullPath(residualPath),
+        sampleRate,
+        frameCount,
+        shotgunChannel,
+        cardioidChannel,
+        estimatedCardioidDelaySamples = delay,
+        estimatedCardioidDelayMicroseconds = delay * 1_000_000.0 / sampleRate,
+        shotgunHoldbackSamples = shotgunHoldback,
+        cardioidHoldbackSamples = cardioidHoldback,
+        dialogueRms = RootMeanSquare(dialogue),
+        residualRms = RootMeanSquare(residual),
+        pipeline = "faust/mimir_alignment_actuator.dsp -> faust/mimir_dual_mic_dialogue_cleaner.dsp"
+    };
+    File.WriteAllText(reportPath, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine(
+        $"asio-dual-mic-faust-cleaner-wav input={inputPath} output={outputPath} residual={residualPath} report={reportPath} frames={frameCount} " +
+        $"delaySamples={delay:0.000} delayUs={delay * 1_000_000.0 / sampleRate:0.000} holdback={shotgunHoldback:0.000}/{cardioidHoldback:0.000} rms={RootMeanSquare(dialogue):0.000000}");
+    return 0;
+}
+
+static bool TryRunFaustCleaner(
+    float[] shotgun,
+    float[] cardioid,
+    int frameCount,
+    int sampleRate,
+    double shotgunHoldback,
+    double cardioidHoldback,
+    out float[] dialogue,
+    out float[] residual,
+    out string error)
+{
+    dialogue = [];
+    residual = [];
+    error = "";
+    var alignmentPath = Path.GetFullPath("faust/mimir_alignment_actuator.dsp");
+    var cleanerPath = Path.GetFullPath("faust/mimir_dual_mic_dialogue_cleaner.dsp");
+    if (!File.Exists(alignmentPath) || !File.Exists(cleanerPath))
+    {
+        error = "required Faust DSP files are missing.";
+        return false;
+    }
+
+    using var compiler = new AquaSynthPatchCompiler(new AquaSynthNativeOptions(SampleRate: sampleRate));
+    if (!compiler.TryCompileSource(
+        new AquaSynthCompileIdentity("mimir-alignment-offline", "mimir_alignment_actuator", File.ReadAllText(alignmentPath), unchecked((int)File.GetLastWriteTimeUtc(alignmentPath).Ticks)),
+        File.ReadAllText(alignmentPath),
+        0.05f,
+        out var alignmentPatch,
+        out var alignmentError))
+    {
+        error = alignmentError ?? "alignment Faust compile failed.";
+        return false;
+    }
+
+    if (!compiler.TryCompileSource(
+        new AquaSynthCompileIdentity("mimir-dialogue-cleaner-offline", "mimir_dual_mic_dialogue_cleaner", File.ReadAllText(cleanerPath), unchecked((int)File.GetLastWriteTimeUtc(cleanerPath).Ticks)),
+        File.ReadAllText(cleanerPath),
+        0.05f,
+        out var cleanerPatch,
+        out var cleanerError))
+    {
+        error = cleanerError ?? "dialogue cleaner Faust compile failed.";
+        return false;
+    }
+
+    using var alignment = alignmentPatch!.CreateStreamingPatch();
+    using var cleaner = cleanerPatch!.CreateStreamingPatch();
+    var aligned = Enumerable.Range(0, Math.Max(2, alignment.OutputCount))
+        .Select(_ => new float[frameCount])
+        .ToArray();
+    var silence = new float[frameCount];
+    alignment.ProcessBlock(
+        [shotgun, cardioid, silence, silence, silence, silence],
+        aligned,
+        frameCount,
+        new Dictionary<string, float>(StringComparer.Ordinal)
+        {
+            ["source0/delay_samples"] = (float)Math.Clamp(shotgunHoldback, 0.0, 4096.0),
+            ["source1/delay_samples"] = (float)Math.Clamp(cardioidHoldback, 0.0, 4096.0),
+            ["source0/gain"] = 1.0f,
+            ["source1/gain"] = 1.0f
+        });
+
+    var cleaned = Enumerable.Range(0, Math.Max(2, cleaner.OutputCount))
+        .Select(_ => new float[frameCount])
+        .ToArray();
+    cleaner.ProcessBlock([aligned[0], aligned[1]], cleaned, frameCount);
+    dialogue = cleaned[0];
+    residual = cleaned[1];
+    return true;
 }
 
 static int RunTargetedBioacousticProbeSmoke()

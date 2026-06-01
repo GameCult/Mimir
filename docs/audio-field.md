@@ -150,15 +150,19 @@ to `16.304 dB`. This is still the C# diagnostic/offline contract; Faust/native
 DSP owns the production hot lane.
 The first listenable bridge receipt is
 `scripts/record-kiyo-dual-mic-composite.ps1`. It records Kiyo video and
-Scarlett ASIO raw channels together, converts Scarlett channels 0/1 into a
-computed dual-mic composite WAV with `--asio-dual-mic-composite-wav`, then muxes
-that WAV with the Kiyo video. The 2026-06-01 receipt at
+Scarlett ASIO raw channels together, converts Scarlett channels 0/1 through
+the offline Faust chain with `--asio-dual-mic-faust-cleaner-wav`, then muxes
+the dialogue WAV with the Kiyo video. That command compiles and runs
+`faust/mimir_alignment_actuator.dsp` first, then feeds the aligned
+shotgun/cardioid stems into `faust/mimir_dual_mic_dialogue_cleaner.dsp`; it is a
+listening receipt for the real DSP chain, not the older C# composite audition.
+The fresh 2026-06-01 receipt at
 `artifacts/runtime/kiyo-dual-mic-composite/kiyo-dual-mic-composite-latest.mp4`
-contains 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC from the
-computed composite. After listening feedback, the bridge tightened its audition
-defaults: measured-band gain is capped at `1.18x`, incoherent calibrated bands
-are suppressed more aggressively, and the choppy post-sum residual expander is
-not enabled by default. The next hot owner is
+contains 10.000 s of 640x480 30 fps Kiyo video and 10.000 s of mono AAC from the
+Faust dialogue stem. Run `20260601-051044` estimated the cardioid 359.398
+samples late at 48 kHz (7487.452 us), applied holdback 359.398/0.000 samples to
+shotgun/cardioid before cleanup, wrote a residual WAV, and reported dialogue
+RMS `0.002678`. The hot owner is
 `faust/mimir_dual_mic_dialogue_cleaner.dsp`: a two-input/two-output Faust graph
 for aligned shotgun/cardioid witnesses that emits a dialogue composite stem and
 a rejected residual witness using smooth multiband voice shaping, witness

@@ -814,13 +814,19 @@ a named invariant that the native runtime cannot protect yet.
    calibrated-band coherence and suppresses incoherent measured-band components
    before summing; `--dual-mic-coherence-cancellation-smoke` proves the two-mic
    case by cutting a mic-local 3.52 kHz interferer while preserving coherent
-   shared tones. `scripts/record-kiyo-dual-mic-composite.ps1` is the first
-   listenable bridge: it records Kiyo video plus Scarlett ASIO raw channels,
-   renders the channels 0/1 composite WAV with `--asio-dual-mic-composite-wav`,
-   and muxes the computed mono composite into the Kiyo MP4. The bridge defaults
-   now cap measured-band boost at 1.18x, apply stronger incoherent-band
-   suppression, and do not enable the choppy C# residual expander by default.
-   The Faust hot-lane target now exists as
+   shared tones. `scripts/record-kiyo-dual-mic-composite.ps1` is now the first
+   listenable Faust-chain bridge: it records Kiyo video plus Scarlett ASIO raw
+   channels, renders channels 0/1 through
+   `--asio-dual-mic-faust-cleaner-wav`, and muxes the Faust dialogue stem into
+   the Kiyo MP4. That offline command compiles and runs
+   `faust/mimir_alignment_actuator.dsp` before
+   `faust/mimir_dual_mic_dialogue_cleaner.dsp`, so the receipt exercises the
+   actual alignment-then-cleaner chain. The fresh 2026-06-01 run
+   `artifacts/runtime/kiyo-dual-mic-composite/20260601-051044` estimated a
+   359.398-sample cardioid delay at 48 kHz, applied holdback 359.398/0.000 to
+   shotgun/cardioid, wrote dialogue and residual WAVs, and muxed a 10.000 s
+   640x480@30 Kiyo MP4 with 10.000 s 48 kHz mono AAC. The Faust hot-lane target
+   exists as
    `faust/mimir_dual_mic_dialogue_cleaner.dsp`; Mimir queues it as
    `dual-mic-dialogue-cleaner`, consuming the alignment actuator's published
    `aligned_source_*` stem frame rather than raw mic buffers, and emitting

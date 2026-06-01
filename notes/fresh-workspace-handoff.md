@@ -157,6 +157,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
   app owns that path.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
+- The current listenable dual-mic receipt is the Faust-chain bridge, not the
+  older C# composite. `scripts/record-kiyo-dual-mic-composite.ps1` records Kiyo
+  plus Scarlett ASIO, then `--asio-dual-mic-faust-cleaner-wav` compiles/runs
+  `faust/mimir_alignment_actuator.dsp` before
+  `faust/mimir_dual_mic_dialogue_cleaner.dsp` and muxes the dialogue stem into
+  `artifacts/runtime/kiyo-dual-mic-composite/kiyo-dual-mic-composite-latest.mp4`.
+  Fresh run `20260601-051044` measured cardioid delay 359.398 samples
+  (7487.452 us) at 48 kHz and applied holdback 359.398/0.000 to
+  shotgun/cardioid before cleanup.
 - OBS receives final program surfaces; it does not own synchronization.
 
 ## Current Pressure

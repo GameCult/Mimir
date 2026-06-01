@@ -317,18 +317,21 @@ two-witness cancellation cut: shared tones keep about 0.999 coherence, a
 mic-local 3.52 kHz interferer scores about 0.001 coherence and 0.948
 suppression, its measured energy falls from 0.039195 to 0.001306, and SNR rises
 from 1.366 dB to 16.304 dB.
-`scripts/record-kiyo-dual-mic-composite.ps1` is the first listenable bridge
-receipt for that path. It starts Kiyo FFmpeg capture and Scarlett ASIO raw
-capture together, converts ASIO channels 0/1 to a computed composite WAV through
-`--asio-dual-mic-composite-wav`, then muxes the composite WAV with Kiyo video.
-The 2026-06-01 receipt
+`scripts/record-kiyo-dual-mic-composite.ps1` is the first listenable Faust-chain
+bridge receipt for that path. It starts Kiyo FFmpeg capture and Scarlett ASIO
+raw capture together, converts ASIO channels 0/1 through
+`--asio-dual-mic-faust-cleaner-wav`, and muxes the Faust dialogue WAV with Kiyo
+video. The offline command compiles/runs
+`faust/mimir_alignment_actuator.dsp` first, then feeds the aligned
+shotgun/cardioid stems into `faust/mimir_dual_mic_dialogue_cleaner.dsp`; the
+older C# composite stays a scoring/audition contract, not the current listening
+receipt. The fresh 2026-06-01 receipt at
+`artifacts/runtime/kiyo-dual-mic-composite/20260601-051044` and
 `artifacts/runtime/kiyo-dual-mic-composite/kiyo-dual-mic-composite-latest.mp4`
-has 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC composite
-audio; the composite report estimated channel-1 delay at about -141.019 samples
-(-2937.889 us). After user listening feedback, the bridge tightened audition
-defaults: measured-band boost is capped at 1.18x, incoherent calibrated bands
-are suppressed harder, and the choppy residual expander is not enabled by
-default. The actual denoise authority is moving to Faust:
+has 10.000 s of 640x480 30 fps Kiyo video and 10.000 s of 48 kHz mono AAC from
+the Faust dialogue stem. It estimated the cardioid 359.398 samples late
+(7487.452 us), applied holdback 359.398/0.000 samples to shotgun/cardioid, and
+wrote both dialogue and residual WAVs. The actual denoise authority is Faust:
 `faust/mimir_dual_mic_dialogue_cleaner.dsp` compiles as a two-input/two-output
 aligned shotgun/cardioid dialogue cleaner with smooth multiband voice shaping,
 witness subtraction, and slow downward expansion. `MimirRuntime` queues it as
