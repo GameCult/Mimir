@@ -48,9 +48,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   normalized placement; the Eve/CultUI surface is Video Sources on the left, a
   chrome-free program canvas in the center, Audio Mixer docked underneath that
   canvas, and a Unity-style Inspector on the right for the selected layer's
-  properties. Camera/SDF/model editor affordances have no live UI authority,
-  and editor camera/SDF/spline output no longer contributes to the runtime
-  frame. Smoke with `--scene-editor-smoke`.
+  properties. The center preview requests Fensalir's current output-buffer blit
+  as its background and overlays Mimir's normalized layer placements on top.
+  Camera/SDF/model editor affordances have no live UI authority, and editor
+  camera/SDF/spline output no longer contributes to the runtime frame. Smoke
+  with `--scene-editor-smoke`.
 - The Audio Mixer dock is a horizontal CultUI channel-strip bank, not a
   selected-stem inspector form. Six fixed slots read the live
   `presentationControls.AudioFeeds` order so Scarlett ASIO mono inputs,

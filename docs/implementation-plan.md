@@ -298,6 +298,10 @@ a named invariant that the native runtime cannot protect yet.
   commands, and grab/rotate/resize gizmo intent. `MimirRuntime` renders derived
   spline outlines and handle markers from that state, and the `Mimir Editor`
   panel exposes hierarchy, visibility, transform, creation, and reset controls.
+  The center preview now asks Fensalir's CultUI preview contract to blit the
+  current renderer output buffer behind Mimir's normalized placement overlays,
+  so the app preview is a live program-surface witness rather than a symbolic
+  rectangle diagram.
   See [[scene-editor-control-surface|Mimir Scene Editor Control Surface]].
   `Mimir.BufferSmoke --scene-editor-smoke` proves the graph/control/gizmo owner
   path. World SDF text glyph rendering, ASSIMP-style mesh import/upload, and

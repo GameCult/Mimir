@@ -543,9 +543,12 @@ the editor camera, dynamic scene nodes, selected node, visibility/lock state,
 video buffers derive sensor-feed panel nodes; SDF text panels and model import
 requests create editor graph nodes. `MimirRuntime` presents that editor through
 the Fensalir camera plus derived spline outlines, selection handles, and the
-`Mimir Editor` hierarchy/transform panel. This editor is not the OBS program
-output. World SDF glyph rendering, ASSIMP-style mesh decoding/upload, and
-pixel-accurate gizmo hit-testing are explicit Fensalir renderer cuts, mapped in
+`Mimir Editor` hierarchy/transform panel. The center preview requests a
+Fensalir-owned blit of the current output buffer, then draws Mimir's normalized
+placement overlays on top. This editor is not the OBS program output authority;
+it is a live program-surface witness. World SDF glyph rendering, ASSIMP-style
+mesh decoding/upload, and pixel-accurate gizmo hit-testing are explicit
+Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].
 `Mimir.EveDashboard` is now a small native Eve dashboard broker. It serves
 `/eve/deck` plus the compatibility `/eve/dashboard` endpoint, exposes provider
