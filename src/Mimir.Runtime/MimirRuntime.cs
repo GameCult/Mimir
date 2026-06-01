@@ -33,6 +33,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private const float SpectrumFrustumMinimumNear = 0.01f;
     private const float SpectrumSplineTubePadding = 0.18f;
     private const int DefaultSpectrumSourceLaneCapacity = 8;
+    private const int VideoSourceListSlotCount = 12;
     private const int AudioMixerChannelSlotCount = 6;
     private const string SpectrumFieldResourceKey = "mimir:resource:spectrum:field-upload";
     private const string SpectrumRampResourceKey = AquariumBuiltInFieldResources.BlackbodyRampResourceKey;
@@ -858,20 +859,24 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private AquariumUiDocument CreateUi()
     {
         return new AquariumUiDocument()
-            .Surface("mimir.editor.surface", "Mimir Editor", 18.0f, 56.0f, 1220.0f, 660.0f, surface =>
+            .Surface("mimir.editor.surface", "", 18.0f, 56.0f, 1220.0f, 660.0f, surface =>
             {
                 surface.Horizontal("mimir.editor.shell", shell =>
                 {
                     shell.Pane("mimir.video-sources", "Video Sources", graph =>
                     {
-                        graph.Options("video.source-select", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
                         graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f);
-                        graph.Text("video.layer-list", sceneEditor.DescribeHierarchy, "mono", weight: 3.8f);
-                        graph.Row("video.nav", nav =>
+                        graph.Text("video.source-list-title", "Program Sources", "strong", weight: 0.55f);
+                        for (var slot = 0; slot < VideoSourceListSlotCount; slot++)
                         {
-                            nav.Button("video.previous", "Previous", sceneEditor.SelectPrevious);
-                            nav.Button("video.next", "Next", sceneEditor.SelectNext);
-                        });
+                            var sourceIndex = slot;
+                            graph.Row($"video.source-row.{slot}", row =>
+                            {
+                                row.Button($"video.source-row.{slot}.select", "Select", () => SelectVideoSlot(sourceIndex), weight: 0.55f);
+                                row.Text($"video.source-row.{slot}.label", () => DescribeVideoSourceSlot(sourceIndex), "caption", weight: 1.45f);
+                            }, weight: 0.75f, isVisible: () => VideoSourceSlotVisible(sourceIndex));
+                        }
+                        graph.Text("video.empty", () => presentationControls.VideoFeeds.Count == 0 ? "No synced video streams yet." : "", "caption", weight: 0.65f);
                         graph.Text("video.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f);
                     }, weight: 0.85f);
 
@@ -1087,6 +1092,37 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         {
             sceneEditor.SelectSource(selected.SourceId);
         }
+    }
+
+    private bool VideoSourceSlotVisible(int index) =>
+        index >= 0 && index < presentationControls.VideoFeeds.Count;
+
+    private void SelectVideoSlot(int index)
+    {
+        if (!VideoSourceSlotVisible(index))
+        {
+            return;
+        }
+
+        SelectVideoLayer(index);
+    }
+
+    private string DescribeVideoSourceSlot(int index)
+    {
+        var feeds = presentationControls.VideoFeeds;
+        if (index < 0 || index >= feeds.Count)
+        {
+            return "";
+        }
+
+        var feed = feeds[index];
+        var selected = presentationControls.SelectedVideo is { } current &&
+            string.Equals(current.SourceId, feed.SourceId, StringComparison.Ordinal);
+        var placement = sceneEditor.PlacementForSource(feed.SourceId);
+        var frame = placement is { } value
+            ? $"{value.CenterX:0.00},{value.CenterY:0.00} {value.Width:0.00}x{value.Height:0.00}"
+            : "unplaced";
+        return $"{(selected ? "* " : "  ")}{feed.Layer + 1}. {feed.DisplayName} {frame}";
     }
 
     private void SetSelectedVideoVisible(bool visible)

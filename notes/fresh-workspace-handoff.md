@@ -67,6 +67,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   picture-in-picture at layer 1. `MimirSceneEditorState` applies matching
   source placements once when those feeds appear, then inspector/drag edits own
   subsequent placement.
+- The left Video Sources rail is a direct source selector, not a previous/next
+  navigator. It renders visible rows for live video feeds using CultUI
+  row-level visibility, with a Select action and placement summary per source.
+  Keep configured/offline source inventory as a future source-state owner;
+  the current rail lists live synced video feeds.
 - Live camera image buffers should use Fensalir-owned texture leases when they
   are rendering inputs: Mimir asks the engine broker for a keyed D3D12
   Texture2D/fence lease, writes decoded frames into that texture, commits the
