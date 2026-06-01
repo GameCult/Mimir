@@ -594,11 +594,21 @@ a named invariant that the native runtime cannot protect yet.
   Well profile with capture-page/body-paging enabled. This is the first local
   paged-recording ABI for offline reconstruction, not the final CultCache shard
   engine. GPU-handle-only samples remain metadata/body-handle evidence until a
-  Fensalir/native program-output recorder owns rendered composite bodies. The
-  current live scar is explicit: ASIO device timestamps and
-  camera driver timestamps are different domains, so `Mimir.Well` publishes
-  degraded sync status until a camera-clock/global-time correction owner maps
-  those domains.
+  Fensalir/native program-output recorder owns rendered composite bodies.
+  `Mimir.Well` now publishes the first stream-organ pressure surface inside
+  `mimir.well_snapshot.v1`: `clockDomains` reports per-domain live edges,
+  actual overlap, and provisional offsets to the ASIO reference, while
+  `streamPressure` (`mimir.well_stream_pressure.v1`) reports poll and publish
+  pressure for the transitional WebSocket/JSON path. The planner feeds
+  provisional clock-domain edge fits through `MimirSourceTimingCorrection`,
+  then uses actual oldest buffered sample timestamps instead of the configured
+  retention boundary when choosing a synchronized window. This makes the live
+  metric honest: a five-second buffer target is no longer allowed to masquerade
+  as five seconds of resident samples when body serialization/backpressure
+  starves a source. The next coherent cut is a CultMesh streaming organ with a
+  compact typed control lane, a CultCache page/shard append body lane, explicit
+  cursors/backpressure, and a lossy latest-state dashboard lane; do not keep
+  expanding inline base64 capture pages as if they were the final transport.
   Eve now follows the same rule for its own device body:
   `MimirDistributedWitnessConfigurations.EveLocalSensors` and the
   `eve-local-sensors` Perfect Machine profile make Eve responsible for local

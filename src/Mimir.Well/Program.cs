@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Mimir.Runtime.Synchronization;
@@ -54,6 +55,9 @@ var nextPublish = DateTimeOffset.MinValue;
 var nextCapture = DateTimeOffset.MinValue;
 var nextSync = DateTimeOffset.MinValue;
 var nextVisualCalibration = DateTimeOffset.MinValue;
+var frameDegradedCount = 0L;
+var nextFrameDegradedLog = DateTimeOffset.MinValue;
+var streamTelemetry = new MimirWellStreamTelemetry();
 var presentation = new MimirPresentationControlState();
 var exposureController = new MimirCameraExposureController(new MimirCameraExposureControlOptions(
     options.VisualCalibrationEnabled,
@@ -66,7 +70,10 @@ Console.Error.WriteLine($"Mimir Well sources={runtimeConfig.SourceFactories.Coun
 
 while (!stopping.IsCancellationRequested)
 {
-    hub.PollSources(options.MaxSamplesPerSource);
+    var pollStopwatch = Stopwatch.StartNew();
+    var consumedSamples = hub.PollSources(options.MaxSamplesPerSource);
+    pollStopwatch.Stop();
+    streamTelemetry.ObservePoll(consumedSamples, pollStopwatch.Elapsed);
     var now = DateTimeOffset.UtcNow;
     if (now >= nextSync)
     {
@@ -95,28 +102,43 @@ while (!stopping.IsCancellationRequested)
     if (now >= nextPublish)
     {
         presentation.SyncFromBuffers(hub.Buffers.Buffers);
-        var frame = BuildFrameOrEmpty(hub, TimeSpan.FromMilliseconds(options.PresentationDelayMs));
+        var frameResult = BuildFrameOrEmpty(hub, TimeSpan.FromMilliseconds(options.PresentationDelayMs));
+        if (!string.IsNullOrWhiteSpace(frameResult.DegradedReason))
+        {
+            frameDegradedCount++;
+            if (now >= nextFrameDegradedLog)
+            {
+                Console.Error.WriteLine(
+                    $"mimir-well synchronized-frame degraded count={frameDegradedCount} reason={frameResult.DegradedReason}");
+                nextFrameDegradedLog = now + TimeSpan.FromSeconds(5);
+            }
+        }
+
+        var frame = frameResult.Frame;
         var snapshot = MimirWellSnapshot.Build(
             options,
             runtimeConfig,
             hub,
             presentation,
-            frame,
+            frameResult,
             exposureController.Statuses,
             sourceErrors,
+            streamTelemetry.Snapshot(now, subscribersAreExternal: true),
             ++sequence,
             startedAt);
-        await publisher.PublishAsync(snapshot, stopping.Token).ConfigureAwait(false);
+        streamTelemetry.ObservePublish(
+            await publisher.PublishAsync(snapshot, "mimir.well_snapshot.v1", stopping.Token).ConfigureAwait(false));
         if (options.CapturePagesEnabled && now >= nextCapture)
         {
             var capturePage = MimirWellCapturePage.Build(
                 options,
                 presentation,
-                frame,
+                frameResult,
                 hub.Buffers.Buffers,
                 ++captureSequence,
                 startedAt);
-            await publisher.PublishAsync(capturePage, stopping.Token).ConfigureAwait(false);
+            streamTelemetry.ObservePublish(
+                await publisher.PublishAsync(capturePage, "mimir.well_capture_page.v1", stopping.Token).ConfigureAwait(false));
             nextCapture = now + TimeSpan.FromMilliseconds(options.CaptureIntervalMs);
         }
 
@@ -143,22 +165,115 @@ Console.Error.WriteLine($"Mimir Well complete sequence={sequence} ingested={hub.
 
 static long NowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
 
-static MimirSynchronizedBufferFrame BuildFrameOrEmpty(MimirSynchronizationHub hub, TimeSpan presentationDelay)
+static MimirWellFrameBuildResult BuildFrameOrEmpty(MimirSynchronizationHub hub, TimeSpan presentationDelay)
 {
     try
     {
-        return hub.BuildSynchronizedBufferFrame(presentationDelay);
+        return new MimirWellFrameBuildResult(
+            hub.BuildSynchronizedBufferFrame(presentationDelay),
+            "",
+            "");
     }
     catch (ArgumentException ex)
     {
-        Console.Error.WriteLine($"mimir-well synchronized-frame degraded: {ex.Message}");
-        return new MimirSynchronizedBufferFrame(0, 0, 0, presentationDelay, []);
+        return new MimirWellFrameBuildResult(
+            new MimirSynchronizedBufferFrame(0, 0, 0, presentationDelay, []),
+            ex.GetType().Name,
+            ex.Message);
     }
     catch (OverflowException ex)
     {
-        Console.Error.WriteLine($"mimir-well synchronized-frame degraded: {ex.Message}");
-        return new MimirSynchronizedBufferFrame(0, 0, 0, presentationDelay, []);
+        return new MimirWellFrameBuildResult(
+            new MimirSynchronizedBufferFrame(0, 0, 0, presentationDelay, []),
+            ex.GetType().Name,
+            ex.Message);
     }
+}
+
+internal sealed record MimirWellFrameBuildResult(
+    MimirSynchronizedBufferFrame Frame,
+    string DegradedKind,
+    string DegradedReason);
+
+internal sealed record MimirWellPublishReceipt(
+    string Document,
+    int ByteLength,
+    double SerializeMilliseconds,
+    double SendMilliseconds,
+    double TotalMilliseconds);
+
+internal sealed class MimirWellStreamTelemetry
+{
+    private long pollIterations;
+    private long consumedSamples;
+    private long zeroPollIterations;
+    private double maxPollMilliseconds;
+    private double totalPollMilliseconds;
+    private long publishedDocuments;
+    private long publishedBytes;
+    private double maxPublishMilliseconds;
+    private double totalPublishMilliseconds;
+    private string lastPublishedDocument = "";
+    private int lastPublishedBytes;
+    private double lastPublishMilliseconds;
+
+    public void ObservePoll(int consumed, TimeSpan elapsed)
+    {
+        pollIterations++;
+        consumedSamples += Math.Max(0, consumed);
+        if (consumed <= 0)
+        {
+            zeroPollIterations++;
+        }
+
+        var milliseconds = elapsed.TotalMilliseconds;
+        totalPollMilliseconds += milliseconds;
+        maxPollMilliseconds = Math.Max(maxPollMilliseconds, milliseconds);
+    }
+
+    public void ObservePublish(MimirWellPublishReceipt receipt)
+    {
+        publishedDocuments++;
+        publishedBytes += receipt.ByteLength;
+        totalPublishMilliseconds += receipt.TotalMilliseconds;
+        maxPublishMilliseconds = Math.Max(maxPublishMilliseconds, receipt.TotalMilliseconds);
+        lastPublishedDocument = receipt.Document;
+        lastPublishedBytes = receipt.ByteLength;
+        lastPublishMilliseconds = receipt.TotalMilliseconds;
+    }
+
+    public object Snapshot(DateTimeOffset now, bool subscribersAreExternal) => new
+    {
+        document = "mimir.well_stream_pressure.v1",
+        status = "transitional-websocket-json",
+        authority = "Mimir.Well observes producer pressure; CultMesh streaming organ should own durable body lanes.",
+        wallClockUtc = now.ToString("O"),
+        poll = new
+        {
+            iterations = pollIterations,
+            consumedSamples,
+            zeroPollIterations,
+            averageMilliseconds = pollIterations == 0 ? 0.0 : totalPollMilliseconds / pollIterations,
+            maxMilliseconds = maxPollMilliseconds,
+        },
+        publish = new
+        {
+            documents = publishedDocuments,
+            bytes = publishedBytes,
+            averageMilliseconds = publishedDocuments == 0 ? 0.0 : totalPublishMilliseconds / publishedDocuments,
+            maxMilliseconds = maxPublishMilliseconds,
+            lastDocument = lastPublishedDocument,
+            lastBytes = lastPublishedBytes,
+            lastMilliseconds = lastPublishMilliseconds,
+            subscribersAreExternal,
+        },
+        nextOrgan = new
+        {
+            controlLane = "CultMesh typed state and compact stream cursors",
+            bodyLane = "CultCache page/shard append stream with refs, hashes, and backpressure",
+            realtimeLane = "loss-aware latest-state observation stream for dashboards",
+        },
+    };
 }
 
 internal sealed record MimirWellOptions(
@@ -255,11 +370,24 @@ internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
         await socket.ConnectAsync(url, stopping).ConfigureAwait(false);
     }
 
-    public async Task PublishAsync(object document, CancellationToken stopping)
+    public async Task<MimirWellPublishReceipt> PublishAsync(
+        object document,
+        string documentName,
+        CancellationToken stopping)
     {
+        var stopwatch = Stopwatch.StartNew();
         var json = JsonSerializer.Serialize(document);
         var bytes = Encoding.UTF8.GetBytes(json);
+        var serializeMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+        stopwatch.Restart();
         await socket.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, stopping).ConfigureAwait(false);
+        stopwatch.Stop();
+        return new MimirWellPublishReceipt(
+            documentName,
+            bytes.Length,
+            serializeMilliseconds,
+            stopwatch.Elapsed.TotalMilliseconds,
+            serializeMilliseconds + stopwatch.Elapsed.TotalMilliseconds);
     }
 
     public async ValueTask DisposeAsync()
@@ -285,11 +413,14 @@ internal static class MimirWellCapturePage
     public static object Build(
         MimirWellOptions options,
         MimirPresentationControlState presentation,
-        MimirSynchronizedBufferFrame frame,
+        MimirWellFrameBuildResult frameResult,
         IEnumerable<MimirRollingStreamBuffer> buffers,
         long captureSequence,
-        DateTimeOffset startedAt) => new
+        DateTimeOffset startedAt)
     {
+        var frame = frameResult.Frame;
+        return new
+        {
         type = "cultmesh-observation",
         document = "mimir.well_capture_page.v1",
         sourceId = "mimir-well",
@@ -304,6 +435,8 @@ internal static class MimirWellCapturePage
             frame.WindowEndNs,
             PresentationDelayMs = frame.PresentationDelay.TotalMilliseconds,
             frame.IsComplete,
+            degradedKind = frameResult.DegradedKind,
+            degradedReason = frameResult.DegradedReason,
         },
         storage = new
         {
@@ -340,6 +473,7 @@ internal static class MimirWellCapturePage
         samples = CaptureSamples(options, captureSequence, frame, buffers)
             .ToArray(),
     };
+    }
 
     private static IEnumerable<object> CaptureSamples(
         MimirWellOptions options,
@@ -484,6 +618,108 @@ internal static class MimirWellCapturePage
     }
 }
 
+internal static class MimirWellClockDiagnostics
+{
+    public static object Build(
+        IEnumerable<MimirRollingStreamBuffer> buffers,
+        string referenceSourceId,
+        MimirWellFrameBuildResult frameResult)
+    {
+        var activeBuffers = buffers
+            .Where(static buffer => buffer.Latest.HasValue)
+            .ToArray();
+        var referenceBuffer = activeBuffers.FirstOrDefault(buffer =>
+            string.Equals(buffer.Descriptor.SourceId, referenceSourceId, StringComparison.Ordinal));
+        var referenceEdgeNs = referenceBuffer?.Latest?.TimestampNs ?? 0L;
+        var referenceClockDomain = referenceBuffer?.Descriptor.EffectiveClockDomainId ?? "";
+
+        var domains = activeBuffers
+            .GroupBy(static buffer => buffer.Descriptor.EffectiveClockDomainId, StringComparer.Ordinal)
+            .Select(group => BuildDomain(group.Key, group.ToArray(), referenceClockDomain, referenceEdgeNs))
+            .OrderBy(domain => domain.ClockDomainId, StringComparer.Ordinal)
+            .ToArray();
+
+        return new
+        {
+            status = frameResult.Frame.Slices.Count > 0 ? "frame-built" : "degraded",
+            frameResult.DegradedKind,
+            frameResult.DegradedReason,
+            referenceSourceId,
+            referenceClockDomain,
+            referenceEdgeNs,
+            domainCount = domains.Length,
+            activeSourceCount = activeBuffers.Length,
+            domains,
+        };
+    }
+
+    private static ClockDomainDiagnostics BuildDomain(
+        string clockDomainId,
+        IReadOnlyList<MimirRollingStreamBuffer> buffers,
+        string referenceClockDomain,
+        long referenceEdgeNs)
+    {
+        var latestEdges = buffers
+            .Select(buffer => buffer.Latest?.TimestampNs ?? 0L)
+            .Where(static value => value > 0)
+            .ToArray();
+        var windowStarts = buffers
+            .Select(static buffer => buffer.OldestSampleTimestampNs > 0 ? buffer.OldestSampleTimestampNs : buffer.WindowStartNs)
+            .Where(static value => value > 0)
+            .ToArray();
+        var minLatest = latestEdges.Length == 0 ? 0L : latestEdges.Min();
+        var maxLatest = latestEdges.Length == 0 ? 0L : latestEdges.Max();
+        var maxWindowStart = windowStarts.Length == 0 ? 0L : windowStarts.Max();
+        var minWindowEnd = minLatest;
+        var overlapNs = minWindowEnd > 0 && maxWindowStart > 0
+            ? minWindowEnd - maxWindowStart
+            : 0L;
+        var domainEdgeNs = maxLatest;
+        var provisionalOffsetToReferenceNs = referenceEdgeNs > 0 && domainEdgeNs > 0
+            ? referenceEdgeNs - domainEdgeNs
+            : 0L;
+
+        return new ClockDomainDiagnostics(
+            clockDomainId,
+            buffers.Count,
+            buffers
+                .OrderBy(static buffer => buffer.Descriptor.SourceId, StringComparer.Ordinal)
+                .Select(buffer => new
+                {
+                    buffer.Descriptor.SourceId,
+                    Kind = buffer.Descriptor.Kind.ToString(),
+                    Origin = buffer.Descriptor.Origin.ToString(),
+                    buffer.Count,
+                    buffer.WindowStartNs,
+                    buffer.OldestSampleTimestampNs,
+                    EdgeNs = buffer.Latest?.TimestampNs ?? 0L,
+                    ByteLength = buffer.Latest?.ByteLength ?? 0,
+                })
+                .ToArray(),
+            maxWindowStart,
+            minLatest,
+            maxLatest,
+            overlapNs,
+            overlapNs >= 0,
+            string.Equals(clockDomainId, referenceClockDomain, StringComparison.Ordinal),
+            provisionalOffsetToReferenceNs,
+            provisionalOffsetToReferenceNs / 1_000_000.0);
+    }
+
+    private sealed record ClockDomainDiagnostics(
+        string ClockDomainId,
+        int SourceCount,
+        object[] Sources,
+        long MaxWindowStartNs,
+        long MinLatestEdgeNs,
+        long MaxLatestEdgeNs,
+        long OverlapNs,
+        bool HasLocalOverlap,
+        bool IsReferenceDomain,
+        long ProvisionalOffsetToReferenceNs,
+        double ProvisionalOffsetToReferenceMs);
+}
+
 internal static class MimirWellSnapshot
 {
     public static object Build(
@@ -491,12 +727,16 @@ internal static class MimirWellSnapshot
         MimirRuntimeConfiguration runtimeConfig,
         MimirSynchronizationHub hub,
         MimirPresentationControlState presentation,
-        MimirSynchronizedBufferFrame frame,
+        MimirWellFrameBuildResult frameResult,
         IReadOnlyList<MimirCameraExposureControlStatus> visualCalibration,
         IReadOnlyList<object> sourceErrors,
+        object streamPressure,
         long sequence,
-        DateTimeOffset startedAt) => new
+        DateTimeOffset startedAt)
     {
+        var frame = frameResult.Frame;
+        return new
+        {
         type = "cultmesh-observation",
         document = "mimir.well_snapshot.v1",
         sourceId = "mimir-well",
@@ -516,8 +756,15 @@ internal static class MimirWellSnapshot
             frame.WindowEndNs,
             PresentationDelayMs = frame.PresentationDelay.TotalMilliseconds,
             frame.IsComplete,
+            degradedKind = frameResult.DegradedKind,
+            degradedReason = frameResult.DegradedReason,
             slices = frame.Slices.Select(SliceSnapshot).ToArray(),
         },
+        clockDomains = MimirWellClockDiagnostics.Build(
+            hub.Buffers.Buffers,
+            runtimeConfig.Settings.Audio.ReferenceSourceId,
+            frameResult),
+        streamPressure,
         audioSync = new
         {
             referenceSourceId = runtimeConfig.Settings.Audio.ReferenceSourceId,
@@ -622,6 +869,7 @@ internal static class MimirWellSnapshot
             }).ToArray(),
         },
     };
+    }
 
     private static object BufferSnapshot(MimirRollingStreamBuffer buffer) => new
     {
@@ -632,6 +880,7 @@ internal static class MimirWellSnapshot
         buffer.Descriptor.EffectiveClockDomainId,
         buffer.Count,
         buffer.EdgeNs,
+        buffer.OldestSampleTimestampNs,
         buffer.WindowStartNs,
         hasLatest = buffer.Latest.HasValue,
         latest = buffer.Latest.HasValue ? SampleSnapshot(buffer.Latest.Value) : null,

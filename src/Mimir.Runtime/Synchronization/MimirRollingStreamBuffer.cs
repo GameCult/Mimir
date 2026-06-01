@@ -18,6 +18,8 @@ public sealed class MimirRollingStreamBuffer
 
     public long WindowStartNs => Math.Max(0, EdgeNs - DurationNs);
 
+    public long OldestSampleTimestampNs => samples.Count == 0 ? 0L : samples.Peek().TimestampNs;
+
     public int Count => samples.Count;
 
     public MimirStreamSample? Latest { get; private set; }

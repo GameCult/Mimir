@@ -67,10 +67,14 @@ public sealed class MimirSynchronizationHub : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         var delay = presentationDelay ?? TimeSpan.FromTicks(Settings.BufferDuration.Ticks / 2);
+        var timingCorrections = MimirSynchronizedBufferPlanner
+            .CorrectionsFromClockDomainEdges(Buffers.Buffers, Settings.Audio.ReferenceSourceId)
+            .Concat(MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates(audioSynchronizationState.States, Buffers.Buffers))
+            .ToArray();
         return new MimirSynchronizedBufferPlanner().BuildFrame(
             Buffers.Buffers,
             delay,
-            MimirSynchronizedBufferPlanner.CorrectionsFromAudioStates(audioSynchronizationState.States, Buffers.Buffers));
+            timingCorrections);
     }
 
     public void AddSource(IMimirStreamSource source)

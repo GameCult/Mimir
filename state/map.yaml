@@ -424,10 +424,23 @@ invariants:
     gestures with Realtek plus opportunistic ASIO music evidence, and
     `Mimir.Well` with capture-page/body-paging enabled. This owns a first local
     paged-recording ABI, not the final CultCache shard engine yet. The live
-    timestamp-domain scar is explicit: ASIO device time
-    and camera driver time are not in one canonical timeline, so sync frame
-    publication is degraded until a camera-clock/global-time correction owner
-    exists.
+    timestamp-domain scar is now instrumented: `Mimir.Well` publishes
+    `clockDomains` diagnostics in `mimir.well_snapshot.v1`, and
+    `MimirSynchronizationHub` feeds provisional clock-domain edge-fit
+    corrections into the existing `MimirSourceTimingCorrection` primitive so
+    camera/ASIO clocks can be compared on one canonical timeline while the
+    evidence remains explicitly provisional. The synchronized-frame planner now
+    uses actual oldest buffered sample timestamps, not just the configured
+    retention boundary, so a five-second retention target cannot pretend to
+    contain five seconds of samples under publish pressure. Snapshots expose
+    `OldestSampleTimestampNs`, `WindowStartNs`, and `streamPressure`
+    (`mimir.well_stream_pressure.v1`) so the dashboard can distinguish clock
+    fit, real buffered span, JSON/WebSocket publish cost, and body-lane
+    backpressure. Live shakedown after this cut produced a complete 6/6 Ready
+    frame over Scarlett ASIO, Kiyo Pro, and Leap with zero slice distance, while
+    also showing the stream-organ scar plainly: ASIO had only about 20 ms of
+    actual buffered history despite a five-second retention target because the
+    current WebSocket JSON capture-page path is still the hose, not the organ.
     The Eve live-stats provider now reads the latest `mimir.well_snapshot.v1`
     records from the observation ledger and the latest
     `mimir.online_move_music_sync_frame.v1` trace from runtime artifacts. Its
