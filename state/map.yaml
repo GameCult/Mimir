@@ -224,13 +224,17 @@ invariants:
     window on local Scarlett ASIO, local Leap stereo IR, local Kiyo Pro RGB,
     and Raven display/audio from one muxed Raven NVENC/AAC MPEG-TS SRT stream
     on port 5200. `scripts/start-raven-av-sender.ps1` captures Raven's desktop
-    through FFmpeg `gdigrab`/NVENC and captures Raven's Realtek/default render
+    through FFmpeg `ddagrab` Desktop Duplication API plus NVENC and captures
+    Raven's Realtek/default render
     loopback through the compiled `Mimir.WasapiLoopback` helper when staged at
     `tools/Mimir.WasapiLoopback/Mimir.WasapiLoopback.exe`; the older
     PowerShell loopback reader is now only a diagnostic fallback. BtbN current
     FFmpeg was tested on Raven and still exposes no native `wasapi` input
     device, so loopback capture cannot be solved by swapping FFmpeg builds
-    alone. `scripts/start-raven-av-demux.ps1`
+    alone. Raven's local `ddagrab + Mimir.WasapiLoopback + AAC + h264_nvenc`
+    proof recorded 568 frames in ten seconds at 1080p60; sparse-frame direct
+    TCP/SSH proof captures are therefore transport/proof-path evidence, not
+    Raven GPU/capture evidence. `scripts/start-raven-av-demux.ps1`
     is the Starfire local demux edge, copying video to local SRT port 5210 and
     decoding audio to f32 PCM on local SRT port 5212 for Mimir's current raw
     ingest adapters. `MimirFfmpegPcmAudioStreamSource` owns the post-demux PCM

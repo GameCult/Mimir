@@ -6,6 +6,9 @@ param(
     [int]$Framerate = 30,
     [int]$AudioSampleRate = 48000,
     [int]$AudioChannels = 2,
+    [ValidateSet("ddagrab", "gdigrab")]
+    [string]$VideoCapture = "ddagrab",
+    [int]$DdagrabOutputIndex = 0,
     [ValidateSet("srt", "tcp-listener")]
     [string]$Transport = "srt",
     [ValidateSet("caller", "listener")]
@@ -54,29 +57,51 @@ $audioCaptureCommand = if (Test-Path $loopbackExe) {
         " -SampleRate $AudioSampleRate -Channels $AudioChannels"
 }
 
-$ffmpegArgs = @(
-    "-hide_banner",
-    "-loglevel", "warning",
-    "-thread_queue_size", "1024",
-    "-f", "gdigrab",
-    "-framerate", $Framerate.ToString(),
-    "-video_size", $videoSize,
-    "-i", $Source,
-    "-thread_queue_size", "1024",
-    "-f", "f32le",
-    "-ar", $AudioSampleRate.ToString(),
-    "-ac", $AudioChannels.ToString(),
-    "-i", "pipe:0",
-    "-map", "0:v:0",
-    "-map", "1:a:0",
+$videoInputArgs = if ($VideoCapture -eq "ddagrab") {
+    @(
+        "-thread_queue_size", "1024",
+        "-f", "lavfi",
+        "-i", "ddagrab=framerate=${Framerate}:output_idx=${DdagrabOutputIndex}:draw_mouse=1"
+    )
+} else {
+    @(
+        "-thread_queue_size", "1024",
+        "-f", "gdigrab",
+        "-framerate", $Framerate.ToString(),
+        "-video_size", $videoSize,
+        "-i", $Source
+    )
+}
+
+$videoEncodeArgs = @(
     "-c:v", "h264_nvenc",
     "-preset", "p4",
     "-tune", "ll",
     "-b:v", $VideoBitrate,
     "-maxrate", $VideoBitrate,
     "-bufsize", "24000k",
-    "-pix_fmt", "yuv420p",
-    "-g", $gop.ToString(),
+    "-g", $gop.ToString()
+)
+if ($VideoCapture -eq "gdigrab") {
+    $videoEncodeArgs += @("-pix_fmt", "yuv420p")
+}
+
+$ffmpegArgs = @(
+    "-hide_banner",
+    "-loglevel", "warning"
+)
+$ffmpegArgs += $videoInputArgs
+$ffmpegArgs += @(
+    "-thread_queue_size", "1024",
+    "-f", "f32le",
+    "-ar", $AudioSampleRate.ToString(),
+    "-ac", $AudioChannels.ToString(),
+    "-i", "pipe:0",
+    "-map", "0:v:0",
+    "-map", "1:a:0"
+)
+$ffmpegArgs += $videoEncodeArgs
+$ffmpegArgs += @(
     "-c:a", "aac",
     "-b:a", $AudioBitrate,
     "-ar", $AudioSampleRate.ToString(),
@@ -95,7 +120,7 @@ Write-Host "Raven muxed A/V sender:"
 Write-Host "  ffmpeg: $FfmpegPath"
 Write-Host "  target: $endpoint"
 Write-Host "  transport: $Transport"
-Write-Host "  video: $Source $videoSize@$Framerate via h264_nvenc"
+Write-Host "  video: $(if ($VideoCapture -eq "ddagrab") { "ddagrab output $DdagrabOutputIndex" } else { "$Source $videoSize" })@$Framerate via h264_nvenc"
 Write-Host "  audio: Raven Realtek/default render loopback ${AudioChannels}ch ${AudioSampleRate}Hz f32 -> AAC"
 Write-Host "  loopback: $(if (Test-Path $loopbackExe) { $loopbackExe } else { "$captureScript (diagnostic fallback)" })"
 Write-Host "  sync role: Raven Realtek is co-streamer game/program loopback packaged with NVENC; Starfire Realtek owns chirp emission"
