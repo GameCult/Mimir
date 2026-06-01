@@ -90,6 +90,11 @@ if (args.Any(arg => string.Equals(arg, "--scene-editor-smoke", StringComparison.
     return RunSceneEditorSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--program-surface-default-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunProgramSurfaceDefaultSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--audio-stem-publication-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunAudioStemPublicationSmoke();
@@ -3442,6 +3447,39 @@ static int RunSceneEditorSmoke()
         hasOnlyVideoPreview &&
         !hasCameraPreview &&
         programCentered
+            ? 0
+            : 1;
+}
+
+static int RunProgramSurfaceDefaultSmoke()
+{
+    var config = MimirProgramSurfaceConfigStore.CreateDefault();
+    var editor = new MimirSceneEditorState();
+    var ravenDisplay = NewVideoBuffer("raven-display", MimirStreamOrigin.Network, 1_000_000_000, 1920, 1080, MimirVideoPixelFormat.Bgra8, 1, "raven-sync");
+    var kiyoPro = NewVideoBuffer("kiyo-pro-rgb", MimirStreamOrigin.LocalDevice, 1_000_000_000, 640, 480, MimirVideoPixelFormat.Yuy2, 2);
+    editor.SyncSensorFeeds([kiyoPro, ravenDisplay]);
+    editor.ApplyProgramSurfaceConfig(config);
+
+    var ravenPlacement = editor.PlacementForSource("raven-display");
+    var kiyoPlacement = editor.PlacementForSource("kiyo-pro-rgb");
+    var selected = editor.SelectedNode?.SourceId ?? "";
+    var ravenFullFrame = ravenPlacement is { CenterX: 0.5f, CenterY: 0.5f, Width: 1.0f, Height: 1.0f, Layer: 0 };
+    var kiyoCorner = kiyoPlacement is { Layer: 1 } &&
+        kiyoPlacement.Value.CenterX < 0.35f &&
+        kiyoPlacement.Value.CenterY < 0.35f &&
+        kiyoPlacement.Value.Width > 0.1f &&
+        kiyoPlacement.Value.Width < 0.4f &&
+        kiyoPlacement.Value.Height > 0.1f &&
+        kiyoPlacement.Value.Height < 0.4f;
+
+    Console.WriteLine(
+        $"program-surface-default-smoke selected={selected} " +
+        $"raven={ravenPlacement?.CenterX:0.000},{ravenPlacement?.CenterY:0.000} {ravenPlacement?.Width:0.000}x{ravenPlacement?.Height:0.000} layer={ravenPlacement?.Layer} " +
+        $"kiyo={kiyoPlacement?.CenterX:0.000},{kiyoPlacement?.CenterY:0.000} {kiyoPlacement?.Width:0.000}x{kiyoPlacement?.Height:0.000} layer={kiyoPlacement?.Layer}");
+
+    return string.Equals(selected, "kiyo-pro-rgb", StringComparison.Ordinal) &&
+        ravenFullFrame &&
+        kiyoCorner
             ? 0
             : 1;
 }

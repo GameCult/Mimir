@@ -16,6 +16,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Quote-CmdArgument([string]$Value) {
+    return '"' + $Value.Replace('"', '\"') + '"'
+}
+
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
 $repo = Split-Path -Parent $PSScriptRoot
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -56,13 +60,19 @@ $ffmpegArgs = @(
     "-f", "mpegts",
     $endpoint
 )
-$command = "& `"$captureScript`" -Output - -SampleRate $AudioSampleRate -Channels $AudioChannels | & `"$FfmpegPath`" $($ffmpegArgs -join ' ')"
+$quotedFfmpegArgs = $ffmpegArgs | ForEach-Object { Quote-CmdArgument $_ }
+$command = (Quote-CmdArgument $captureScript) +
+    " -Output - -SampleRate $AudioSampleRate -Channels $AudioChannels | " +
+    (Quote-CmdArgument $FfmpegPath) +
+    " " +
+    ($quotedFfmpegArgs -join " ")
 
 Write-Host "Raven muxed A/V sender:"
 Write-Host "  ffmpeg: $FfmpegPath"
 Write-Host "  target: $endpoint"
 Write-Host "  video: $Source $videoSize@$Framerate via h264_nvenc"
-Write-Host "  audio: Realtek/default render loopback ${AudioChannels}ch ${AudioSampleRate}Hz -> AAC"
+Write-Host "  audio: Raven Realtek/default render loopback ${AudioChannels}ch ${AudioSampleRate}Hz -> AAC"
+Write-Host "  sync role: Raven Realtek is co-streamer game/program loopback packaged with NVENC; Starfire Realtek owns chirp emission"
 Write-Host "  stdout: $stdoutLog"
 Write-Host "  stderr: $stderrLog"
 
@@ -72,8 +82,8 @@ if ($DryRun) {
 }
 
 Start-Process `
-    -FilePath "powershell" `
-    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $command) `
+    -FilePath "cmd.exe" `
+    -ArgumentList @("/d", "/c", $command) `
     -WindowStyle Hidden `
     -RedirectStandardOutput $stdoutLog `
     -RedirectStandardError $stderrLog `

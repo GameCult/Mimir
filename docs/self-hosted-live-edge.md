@@ -58,6 +58,45 @@ The static viewer lives on the root GameCult site:
 https://gamecult.org/livestream
 ```
 
+## Local Recording Before Public Push
+
+Before pushing a live program to Yggdrasil, record the same simple stream-proof
+shape locally and judge sync from the artifact:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\record-stream-proof-output.ps1 -StartRavenSender -DurationSeconds 20
+```
+
+The recording harness listens for a Raven muxed A/V SRT feed on a private test
+port, overlays Kiyo Pro as picture-in-picture, mixes Raven Realtek loopback with
+Starfire's Scarlett capture, applies conservative FFmpeg denoise filters, and
+writes an MP4 under `artifacts\runtime\stream-proof\`.
+
+The current routing contract is explicit:
+
+- Starfire Realtek/default render is the chirp/speaker emission lane.
+- Raven Realtek/default render loopback is the co-streamer game/program lane.
+  It is packaged with Raven's NVENC video feed back to Starfire.
+- Starfire Scarlett carries the monitored final mix/return. The streamer hears
+  that on direct monitor/headphones, and Raven's Scarlett monitor return is
+  routed into Starfire Scarlett channel 1.
+- The proof recording is allowed to mix those lanes for human sync judgment, but
+  it must not collapse their authority. Starfire Realtek proves chirp emission,
+  Raven Realtek proves the co-streamer/game program path, and Scarlett proves
+  the monitored return path.
+
+This is a bridge recording, not public broadcast truth. It exists so humans can
+judge audio/video sync and tell Mimir which offsets to apply before the RTMP/HLS
+edge is involved. Offset knobs are explicit:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\record-stream-proof-output.ps1 `
+  -StartRavenSender `
+  -RavenOffsetSeconds 0.000 `
+  -KiyoOffsetSeconds 0.000 `
+  -MicOffsetSeconds 0.000
+```
+
 ## Scaling Rule
 
 Viewer capacity is approximately:

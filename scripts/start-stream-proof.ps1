@@ -4,8 +4,16 @@ param(
     [int]$HeadlessHeight = 720,
     [string]$CaptureFrame = "",
     [string]$NightwingHost = "nightwing",
+    [switch]$StartRavenSender,
+    [string]$RavenHost = "madman's lullaby@192.168.1.84",
+    [string]$RavenRepo = "C:\Meta\Mimir",
+    [string]$StarfireHost = "192.168.1.66",
     [string]$WitnessUrl = "ws://192.168.1.66:8796/eve/periwinkle",
     [string]$ConfigPath = "E:\Projects\Mimir\config\mimir-runtime.stream-proof.local.json",
+    [switch]$ProgramOutput,
+    [string]$SharedTextureName = "Global\MimirFensalirProgramTexture",
+    [string]$SharedFenceName = "Global\MimirFensalirProgramFence",
+    [int]$SharedTextureRingCount = 1,
     [switch]$DryRun
 )
 
@@ -16,10 +24,19 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 if ($DryRun) {
     Write-Host "MIMIR_RUNTIME_CONFIG=$ConfigPath"
+    if ($ProgramOutput) {
+        Write-Host "FENSALIR_PROGRAM_OUTPUT_D3D12=1"
+        Write-Host "FENSALIR_PROGRAM_OUTPUT_NAME=$SharedTextureName"
+        Write-Host "FENSALIR_PROGRAM_OUTPUT_FENCE_NAME=$SharedFenceName"
+        Write-Host "FENSALIR_PROGRAM_OUTPUT_RING_COUNT=$SharedTextureRingCount"
+    }
     Write-Host "Would stage Nightwing witness tools to $NightwingHost and start --track-eyes publisher at $WitnessUrl"
+    if ($StartRavenSender) {
+        Write-Host "Would start Raven muxed A/V sender on ${RavenHost}: ${RavenRepo}\scripts\start-raven-av-sender.ps1 -TargetHost $StarfireHost -Port 5200"
+    }
     Write-Host "Would start local Raven A/V demux: scripts\start-raven-av-demux.ps1"
     Write-Host "Would launch: dotnet run --project $repo\src\Mimir.App\Mimir.App.csproj"
-    Write-Host "Raven muxed A/V sender: scripts\start-raven-av-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
+    Write-Host "Program layout: raven-display full-frame, kiyo-pro-rgb picture-in-picture"
     exit 0
 }
 
@@ -84,7 +101,28 @@ if ($LASTEXITCODE -ne 0) {
 
 & (Join-Path $repo "scripts\start-raven-av-demux.ps1")
 
+if ($StartRavenSender) {
+    $taskName = "MimirRavenAvSender5200"
+    $ravenSender = "${RavenRepo}\scripts\start-raven-av-sender.ps1"
+    $remoteCmd = "${RavenRepo}\scripts\run-raven-av-5200.cmd"
+    $taskTime = (Get-Date).AddMinutes(1).ToString("HH:mm")
+    ssh $RavenHost "cmd /c echo powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ravenSender -TargetHost $StarfireHost -Port 5200 ^> $remoteCmd" | Out-Null
+    ssh $RavenHost "schtasks /Delete /TN $taskName /F" | Out-Null
+    ssh $RavenHost "schtasks /Create /TN $taskName /SC ONCE /ST $taskTime /TR $remoteCmd /F /IT" | Out-Host
+    ssh $RavenHost "schtasks /Run /TN $taskName" | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not start Raven muxed A/V sender task on $RavenHost."
+    }
+    Start-Sleep -Milliseconds 1500
+}
+
 $env:MIMIR_RUNTIME_CONFIG = $ConfigPath
+if ($ProgramOutput) {
+    $env:FENSALIR_PROGRAM_OUTPUT_D3D12 = "1"
+    $env:FENSALIR_PROGRAM_OUTPUT_NAME = $SharedTextureName
+    $env:FENSALIR_PROGRAM_OUTPUT_FENCE_NAME = $SharedFenceName
+    $env:FENSALIR_PROGRAM_OUTPUT_RING_COUNT = [string]$SharedTextureRingCount
+}
 $args = @("run", "--project", (Join-Path $repo "src\Mimir.App\Mimir.App.csproj"))
 if ($Headless) {
     $args += "--"
@@ -101,5 +139,8 @@ if ($Headless) {
 
 Write-Host "MIMIR_RUNTIME_CONFIG=$ConfigPath"
 Write-Host "Starting stream proof: Leap + Kiyo Pro + Raven screen/audio, Nightwing Eye/Move witness claims"
-Write-Host "Raven sender expected: scripts\start-raven-av-sender.ps1 -TargetHost 192.168.1.66 -Port 5200"
+if ($ProgramOutput) {
+    Write-Host "Program output texture: $SharedTextureName"
+}
+Write-Host "Program layout: raven-display full-frame, kiyo-pro-rgb picture-in-picture"
 dotnet @args
