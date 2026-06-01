@@ -409,9 +409,16 @@ invariants:
     bounded `mimir.well_capture_page.v1` records for synchronized frame slices:
     each page carries timing metadata, configured composite state, and inline
     source sample bodies when a sample has CPU bytes and stays under the
-    configured body limit. GPU-handle-only samples remain metadata/body-handle
-    evidence until a Fensalir/native readback or direct program-output recorder
-    owns rendered composite bodies. The online supervisor
+    configured body limit. If synchronized-frame planning degrades because
+    source clocks are not yet in one canonical domain, capture pages fall back
+    to latest per-buffer samples with `TimingEvidenceKind =
+    unsynchronized-fallback`; this preserves raw evidence for offline
+    reconstruction without pretending the samples were synchronized.
+    GPU-handle-only samples remain metadata/body-handle evidence until a
+    Fensalir/native readback or direct program-output recorder owns rendered
+    composite bodies. The relay broadcasts full capture pages to subscribers
+    but redacts capture-page bodies from its diagnostic stdout so
+    `verse-relay.out.log` does not duplicate the body store. The online supervisor
     now starts relay, recorder, Nightwing Eyes/Move/builtin-camera/builtin-mic
     witness publication, conservative de-Bruijn/microtonal music-synced Move
     gestures with Realtek plus opportunistic ASIO music evidence, and

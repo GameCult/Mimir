@@ -113,6 +113,7 @@ while (!stopping.IsCancellationRequested)
                 options,
                 presentation,
                 frame,
+                hub.Buffers.Buffers,
                 ++captureSequence,
                 startedAt);
             await publisher.PublishAsync(capturePage, stopping.Token).ConfigureAwait(false);
@@ -285,6 +286,7 @@ internal static class MimirWellCapturePage
         MimirWellOptions options,
         MimirPresentationControlState presentation,
         MimirSynchronizedBufferFrame frame,
+        IEnumerable<MimirRollingStreamBuffer> buffers,
         long captureSequence,
         DateTimeOffset startedAt) => new
     {
@@ -335,11 +337,29 @@ internal static class MimirWellCapturePage
                 reason = "Fensalir/OBS program-output capture is a separate producer; this page records the configured composite contract and synchronized source bodies.",
             },
         },
-        samples = frame.Slices
-            .Where(slice => slice.Sample.HasValue)
-            .Select(slice => CaptureSample(options, captureSequence, slice))
+        samples = CaptureSamples(options, captureSequence, frame, buffers)
             .ToArray(),
     };
+
+    private static IEnumerable<object> CaptureSamples(
+        MimirWellOptions options,
+        long captureSequence,
+        MimirSynchronizedBufferFrame frame,
+        IEnumerable<MimirRollingStreamBuffer> buffers)
+    {
+        var sliceSamples = frame.Slices
+            .Where(slice => slice.Sample.HasValue)
+            .Select(slice => CaptureSample(options, captureSequence, slice))
+            .ToArray();
+        if (sliceSamples.Length > 0)
+        {
+            return sliceSamples;
+        }
+
+        return buffers
+            .Where(buffer => buffer.Latest.HasValue)
+            .Select(buffer => CaptureLatestFallbackSample(options, captureSequence, buffer));
+    }
 
     private static object CaptureSample(
         MimirWellOptions options,
@@ -365,6 +385,36 @@ internal static class MimirWellCapturePage
                 slice.DistanceFromPresentationNs,
                 slice.TimingConfidence,
                 slice.TimingEvidenceKind,
+            },
+            sample = SampleMetadata(sample),
+            body = CaptureBody(options, sample),
+        };
+    }
+
+    private static object CaptureLatestFallbackSample(
+        MimirWellOptions options,
+        long captureSequence,
+        MimirRollingStreamBuffer buffer)
+    {
+        var sample = buffer.Latest!.Value;
+        var bodyId = $"{options.NodeId}:{captureSequence}:{sample.SourceId}:{sample.Sequence}:latest";
+        return new
+        {
+            bodyId,
+            slice = new
+            {
+                sample.SourceId,
+                Kind = sample.Kind.ToString(),
+                Origin = sample.Origin.ToString(),
+                Status = "LatestUnalignedFallback",
+                SourceTimestampNs = sample.TimestampNs,
+                CanonicalStartNs = sample.TimestampNs,
+                CanonicalEndNs = sample.TimestampNs,
+                PresentationTimeNs = 0L,
+                TimingOffsetNs = 0L,
+                DistanceFromPresentationNs = 0L,
+                TimingConfidence = 0.0,
+                TimingEvidenceKind = "unsynchronized-fallback",
             },
             sample = SampleMetadata(sample),
             body = CaptureBody(options, sample),

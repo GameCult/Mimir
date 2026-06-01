@@ -114,7 +114,7 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
                 if (TryValidateCultMeshObservation(frame.Payload, out var normalizedObservation)
                     || TryValidateCultMeshMediaObservation(frame.Payload, out normalizedObservation))
                 {
-                    Console.WriteLine(normalizedObservation);
+                    Console.WriteLine(ObservationStdoutLine(normalizedObservation));
                     Console.Out.Flush();
                     await BroadcastAsync(normalizedObservation).ConfigureAwait(false);
                 }
@@ -130,11 +130,43 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
             var text = Encoding.UTF8.GetString(frame.Payload);
             if (TryValidateFrameEvent(text, out var normalized))
             {
-                Console.WriteLine(normalized);
+                Console.WriteLine(ObservationStdoutLine(normalized));
                 Console.Out.Flush();
                 await BroadcastAsync(normalized).ConfigureAwait(false);
             }
         }
+    }
+
+    private static string ObservationStdoutLine(string normalized)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(normalized);
+            var root = document.RootElement;
+            if (root.TryGetProperty("document", out var documentKind)
+                && string.Equals(documentKind.GetString(), "mimir.well_capture_page.v1", StringComparison.Ordinal))
+            {
+                var sampleCount = root.TryGetProperty("samples", out var samples)
+                    && samples.ValueKind == JsonValueKind.Array
+                        ? samples.GetArrayLength()
+                        : 0;
+                return JsonSerializer.Serialize(new
+                {
+                    type = root.GetProperty("type").GetString(),
+                    document = "mimir.well_capture_page.v1",
+                    sourceId = root.TryGetProperty("sourceId", out var sourceId) ? sourceId.GetString() : null,
+                    nodeId = root.TryGetProperty("nodeId", out var nodeId) ? nodeId.GetString() : null,
+                    captureSequence = root.TryGetProperty("captureSequence", out var sequence) ? sequence.GetInt64() : 0,
+                    sampleCount,
+                    stdoutBodyPolicy = "body-redacted",
+                });
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return normalized;
     }
 
     private async Task SubscribeAsync(NetworkStream stream)

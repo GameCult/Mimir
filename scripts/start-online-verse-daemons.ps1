@@ -65,6 +65,33 @@ function Start-LoggedProcess {
     return $process
 }
 
+function Wait-HttpHealth {
+    param(
+        [string]$Url,
+        [int]$TimeoutSeconds = 45
+    )
+
+    if ($DryRun) {
+        Write-Host "DRY wait health: $Url"
+        return
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 3
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
+                Write-Host "health ok: $Url"
+                return
+            }
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Timed out waiting for $Url"
+}
+
 $manifest = [ordered]@{
     kind = "mimir.online_verse_daemon_supervisor.v1"
     runId = $runId
@@ -111,7 +138,7 @@ $receiver = Start-LoggedProcess `
     )
 if ($receiver) { $manifest.processes["verseRelayPid"] = $receiver.Id }
 
-Start-Sleep -Milliseconds 900
+Wait-HttpHealth -Url "http://127.0.0.1:8796/health"
 
 $recorderArgs = @(
     "run",
@@ -263,7 +290,7 @@ if (-not $SkipRuntime) {
             "--project",
             (Join-Path $repo "src\Mimir.Well\Mimir.Well.csproj"),
             "--",
-            "--seconds", $(if ($DurationSeconds -gt 0) { "$DurationSeconds" } else { "31536000" }),
+            "--seconds", $(if ($DurationSeconds -gt 0) { "$DurationSeconds" } else { "0" }),
             "--poll-ms", "5",
             "--publish-url", $WellPublishUrl,
             "--node-id", "starfire",
