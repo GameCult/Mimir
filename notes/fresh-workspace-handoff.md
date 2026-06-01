@@ -52,6 +52,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
   as its background and overlays Mimir's normalized layer placements on top.
   Placement commits snap near frame edges/center and preserve source aspect
   while resizing through direct preview handles, sliders, or the scale gizmo.
+  Explicit source/transform controls are inspector-only and only visible when a
+  program source is selected.
   Camera/SDF/model editor affordances have no live UI authority, and editor
   camera/SDF/spline output no longer contributes to the runtime frame. Smoke
   with `--scene-editor-smoke`.

@@ -4259,11 +4259,15 @@ static int RunSceneEditorSmoke()
     var hasCameraPreview = previewItems.Any(item => string.Equals(item.Id, "editor-camera", StringComparison.Ordinal));
     var hasOnlyVideoPreview = previewItems.Count == 2 && previewItems.All(item => item.Id.StartsWith("feed:", StringComparison.Ordinal));
     var programCentered = placement is { CenterX: 0.5f, CenterY: 0.5f };
+    editor.SelectNode("editor-camera");
+    var cameraIsNotProgramSource = !editor.HasSelectedProgramSource &&
+        Math.Abs(editor.SelectedProgramX - 0.5f) < 0.001f &&
+        Math.Abs(editor.SelectedProgramY - 0.5f) < 0.001f;
 
     Console.WriteLine(
         $"scene-editor-smoke nodes={editor.Nodes.Count} feeds={editor.Nodes.Count(node => node.Kind == MimirSceneEditorNodeKind.SensorFeedPanel)} " +
         $"preview={previewItems.Count} selected={editor.SelectedNode?.DisplayName} hasDisplay={hasDisplay} cameraPreview={hasCameraPreview} " +
-        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered} aspectLocked={aspectLocked} snapped={snappedToBounds} previewMove={previewMoveHandled} previewHandle={previewHandleAspectLocked}");
+        $"placement={placement?.CenterX:0.000},{placement?.CenterY:0.000} programCentered={programCentered} aspectLocked={aspectLocked} snapped={snappedToBounds} previewMove={previewMoveHandled} previewHandle={previewHandleAspectLocked} cameraSource={editor.HasSelectedProgramSource}");
 
     return editor.Nodes.Count == 3 &&
         hasDisplay &&
@@ -4273,7 +4277,8 @@ static int RunSceneEditorSmoke()
         aspectLocked &&
         snappedToBounds &&
         previewMoveHandled &&
-        previewHandleAspectLocked
+        previewHandleAspectLocked &&
+        cameraIsNotProgramSource
             ? 0
             : 1;
 }

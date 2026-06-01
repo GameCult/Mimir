@@ -922,26 +922,29 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     {
                         inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
                         inspector.Options("inspector.video-feed", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
-                        inspector.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
-                        inspector.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
-                        inspector.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
-                        inspector.Text("inspector.program-placement", "Program Frame", "strong");
-                        inspector.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
-                        inspector.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
-                        inspector.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
-                        inspector.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
-                        inspector.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
-                        inspector.Row("program.fit", fit =>
+                        inspector.Vertical("inspector.source-controls", source =>
                         {
-                            fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer);
-                            fit.Button("program.fit-selected", "Fit", sceneEditor.FitSelectedProgramLayer);
-                            fit.Button("program.fill-selected", "Fill", sceneEditor.FillSelectedProgramLayer);
-                        });
-                        inspector.Row("program.order", order =>
-                        {
-                            order.Button("program.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
-                            order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
-                        });
+                            source.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
+                            source.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
+                            source.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
+                            source.Text("inspector.program-placement", "Program Frame", "strong");
+                            source.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
+                            source.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
+                            source.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
+                            source.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
+                            source.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
+                            source.Row("program.fit", fit =>
+                            {
+                                fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer);
+                                fit.Button("program.fit-selected", "Fit", sceneEditor.FitSelectedProgramLayer);
+                                fit.Button("program.fill-selected", "Fill", sceneEditor.FillSelectedProgramLayer);
+                            });
+                            source.Row("program.order", order =>
+                            {
+                                order.Button("program.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
+                                order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
+                            });
+                        }, isVisible: () => sceneEditor.HasSelectedProgramSource);
                     }, weight: 0.95f);
                 });
             });

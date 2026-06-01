@@ -549,7 +549,9 @@ placement overlays on top. This editor is not the OBS program output authority;
 it is a live program-surface witness. The placement commit primitive keeps
 layers inside the program frame, snaps near edges/center, and preserves source
 aspect while resizing through direct preview handles, sliders, or the scale
-gizmo. World SDF glyph rendering, ASSIMP-style
+gizmo. Explicit transform/source controls are inspector-only and gated to a
+selected program source; the center canvas handles are the primary compositor
+edit path. World SDF glyph rendering, ASSIMP-style
 mesh decoding/upload, and pixel-accurate gizmo hit-testing are explicit
 Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].

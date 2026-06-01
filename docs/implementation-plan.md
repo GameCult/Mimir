@@ -303,7 +303,9 @@ a named invariant that the native runtime cannot protect yet.
   so the app preview is a live program-surface witness rather than a symbolic
   rectangle diagram. Placement commits keep video layers inside the program
   frame, snap near edges/center, and preserve the source aspect ratio while
-  resizing through direct preview handles, sliders, or the scale gizmo.
+  resizing through direct preview handles, sliders, or the scale gizmo. Explicit
+  transform/source controls are inspector-only and only appear while a program
+  source is selected; the compositor canvas handles are the primary edit path.
   See [[scene-editor-control-surface|Mimir Scene Editor Control Surface]].
   `Mimir.BufferSmoke --scene-editor-smoke` proves the graph/control/gizmo owner
   path. World SDF text glyph rendering, ASSIMP-style mesh import/upload, and

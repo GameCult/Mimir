@@ -63,7 +63,9 @@ invariants:
     edges/center, and preserve source aspect while resizing through sliders or
     the scale gizmo. The center preview now has direct Fensalir CultUI
     body/corner-handle gestures wired to the same placement owner; sliders are
-    fallback/precision controls, not the primary compositor surface.
+    fallback/precision controls, not the primary compositor surface. Explicit
+    source/transform controls are inspector-only and visible only while a
+    program source is selected.
   - `MimirProgramRecorder` owns the first app-level recording control. The Video
     Sources rail exposes `Record` / `Stop`, status text, latest output path, and
     process-tree shutdown. Its current actuator delegates to

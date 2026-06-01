@@ -40,6 +40,8 @@ public sealed class MimirSceneEditorState
     public MimirSceneEditorNode? SelectedNode =>
         nodes.FirstOrDefault(node => string.Equals(node.Id, SelectedNodeId, StringComparison.Ordinal));
 
+    public bool HasSelectedProgramSource => SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel };
+
     public IReadOnlyList<MimirSceneEditorNode> VisibleNodes =>
         nodes.Where(node => node.Visible).ToArray();
 
@@ -279,17 +281,17 @@ public sealed class MimirSceneEditorState
         }
     }
 
-    public float SelectedProgramX => SelectedNode is { } selected ? PlacementForNode(selected).CenterX : 0.5f;
+    public float SelectedProgramX => SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected ? PlacementForNode(selected).CenterX : 0.5f;
 
-    public float SelectedProgramY => SelectedNode is { } selected ? PlacementForNode(selected).CenterY : 0.5f;
+    public float SelectedProgramY => SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected ? PlacementForNode(selected).CenterY : 0.5f;
 
-    public float SelectedProgramWidth => SelectedNode is { } selected ? PlacementForNode(selected).Width : 0.1f;
+    public float SelectedProgramWidth => SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected ? PlacementForNode(selected).Width : 0.1f;
 
-    public float SelectedProgramHeight => SelectedNode is { } selected ? PlacementForNode(selected).Height : 0.1f;
+    public float SelectedProgramHeight => SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected ? PlacementForNode(selected).Height : 0.1f;
 
     public void SetSelectedProgramX(float value)
     {
-        if (SelectedNode is { } selected)
+        if (SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
         {
             SetNodeProgramPlacement(selected, PlacementForNode(selected) with { CenterX = value });
         }
@@ -297,7 +299,7 @@ public sealed class MimirSceneEditorState
 
     public void SetSelectedProgramY(float value)
     {
-        if (SelectedNode is { } selected)
+        if (SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
         {
             SetNodeProgramPlacement(selected, PlacementForNode(selected) with { CenterY = value });
         }
@@ -305,7 +307,7 @@ public sealed class MimirSceneEditorState
 
     public void SetSelectedProgramWidth(float value)
     {
-        if (SelectedNode is { } selected)
+        if (SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
         {
             SetNodeProgramPlacement(selected, ResizeProgramPlacement(selected, PlacementForNode(selected), value, resizeWidth: true));
         }
@@ -313,7 +315,7 @@ public sealed class MimirSceneEditorState
 
     public void SetSelectedProgramHeight(float value)
     {
-        if (SelectedNode is { } selected)
+        if (SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
         {
             SetNodeProgramPlacement(selected, ResizeProgramPlacement(selected, PlacementForNode(selected), value, resizeWidth: false));
         }
@@ -321,7 +323,7 @@ public sealed class MimirSceneEditorState
 
     public void CenterSelectedProgramLayer()
     {
-        if (SelectedNode is { } selected)
+        if (SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
         {
             SetNodeProgramPlacement(selected, PlacementForNode(selected) with { CenterX = 0.5f, CenterY = 0.5f });
         }
@@ -329,7 +331,7 @@ public sealed class MimirSceneEditorState
 
     public void FitSelectedProgramLayer()
     {
-        if (SelectedNode is not { } selected)
+        if (SelectedNode is not { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
         {
             return;
         }
@@ -358,7 +360,7 @@ public sealed class MimirSceneEditorState
 
     public void FillSelectedProgramLayer()
     {
-        if (SelectedNode is { } selected)
+        if (SelectedNode is { Kind: MimirSceneEditorNodeKind.SensorFeedPanel } selected)
         {
             SetNodeProgramPlacement(selected, PlacementForNode(selected) with
             {
