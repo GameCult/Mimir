@@ -219,7 +219,16 @@ if (-not $SkipMoves) {
         "--voice-vibrato-hz", "5.2",
         "--voice-vibrato-cents", "18.0",
         "--voice-note-hue-mix", "0.46",
-        "--voice-vibrato-hue-width", "0.012"
+        "--voice-vibrato-hue-width", "0.012",
+        "--score-voice-roles", "violin-syrinx,harp-arpeggio,peck-syrinx",
+        "--violin-glide-rate", "1.35",
+        "--violin-release", "0.93",
+        "--violin-call-seconds", "0.72",
+        "--harp-slot-spacing", "5",
+        "--harp-min-onset-intensity", "0.58",
+        "--harp-call-seconds", "0.18",
+        "--peck-min-onset-intensity", "0.34",
+        "--peck-call-seconds", "0.11"
     )
     $moveArgs += "--emit-bioacoustic-realtk"
     $moveArgs += "--bioacoustic-song"

@@ -278,6 +278,19 @@ invariants:
     three Move targets assigned to `shotgun-mic`, `realtek-loopback`, and
     `cardioid-mic` with calibration priorities around 0.68-0.72 while score
     confidence remained below the 0.78 target.
+    Move/Syrinx score gestures now have explicit instrument articulation roles
+    instead of one generic pulse law. `ScoreGestureScheduler` assigns connected
+    Moves to `violin-syrinx`, `harp-arpeggio`, and `peck-syrinx` by default:
+    the violin role sustains a legato multi-note glide with vibrato, the harp
+    role emits sparse single-string arpeggio plucks, and the peck role follows
+    detected/improvised melody notes with short staccato calls. Each accepted
+    score strike carries articulation, gesture note sequence, attack shape, and
+    duration hint in `mimir.syrinx_move_witness_event.v1`; Move RGB lowering and
+    Realtek AquaSynth witness-call playback both consume the same event so the
+    visual pulse and Syrinx call remain one calibration voice. The current
+    audio renderer uses separate AquaSynth contestant renders with
+    role-specific durations/gains; true per-role physical timbre remains a
+    future AquaSynth/Faust renderer cut, not hidden scheduler behavior.
     MIDI keyboard notes should later enter as an explicit typed score source,
     but today AquaSynth is observed through whatever audio channel carries its
     rendered voice.

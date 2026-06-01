@@ -792,24 +792,42 @@ class LiveScoreEstimator:
 class ScoreGestureScheduler:
     def __init__(self, move_count: int, args: argparse.Namespace) -> None:
         self.args = args
+        configured_roles = [
+            value.strip()
+            for value in str(args.score_voice_roles).split(",")
+            if value.strip()
+        ]
+        if not configured_roles:
+            configured_roles = ["violin-syrinx", "harp-arpeggio", "peck-syrinx"]
+        self.voice_roles = [
+            configured_roles[index % len(configured_roles)]
+            for index in range(move_count)
+        ]
         self.envelopes = [0.0 for _ in range(move_count)]
         self.last_slots = [-1 for _ in range(move_count)]
         self.last_score_slot = -1
         self.score_slot_counter = 0
         self.pending_strikes: list[dict[str, object]] = []
-        self.voice_contours = [
-            {
-                "active": False,
-                "previous_note": 0.0,
-                "target_note": 0.0,
-                "current_note": 0.0,
-                "glide": 1.0,
-                "vibrato": 0.0,
-                "harmonic": 1.0,
-                "intensity": 0.0,
-            }
-            for _ in range(move_count)
-        ]
+        self.voice_contours = []
+        for index in range(move_count):
+            self.voice_contours.append(
+                {
+                    "active": False,
+                    "previous_note": 0.0,
+                    "target_note": 0.0,
+                    "current_note": 0.0,
+                    "glide": 1.0,
+                    "vibrato": 0.0,
+                    "harmonic": 1.0,
+                    "intensity": 0.0,
+                    "articulation": self.voice_roles[index],
+                    "gesture_notes": [],
+                    "gesture_note_names": [],
+                    "gesture_progress": 1.0,
+                    "duration_hint_seconds": 0.0,
+                    "attack_shape": "smooth",
+                }
+            )
         self.vibrato_phases = [0.0 for _ in range(move_count)]
 
     def update(self, state: dict[str, object]) -> tuple[float, ...]:
@@ -868,7 +886,8 @@ class ScoreGestureScheduler:
                 continue
             if not ensemble_accent and not self._slot_belongs_to_instrument(slot, index):
                 continue
-            if not ensemble_accent and not self._improv_allows(slot, index, score_lock, onset_intensity, live_score):
+            role = self.voice_roles[index]
+            if not ensemble_accent and not self._articulation_allows(role, slot, index, score_lock, onset_intensity, live_score):
                 continue
             accent = (rise_accent ** self.args.score_loudness_exponent) * onset_accent
             if ensemble_accent:
@@ -877,7 +896,7 @@ class ScoreGestureScheduler:
                 accent = min(1.0, accent * (1.0 + live_score_deficit * self.args.score_confidence_accent_gain))
             if accent < self.args.score_min_accent:
                 continue
-            lane_scale = 1.0 if ensemble_accent else (0.72 + 0.28 * debruijn_accent(beat, index, self.args))
+            lane_scale = self._role_lane_scale(role, ensemble_accent, beat, index)
             self.envelopes[index] = max(self.envelopes[index], min(self.args.score_max_envelope, accent * lane_scale))
             self._strike_voice(index, chord_root, key_mode, score_lock, onset_intensity, ensemble_accent, live_score)
         return tuple(float(value) for value in self.envelopes)
@@ -904,19 +923,88 @@ class ScoreGestureScheduler:
         cursor = math.sin((slot + 1) * 12.9898 + (move_index + 1) * 78.233) * 43758.5453
         return (cursor - math.floor(cursor)) < max(0.0, min(1.0, density))
 
+    def _articulation_allows(self, role: str, slot: int, move_index: int, score_lock: float, onset_intensity: float, live_score: object) -> bool:
+        if role == "harp-arpeggio":
+            if slot == 0 and onset_intensity >= self.args.score_downbeat_min_onset:
+                return True
+            if onset_intensity < self.args.harp_min_onset_intensity:
+                return False
+            spacing = max(1, int(self.args.harp_slot_spacing))
+            return (self.score_slot_counter + move_index * 2) % spacing == 0
+        if role == "violin-syrinx":
+            if onset_intensity >= self.args.score_call_response_min_onset:
+                return True
+            return self._improv_allows(slot, move_index, score_lock, onset_intensity, live_score)
+        if role == "peck-syrinx":
+            if onset_intensity >= self.args.peck_min_onset_intensity:
+                return True
+            return self._improv_allows(slot, move_index, score_lock, onset_intensity, live_score)
+        return self._improv_allows(slot, move_index, score_lock, onset_intensity, live_score)
+
+    def _role_lane_scale(self, role: str, ensemble_accent: bool, beat: float, move_index: int) -> float:
+        if ensemble_accent:
+            return 1.0
+        if role == "harp-arpeggio":
+            return 0.58 + 0.24 * debruijn_accent(beat, move_index, self.args)
+        if role == "violin-syrinx":
+            return 0.74 + 0.26 * debruijn_accent(beat, move_index, self.args)
+        if role == "peck-syrinx":
+            return 0.66 + 0.34 * debruijn_accent(beat, move_index, self.args)
+        return 0.72 + 0.28 * debruijn_accent(beat, move_index, self.args)
+
     def _advance_voice_contours(self) -> None:
-        glide_step = max(0.001, self.args.voice_glide_rate / max(1.0, self.args.fps))
         for index, contour in enumerate(self.voice_contours):
+            role = str(contour.get("articulation", self.voice_roles[index]))
+            if role == "violin-syrinx":
+                glide_rate = self.args.violin_glide_rate
+                release = self.args.violin_release
+                vibrato_hz = self.args.violin_vibrato_hz
+                vibrato_cents = self.args.violin_vibrato_cents
+            elif role == "harp-arpeggio":
+                glide_rate = self.args.harp_glide_rate
+                release = self.args.harp_release
+                vibrato_hz = self.args.harp_vibrato_hz
+                vibrato_cents = self.args.harp_vibrato_cents
+            elif role == "peck-syrinx":
+                glide_rate = self.args.peck_glide_rate
+                release = self.args.peck_release
+                vibrato_hz = self.args.peck_vibrato_hz
+                vibrato_cents = self.args.peck_vibrato_cents
+            else:
+                glide_rate = self.args.voice_glide_rate
+                release = self.args.score_release
+                vibrato_hz = self.args.voice_vibrato_hz
+                vibrato_cents = self.args.voice_vibrato_cents
+            glide_step = max(0.001, glide_rate / max(1.0, self.args.fps))
             contour["glide"] = min(1.0, float(contour["glide"]) + glide_step)
-            contour["intensity"] = max(0.0, float(contour["intensity"]) * self.args.score_release)
-            self.vibrato_phases[index] = (self.vibrato_phases[index] + self.args.voice_vibrato_hz / max(1.0, self.args.fps)) % 1.0
+            contour["gesture_progress"] = min(1.0, float(contour.get("gesture_progress", 1.0)) + glide_step)
+            contour["intensity"] = max(0.0, float(contour["intensity"]) * release)
+            self.vibrato_phases[index] = (self.vibrato_phases[index] + vibrato_hz / max(1.0, self.args.fps)) % 1.0
             glide = smoothstep(float(contour["glide"]))
             previous_note = float(contour["previous_note"])
-            target_note = float(contour["target_note"])
+            target_note = self._contour_target_note(contour, role, glide)
             vibrato = math.sin(2.0 * math.pi * self.vibrato_phases[index])
             contour["vibrato"] = vibrato
-            contour["current_note"] = previous_note + (target_note - previous_note) * glide + (self.args.voice_vibrato_cents / 100.0) * vibrato
+            contour["current_note"] = previous_note + (target_note - previous_note) * glide + (vibrato_cents / 100.0) * vibrato
             contour["active"] = bool(float(contour["intensity"]) > 0.001)
+
+    def _contour_target_note(self, contour: dict[str, object], role: str, glide: float) -> float:
+        notes = contour.get("gesture_notes", [])
+        if not isinstance(notes, list) or not notes:
+            return float(contour["target_note"])
+        clean_notes = [float(value) for value in notes]
+        if role == "violin-syrinx":
+            if len(clean_notes) == 1:
+                return clean_notes[0]
+            cursor = max(0.0, min(0.999999, glide)) * (len(clean_notes) - 1)
+            left = int(math.floor(cursor))
+            right = min(len(clean_notes) - 1, left + 1)
+            amount = smoothstep(cursor - left)
+            return clean_notes[left] + (clean_notes[right] - clean_notes[left]) * amount
+        if role == "harp-arpeggio":
+            index = int(contour.get("pluck_index", 0)) % len(clean_notes)
+            return clean_notes[index]
+        return clean_notes[-1]
 
     def _strike_voice(
         self,
@@ -941,22 +1029,48 @@ class ScoreGestureScheduler:
             if isinstance(targets, list) and move_index < len(targets) and isinstance(targets[move_index], dict):
                 target = float(targets[move_index].get("target_note", target))
                 target_source = str(targets[move_index].get("source", target_source))
+        role = self.voice_roles[move_index]
+        gesture_notes = self._gesture_notes_for_role(role, target, degrees, phrase_step, ensemble_accent)
         contour = self.voice_contours[move_index]
-        contour["previous_note"] = float(contour["current_note"])
+        was_active = bool(contour.get("active", False))
+        current_note = float(contour["current_note"])
+        if (
+            not was_active
+            and abs(current_note) < 1.0
+            and not contour.get("gesture_notes")
+        ):
+            contour["previous_note"] = float(gesture_notes[0] if gesture_notes else target)
+            contour["current_note"] = contour["previous_note"]
+        else:
+            contour["previous_note"] = current_note
         contour["target_note"] = target
+        contour["gesture_notes"] = gesture_notes
+        contour["gesture_note_names"] = [note_name_from_midi(value) for value in gesture_notes]
+        contour["gesture_progress"] = 0.0
         contour["glide"] = 0.0
+        contour["articulation"] = role
+        contour["attack_shape"] = self._attack_shape_for_role(role)
+        contour["duration_hint_seconds"] = self._duration_hint_for_role(role)
+        if role == "harp-arpeggio":
+            contour["pluck_index"] = int(contour.get("pluck_index", -1)) + 1
         contour["harmonic"] = self.args.harmonic_base ** (move_index / max(1, len(self.envelopes))) * (2.0 if ensemble_accent else 1.0)
-        contour["intensity"] = max(float(contour["intensity"]), min(1.0, onset_intensity * (0.55 + 0.45 * score_lock)))
+        role_gain = self._role_intensity_gain(role)
+        contour["intensity"] = max(float(contour["intensity"]), min(1.0, onset_intensity * (0.55 + 0.45 * score_lock) * role_gain))
         contour["active"] = True
         self.pending_strikes.append(
             {
                 "kind": "mimir.syrinx_move_witness_event.v1",
+                "articulation": role,
                 "move_index": move_index,
                 "score_slot": self.score_slot_counter,
                 "target_note": target,
                 "target_note_name": note_name_from_midi(target),
                 "target_source": target_source,
                 "previous_note": contour["previous_note"],
+                "gesture_notes": gesture_notes,
+                "gesture_note_names": contour["gesture_note_names"],
+                "duration_hint_seconds": contour["duration_hint_seconds"],
+                "attack_shape": contour["attack_shape"],
                 "harmonic": contour["harmonic"],
                 "intensity": contour["intensity"],
                 "score_lock": score_lock,
@@ -964,6 +1078,46 @@ class ScoreGestureScheduler:
                 "ensemble": ensemble_accent,
             }
         )
+
+    def _gesture_notes_for_role(self, role: str, target: float, degrees: tuple[int, ...], phrase_step: int, ensemble_accent: bool) -> list[float]:
+        if role == "violin-syrinx":
+            neighbor = degrees[(phrase_step + 1) % len(degrees)] - degrees[phrase_step % len(degrees)]
+            upper = target + (neighbor if abs(neighbor) <= 7 else 2.0)
+            lower = target - (3.0 if ensemble_accent else 2.0)
+            return [lower, target, upper, target + 0.5]
+        if role == "harp-arpeggio":
+            chord = [target, target + 4.0, target + 7.0, target + 12.0]
+            return chord if (phrase_step % 2 == 0) else [chord[0], chord[2], chord[1], chord[3]]
+        if role == "peck-syrinx":
+            return [target]
+        return [target]
+
+    def _attack_shape_for_role(self, role: str) -> str:
+        if role == "violin-syrinx":
+            return "legato-glide-vibrato"
+        if role == "harp-arpeggio":
+            return "single-string-pluck"
+        if role == "peck-syrinx":
+            return "staccato-peck"
+        return "smooth"
+
+    def _duration_hint_for_role(self, role: str) -> float:
+        if role == "violin-syrinx":
+            return float(self.args.violin_call_seconds)
+        if role == "harp-arpeggio":
+            return float(self.args.harp_call_seconds)
+        if role == "peck-syrinx":
+            return float(self.args.peck_call_seconds)
+        return float(self.args.bioacoustic_loop_seconds)
+
+    def _role_intensity_gain(self, role: str) -> float:
+        if role == "violin-syrinx":
+            return float(self.args.violin_intensity_gain)
+        if role == "harp-arpeggio":
+            return float(self.args.harp_intensity_gain)
+        if role == "peck-syrinx":
+            return float(self.args.peck_intensity_gain)
+        return 1.0
 
 
 DEBRUIJN_2_3 = "00010111"
@@ -1024,7 +1178,15 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
         current_note = float(voice.get("current_note", 0.0))
         note_hue = (current_note % 12.0) / 12.0
         hue = mix_hue(hue, note_hue, args.voice_note_hue_mix)
-        hue = (hue + args.voice_vibrato_hue_width * float(voice.get("vibrato", 0.0))) % 1.0
+        role = str(voice.get("articulation", ""))
+        vibrato_width = args.voice_vibrato_hue_width
+        if role == "violin-syrinx":
+            vibrato_width = args.violin_vibrato_hue_width
+        elif role == "harp-arpeggio":
+            vibrato_width = args.harp_vibrato_hue_width
+        elif role == "peck-syrinx":
+            vibrato_width = args.peck_vibrato_hue_width
+        hue = (hue + vibrato_width * float(voice.get("vibrato", 0.0))) % 1.0
     chord_confidence = float(state.get("chord_confidence", 0.0))
     chord_root = int(state.get("chord_root", 0))
     if chord_confidence > args.chord_hue_threshold:
@@ -1046,6 +1208,24 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
     g = gg * (0.45 + 0.55 * float(spectral[1]))
     b = bb * (0.45 + 0.55 * float(spectral[2]))
     if isinstance(voice, dict) and voice.get("active"):
+        role = str(voice.get("articulation", ""))
+        glide = float(voice.get("glide", 1.0))
+        if role == "violin-syrinx":
+            legato = 0.64 + 0.36 * smoothstep(glide)
+            r *= legato
+            g *= legato
+            b *= legato
+        elif role == "harp-arpeggio":
+            pluck = max(0.0, 1.0 - glide) ** 1.8
+            sparkle = 0.72 + 0.28 * pluck
+            r *= sparkle
+            g *= sparkle
+            b *= min(1.0, sparkle + 0.12 * pluck)
+        elif role == "peck-syrinx":
+            peck = max(0.0, 1.0 - glide) ** 0.7
+            r *= 0.58 + 0.42 * peck
+            g *= 0.58 + 0.42 * peck
+            b *= 0.58 + 0.42 * peck
         harmonic_content = min(1.0, abs(math.sin(float(voice.get("harmonic", 1.0)) * math.pi * phase)))
         r *= 0.86 + 0.14 * harmonic_content
         g *= 0.90 + 0.10 * (1.0 - harmonic_content)
@@ -1067,7 +1247,7 @@ class BioacousticRealtekTrigger:
     def __init__(self, args: argparse.Namespace, out_dir: Path) -> None:
         self.args = args
         self.out_dir = out_dir
-        self.render_path = out_dir / "bioacoustic-syrinx-f32.raw"
+        self.render_paths: dict[str, Path] = {}
         self.processes: deque[subprocess.Popen[bytes]] = deque()
         self.last_trigger = 0.0
         self.stdout = (out_dir / "bioacoustic-realtk.out.log").open("ab")
@@ -1078,42 +1258,73 @@ class BioacousticRealtekTrigger:
         if not args.emit_bioacoustic_realtk:
             return None
         trigger = cls(args, out_dir)
-        render_cmd = [
-            "dotnet",
-            "run",
-            "--project",
-            str(Path(__file__).resolve().parents[1] / "src" / "Mimir.BufferSmoke" / "Mimir.BufferSmoke.csproj"),
-            "--",
-            "--render-contestant-f32",
-            "--output",
-            str(trigger.render_path),
-            "--sample-rate",
-            str(args.sample_rate),
-            "--seconds",
-            str(args.bioacoustic_loop_seconds),
-            "--song",
-            args.bioacoustic_song,
-        ]
-        render = subprocess.run(render_cmd, cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
-        (out_dir / "bioacoustic-render.out.log").write_text(render.stdout, encoding="utf-8")
-        (out_dir / "bioacoustic-render.err.log").write_text(render.stderr, encoding="utf-8")
-        if render.returncode != 0 or not trigger.render_path.exists():
-            trigger.close()
-            print(f"bioacoustic Realtek trigger disabled: render failed code={render.returncode}", file=sys.stderr, flush=True)
-            return None
+        roles = ["violin-syrinx", "harp-arpeggio", "peck-syrinx"]
+        render_out: list[str] = []
+        render_err: list[str] = []
+        for role in roles:
+            seconds = trigger._seconds_for_role(role)
+            path = out_dir / f"bioacoustic-{role}-f32.raw"
+            trigger.render_paths[role] = path
+            render_cmd = [
+                "dotnet",
+                "run",
+                "--project",
+                str(Path(__file__).resolve().parents[1] / "src" / "Mimir.BufferSmoke" / "Mimir.BufferSmoke.csproj"),
+                "--",
+                "--render-contestant-f32",
+                "--output",
+                str(path),
+                "--sample-rate",
+                str(args.sample_rate),
+                "--seconds",
+                f"{seconds:.6f}",
+                "--song",
+                args.bioacoustic_song,
+            ]
+            render = subprocess.run(render_cmd, cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
+            render_out.append(f"## {role} seconds={seconds:.6f}\n{render.stdout}")
+            render_err.append(f"## {role} seconds={seconds:.6f}\n{render.stderr}")
+            if render.returncode != 0 or not path.exists():
+                trigger.close()
+                (out_dir / "bioacoustic-render.out.log").write_text("\n".join(render_out), encoding="utf-8")
+                (out_dir / "bioacoustic-render.err.log").write_text("\n".join(render_err), encoding="utf-8")
+                print(f"bioacoustic Realtek trigger disabled: {role} render failed code={render.returncode}", file=sys.stderr, flush=True)
+                return None
+        (out_dir / "bioacoustic-render.out.log").write_text("\n".join(render_out), encoding="utf-8")
+        (out_dir / "bioacoustic-render.err.log").write_text("\n".join(render_err), encoding="utf-8")
         return trigger
+
+    def _seconds_for_role(self, role: str) -> float:
+        if role == "violin-syrinx":
+            return float(self.args.violin_call_seconds)
+        if role == "harp-arpeggio":
+            return float(self.args.harp_call_seconds)
+        if role == "peck-syrinx":
+            return float(self.args.peck_call_seconds)
+        return float(self.args.bioacoustic_loop_seconds)
 
     def trigger(self, event: dict[str, object], now: float) -> bool:
         self._reap()
         if now - self.last_trigger < self.args.bioacoustic_min_interval_seconds:
             return False
         self.last_trigger = now
-        gain = float(self.args.bioacoustic_gain) * max(0.12, min(1.0, float(event.get("intensity", 0.0))))
+        role = str(event.get("articulation", "peck-syrinx"))
+        render_path = self.render_paths.get(role) or self.render_paths.get("peck-syrinx")
+        if render_path is None:
+            return False
+        role_gain = 1.0
+        if role == "violin-syrinx":
+            role_gain = float(self.args.violin_audio_gain)
+        elif role == "harp-arpeggio":
+            role_gain = float(self.args.harp_audio_gain)
+        elif role == "peck-syrinx":
+            role_gain = float(self.args.peck_audio_gain)
+        gain = float(self.args.bioacoustic_gain) * role_gain * max(0.12, min(1.0, float(event.get("intensity", 0.0))))
         cmd = [
             str(Path(self.args.wasapi).resolve()),
             "--play-f32-mono",
             "--input",
-            str(self.render_path.resolve()),
+            str(render_path.resolve()),
             "--device",
             self.args.bioacoustic_device,
             "--sample-rate",
@@ -1237,6 +1448,34 @@ def main() -> int:
     parser.add_argument("--voice-vibrato-cents", type=float, default=18.0)
     parser.add_argument("--voice-note-hue-mix", type=float, default=0.46)
     parser.add_argument("--voice-vibrato-hue-width", type=float, default=0.012)
+    parser.add_argument("--score-voice-roles", default="violin-syrinx,harp-arpeggio,peck-syrinx", help="Comma-separated Move voice roles. Defaults to legato violin Syrinx, sparse harp arpeggio, and staccato peck Syrinx.")
+    parser.add_argument("--violin-glide-rate", type=float, default=1.35)
+    parser.add_argument("--violin-release", type=float, default=0.93)
+    parser.add_argument("--violin-vibrato-hz", type=float, default=5.8)
+    parser.add_argument("--violin-vibrato-cents", type=float, default=24.0)
+    parser.add_argument("--violin-vibrato-hue-width", type=float, default=0.020)
+    parser.add_argument("--violin-call-seconds", type=float, default=0.72)
+    parser.add_argument("--violin-intensity-gain", type=float, default=0.92)
+    parser.add_argument("--violin-audio-gain", type=float, default=0.86)
+    parser.add_argument("--harp-glide-rate", type=float, default=12.0)
+    parser.add_argument("--harp-release", type=float, default=0.42)
+    parser.add_argument("--harp-vibrato-hz", type=float, default=0.0)
+    parser.add_argument("--harp-vibrato-cents", type=float, default=0.0)
+    parser.add_argument("--harp-vibrato-hue-width", type=float, default=0.002)
+    parser.add_argument("--harp-call-seconds", type=float, default=0.18)
+    parser.add_argument("--harp-intensity-gain", type=float, default=0.74)
+    parser.add_argument("--harp-audio-gain", type=float, default=0.72)
+    parser.add_argument("--harp-slot-spacing", type=int, default=5)
+    parser.add_argument("--harp-min-onset-intensity", type=float, default=0.58)
+    parser.add_argument("--peck-glide-rate", type=float, default=18.0)
+    parser.add_argument("--peck-release", type=float, default=0.36)
+    parser.add_argument("--peck-vibrato-hz", type=float, default=7.2)
+    parser.add_argument("--peck-vibrato-cents", type=float, default=8.0)
+    parser.add_argument("--peck-vibrato-hue-width", type=float, default=0.006)
+    parser.add_argument("--peck-call-seconds", type=float, default=0.11)
+    parser.add_argument("--peck-intensity-gain", type=float, default=0.82)
+    parser.add_argument("--peck-audio-gain", type=float, default=0.62)
+    parser.add_argument("--peck-min-onset-intensity", type=float, default=0.34)
     parser.add_argument("--emit-bioacoustic-realtk", action="store_true", help="Loop a rendered Mimir bioacoustic/Syrinx call on the Realtek output so the Well decoders can place it on the timeline.")
     parser.add_argument("--bioacoustic-song", default="aquasynth-formant-weaver")
     parser.add_argument("--bioacoustic-device", default="Realtek")
