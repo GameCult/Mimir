@@ -309,7 +309,11 @@ a named invariant that the native runtime cannot protect yet.
   overlays, and the D3D12 hit-test path lowers the same tree into preview
   gestures. Eve is the portable dashboard authority; CultUI is only the original
   C# API shape used here so the same document can be lowered by native, web,
-  Android, or iOS backends without making Direct2D the owner. Placement commits
+  Android, or iOS backends without making Direct2D the owner. Elements can now
+  carry typed CultCache/CultMesh bindings with document schema/id, field path,
+  value kind, access, authority, and optional command id. Those bindings are
+  the Verse-backed state contract; callbacks remain native lowering actuators.
+  Placement commits
   keep video layers inside the program frame, snap near edges/center, and
   preserve the source aspect ratio while resizing through direct preview
   handles, sliders, or the scale gizmo. Explicit transform/source controls are

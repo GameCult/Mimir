@@ -70,7 +70,11 @@ invariants:
     hover/active handle state and snap guides are supplied through the shared
     document state lowered by Fensalir's Direct2D/D3D12 paths; Eve is the
     portable dashboard authority and CultUI is only the original C# reference
-    API shape. Keyboard arrows nudge selected layers without
+    API shape. Dashboard fields now carry explicit typed CultCache/CultMesh
+    bindings with document schema/id, field path, value kind, access,
+    authority, and optional command id; local callbacks are native lowering
+    actuators while Verse-backed CultCache fields are the portable state
+    contract. Keyboard arrows nudge selected layers without
     snapping, PageUp/PageDown reorder layers, and the inspector owns the
     selected source contain/cover/stretch fit mode.
   - The right rail `Output` panel owns OBS-like program actions below the

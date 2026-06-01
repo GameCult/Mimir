@@ -155,11 +155,16 @@ closer to CultUI than to the old flat dashboard node list:
 - `bindNodeId`: optional bridge back to the compatibility `nodes` projection.
 - `commandId`: provider-owned intent id. Eve clients invoke commands; providers
   accept or reject and publish the next snapshot.
+- `binding`: optional typed CultCache/CultMesh field binding. It names
+  `documentSchema`, `documentId`, field `path`, `valueKind`, `access`,
+  `authority`, and optional `commandId`. This is the Verse-backed field
+  contract; native callbacks and DOM handlers are only lowering actuators.
 
 The old `nodes` array is no longer expected to carry complete UI composition.
 It is a compatibility/debug/data surface. Clients that understand `surface`
 should render the composed tree first and use `nodes` only for selection,
-state-path binding, and fallback.
+legacy node binding, and fallback. `bindNodeId` is compatibility glue, not the
+portable state owner.
 
 The binary CultMesh state document mirrors this ownership: field 7 carries the
 optional `surface` tree. Older clients can stop at the node projection; current

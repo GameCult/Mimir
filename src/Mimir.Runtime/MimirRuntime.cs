@@ -35,6 +35,10 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private const int DefaultSpectrumSourceLaneCapacity = 8;
     private const int VideoSourceListSlotCount = 12;
     private const int AudioMixerChannelSlotCount = 6;
+    private const string ProgramSurfaceConfigSchema = "mimir.program_surface_config.v1";
+    private const string RuntimeStateSchema = "mimir.runtime_state.v1";
+    private const string RuntimeCommandSchema = "mimir.runtime_command.v1";
+    private const string DashboardAuthority = "mimir.runtime.dashboard";
     private const string SpectrumFieldResourceKey = "mimir:resource:spectrum:field-upload";
     private const string SpectrumRampResourceKey = AquariumBuiltInFieldResources.BlackbodyRampResourceKey;
     private static readonly string SpectrumRampTexturePath = AquariumBuiltInFieldResources.ResolveBlackbodyRampPath();
@@ -864,6 +868,26 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         synchronization.Dispose();
     }
 
+    private AquariumUiBinding ProgramSurfaceBinding(string path, string valueKind)
+    {
+        return AquariumUiBinding.ReadWrite(ProgramSurfaceConfigSchema, programSurfaceConfig.SurfaceId, path, valueKind, DashboardAuthority);
+    }
+
+    private static AquariumUiBinding RuntimeRead(string path, string valueKind)
+    {
+        return AquariumUiBinding.Read(RuntimeStateSchema, "mimir.local", path, valueKind, DashboardAuthority);
+    }
+
+    private static AquariumUiBinding RuntimeReadWrite(string path, string valueKind)
+    {
+        return AquariumUiBinding.ReadWrite(RuntimeStateSchema, "mimir.local", path, valueKind, DashboardAuthority);
+    }
+
+    private static AquariumUiBinding RuntimeCommand(string commandId, string path)
+    {
+        return AquariumUiBinding.Command(RuntimeCommandSchema, "mimir.local", path, DashboardAuthority, commandId);
+    }
+
     private AquariumUiDocument CreateUi()
     {
         return new AquariumUiDocument()
@@ -873,19 +897,19 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 {
                     shell.Pane("mimir.video-sources", "", graph =>
                     {
-                        graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f);
+                        graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f, binding: RuntimeRead("/program/video/summary", "string"));
                         graph.Text("video.source-list-title", "Program Sources", "strong", weight: 0.55f);
                         for (var slot = 0; slot < VideoSourceListSlotCount; slot++)
                         {
                             var sourceIndex = slot;
                             graph.Row($"video.source-row.{slot}", row =>
                             {
-                                row.Button($"video.source-row.{slot}.select", "Select", () => SelectVideoSlot(sourceIndex), weight: 0.55f);
-                                row.Text($"video.source-row.{slot}.label", () => DescribeVideoSourceSlot(sourceIndex), "caption", weight: 1.45f);
+                                row.Button($"video.source-row.{slot}.select", "Select", () => SelectVideoSlot(sourceIndex), weight: 0.55f, binding: RuntimeCommand($"program.video.select.{slot}", $"/commands/program/video/select/{slot}"));
+                                row.Text($"video.source-row.{slot}.label", () => DescribeVideoSourceSlot(sourceIndex), "caption", weight: 1.45f, binding: RuntimeRead($"/program/video/sources/{slot}/summary", "string"));
                             }, weight: 0.75f, isVisible: () => VideoSourceSlotVisible(sourceIndex));
                         }
                         graph.Text("video.empty", () => presentationControls.VideoFeeds.Count == 0 ? "No synced video streams yet." : "", "caption", weight: 0.65f);
-                        graph.Text("video.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f);
+                        graph.Text("video.selected", sceneEditor.DescribeSelection, "caption", weight: 1.2f, binding: RuntimeRead("/program/video/selection/summary", "string"));
                     }, weight: 0.85f);
 
                     shell.Vertical("mimir.editor-center", center =>
@@ -898,7 +922,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                             blitOutputBuffer: true,
                             handleInteraction: sceneEditor.HandlePreviewInteraction,
                             readState: () => sceneEditor.PreviewState,
-                            readGuides: () => sceneEditor.PreviewGuides);
+                            readGuides: () => sceneEditor.PreviewGuides,
+                            binding: RuntimeReadWrite("/program/video/placement", "preview-items"));
                         center.Pane("mimir.audio-mixer", "", mixer =>
                         {
                             mixer.Text("audio.mixer-title", "Audio Mixer", "strong", weight: 0.55f);
@@ -909,18 +934,18 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                                     var channelIndex = slot;
                                     bank.Card($"audio.channel.{slot}", strip =>
                                     {
-                                        strip.Text($"audio.channel.{slot}.name", () => AudioChannelName(channelIndex), "strong", weight: 0.55f);
+                                        strip.Text($"audio.channel.{slot}.name", () => AudioChannelName(channelIndex), "strong", weight: 0.55f, binding: RuntimeRead($"/program/audio/channels/{slot}/name", "string"));
                                         strip.Row($"audio.channel.{slot}.toggles", toggles =>
                                         {
-                                            toggles.Toggle($"audio.channel.{slot}.mute", "M", () => AudioMuted(channelIndex), value => SetAudioMuted(channelIndex, value));
-                                            toggles.Toggle($"audio.channel.{slot}.solo", "S", () => AudioSolo(channelIndex), value => SetAudioSolo(channelIndex, value));
+                                            toggles.Toggle($"audio.channel.{slot}.mute", "M", () => AudioMuted(channelIndex), value => SetAudioMuted(channelIndex, value), binding: RuntimeReadWrite($"/program/audio/channels/{slot}/mute", "bool"));
+                                            toggles.Toggle($"audio.channel.{slot}.solo", "S", () => AudioSolo(channelIndex), value => SetAudioSolo(channelIndex, value), binding: RuntimeReadWrite($"/program/audio/channels/{slot}/solo", "bool"));
                                         }, weight: 0.55f);
-                                        strip.Slider($"audio.channel.{slot}.gain", "Gain", () => AudioGain(channelIndex), value => SetAudioGain(channelIndex, value), 0.0f, 2.0f, "0.00", weight: 0.65f);
-                                        strip.Text($"audio.channel.{slot}.status", () => DescribeAudioChannelStatus(channelIndex), "caption", weight: 0.95f);
+                                        strip.Slider($"audio.channel.{slot}.gain", "Gain", () => AudioGain(channelIndex), value => SetAudioGain(channelIndex, value), 0.0f, 2.0f, "0.00", weight: 0.65f, binding: RuntimeReadWrite($"/program/audio/channels/{slot}/gain", "float"));
+                                        strip.Text($"audio.channel.{slot}.status", () => DescribeAudioChannelStatus(channelIndex), "caption", weight: 0.95f, binding: RuntimeRead($"/program/audio/channels/{slot}/status", "string"));
                                     });
                                 }
                             }, weight: 1.0f, gap: 6.0f);
-                            mixer.Text("audio.program", DescribeProgramAudio, "caption", weight: 0.35f);
+                            mixer.Text("audio.program", DescribeProgramAudio, "caption", weight: 0.35f, binding: RuntimeRead("/program/audio/summary", "string"));
                         }, weight: 0.95f);
                     }, weight: 1.75f);
 
@@ -928,30 +953,30 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     {
                         right.Pane("mimir.inspector", "", inspector =>
                         {
-                            inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
-                            inspector.Options("inspector.video-feed", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
+                            inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong", binding: RuntimeRead("/program/selection/summary", "string"));
+                            inspector.Options("inspector.video-feed", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions(), binding: RuntimeReadWrite("/program/selection/videoFeedIndex", "int"));
                             inspector.Vertical("inspector.source-controls", source =>
                             {
-                                source.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
-                                source.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
-                                source.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
+                                source.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible, binding: RuntimeReadWrite("/program/selection/video/visible", "bool"));
+                                source.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo, binding: RuntimeReadWrite("/program/selection/video/solo", "bool"));
+                                source.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00", binding: RuntimeReadWrite("/program/selection/video/opacity", "float"));
                                 source.Text("inspector.program-placement", "Program Frame", "strong");
-                                source.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
-                                source.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
-                                source.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
-                                source.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
-                                source.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
-                                source.Options("program.fit-mode", "Fit", () => sceneEditor.SelectedFitModeIndex, sceneEditor.SetSelectedFitModeIndex, sceneEditor.FitModeOptions);
+                                source.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000", binding: ProgramSurfaceBinding("/selection/programLayer/placement/x", "float"));
+                                source.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000", binding: ProgramSurfaceBinding("/selection/programLayer/placement/y", "float"));
+                                source.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000", binding: ProgramSurfaceBinding("/selection/programLayer/placement/width", "float"));
+                                source.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000", binding: ProgramSurfaceBinding("/selection/programLayer/placement/height", "float"));
+                                source.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00", binding: ProgramSurfaceBinding("/selection/programLayer/placement/rotationRadians", "float"));
+                                source.Options("program.fit-mode", "Fit", () => sceneEditor.SelectedFitModeIndex, sceneEditor.SetSelectedFitModeIndex, sceneEditor.FitModeOptions, binding: ProgramSurfaceBinding("/selection/programLayer/fitMode", "enum"));
                                 source.Row("program.fit", fit =>
                                 {
-                                    fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer);
-                                    fit.Button("program.fit-selected", "Fit", sceneEditor.FitSelectedProgramLayer);
-                                    fit.Button("program.fill-selected", "Fill", sceneEditor.FillSelectedProgramLayer);
+                                    fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer, binding: RuntimeCommand("program.layer.center", "/commands/program/layer/center"));
+                                    fit.Button("program.fit-selected", "Fit", sceneEditor.FitSelectedProgramLayer, binding: RuntimeCommand("program.layer.fit", "/commands/program/layer/fit"));
+                                    fit.Button("program.fill-selected", "Fill", sceneEditor.FillSelectedProgramLayer, binding: RuntimeCommand("program.layer.fill", "/commands/program/layer/fill"));
                                 });
                                 source.Row("program.order", order =>
                                 {
-                                    order.Button("program.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
-                                    order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
+                                    order.Button("program.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1), binding: RuntimeCommand("program.layer.up", "/commands/program/layer/up"));
+                                    order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1), binding: RuntimeCommand("program.layer.down", "/commands/program/layer/down"));
                                 });
                             }, isVisible: () => sceneEditor.HasSelectedProgramSource);
                         }, weight: 1.0f);
@@ -959,21 +984,21 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                         right.Pane("mimir.output", "", output =>
                         {
                             output.Text("output.title", "Output", "strong", weight: 0.55f);
-                            output.Text("output.program-summary", DescribeProgramOutput, "caption", weight: 0.6f);
+                            output.Text("output.program-summary", DescribeProgramOutput, "caption", weight: 0.6f, binding: RuntimeRead("/program/output/summary", "string"));
                             output.Row("output.recording", row =>
                             {
-                                row.Button("program.record", "Record", StartProgramRecording, weight: 0.7f);
-                                row.Button("program.record-stop", "Stop", programRecorder.Stop, weight: 0.55f);
-                                row.Text("program.record-status", programRecorder.Describe, "caption", weight: 1.75f);
+                                row.Button("program.record", "Record", StartProgramRecording, weight: 0.7f, binding: RuntimeCommand("program.record.start", "/commands/program/record/start"));
+                                row.Button("program.record-stop", "Stop", programRecorder.Stop, weight: 0.55f, binding: RuntimeCommand("program.record.stop", "/commands/program/record/stop"));
+                                row.Text("program.record-status", programRecorder.Describe, "caption", weight: 1.75f, binding: RuntimeRead("/program/output/recording/status", "string"));
                             }, weight: 0.7f);
-                            output.Text("output.record-path", () => $"folder {programRecorder.OutputDirectory}", "caption", weight: 0.7f);
+                            output.Text("output.record-path", () => $"folder {programRecorder.OutputDirectory}", "caption", weight: 0.7f, binding: RuntimeRead("/program/output/recording/folder", "path"));
                             output.Row("output.streaming", row =>
                             {
-                                row.Button("program.stream", "Live", StartProgramStreaming, weight: 0.7f);
-                                row.Button("program.stream-stop", "Stop", programStreamer.Stop, weight: 0.55f);
-                                row.Text("program.stream-status", programStreamer.Describe, "caption", weight: 1.75f);
+                                row.Button("program.stream", "Live", StartProgramStreaming, weight: 0.7f, binding: RuntimeCommand("program.stream.start", "/commands/program/stream/start"));
+                                row.Button("program.stream-stop", "Stop", programStreamer.Stop, weight: 0.55f, binding: RuntimeCommand("program.stream.stop", "/commands/program/stream/stop"));
+                                row.Text("program.stream-status", programStreamer.Describe, "caption", weight: 1.75f, binding: RuntimeRead("/program/output/streaming/status", "string"));
                             }, weight: 0.7f);
-                            output.Text("output.stream-target", () => $"target {programStreamer.TargetUrl}", "caption", weight: 0.7f);
+                            output.Text("output.stream-target", () => $"target {programStreamer.TargetUrl}", "caption", weight: 0.7f, binding: RuntimeRead("/program/output/streaming/target", "uri"));
                         }, fixedExtent: 172.0f);
                     }, weight: 0.95f);
                 });

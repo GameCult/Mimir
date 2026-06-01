@@ -177,7 +177,18 @@ public sealed record MimirEveDashboardUiElementSnapshot(
     [property: Key(8)] MimirEveDashboardUiLayoutSnapshot? Layout,
     [property: Key(9)] MimirEveDashboardUiStyleSnapshot? Style,
     [property: Key(10)] MimirEveDashboardUiMetricSnapshot? Metric,
-    [property: Key(11)] MimirEveDashboardUiElementSnapshot[] Children);
+    [property: Key(11)] MimirEveDashboardUiElementSnapshot[] Children,
+    [property: Key(12)] MimirEveDashboardUiBindingSnapshot? Binding = null);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiBindingSnapshot(
+    [property: Key(0)] string DocumentSchema,
+    [property: Key(1)] string DocumentId,
+    [property: Key(2)] string Path,
+    [property: Key(3)] string ValueKind,
+    [property: Key(4)] string Access,
+    [property: Key(5)] string Authority,
+    [property: Key(6)] string? CommandId);
 
 [MessagePackObject]
 public sealed record MimirEveDashboardUiLayoutSnapshot(

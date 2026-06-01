@@ -559,7 +559,11 @@ snap guides come from the shared Eve dashboard document state that Fensalir's
 Direct2D and D3D12 paths lower locally; arrows nudge the selected layer,
 PageUp/PageDown reorder layers, and the inspector owns the selected source
 contain/cover/stretch fit mode. Eve is the portable dashboard authority, while
-CultUI is only the C# reference API shape for the document. World SDF glyph rendering, ASSIMP-style
+CultUI is only the C# reference API shape for the document. The shared element
+contract now includes typed CultCache/CultMesh field bindings: document
+schema/id, field path, value kind, access, authority, and optional command id.
+Callbacks are native lowering actuators; the binding is the portable
+Verse-backed state contract. World SDF glyph rendering, ASSIMP-style
 mesh decoding/upload, and pixel-accurate gizmo hit-testing are explicit
 Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].
@@ -579,9 +583,11 @@ selected Face/status pane, state tree, and detail panel.
 Dashboard manifests and states have typed CultMesh-compatible document shapes
 `mimir.eve_dashboard_manifest.v1` and `mimir.eve_dashboard_state.v1`, while the
 live iPad lane remains WebSocket/TCP because it is the proven tunnelable
-transport. The Mimir stream-layout provider still uses fixture state; the next
-cut is binding it to live `MimirPresentationControlState` and
-`MimirSceneEditorState`.
+transport. `mimir.eve_dashboard_state.v1` now mirrors each retained element's
+optional binding object so clients can move fields into CultCache without
+turning `bindNodeId` into a second authority. The Mimir stream-layout provider
+still uses fixture state; the next cut is binding it to live
+`MimirPresentationControlState` and `MimirSceneEditorState`.
 
 ## Visual Fusion
 

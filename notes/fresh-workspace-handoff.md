@@ -180,6 +180,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   fixed-height OBS-like control block below it. Eve is the portable dashboard
   authority; the C# CultUI-shaped Aquarium contract is only the reference API
   shape, and Fensalir Direct2D/D3D12 are native lowerings of the same document.
+  Elements can now carry typed CultCache/CultMesh bindings with document
+  schema/id, field path, value kind, access, authority, and optional command id;
+  native callbacks remain local lowering actuators, not portable state owners.
   `MimirProgramRecorder` owns `Record` / `Stop`, status text, and timestamped
   receipts under `C:\Users\Meta\Videos\Mimir` by default
   (`MIMIR_RECORD_OUTPUT_DIR` overrides). It delegates to

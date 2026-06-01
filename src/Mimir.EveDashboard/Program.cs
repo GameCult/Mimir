@@ -382,7 +382,17 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
             element.Metric == null
                 ? null
                 : new MimirEveDashboardUiMetricSnapshot(element.Metric.Label, element.Metric.Value, element.Metric.Tone),
-            element.Children.Select(ToCultMeshElement).ToArray());
+            element.Children.Select(ToCultMeshElement).ToArray(),
+            element.Binding == null
+                ? null
+                : new MimirEveDashboardUiBindingSnapshot(
+                    element.Binding.DocumentSchema,
+                    element.Binding.DocumentId,
+                    element.Binding.Path,
+                    element.Binding.ValueKind,
+                    element.Binding.Access,
+                    element.Binding.Authority,
+                    element.Binding.CommandId));
     }
 
     private async Task BroadcastStateAsync()
@@ -2206,6 +2216,23 @@ internal sealed class DashboardSurface
 
 internal sealed record DashboardSurfaceAsset(string Id, string Kind, string Uri);
 
+internal sealed class DashboardUiBinding
+{
+    public string DocumentSchema { get; set; } = "";
+
+    public string DocumentId { get; set; } = "";
+
+    public string Path { get; set; } = "";
+
+    public string ValueKind { get; set; } = "";
+
+    public string Access { get; set; } = "read";
+
+    public string Authority { get; set; } = "";
+
+    public string? CommandId { get; set; }
+}
+
 internal sealed class DashboardUiElement
 {
     public string Id { get; set; } = "";
@@ -2223,6 +2250,8 @@ internal sealed class DashboardUiElement
     public string? BindNodeId { get; set; }
 
     public string? CommandId { get; set; }
+
+    public DashboardUiBinding? Binding { get; set; }
 
     public DashboardUiLayout? Layout { get; set; }
 
