@@ -10,8 +10,13 @@ param(
     [string]$FfmpegPath = "ffmpeg",
     [switch]$StartRavenSender,
     [string]$RavenHost = "madman's lullaby@192.168.1.84",
+    [string]$RavenAddress = "192.168.1.84",
     [string]$RavenRepo = "C:\Meta\Mimir",
     [string]$StarfireHost = "192.168.1.66",
+    [switch]$RavenSenderListens,
+    [ValidateSet("srt", "tcp-listener")]
+    [string]$RavenSenderTransport = "srt",
+    [string]$RavenInputOverride = "",
     [string]$KiyoVideoDevice = "USB Video Device",
     [string]$StarfireScarlettAudioDevice = "Analogue 1 + 2 (2- Focusrite USB Audio)",
     [int]$KiyoWidth = 640,
@@ -27,6 +32,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Quote-ProcessArgument([string]$Value) {
+    if ($Value.Length -eq 0) {
+        return '""'
+    }
+
+    if ($Value -notmatch '[\s"]') {
+        return $Value
+    }
+
+    return '"' + $Value.Replace('"', '\"') + '"'
+}
 
 $repo = Split-Path -Parent $PSScriptRoot
 $absoluteOutputPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) {
@@ -46,13 +63,21 @@ $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $stdoutLog = Join-Path $absoluteLogRoot "stream-proof-record-$timestamp.out.log"
 $stderrLog = Join-Path $absoluteLogRoot "stream-proof-record-$timestamp.err.log"
 
-$ravenEndpoint = "srt://0.0.0.0:${RavenPort}?mode=listener&latency=120000&timeout=5000000"
+$ravenEndpoint = if ($RavenInputOverride.Length -gt 0) {
+    $RavenInputOverride
+} elseif ($RavenSenderListens) {
+    "srt://${RavenAddress}:${RavenPort}?mode=caller&latency=120000&timeout=30000000"
+} else {
+    "srt://0.0.0.0:${RavenPort}?mode=listener&latency=120000&timeout=30000000"
+}
 $ravenSender = "${RavenRepo}\scripts\start-raven-av-sender.ps1"
 
 if ($StartRavenSender) {
     $taskName = "MimirRavenAvSender$RavenPort"
     $remoteCmd = "${RavenRepo}\scripts\run-raven-av-$RavenPort.cmd"
-    $remoteCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ravenSender -TargetHost $StarfireHost -Port $RavenPort"
+    $remoteTargetHost = if ($RavenSenderListens) { "0.0.0.0" } else { $StarfireHost }
+    $remoteSrtMode = if ($RavenSenderListens) { "listener" } else { "caller" }
+    $remoteCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ravenSender -TargetHost $remoteTargetHost -Port $RavenPort -SrtMode $remoteSrtMode -Transport $RavenSenderTransport"
     $taskTime = (Get-Date).AddMinutes(1).ToString("HH:mm")
     Write-Host "Starting Raven muxed A/V sender on ${RavenHost} through interactive task ${taskName}: $remoteCommand"
     if (-not $DryRun) {
@@ -134,6 +159,7 @@ $arguments += @(
 
 Write-Host "Stream-proof recording:"
 Write-Host "  Raven input: $ravenEndpoint"
+Write-Host "  Raven SRT mode: $(if ($RavenSenderListens) { 'Raven listener, Starfire caller' } else { 'Starfire listener, Raven caller' })"
 Write-Host "  Kiyo PIP: $KiyoVideoDevice ${KiyoWidth}x${KiyoHeight}@$KiyoFrameRate -> ${KiyoCornerWidth}x${scaledKiyoHeight}"
 Write-Host "  Raven audio: Realtek/default render loopback in muxed NVENC/SRT feed"
 Write-Host "  Starfire Scarlett: $(if ($NoStarfireScarlett) { 'disabled' } else { $StarfireScarlettAudioDevice })"
@@ -153,9 +179,7 @@ $startInfo.FileName = $FfmpegPath
 $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
-foreach ($argument in $arguments) {
-    [void]$startInfo.ArgumentList.Add($argument)
-}
+$startInfo.Arguments = ($arguments | ForEach-Object { Quote-ProcessArgument $_ }) -join " "
 
 $process = [System.Diagnostics.Process]::Start($startInfo)
 if (-not $process) {
@@ -170,8 +194,8 @@ if (-not $process.WaitForExit($timeoutMs)) {
     throw "FFmpeg recorder timed out after $($DurationSeconds + $StartupTimeoutSeconds)s. Check $stderrLog."
 }
 
-$stdoutTask.GetAwaiter().GetResult()
-$stderrTask.GetAwaiter().GetResult()
+[void]$stdoutTask.GetAwaiter().GetResult()
+[void]$stderrTask.GetAwaiter().GetResult()
 if ($process.ExitCode -ne 0) {
     throw "FFmpeg recorder failed with exit code $($process.ExitCode). Check $stderrLog."
 }

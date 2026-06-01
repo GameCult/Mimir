@@ -6,6 +6,10 @@ param(
     [int]$Framerate = 30,
     [int]$AudioSampleRate = 48000,
     [int]$AudioChannels = 2,
+    [ValidateSet("srt", "tcp-listener")]
+    [string]$Transport = "srt",
+    [ValidateSet("caller", "listener")]
+    [string]$SrtMode = "caller",
     [string]$FfmpegPath = "ffmpeg",
     [string]$Source = "desktop",
     [string]$VideoBitrate = "12000k",
@@ -25,7 +29,11 @@ $repo = Split-Path -Parent $PSScriptRoot
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $stdoutLog = Join-Path $LogRoot "raven-av-srt-$timestamp.out.log"
 $stderrLog = Join-Path $LogRoot "raven-av-srt-$timestamp.err.log"
-$endpoint = "srt://${TargetHost}:${Port}?mode=caller&latency=120000"
+$endpoint = if ($Transport -eq "tcp-listener") {
+    "tcp://${TargetHost}:${Port}?listen=1"
+} else {
+    "srt://${TargetHost}:${Port}?mode=${SrtMode}&latency=120000&timeout=30000000"
+}
 $videoSize = "${Width}x${Height}"
 $gop = [Math]::Max(1, $Framerate * 2)
 $captureScript = Join-Path $repo "scripts\wasapi-loopback-capture.ps1"
@@ -61,8 +69,11 @@ $ffmpegArgs = @(
     $endpoint
 )
 $quotedFfmpegArgs = $ffmpegArgs | ForEach-Object { Quote-CmdArgument $_ }
-$command = (Quote-CmdArgument $captureScript) +
-    " -Output - -SampleRate $AudioSampleRate -Channels $AudioChannels | " +
+$command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " +
+    (Quote-CmdArgument $captureScript) +
+    " -Output " +
+    (Quote-CmdArgument "stdout") +
+    " -SampleRate $AudioSampleRate -Channels $AudioChannels | " +
     (Quote-CmdArgument $FfmpegPath) +
     " " +
     ($quotedFfmpegArgs -join " ")
@@ -70,6 +81,7 @@ $command = (Quote-CmdArgument $captureScript) +
 Write-Host "Raven muxed A/V sender:"
 Write-Host "  ffmpeg: $FfmpegPath"
 Write-Host "  target: $endpoint"
+Write-Host "  transport: $Transport"
 Write-Host "  video: $Source $videoSize@$Framerate via h264_nvenc"
 Write-Host "  audio: Raven Realtek/default render loopback ${AudioChannels}ch ${AudioSampleRate}Hz -> AAC"
 Write-Host "  sync role: Raven Realtek is co-streamer game/program loopback packaged with NVENC; Starfire Realtek owns chirp emission"

@@ -97,6 +97,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\record-stream-proof-output.ps
   -MicOffsetSeconds 0.000
 ```
 
+If Windows firewall blocks direct SRT/UDP during a local proof, run the Raven
+leg through an SSH TCP tunnel instead:
+
+```powershell
+Start-Process ssh.exe -ArgumentList '-o ExitOnForwardFailure=yes -N -L 6204:127.0.0.1:5204 -l "madman''s lullaby" 192.168.1.84' -WindowStyle Hidden
+
+powershell -ExecutionPolicy Bypass -File .\scripts\record-stream-proof-output.ps1 `
+  -StartRavenSender `
+  -RavenSenderListens `
+  -RavenSenderTransport tcp-listener `
+  -RavenInputOverride tcp://127.0.0.1:6204
+```
+
+That fallback keeps the proof private to the LAN/SSH path and avoids changing
+machine firewall policy just to capture a judging artifact.
+
 ## Scaling Rule
 
 Viewer capacity is approximately:

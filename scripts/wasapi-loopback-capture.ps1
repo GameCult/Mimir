@@ -112,7 +112,7 @@ namespace Mimir {
         }
 
         public static void Capture(string outputPath, double seconds, int targetRate, int targetChannels, string roleName) {
-            Stream output = outputPath == "-" ? Console.OpenStandardOutput() : new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            Stream output = IsStdoutPath(outputPath) ? Console.OpenStandardOutput() : new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.Read);
             try {
                 IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumerator());
                 IMMDevice device;
@@ -216,8 +216,13 @@ namespace Mimir {
                 }
             }
             finally {
-                if (outputPath != "-") output.Dispose();
+                if (!IsStdoutPath(outputPath)) output.Dispose();
             }
+        }
+
+        static bool IsStdoutPath(string outputPath) {
+            return String.Equals(outputPath, "-", StringComparison.Ordinal) ||
+                String.Equals(outputPath, "stdout", StringComparison.OrdinalIgnoreCase);
         }
 
         static void Check(int hr, string stage) {
