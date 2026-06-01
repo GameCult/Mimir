@@ -283,12 +283,15 @@ a named invariant that the native runtime cannot protect yet.
   `Mimir.BufferSmoke --presentation-control-smoke` proves the state owner.
 - `MimirProgramRecorder` is the first app-owned recording control. The Mimir UI
   exposes `Record` / `Stop` in the Video Sources rail, tracks child-process
-  status, writes the latest MP4 under `artifacts/runtime/mimir-app-recordings/`,
+  status, writes the latest MP4 under `artifacts/runtime/stream-proof/`,
   and kills the process tree on stop. The current actuator deliberately delegates
-  to `scripts/record-kiyo-dual-mic-composite.ps1`, so the known Kiyo plus
-  Scarlett/Faust receipt is available from the app without making the script a
-  second operator interface. Native program-output recording can replace that
-  actuator later behind the same UI owner.
+  to `scripts/record-stream-proof-output.ps1`, so the app records the same
+  stream-proof composite intended for the Yggdrasil/public path: Raven program
+  feed, Kiyo picture-in-picture, Starfire Scarlett audio, and NVENC/AAC
+  broadcast settings. `MIMIR_RECORD_START_RAVEN=1` lets the app ask the script
+  to start Raven's sender; otherwise it records from the already-running feed.
+  Native program-output recording can replace that actuator later behind the
+  same UI owner.
 - `MimirSceneEditorState` owns the new Mimir-window editor graph. It is not the
   OBS program output: it owns editor camera, selected node, sensor-feed panels,
   SDF text-panel nodes, model placeholders, visibility, locks, transforms, reset

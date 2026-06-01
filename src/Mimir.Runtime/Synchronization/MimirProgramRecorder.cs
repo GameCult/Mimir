@@ -15,7 +15,7 @@ public sealed class MimirProgramRecorder : IDisposable
         this.repositoryRoot = string.IsNullOrWhiteSpace(repositoryRoot)
             ? ResolveRepositoryRoot()
             : Path.GetFullPath(repositoryRoot);
-        LatestOutputPath = Path.Combine(this.repositoryRoot, "artifacts", "runtime", "mimir-app-recordings", "mimir-record-latest.mp4");
+        LatestOutputPath = Path.Combine(this.repositoryRoot, "artifacts", "runtime", "stream-proof", "mimir-program-record-latest.mp4");
     }
 
     public bool IsRecording => process is { HasExited: false };
@@ -44,7 +44,7 @@ public sealed class MimirProgramRecorder : IDisposable
             return false;
         }
 
-        var scriptPath = Path.Combine(repositoryRoot, "scripts", "record-kiyo-dual-mic-composite.ps1");
+        var scriptPath = Path.Combine(repositoryRoot, "scripts", "record-stream-proof-output.ps1");
         if (!File.Exists(scriptPath))
         {
             status = "record script missing";
@@ -53,9 +53,9 @@ public sealed class MimirProgramRecorder : IDisposable
 
         var duration = Math.Max(1, durationSeconds ?? ReadDurationSeconds());
         LatestOutputPath = Path.GetFullPath(string.IsNullOrWhiteSpace(outputPath)
-            ? Path.Combine(repositoryRoot, "artifacts", "runtime", "mimir-app-recordings", "mimir-record-latest.mp4")
+            ? Path.Combine(repositoryRoot, "artifacts", "runtime", "stream-proof", "mimir-program-record-latest.mp4")
             : Path.IsPathRooted(outputPath) ? outputPath : Path.Combine(repositoryRoot, outputPath));
-        var logRoot = Path.Combine(repositoryRoot, "artifacts", "runtime", "mimir-app-recordings");
+        var logRoot = Path.Combine(repositoryRoot, "artifacts", "runtime", "stream-proof");
         Directory.CreateDirectory(logRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(LatestOutputPath) ?? logRoot);
 
@@ -79,6 +79,10 @@ public sealed class MimirProgramRecorder : IDisposable
         startInfo.ArgumentList.Add(LatestOutputPath);
         startInfo.ArgumentList.Add("-LogRoot");
         startInfo.ArgumentList.Add(logRoot);
+        if (IsTruthy(Environment.GetEnvironmentVariable("MIMIR_RECORD_START_RAVEN")))
+        {
+            startInfo.ArgumentList.Add("-StartRavenSender");
+        }
 
         var stdoutPath = Path.Combine(logRoot, "mimir-app-record.out.log");
         var stderrPath = Path.Combine(logRoot, "mimir-app-record.err.log");
@@ -159,6 +163,13 @@ public sealed class MimirProgramRecorder : IDisposable
             ? parsed
             : DefaultDurationSeconds;
     }
+
+    private static bool IsTruthy(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        (string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "on", StringComparison.OrdinalIgnoreCase));
 
     private static string ResolveRepositoryRoot()
     {

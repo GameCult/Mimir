@@ -166,11 +166,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Fresh run `20260601-051044` measured cardioid delay 359.398 samples
   (7487.452 us) at 48 kHz and applied holdback 359.398/0.000 to
   shotgun/cardioid before cleanup.
-- `MimirProgramRecorder` exposes that receipt as a Mimir app feature. The Video
-  Sources rail has `Record` / `Stop`, status text, and latest output under
-  `artifacts/runtime/mimir-app-recordings/mimir-record-latest.mp4`. It currently
-  delegates to `scripts/record-kiyo-dual-mic-composite.ps1`; native
-  program-output recording should replace that actuator behind the same owner.
+- `MimirProgramRecorder` exposes local broadcast-proof recording as a Mimir app
+  feature. The Video Sources rail has `Record` / `Stop`, status text, and latest
+  output under
+  `artifacts/runtime/stream-proof/mimir-program-record-latest.mp4`. It currently
+  delegates to `scripts/record-stream-proof-output.ps1`, so the app records the
+  same Raven + Kiyo PIP + Starfire Scarlett NVENC/AAC composite intended for
+  Yggdrasil/public judgment. `MIMIR_RECORD_START_RAVEN=1` asks it to launch the
+  Raven sender too. Native program-output recording should replace that
+  actuator behind the same owner.
 - OBS receives final program surfaces; it does not own synchronization.
 
 ## Current Pressure
