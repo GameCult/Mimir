@@ -263,6 +263,21 @@ invariants:
     Live run `artifacts/runtime/move-syrinx-witness-20260601-224705` rendered a
     0.42s Syrinx call and, in a 1764-frame poll, produced 79 visual voice
     events, 69 emitted Realtek calls, and participation from all three Moves.
+    The next live-score cut adds `mimir.live_score.v1` to the same trace:
+    `LiveScoreEstimator` turns per-source FFT/adaptive-whitened onset,
+    autocorrelation tempo candidates, cyclic tempogram bins, f0, chroma, key,
+    and chord evidence into active voices, note names, durations, score
+    confidence, target-confidence deficit, gesture density, and per-Move note
+    targets. `ScoreGestureScheduler` consumes that score document before
+    choosing Move/Syrinx strikes, so calibration gestures are spread across
+    detected voices and spectral lanes according to the confidence deficit
+    instead of being raw RGB reactions. Live run
+    `artifacts/runtime/move-live-score-20260601-232156` showed 350/350 sampled
+    records carrying `mimir.live_score.v1`, three active voices, up to eight
+    tempo candidates, 21 score event frames, 20 emitted Syrinx calls, and
+    three Move targets assigned to `shotgun-mic`, `realtek-loopback`, and
+    `cardioid-mic` with calibration priorities around 0.68-0.72 while score
+    confidence remained below the 0.78 target.
     MIDI keyboard notes should later enter as an explicit typed score source,
     but today AquaSynth is observed through whatever audio channel carries its
     rendered voice.

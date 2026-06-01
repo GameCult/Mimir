@@ -112,6 +112,18 @@ def parse_channel_names(values: list[str] | None) -> dict[int, str]:
     return names
 
 
+def midi_from_hz(hz: float) -> float:
+    if hz <= 0.0:
+        return 0.0
+    return 69.0 + 12.0 * math.log2(hz / 440.0)
+
+
+def note_name_from_midi(midi: float) -> str:
+    note = int(round(midi))
+    octave = note // 12 - 1
+    return f"{PITCH_NAMES[note % 12]}{octave}"
+
+
 def rgb_to_hsv01(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
     return colorsys.rgb_to_hsv(rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0)
 
@@ -141,6 +153,8 @@ class OnlineAnalyzer:
         self.chroma_smooth = np.ones(12, dtype=np.float32) / 12.0
         self.bpm = 140.0
         self.bpm_confidence = 0.0
+        self.tempo_candidates: list[dict[str, float]] = []
+        self.cyclic_tempogram = np.zeros(12, dtype=np.float32)
         self.beat_phase = 0.0
         self.last_t = time.monotonic()
 
@@ -219,6 +233,8 @@ class OnlineAnalyzer:
             "level": self.level_env,
             "bpm": self.bpm,
             "bpm_confidence": self.bpm_confidence,
+            "tempo_candidates": tuple(dict(item) for item in self.tempo_candidates),
+            "cyclic_tempogram": tuple(float(value) for value in self.cyclic_tempogram),
             "beat_phase": self.beat_phase,
             "fundamental_hz": f0,
             "color_balance": color,
@@ -248,6 +264,8 @@ class OnlineAnalyzer:
             return
         best_bpm = self.bpm
         best_score = 0.0
+        candidates: list[dict[str, float]] = []
+        tempogram = np.zeros(12, dtype=np.float32)
         for bpm in np.linspace(self.args.tempo_min_bpm, self.args.tempo_max_bpm, 161):
             lag = int(round((60.0 / float(bpm)) * self.fps))
             if lag <= 1 or lag >= len(x) - 4:
@@ -256,11 +274,19 @@ class OnlineAnalyzer:
             b = x[:-lag]
             denom = float(np.linalg.norm(a) * np.linalg.norm(b))
             score = 0.0 if denom <= 1e-9 else float(np.dot(a, b) / denom)
+            if score > 0.0:
+                tempo_class = (math.log2(float(bpm) / 60.0) % 1.0) * 12.0
+                tempogram[int(round(tempo_class)) % 12] += score
+                candidates.append({"bpm": float(bpm), "lag_frames": float(lag), "score": score})
             if score > best_score:
                 best_score = score
                 best_bpm = float(bpm)
         self.bpm = 0.88 * self.bpm + 0.12 * best_bpm
         self.bpm_confidence = max(0.0, min(1.0, best_score))
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        self.tempo_candidates = candidates[:8]
+        total = float(np.sum(tempogram))
+        self.cyclic_tempogram = tempogram / total if total > 1e-6 else tempogram
 
     def _estimate_fundamental_and_color(self, mag: np.ndarray) -> tuple[float, tuple[float, float, float], float, float]:
         freqs = np.fft.rfftfreq(self.fft_size, 1.0 / self.rate)
@@ -560,6 +586,8 @@ def fuse_music_sources(primary: dict[str, object], source_states: list[dict[str,
         "role": "program-loopback",
         "bpm": primary["bpm"],
         "bpm_confidence": primary["bpm_confidence"],
+        "tempo_candidates": primary.get("tempo_candidates", ()),
+        "cyclic_tempogram": primary.get("cyclic_tempogram", ()),
         "hit": primary["hit"],
         "body": primary["body"],
         "loudness_gate": primary["loudness_gate"],
@@ -594,9 +622,171 @@ def fuse_music_sources(primary: dict[str, object], source_states: list[dict[str,
         primary["fundamental_hz"] = sum(freq * weight for freq, weight in fundamentals) / fundamental_weight
     primary_source["bpm"] = primary["bpm"]
     primary_source["bpm_confidence"] = primary["bpm_confidence"]
+    primary_source["tempo_candidates"] = primary.get("tempo_candidates", ())
+    primary_source["cyclic_tempogram"] = primary.get("cyclic_tempogram", ())
     primary["music_sources"] = [primary_source, *source_states]
     primary["score_source_count"] = len(primary["music_sources"])
     return primary
+
+
+class LiveScoreEstimator:
+    def __init__(self, move_count: int, args: argparse.Namespace) -> None:
+        self.args = args
+        self.move_count = move_count
+        self.voices: dict[str, dict[str, object]] = {}
+
+    def update(self, state: dict[str, object], now: float) -> dict[str, object]:
+        sources = state.get("music_sources", [])
+        if not isinstance(sources, list):
+            sources = []
+        seen: set[str] = set()
+        voice_records: list[dict[str, object]] = []
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            source_id = str(source.get("source", f"source-{len(voice_records)}"))
+            seen.add(source_id)
+            voice = self._voice_from_source(source_id, source, now)
+            if voice is not None:
+                self.voices[source_id] = voice
+                voice_records.append(dict(voice))
+
+        stale_after = max(0.1, float(self.args.score_voice_release_seconds))
+        for source_id in list(self.voices.keys()):
+            voice = self.voices[source_id]
+            if source_id in seen:
+                continue
+            if now - float(voice.get("last_seen", now)) > stale_after:
+                del self.voices[source_id]
+            else:
+                voice["active"] = False
+                voice_records.append(dict(voice))
+
+        voice_records.sort(key=lambda item: float(item.get("confidence", 0.0)), reverse=True)
+        active_voices = [voice for voice in voice_records if bool(voice.get("active", False))]
+        confidence = self._score_confidence(state, active_voices)
+        deficit = max(0.0, float(self.args.score_target_confidence) - confidence)
+        move_targets = self._assign_move_targets(state, active_voices, deficit)
+        return {
+            "kind": "mimir.live_score.v1",
+            "tempo_bpm": float(state.get("bpm", 0.0)),
+            "tempo_confidence": float(state.get("bpm_confidence", 0.0)),
+            "tempo_candidates": state.get("tempo_candidates", ()),
+            "cyclic_tempogram": state.get("cyclic_tempogram", ()),
+            "beat_phase": float(state.get("beat_phase", 0.0)),
+            "key": state.get("key_name", ""),
+            "mode": state.get("key_mode", ""),
+            "key_confidence": float(state.get("key_confidence", 0.0)),
+            "chord": state.get("chord_name", ""),
+            "chord_confidence": float(state.get("chord_confidence", 0.0)),
+            "voices": voice_records,
+            "active_voice_count": len(active_voices),
+            "confidence": confidence,
+            "target_confidence": float(self.args.score_target_confidence),
+            "confidence_deficit": deficit,
+            "gesture_density": max(
+                float(self.args.score_min_improv_density),
+                min(float(self.args.score_max_improv_density), float(self.args.score_min_improv_density) + deficit * float(self.args.score_confidence_gesture_gain)),
+            ),
+            "move_targets": move_targets,
+        }
+
+    def _voice_from_source(self, source_id: str, source: dict[str, object], now: float) -> dict[str, object] | None:
+        strength = max(
+            float(source.get("score_strength", 0.0)),
+            float(source.get("hit", 0.0)),
+            float(source.get("loudness_gate", 0.0)),
+        )
+        body = float(source.get("body", 0.0))
+        hz = float(source.get("fundamental_hz", 0.0))
+        if strength < self.args.score_min_voice_strength and body < self.args.score_min_voice_body:
+            previous = self.voices.get(source_id)
+            if previous is None:
+                return None
+            previous["active"] = False
+            previous["confidence"] = max(0.0, float(previous.get("confidence", 0.0)) * self.args.score_voice_decay)
+            return previous
+        midi = midi_from_hz(hz)
+        note = int(round(midi))
+        previous = self.voices.get(source_id, {})
+        started_at = float(previous.get("started_at", now))
+        if previous.get("note") != note or not bool(previous.get("active", False)):
+            started_at = now
+        confidence = max(
+            0.0,
+            min(
+                1.0,
+                0.48 * strength
+                + 0.18 * min(1.0, body * 20.0)
+                + 0.16 * float(source.get("bpm_confidence", 0.0))
+                + 0.10 * float(source.get("key_confidence", 0.0))
+                + 0.08 * float(source.get("chord_confidence", 0.0)),
+            ),
+        )
+        return {
+            "voice_id": source_id,
+            "source": source_id,
+            "active": True,
+            "midi": midi,
+            "note": note,
+            "note_name": note_name_from_midi(midi),
+            "frequency_hz": hz,
+            "cents": (midi - note) * 100.0,
+            "strength": strength,
+            "confidence": confidence,
+            "started_at": started_at,
+            "last_seen": now,
+            "duration_seconds": max(0.0, now - started_at),
+            "chord": source.get("chord_name", ""),
+            "key": source.get("key_name", ""),
+            "role": source.get("role", ""),
+        }
+
+    def _score_confidence(self, state: dict[str, object], voices: list[dict[str, object]]) -> float:
+        voice_confidence = 0.0
+        if voices:
+            weights = [float(voice.get("confidence", 0.0)) for voice in voices]
+            voice_confidence = sum(weights[:4]) / min(4, max(1, len(weights)))
+        return max(
+            0.0,
+            min(
+                1.0,
+                0.30 * float(state.get("bpm_confidence", 0.0))
+                + 0.25 * float(state.get("key_confidence", 0.0))
+                + 0.20 * float(state.get("chord_confidence", 0.0))
+                + 0.25 * voice_confidence,
+            ),
+        )
+
+    def _assign_move_targets(self, state: dict[str, object], voices: list[dict[str, object]], deficit: float) -> list[dict[str, object]]:
+        chord_root = int(state.get("chord_root", 0))
+        key_mode = str(state.get("key_mode", "major"))
+        scale = (0, 3, 5, 7, 10, 12, 15) if key_mode == "minor" else (0, 2, 4, 7, 9, 11, 14)
+        targets: list[dict[str, object]] = []
+        for index in range(self.move_count):
+            if voices:
+                voice = voices[index % len(voices)]
+                base_note = int(voice.get("note", chord_root + scale[index % len(scale)]))
+                confidence = float(voice.get("confidence", 0.0))
+                source = str(voice.get("source", "score"))
+            else:
+                base_note = chord_root + scale[index % len(scale)] + 12 * ((index // len(scale)) % 2)
+                confidence = 0.0
+                source = "score-fill"
+            spread = int(round(deficit * 12.0))
+            target_note = float(base_note + (index - (self.move_count - 1) * 0.5) * max(0, spread) / max(1, self.move_count))
+            targets.append(
+                {
+                    "move_index": index,
+                    "source": source,
+                    "target_note": target_note,
+                    "note_name": note_name_from_midi(target_note),
+                    "confidence": confidence,
+                    "calibration_priority": max(0.0, min(1.0, deficit + (1.0 - confidence) * 0.35)),
+                    "spectral_lane": index / max(1, self.move_count),
+                }
+            )
+        return targets
 
 
 class ScoreGestureScheduler:
@@ -637,11 +827,14 @@ class ScoreGestureScheduler:
         confidence = float(state.get("bpm_confidence", 0.0))
         key_confidence = float(state.get("key_confidence", 0.0))
         chord_confidence = float(state.get("chord_confidence", 0.0))
+        live_score = state.get("live_score", {})
+        live_score_confidence = float(live_score.get("confidence", 0.0)) if isinstance(live_score, dict) else 0.0
+        live_score_deficit = float(live_score.get("confidence_deficit", 0.0)) if isinstance(live_score, dict) else 0.0
         chord_root = int(state.get("chord_root", 0))
         key_mode = str(state.get("key_mode", "major"))
         flux_rank = float(state.get("percentile", 0.0))
         onset_intensity = max(flux_rank ** self.args.syrinx_onset_exponent, hit, loudness_gate * self.args.score_loudness_weight)
-        score_lock = min(1.0, confidence * 0.45 + key_confidence * 0.35 + chord_confidence * 0.20)
+        score_lock = min(1.0, confidence * 0.30 + key_confidence * 0.22 + chord_confidence * 0.18 + live_score_confidence * 0.30)
         loudness_can_play = (
             loudness_rank >= self.args.score_loudness_threshold
             and loudness_gate >= self.args.score_min_loudness_gate
@@ -675,16 +868,18 @@ class ScoreGestureScheduler:
                 continue
             if not ensemble_accent and not self._slot_belongs_to_instrument(slot, index):
                 continue
-            if not ensemble_accent and not self._improv_allows(slot, index, score_lock, onset_intensity):
+            if not ensemble_accent and not self._improv_allows(slot, index, score_lock, onset_intensity, live_score):
                 continue
             accent = (rise_accent ** self.args.score_loudness_exponent) * onset_accent
             if ensemble_accent:
                 accent = max(accent, self.args.score_ensemble_min_accent)
+            if live_score_deficit > 0.0:
+                accent = min(1.0, accent * (1.0 + live_score_deficit * self.args.score_confidence_accent_gain))
             if accent < self.args.score_min_accent:
                 continue
             lane_scale = 1.0 if ensemble_accent else (0.72 + 0.28 * debruijn_accent(beat, index, self.args))
             self.envelopes[index] = max(self.envelopes[index], min(self.args.score_max_envelope, accent * lane_scale))
-            self._strike_voice(index, chord_root, key_mode, score_lock, onset_intensity, ensemble_accent)
+            self._strike_voice(index, chord_root, key_mode, score_lock, onset_intensity, ensemble_accent, live_score)
         return tuple(float(value) for value in self.envelopes)
 
     def _slot_belongs_to_instrument(self, slot: int, move_index: int) -> bool:
@@ -695,13 +890,16 @@ class ScoreGestureScheduler:
         spacing = max(1, int(self.args.score_instrument_spacing))
         return (slot + move_index) % spacing == 0
 
-    def _improv_allows(self, slot: int, move_index: int, score_lock: float, onset_intensity: float) -> bool:
+    def _improv_allows(self, slot: int, move_index: int, score_lock: float, onset_intensity: float, live_score: object) -> bool:
         if slot == 0 and onset_intensity >= self.args.score_downbeat_min_onset:
             return True
         move_count = max(1, len(self.envelopes))
         if onset_intensity >= self.args.score_call_response_min_onset:
             return (self.score_slot_counter + move_index) % move_count == 0
-        density = self.args.score_min_improv_density + (self.args.score_max_improv_density - self.args.score_min_improv_density) * score_lock
+        live_density = 0.0
+        if isinstance(live_score, dict):
+            live_density = float(live_score.get("gesture_density", 0.0))
+        density = max(live_density, self.args.score_min_improv_density + (self.args.score_max_improv_density - self.args.score_min_improv_density) * score_lock)
         density *= 0.45 + 0.55 * max(0.0, min(1.0, onset_intensity))
         cursor = math.sin((slot + 1) * 12.9898 + (move_index + 1) * 78.233) * 43758.5453
         return (cursor - math.floor(cursor)) < max(0.0, min(1.0, density))
@@ -728,6 +926,7 @@ class ScoreGestureScheduler:
         score_lock: float,
         onset_intensity: float,
         ensemble_accent: bool,
+        live_score: object,
     ) -> None:
         major_degrees = (0, 2, 4, 7, 9, 11, 14)
         minor_degrees = (0, 3, 5, 7, 10, 12, 15)
@@ -736,6 +935,12 @@ class ScoreGestureScheduler:
         degree = degrees[phrase_step % len(degrees)]
         octave = 12 * ((phrase_step // len(degrees)) % 2)
         target = float(chord_root + degree + octave)
+        target_source = "chord-scale"
+        if isinstance(live_score, dict):
+            targets = live_score.get("move_targets", [])
+            if isinstance(targets, list) and move_index < len(targets) and isinstance(targets[move_index], dict):
+                target = float(targets[move_index].get("target_note", target))
+                target_source = str(targets[move_index].get("source", target_source))
         contour = self.voice_contours[move_index]
         contour["previous_note"] = float(contour["current_note"])
         contour["target_note"] = target
@@ -749,6 +954,8 @@ class ScoreGestureScheduler:
                 "move_index": move_index,
                 "score_slot": self.score_slot_counter,
                 "target_note": target,
+                "target_note_name": note_name_from_midi(target),
+                "target_source": target_source,
                 "previous_note": contour["previous_note"],
                 "harmonic": contour["harmonic"],
                 "intensity": contour["intensity"],
@@ -977,6 +1184,13 @@ def main() -> int:
     parser.add_argument("--score-min-music-confidence", type=float, default=0.30)
     parser.add_argument("--score-min-improv-density", type=float, default=0.04)
     parser.add_argument("--score-max-improv-density", type=float, default=0.22)
+    parser.add_argument("--score-target-confidence", type=float, default=0.78)
+    parser.add_argument("--score-confidence-gesture-gain", type=float, default=0.34)
+    parser.add_argument("--score-confidence-accent-gain", type=float, default=0.55)
+    parser.add_argument("--score-min-voice-strength", type=float, default=0.08)
+    parser.add_argument("--score-min-voice-body", type=float, default=0.004)
+    parser.add_argument("--score-voice-release-seconds", type=float, default=1.2)
+    parser.add_argument("--score-voice-decay", type=float, default=0.72)
     parser.add_argument("--score-downbeat-min-onset", type=float, default=0.62)
     parser.add_argument("--score-call-response-min-onset", type=float, default=0.48)
     parser.add_argument("--score-min-accent", type=float, default=0.025)
@@ -1066,6 +1280,7 @@ def main() -> int:
     )
     assert wasapi.stdout is not None and ssh.stdin is not None
     analyzer = OnlineAnalyzer(args.sample_rate, args.fps, args.fft_size, args)
+    score_estimator = LiveScoreEstimator(len(moves), args)
     score_scheduler = ScoreGestureScheduler(len(moves), args)
     asio_reader = None
     asio_source_names = parse_channel_names(args.asio_music_source_name)
@@ -1112,6 +1327,7 @@ def main() -> int:
                             pass
                         asio_reader = None
                 state = fuse_music_sources(state, auxiliary_states)
+                state["live_score"] = score_estimator.update(state, now)
                 state["score_gesture_envelopes"] = score_scheduler.update(state)
                 state["score_voice_contours"] = score_scheduler.voice_contours
                 score_voice_events = [dict(event) for event in score_scheduler.pending_strikes]
@@ -1140,6 +1356,7 @@ def main() -> int:
                     "color_balance": list(state["color_balance"]),  # type: ignore[index]
                     "chroma": list(state["chroma"]),  # type: ignore[index]
                     "music_sources": state["music_sources"],
+                    "live_score": state["live_score"],
                     "score_gesture_envelopes": list(state["score_gesture_envelopes"]),  # type: ignore[index]
                     "score_voice_contours": state["score_voice_contours"],
                     "score_voice_events": score_voice_events,
