@@ -167,6 +167,11 @@ if (args.Any(arg => string.Equals(arg, "--audio-stem-publication-smoke", StringC
     return RunAudioStemPublicationSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--dialogue-cleaner-routing-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunDialogueCleanerRoutingSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--obs-stem-shared-memory-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunObsStemSharedMemorySmoke();
@@ -4140,6 +4145,51 @@ static int RunAudioStemPublicationSmoke()
             string.Equals(stem.SourceId, "mic-0", StringComparison.Ordinal) &&
             stem.Configured) &&
         snapshot.LatestSequence == 9
+            ? 0
+            : 1;
+}
+
+static int RunDialogueCleanerRoutingSmoke()
+{
+    var stemBus = new SmokeAudioStemBus();
+    using var runtime = new MimirRuntime(
+        new AquariumRuntimeOptions(Headless: true, CultCachePath: null),
+        new MimirSynchronizationSettings());
+    runtime.AttachServices(new AquariumRuntimeServices(SmokeFieldResourceBroker.Instance, stemBus));
+    runtime.OnSceneReady();
+    runtime.Audio.DrainStreamingDspPrograms();
+
+    stemBus.Publish(new AquariumAudioStemFrame(
+        MimirAlignmentActuatorProfile.SixSourceFaust.Id,
+        [
+            new AquariumAudioStemChannel(0, "aligned_source_0", "Aligned source 0", "asio-ch0-shotgun", [0.10f, 0.20f, 0.10f, 0.00f]),
+            new AquariumAudioStemChannel(1, "aligned_source_1", "Aligned source 1", "asio-ch1-cardioid", [0.08f, 0.18f, 0.09f, 0.01f])
+        ],
+        FrameCount: 4,
+        SampleRate: 48_000,
+        Sequence: 12));
+
+    runtime.Update(0.016f, new InputState());
+    var programs = runtime.Audio.DrainStreamingDspPrograms();
+    var blocks = runtime.Audio.DrainStreamingAudioBlocks();
+    var cleanerProgram = programs.FirstOrDefault(program => string.Equals(program.ProfileId, MimirDialogueCleanerProfile.DualMicFaust.Id, StringComparison.Ordinal));
+    var cleanerBlock = blocks.FirstOrDefault(block => string.Equals(block.ProfileId, MimirDialogueCleanerProfile.DualMicFaust.Id, StringComparison.Ordinal));
+
+    Console.WriteLine(
+        $"dialogue-cleaner-routing-smoke programs={programs.Count} blocks={blocks.Count} " +
+        $"cleanerProgram={(cleanerProgram is null ? "missing" : cleanerProgram.FaustName)} " +
+        $"cleanerBlockChannels={cleanerBlock?.Channels.Count ?? 0} frameCount={cleanerBlock?.FrameCount ?? 0} " +
+        $"sources={string.Join(",", cleanerBlock?.Channels.Select(channel => channel.SourceId) ?? [])}");
+
+    return cleanerProgram is not null &&
+        cleanerBlock is not null &&
+        cleanerBlock.Channels.Count == MimirDialogueCleanerProfile.DualMicFaust.SourceCount &&
+        cleanerBlock.Channels[0].ChannelIndex == 0 &&
+        cleanerBlock.Channels[1].ChannelIndex == 1 &&
+        string.Equals(cleanerBlock.Channels[0].SourceId, "asio-ch0-shotgun", StringComparison.Ordinal) &&
+        string.Equals(cleanerBlock.Channels[1].SourceId, "asio-ch1-cardioid", StringComparison.Ordinal) &&
+        cleanerBlock.FrameCount == 4 &&
+        cleanerBlock.SampleRate == 48_000
             ? 0
             : 1;
 }
@@ -9891,4 +9941,45 @@ sealed class FakeTextureLeaseVideoDriver : IMimirVideoCaptureDriver, IMimirFensa
     public void Dispose()
     {
     }
+}
+
+sealed class SmokeAudioStemBus : IAquariumAudioStemBus
+{
+    private readonly Queue<AquariumAudioStemFrame> frames = new();
+    private readonly Dictionary<string, AquariumAudioStemFrame> latest = new(StringComparer.Ordinal);
+
+    public void Publish(AquariumAudioStemFrame frame)
+    {
+        frames.Enqueue(frame);
+        latest[frame.ProfileId] = frame;
+    }
+
+    public IReadOnlyList<AquariumAudioStemFrame> DrainPublishedFrames(int maxFrames = 64)
+    {
+        var drained = new List<AquariumAudioStemFrame>();
+        while (drained.Count < maxFrames && frames.TryDequeue(out var frame))
+        {
+            drained.Add(frame);
+        }
+
+        return drained;
+    }
+
+    public AquariumAudioStemFrame? LatestFrame(string profileId) =>
+        latest.TryGetValue(profileId, out var frame) ? frame : null;
+}
+
+sealed class SmokeFieldResourceBroker : IAquariumFieldResourceBroker
+{
+    public static SmokeFieldResourceBroker Instance { get; } = new();
+
+    private SmokeFieldResourceBroker()
+    {
+    }
+
+    public AquariumFieldResourceLease LeaseTexture2D(AquariumTexture2DLeaseRequest request) => AquariumFieldResourceLease.Invalid;
+
+    public bool CommitLeaseVersion(string resourceKey, ulong version, ulong producerFenceValue) => false;
+
+    public bool UploadTexture2D(AquariumTexture2DUpload upload) => false;
 }

@@ -824,7 +824,10 @@ a named invariant that the native runtime cannot protect yet.
    `faust/mimir_dual_mic_dialogue_cleaner.dsp`; Mimir queues it as
    `dual-mic-dialogue-cleaner`, consuming the alignment actuator's published
    `aligned_source_*` stem frame rather than raw mic buffers, and emitting
-   `host_voice` plus a rejected residual witness. Treat the C# bridge as the
+   `host_voice` plus a rejected residual witness. The routing smoke is
+   `--dialogue-cleaner-routing-smoke`: it verifies post-alignment stems queue
+   the cleaner program/block and that program publication belongs to the
+   cleaner output, not the raw alignment lanes. Treat the C# bridge as the
    contract and offline scorer for the
    native/Faust implementation, not as a parallel live mixer authority. The
    next matching probe loop also exists as

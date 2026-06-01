@@ -665,8 +665,11 @@ accepted_design:
     shotgun/cardioid dialogue cleaner and Mimir queues it as
     `dual-mic-dialogue-cleaner`, fed from the alignment actuator's published
     `aligned_source_*` stem frame rather than raw mic buffers, emitting
-    `host_voice` plus a rejected residual witness. The C# path is a contract,
-    scorer, and offline diagnostic, not a competing live mixer.
+    `host_voice` plus a rejected residual witness. `Mimir.BufferSmoke
+    --dialogue-cleaner-routing-smoke` verifies that aligned stem frames queue
+    the cleaner program/block and that cleaner output, not raw alignment lanes,
+    feeds `NativeProgram` stem publication. The C# path is a contract, scorer,
+    and offline diagnostic, not a competing live mixer.
     `MimirTargetedBioacousticProbePlanner` is now the residual-driven probe
     planner for improving that calibration instead of blindly EQing harder. It
     consumes per-source spectral residuals plus optional source pathology notes

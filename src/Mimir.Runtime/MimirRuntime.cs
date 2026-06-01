@@ -45,7 +45,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirPresentationControlState presentationControls = new();
     private readonly MimirSceneEditorState sceneEditor = new();
     private readonly MimirProgramSurfaceConfigDocument programSurfaceConfig;
-    private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.AlignmentActuatorStemBus);
+    private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.NativeProgram);
     private readonly MimirObsStemSharedMemoryPublisher? obsStemPublisher;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
     private readonly AquariumUiDocument ui;
@@ -1483,6 +1483,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             return;
         }
 
+        QueueDialogueCleanerProgram();
+
         var candidates = alignedFrame.Channels
             .OrderBy(channel => DialogueCleanerSourceRank(channel.SourceId))
             .ThenBy(channel => channel.SourceId, StringComparer.Ordinal)
@@ -1567,6 +1569,11 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             if (string.Equals(stemFrame.ProfileId, MimirAlignmentActuatorProfile.SixSourceFaust.Id, StringComparison.Ordinal))
             {
                 QueueStreamingDialogueCleanerAudioBlock(stemFrame);
+                continue;
+            }
+
+            if (string.Equals(stemFrame.ProfileId, MimirDialogueCleanerProfile.DualMicFaust.Id, StringComparison.Ordinal))
+            {
                 obsStemPublication.Consume(stemFrame);
                 consumed = true;
             }

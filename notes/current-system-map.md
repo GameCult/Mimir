@@ -335,8 +335,11 @@ witness subtraction, and slow downward expansion. `MimirRuntime` queues it as
 `dual-mic-dialogue-cleaner` with `host_voice` and residual `ambient` output
 stems. It is fed from the alignment actuator's published `aligned_source_*`
 stem frame, not from raw mic buffers, so Faust alignment is a real structural
-precursor to cleanup. This is the first hot-lane cleaner socket, not proof that
-the final studio denoiser is solved.
+precursor to cleanup. `Mimir.BufferSmoke --dialogue-cleaner-routing-smoke`
+proves the boundary: alignment frames queue the cleaner DSP and input block, and
+cleaner output frames are what enter `NativeProgram` stem publication. This is
+the first hot-lane cleaner socket, not proof that the final studio denoiser is
+solved.
 `MimirTargetedBioacousticProbePlanner` is the matching "ask the room a better
 question" owner. It consumes per-source spectral residuals and optional source
 pathology notes, then emits gain-bounded shaped probe bands for the

@@ -166,7 +166,10 @@ subtraction, and slow downward expansion. `MimirRuntime` now queues that Faust
 program as `dual-mic-dialogue-cleaner` with `host_voice` and residual `ambient`
 output stems, but only feeds it from the alignment actuator's published
 `aligned_source_*` stem frame. Alignment is therefore a structural precursor to
-cleanup, not an optional sidecar. Treat the C# bridge as an audition/scoring
+cleanup, not an optional sidecar. The routing invariant is covered by
+`Mimir.BufferSmoke --dialogue-cleaner-routing-smoke`: alignment frames queue the
+cleaner DSP and cleaner input block, while cleaner output frames are the
+publishable `NativeProgram` stems. Treat the C# bridge as an audition/scoring
 receipt, not the final native live DSP path.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`;
