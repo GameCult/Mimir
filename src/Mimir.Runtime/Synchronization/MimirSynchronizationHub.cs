@@ -38,6 +38,9 @@ public sealed class MimirSynchronizationHub : IDisposable
 
     public int SourceCount => sources.Count;
 
+    public IReadOnlyList<IMimirCameraExposureGainActuator> CameraExposureGainActuators =>
+        sources.OfType<IMimirCameraExposureGainActuator>().ToArray();
+
     public IReadOnlyList<MimirAudioSynchronizationState> AudioSynchronizationStates =>
         audioSynchronizationState.States;
 

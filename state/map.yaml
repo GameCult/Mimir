@@ -193,6 +193,16 @@ invariants:
     for both Kiyo Pro and Kiyo Basic. LeapUVC rejected the generic KS
     exposure/gain writes and PS3 Eye capture remains fixed-control until its
     native wrapper owns gain/exposure.
+    `Mimir.Well` now owns the online version of that visual-sync actuator:
+    `MimirCameraExposureController` samples latest video frames from live Well
+    buffers, scores the LED spline with `MimirLedSplineFrameAnalyzer`, cycles
+    controllable KS camera exposure/gain candidates, locks the best spline
+    score, and periodically resweeps as room lighting and performer pose
+    change. `MimirVideoCaptureDriverSource` exposes only the narrow
+    `IMimirCameraExposureGainActuator` command surface, so the Well does not
+    know KS internals. `mimir.well_snapshot.v1` now publishes
+    `visualCalibration` status per camera: current setting, best setting,
+    score, detected LED count, usability, frame count, apply status, and reason.
   - PS Move is usable as an active marker/IMU witness, not as an optical depth
     owner. `Mimir.PsMoveProbe` now enumerates Sony `VID_054C` / `PID_03D5`
     through Windows HID without third-party packages. The connected controller

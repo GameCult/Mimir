@@ -1,6 +1,6 @@
 namespace Mimir.Runtime.Synchronization;
 
-public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFensalirTextureLeaseReceiver
+public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFensalirTextureLeaseReceiver, IMimirCameraExposureGainActuator
 {
     private readonly IMimirVideoCaptureDriver driver;
     private readonly MimirNativeIngestStreamSource nativeSource;
@@ -24,6 +24,13 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFe
 
     public MimirStreamDescriptor Descriptor { get; }
 
+    public string SourceId => Descriptor.SourceId;
+
+    public string ExposureControlKind =>
+        driver is MimirKsVideoCaptureDriver ? "ks-exposure-gain" : "fixed-control";
+
+    public bool SupportsExposureGain => driver is MimirKsVideoCaptureDriver;
+
     public Func<long> ReadArrivalNs { get; }
 
     public int LastUploadedCopyCount { get; private set; }
@@ -38,6 +45,10 @@ public sealed class MimirVideoCaptureDriverSource : IMimirStreamSource, IMimirFe
             receiver.AttachTextureLeaseClient(client);
         }
     }
+
+    public bool TrySetExposureGain(int? exposure, int? gain) =>
+        driver is MimirKsVideoCaptureDriver ksDriver &&
+        ksDriver.TrySetExposureGain(exposure, gain);
 
     public bool TryRead(out MimirStreamSample sample)
     {

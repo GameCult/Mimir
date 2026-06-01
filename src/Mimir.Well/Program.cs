@@ -51,7 +51,14 @@ var sequence = 0L;
 var startedAt = DateTimeOffset.UtcNow;
 var nextPublish = DateTimeOffset.MinValue;
 var nextSync = DateTimeOffset.MinValue;
+var nextVisualCalibration = DateTimeOffset.MinValue;
 var presentation = new MimirPresentationControlState();
+var exposureController = new MimirCameraExposureController(new MimirCameraExposureControlOptions(
+    options.VisualCalibrationEnabled,
+    options.VisualExpectedLedCount,
+    options.VisualMinimumLuma,
+    options.VisualSettingSeconds,
+    options.VisualResweepSeconds));
 Console.Error.WriteLine($"Mimir Well publishing to {options.PublishUrl}");
 Console.Error.WriteLine($"Mimir Well sources={runtimeConfig.SourceFactories.Count} buffers={hub.Buffers.Buffers.Count}");
 
@@ -77,6 +84,12 @@ while (!stopping.IsCancellationRequested)
         nextSync = now + TimeSpan.FromMilliseconds(options.SyncIntervalMs);
     }
 
+    if (now >= nextVisualCalibration)
+    {
+        exposureController.Update(now, hub.Buffers.Buffers, hub.CameraExposureGainActuators);
+        nextVisualCalibration = now + TimeSpan.FromMilliseconds(options.VisualCalibrationIntervalMs);
+    }
+
     if (now >= nextPublish)
     {
         presentation.SyncFromBuffers(hub.Buffers.Buffers);
@@ -87,6 +100,7 @@ while (!stopping.IsCancellationRequested)
             hub,
             presentation,
             frame,
+            exposureController.Statuses,
             sourceErrors,
             ++sequence,
             startedAt);
@@ -142,6 +156,12 @@ internal sealed record MimirWellOptions(
     int PresentationDelayMs,
     int MaxSamplesPerSource,
     int SyncCandidatesPerStep,
+    bool VisualCalibrationEnabled,
+    int VisualCalibrationIntervalMs,
+    int VisualExpectedLedCount,
+    double VisualMinimumLuma,
+    double VisualSettingSeconds,
+    double VisualResweepSeconds,
     int MeterEvery)
 {
     public static MimirWellOptions Parse(string[] args) => new(
@@ -154,6 +174,12 @@ internal sealed record MimirWellOptions(
         ParseInt(args, "--presentation-delay-ms", 2500),
         ParseInt(args, "--max-samples-per-source", 4),
         ParseInt(args, "--sync-candidates", 1),
+        ParseBool(args, "--visual-calibration", true),
+        ParseInt(args, "--visual-calibration-ms", 250),
+        ParseInt(args, "--visual-expected-leds", 38),
+        ParseDouble(args, "--visual-minimum-luma", 0.55),
+        ParseDouble(args, "--visual-setting-seconds", 0.75),
+        ParseDouble(args, "--visual-resweep-seconds", 12.0),
         ParseInt(args, "--meter-every", 20));
 
     private static string ParseString(IReadOnlyList<string> args, string name, string fallback)
@@ -174,6 +200,27 @@ internal sealed record MimirWellOptions(
 
     private static double ParseDouble(IReadOnlyList<string> args, string name, double fallback) =>
         double.TryParse(ParseString(args, name, ""), out var value) ? value : fallback;
+
+    private static bool ParseBool(IReadOnlyList<string> args, string name, bool fallback)
+    {
+        for (var index = 0; index < args.Count; index++)
+        {
+            if (!string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (index == args.Count - 1 ||
+                args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return bool.TryParse(args[index + 1], out var value) ? value : fallback;
+        }
+
+        return fallback;
+    }
 }
 
 internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
@@ -218,6 +265,7 @@ internal static class MimirWellSnapshot
         MimirSynchronizationHub hub,
         MimirPresentationControlState presentation,
         MimirSynchronizedBufferFrame frame,
+        IReadOnlyList<MimirCameraExposureControlStatus> visualCalibration,
         IReadOnlyList<object> sourceErrors,
         long sequence,
         DateTimeOffset startedAt) => new
@@ -279,7 +327,34 @@ internal static class MimirWellSnapshot
                     hub.LastBioacousticProbeSchedule.AggregateSyncConfidence,
                     hub.LastBioacousticProbeSchedule.AggregateFrequencyResponseConfidence,
                     reason = hub.LastBioacousticProbeSchedule.Reason.ToString(),
-                },
+            },
+        },
+        visualCalibration = new
+        {
+            enabled = options.VisualCalibrationEnabled,
+            expectedLedCount = options.VisualExpectedLedCount,
+            minimumLuma = options.VisualMinimumLuma,
+            settingSeconds = options.VisualSettingSeconds,
+            resweepSeconds = options.VisualResweepSeconds,
+            cameras = visualCalibration.Select(camera => new
+            {
+                camera.SourceId,
+                camera.ControlKind,
+                camera.SupportsExposureGain,
+                camera.State,
+                camera.CurrentSettingId,
+                camera.CurrentExposure,
+                camera.CurrentGain,
+                camera.BestSettingId,
+                camera.BestExposure,
+                camera.BestGain,
+                camera.BestScore,
+                camera.BestDetectedLedCount,
+                camera.BestUsableForCalibration,
+                camera.FramesScored,
+                camera.LastApplySucceeded,
+                camera.Reason,
+            }).ToArray(),
         },
         composite = new
         {

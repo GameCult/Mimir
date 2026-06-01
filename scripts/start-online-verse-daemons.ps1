@@ -268,7 +268,13 @@ if (-not $SkipRuntime) {
             "--publish-ms", "250",
             "--sync-ms", "250",
             "--presentation-delay-ms", "2500",
-            "--max-samples-per-source", "4"
+            "--max-samples-per-source", "4",
+            "--visual-calibration", "true",
+            "--visual-calibration-ms", "250",
+            "--visual-expected-leds", "38",
+            "--visual-minimum-luma", "0.55",
+            "--visual-setting-seconds", "0.75",
+            "--visual-resweep-seconds", "12.0"
         ) `
         -Environment @{
             "MIMIR_RUNTIME_CONFIG" = $ConfigPath
