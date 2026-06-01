@@ -555,9 +555,11 @@ aspect while resizing through direct preview handles, sliders, or the scale
 gizmo. Explicit transform/source controls are inspector-only and gated to a
 selected program source; the center canvas handles are the primary compositor
 edit path. Empty-canvas clicks clear source selection; hover/active handles and
-snap guides come from the Fensalir CultUI preview state; arrows nudge the
-selected layer, PageUp/PageDown reorder layers, and the inspector owns the
-selected source contain/cover/stretch fit mode. World SDF glyph rendering, ASSIMP-style
+snap guides come from the shared Eve dashboard document state that Fensalir's
+Direct2D and D3D12 paths lower locally; arrows nudge the selected layer,
+PageUp/PageDown reorder layers, and the inspector owns the selected source
+contain/cover/stretch fit mode. Eve is the portable dashboard authority, while
+CultUI is only the C# reference API shape for the document. World SDF glyph rendering, ASSIMP-style
 mesh decoding/upload, and pixel-accurate gizmo hit-testing are explicit
 Fensalir renderer cuts, mapped in
 [[docs/scene-editor-control-surface|Mimir Scene Editor Control Surface]].

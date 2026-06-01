@@ -175,9 +175,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Fresh run `20260601-051044` measured cardioid delay 359.398 samples
   (7487.452 us) at 48 kHz and applied holdback 359.398/0.000 to
   shotgun/cardioid before cleanup.
-- The right rail `Output` panel now exposes OBS-like program controls below the
-  inspector. `MimirProgramRecorder` owns `Record` / `Stop`, status text, and
-  timestamped receipts under `C:\Users\Meta\Videos\Mimir` by default
+- The edge-to-edge Mimir editor shell now uses headerless retained dashboard
+  panels. The inspector expands vertically; the right rail `Output` panel is a
+  fixed-height OBS-like control block below it. Eve is the portable dashboard
+  authority; the C# CultUI-shaped Aquarium contract is only the reference API
+  shape, and Fensalir Direct2D/D3D12 are native lowerings of the same document.
+  `MimirProgramRecorder` owns `Record` / `Stop`, status text, and timestamped
+  receipts under `C:\Users\Meta\Videos\Mimir` by default
   (`MIMIR_RECORD_OUTPUT_DIR` overrides). It delegates to
   `scripts/record-stream-proof-output.ps1`, so the app records the same Raven +
   Kiyo PIP + Starfire Scarlett NVENC/AAC composite intended for

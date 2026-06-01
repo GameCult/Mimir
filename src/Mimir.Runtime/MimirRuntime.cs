@@ -867,11 +867,11 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private AquariumUiDocument CreateUi()
     {
         return new AquariumUiDocument()
-            .Surface("mimir.editor.surface", "", 18.0f, 56.0f, 1220.0f, 660.0f, surface =>
+            .Surface("mimir.editor.surface", "", 0.0f, 0.0f, 1280.0f, 720.0f, contentPadding: 0.0f, rootGap: 8.0f, rootPadding: 0.0f, compose: surface =>
             {
                 surface.Horizontal("mimir.editor.shell", shell =>
                 {
-                    shell.Pane("mimir.video-sources", "Video Sources", graph =>
+                    shell.Pane("mimir.video-sources", "", graph =>
                     {
                         graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f);
                         graph.Text("video.source-list-title", "Program Sources", "strong", weight: 0.55f);
@@ -899,8 +899,9 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                             handleInteraction: sceneEditor.HandlePreviewInteraction,
                             readState: () => sceneEditor.PreviewState,
                             readGuides: () => sceneEditor.PreviewGuides);
-                        center.Pane("mimir.audio-mixer", "Audio Mixer", mixer =>
+                        center.Pane("mimir.audio-mixer", "", mixer =>
                         {
+                            mixer.Text("audio.mixer-title", "Audio Mixer", "strong", weight: 0.55f);
                             mixer.Horizontal("audio.channel-bank", bank =>
                             {
                                 for (var slot = 0; slot < AudioMixerChannelSlotCount; slot++)
@@ -925,7 +926,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
                     shell.Vertical("mimir.right-rail", right =>
                     {
-                        right.Pane("mimir.inspector", "Inspector", inspector =>
+                        right.Pane("mimir.inspector", "", inspector =>
                         {
                             inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
                             inspector.Options("inspector.video-feed", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
@@ -953,10 +954,11 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                                     order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
                                 });
                             }, isVisible: () => sceneEditor.HasSelectedProgramSource);
-                        }, weight: 1.05f);
+                        }, weight: 1.0f);
 
-                        right.Pane("mimir.output", "Output", output =>
+                        right.Pane("mimir.output", "", output =>
                         {
+                            output.Text("output.title", "Output", "strong", weight: 0.55f);
                             output.Text("output.program-summary", DescribeProgramOutput, "caption", weight: 0.6f);
                             output.Row("output.recording", row =>
                             {
@@ -972,7 +974,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                                 row.Text("program.stream-status", programStreamer.Describe, "caption", weight: 1.75f);
                             }, weight: 0.7f);
                             output.Text("output.stream-target", () => $"target {programStreamer.TargetUrl}", "caption", weight: 0.7f);
-                        }, weight: 0.95f);
+                        }, fixedExtent: 172.0f);
                     }, weight: 0.95f);
                 });
             });

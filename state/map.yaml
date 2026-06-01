@@ -61,13 +61,16 @@ invariants:
     the preview observes the program surface without becoming composition
     authority. Placement commits keep layers inside the frame, snap near
     edges/center, and preserve source aspect while resizing through sliders or
-    the scale gizmo. The center preview now has direct Fensalir CultUI
-    body/corner-handle gestures wired to the same placement owner; sliders are
-    fallback/precision controls, not the primary compositor surface. Explicit
+    the scale gizmo. The center preview now has direct preview
+    body/corner-handle gestures wired to the same placement owner through an
+    Eve-style retained dashboard document; sliders are fallback/precision
+    controls, not the primary compositor surface. Explicit
     source/transform controls are inspector-only and visible only while a
     program source is selected. Empty-canvas clicks clear source selection;
-    hover/active handle state and snap guides are supplied through Fensalir's
-    CultUI preview state; keyboard arrows nudge selected layers without
+    hover/active handle state and snap guides are supplied through the shared
+    document state lowered by Fensalir's Direct2D/D3D12 paths; Eve is the
+    portable dashboard authority and CultUI is only the original C# reference
+    API shape. Keyboard arrows nudge selected layers without
     snapping, PageUp/PageDown reorder layers, and the inspector owns the
     selected source contain/cover/stretch fit mode.
   - The right rail `Output` panel owns OBS-like program actions below the

@@ -303,18 +303,22 @@ a named invariant that the native runtime cannot protect yet.
   commands, and grab/rotate/resize gizmo intent. `MimirRuntime` renders derived
   spline outlines and handle markers from that state, and the `Mimir Editor`
   panel exposes hierarchy, visibility, transform, creation, and reset controls.
-  The center preview now asks Fensalir's CultUI preview contract to blit the
-  current renderer output buffer behind Mimir's normalized placement overlays,
-  so the app preview is a live program-surface witness rather than a symbolic
-  rectangle diagram. Placement commits keep video layers inside the program
-  frame, snap near edges/center, and preserve the source aspect ratio while
-  resizing through direct preview handles, sliders, or the scale gizmo. Explicit
-  transform/source controls are inspector-only and only appear while a program
-  source is selected; the compositor canvas handles are the primary edit path.
-  Empty-canvas clicks clear source selection, hover/active handles and snap
-  guides are visible through the Fensalir CultUI preview state, keyboard arrows
-  nudge selected layers, PageUp/PageDown reorder layers, and the inspector owns
-  the selected source's contain/cover/stretch fit mode.
+  The center preview now emits an Eve-style retained dashboard document through
+  the C# CultUI-shaped reference API. Fensalir's Direct2D native lowering blits
+  the current renderer output buffer behind Mimir's normalized placement
+  overlays, and the D3D12 hit-test path lowers the same tree into preview
+  gestures. Eve is the portable dashboard authority; CultUI is only the original
+  C# API shape used here so the same document can be lowered by native, web,
+  Android, or iOS backends without making Direct2D the owner. Placement commits
+  keep video layers inside the program frame, snap near edges/center, and
+  preserve the source aspect ratio while resizing through direct preview
+  handles, sliders, or the scale gizmo. Explicit transform/source controls are
+  inspector-only and only appear while a program source is selected; the
+  compositor canvas handles are the primary edit path. Empty-canvas clicks clear
+  source selection, hover/active handles and snap guides are visible through the
+  shared preview state, keyboard arrows nudge selected layers, PageUp/PageDown
+  reorder layers, and the inspector owns the selected source's
+  contain/cover/stretch fit mode.
   See [[scene-editor-control-surface|Mimir Scene Editor Control Surface]].
   `Mimir.BufferSmoke --scene-editor-smoke` proves the graph/control/gizmo owner
   path. World SDF text glyph rendering, ASSIMP-style mesh import/upload, and
