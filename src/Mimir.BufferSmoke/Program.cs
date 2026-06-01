@@ -85,6 +85,17 @@ if (args.Any(arg => string.Equals(arg, "--dual-mic-coherence-cancellation-smoke"
     return RunDualMicCoherenceCancellationSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--asio-dual-mic-composite-wav", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunAsioDualMicCompositeWave(
+        ParseStringOption(args, "--input", ""),
+        ParseStringOption(args, "--output", ""),
+        ParseIntOption(args, "--sample-rate", 48_000),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--shotgun-channel", 0),
+        ParseIntOption(args, "--cardioid-channel", 1));
+}
+
 if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunTargetedBioacousticProbeSmoke();
@@ -3473,6 +3484,82 @@ static int RunDualMicCoherenceCancellationSmoke()
             : 1;
 }
 
+static int RunAsioDualMicCompositeWave(
+    string inputPath,
+    string outputPath,
+    int sampleRate,
+    int channels,
+    int shotgunChannel,
+    int cardioidChannel)
+{
+    if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
+    {
+        Console.Error.WriteLine("asio-dual-mic-composite-wav failed: --input must name an existing f32 interleaved ASIO capture.");
+        return 1;
+    }
+
+    if (string.IsNullOrWhiteSpace(outputPath))
+    {
+        Console.Error.WriteLine("asio-dual-mic-composite-wav failed: --output is required.");
+        return 1;
+    }
+
+    if (shotgunChannel < 0 || cardioidChannel < 0 || shotgunChannel >= channels || cardioidChannel >= channels)
+    {
+        Console.Error.WriteLine($"asio-dual-mic-composite-wav failed: channel indices must fit 0..{channels - 1}.");
+        return 1;
+    }
+
+    var channelSamples = ReadInterleavedFloat32(inputPath, channels, out var frameCount);
+    if (frameCount == 0)
+    {
+        Console.Error.WriteLine("asio-dual-mic-composite-wav failed: capture has no frames.");
+        return 1;
+    }
+
+    var shotgun = channelSamples[shotgunChannel];
+    var cardioid = channelSamples[cardioidChannel];
+    var delay = EstimateRelativeDelaySamples(shotgun, cardioid, maxLagSamples: Math.Min(sampleRate / 100, 960));
+    var bands = BuildCompositeProbeBands(sampleRate);
+    var shotgunResponses = EstimateBandResponses(shotgun, sampleRate, bands);
+    var cardioidResponses = EstimateBandResponses(cardioid, sampleRate, bands);
+    var result = new MimirCalibratedAudioCompositeBuilder(new MimirCalibratedAudioCompositeOptions(
+        MinimumConfidence: 0.05,
+        TargetBandEnergy: MedianPositiveEnergy(shotgunResponses.Concat(cardioidResponses).Select(static response => response.Energy)),
+        MinimumBandEnergy: 1.0e-8,
+        MinimumBandGain: 0.65,
+        MaximumBandGain: 1.60,
+        NoiseFloorRms: 1.0e-5,
+        MinimumCoherence: 0.42,
+        IncoherentBandSuppression: 0.62)).Build(
+        [
+            NewCompositeSourceFromResponses("asio-ch0-shotgun", shotgun, sampleRate, delaySamples: 0.0, confidence: 0.90, shotgunResponses, NoiseEstimate(shotgun)),
+            NewCompositeSourceFromResponses("asio-ch1-cardioid", cardioid, sampleRate, delaySamples: delay, confidence: 0.90, cardioidResponses, NoiseEstimate(cardioid)),
+        ]);
+    var normalized = NormalizePeak(result.Samples, peak: 0.92f);
+    WriteWave(outputPath, normalized, sampleRate);
+    var reportPath = Path.ChangeExtension(outputPath, ".json");
+    var report = new
+    {
+        input = Path.GetFullPath(inputPath),
+        output = Path.GetFullPath(outputPath),
+        sampleRate,
+        frameCount,
+        shotgunChannel,
+        cardioidChannel,
+        estimatedCardioidDelaySamples = delay,
+        estimatedCardioidDelayMicroseconds = delay * 1_000_000.0 / sampleRate,
+        compositeRms = result.CompositeRms,
+        sourceReports = result.SourceReports,
+        bandReports = result.BandReports,
+    };
+    File.WriteAllText(reportPath, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine(
+        $"asio-dual-mic-composite-wav input={inputPath} output={outputPath} report={reportPath} frames={frameCount} " +
+        $"delaySamples={delay:0.000} delayUs={delay * 1_000_000.0 / sampleRate:0.000} bands={result.BandReports.Count} rms={result.CompositeRms:0.000000}");
+    return 0;
+}
+
 static int RunTargetedBioacousticProbeSmoke()
 {
     var residuals = new[]
@@ -4143,6 +4230,31 @@ static MimirCalibratedAudioCompositeSource NewCompositeSource(
     return new MimirCalibratedAudioCompositeSource(sourceId, 48_000, samples, state, responses, noiseRms);
 }
 
+static MimirCalibratedAudioCompositeSource NewCompositeSourceFromResponses(
+    string sourceId,
+    float[] samples,
+    int sampleRate,
+    double delaySamples,
+    double confidence,
+    IReadOnlyList<MimirChirpletBandResponse> responses,
+    double noiseRms)
+{
+    var state = new MimirAudioSynchronizationState(
+        "scarlett-asio-direct",
+        sourceId,
+        sampleRate,
+        delaySamples,
+        delaySamples,
+        delaySamples * 1000.0 / sampleRate,
+        0.0,
+        confidence,
+        responses,
+        1_000_000_000L,
+        1,
+        1);
+    return new MimirCalibratedAudioCompositeSource(sourceId, sampleRate, samples, state, responses, noiseRms);
+}
+
 static MimirAudioCalibrationBandResidual[] ScarlettProfessionalMicProbeResiduals() =>
 [
     new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 240.0, 0.91, 0.4, ResponseEnergy: 0.62),
@@ -4427,6 +4539,126 @@ static double ToneEnergy(ReadOnlySpan<float> samples, int sampleRate, double cen
     }
 
     return Math.Sqrt(sine * sine + cosine * cosine) * 2.0 / Math.Max(1, count);
+}
+
+static double EstimateRelativeDelaySamples(IReadOnlyList<float> reference, IReadOnlyList<float> candidate, int maxLagSamples)
+{
+    var frameCount = Math.Min(reference.Count, candidate.Count);
+    if (frameCount == 0)
+    {
+        return 0.0;
+    }
+
+    var bestLag = 0;
+    var bestScore = double.NegativeInfinity;
+    for (var lag = -maxLagSamples; lag <= maxLagSamples; lag++)
+    {
+        var score = 0.0;
+        var refEnergy = 0.0;
+        var candEnergy = 0.0;
+        var start = Math.Max(0, -lag);
+        var end = Math.Min(frameCount, frameCount - lag);
+        for (var index = start; index < end; index++)
+        {
+            var left = reference[index];
+            var right = candidate[index + lag];
+            score += left * right;
+            refEnergy += left * left;
+            candEnergy += right * right;
+        }
+
+        var normalized = score / Math.Sqrt(Math.Max(1.0e-18, refEnergy * candEnergy));
+        if (normalized > bestScore)
+        {
+            bestScore = normalized;
+            bestLag = lag;
+        }
+    }
+
+    if (bestLag <= -maxLagSamples || bestLag >= maxLagSamples)
+    {
+        return bestLag;
+    }
+
+    var leftScore = DelayCorrelation(reference, candidate, bestLag - 1);
+    var centerScore = DelayCorrelation(reference, candidate, bestLag);
+    var rightScore = DelayCorrelation(reference, candidate, bestLag + 1);
+    var denominator = leftScore - 2.0 * centerScore + rightScore;
+    var fractional = Math.Abs(denominator) <= 1.0e-12 ? 0.0 : 0.5 * (leftScore - rightScore) / denominator;
+    return bestLag + Math.Clamp(fractional, -0.5, 0.5);
+}
+
+static double DelayCorrelation(IReadOnlyList<float> reference, IReadOnlyList<float> candidate, int lag)
+{
+    var frameCount = Math.Min(reference.Count, candidate.Count);
+    var score = 0.0;
+    var refEnergy = 0.0;
+    var candEnergy = 0.0;
+    var start = Math.Max(0, -lag);
+    var end = Math.Min(frameCount, frameCount - lag);
+    for (var index = start; index < end; index++)
+    {
+        var left = reference[index];
+        var right = candidate[index + lag];
+        score += left * right;
+        refEnergy += left * left;
+        candEnergy += right * right;
+    }
+
+    return score / Math.Sqrt(Math.Max(1.0e-18, refEnergy * candEnergy));
+}
+
+static double[] BuildCompositeProbeBands(int sampleRate)
+{
+    var nyquistGuard = sampleRate * 0.45;
+    return new[] { 160.0, 250.0, 400.0, 630.0, 1_000.0, 1_600.0, 2_500.0, 3_600.0, 5_600.0, 8_000.0, 10_000.0 }
+        .Where(frequency => frequency < nyquistGuard)
+        .ToArray();
+}
+
+static MimirChirpletBandResponse[] EstimateBandResponses(IReadOnlyList<float> samples, int sampleRate, IReadOnlyList<double> bands) =>
+    bands
+        .Select(centerHz =>
+        {
+            var magnitude = ToneEnergy(samples is float[] array ? array : samples.ToArray(), sampleRate, centerHz);
+            return new MimirChirpletBandResponse(centerHz, magnitude * magnitude);
+        })
+        .ToArray();
+
+static double MedianPositiveEnergy(IEnumerable<double> energies)
+{
+    var sorted = energies
+        .Where(static energy => energy > 1.0e-10)
+        .Order()
+        .ToArray();
+    return sorted.Length == 0 ? 0.01 : Math.Clamp(sorted[sorted.Length / 2], 0.0001, 1.0);
+}
+
+static double NoiseEstimate(IReadOnlyList<float> samples)
+{
+    var sorted = samples
+        .Select(static sample => Math.Abs(sample))
+        .Order()
+        .ToArray();
+    if (sorted.Length == 0)
+    {
+        return 1.0e-5;
+    }
+
+    var percentile = sorted[Math.Clamp((int)Math.Round((sorted.Length - 1) * 0.20), 0, sorted.Length - 1)];
+    return Math.Clamp(percentile * 1.4826, 1.0e-5, 0.25);
+}
+
+static float[] NormalizePeak(IReadOnlyList<float> samples, float peak)
+{
+    var max = samples.Select(static sample => Math.Abs(sample)).DefaultIfEmpty(0.0f).Max();
+    if (max <= peak || max <= 1.0e-9f)
+    {
+        return samples.ToArray();
+    }
+
+    var scale = peak / max;
+    return samples.Select(sample => sample * scale).ToArray();
 }
 
 static float[] RenderCalibrationToneStack(

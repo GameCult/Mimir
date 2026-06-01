@@ -814,7 +814,11 @@ a named invariant that the native runtime cannot protect yet.
    calibrated-band coherence and suppresses incoherent measured-band components
    before summing; `--dual-mic-coherence-cancellation-smoke` proves the two-mic
    case by cutting a mic-local 3.52 kHz interferer while preserving coherent
-   shared tones. Treat that as the contract and offline scorer for the
+   shared tones. `scripts/record-kiyo-dual-mic-composite.ps1` is the first
+   listenable bridge: it records Kiyo video plus Scarlett ASIO raw channels,
+   renders the channels 0/1 composite WAV with `--asio-dual-mic-composite-wav`,
+   and muxes the computed mono composite into the Kiyo MP4. Treat that as the
+   contract and offline scorer for the
    native/Faust implementation, not as a parallel live mixer authority. The
    next matching probe loop also exists as
    `MimirTargetedBioacousticProbePlanner`: residuals and mic pathology notes

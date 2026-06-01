@@ -649,6 +649,15 @@ accepted_design:
     mic-local 3.52 kHz interferer scores about 0.001 coherence and 0.948
     suppression, its measured energy falls from 0.039195 to 0.001306, and SNR
     rises from 1.366 dB to 16.304 dB.
+    `scripts/record-kiyo-dual-mic-composite.ps1` is the first listenable bridge
+    receipt for that path. It starts Kiyo FFmpeg capture and Scarlett ASIO raw
+    capture together, converts ASIO channels 0/1 to a computed composite WAV
+    through `--asio-dual-mic-composite-wav`, then muxes the composite WAV with
+    Kiyo video. The 2026-06-01 receipt
+    `artifacts/runtime/kiyo-dual-mic-composite/kiyo-dual-mic-composite-latest.mp4`
+    has 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC composite
+    audio; the composite report estimated channel-1 delay at about -141.019
+    samples (-2937.889 us).
     Faust/native DSP still owns the production hot lane; this C# path is a
     contract, scorer, and offline diagnostic, not a competing live mixer.
     `MimirTargetedBioacousticProbePlanner` is now the residual-driven probe

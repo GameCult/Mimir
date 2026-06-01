@@ -148,6 +148,15 @@ contract on synthetic shotgun/cardioid witnesses: coherent shared tones survive,
 a mic-local `3.52 kHz` interferer is suppressed, and SNR rises from `1.366 dB`
 to `16.304 dB`. This is still the C# diagnostic/offline contract; Faust/native
 DSP owns the production hot lane.
+The first listenable bridge receipt is
+`scripts/record-kiyo-dual-mic-composite.ps1`. It records Kiyo video and
+Scarlett ASIO raw channels together, converts Scarlett channels 0/1 into a
+computed dual-mic composite WAV with `--asio-dual-mic-composite-wav`, then muxes
+that WAV with the Kiyo video. The 2026-06-01 receipt at
+`artifacts/runtime/kiyo-dual-mic-composite/kiyo-dual-mic-composite-latest.mp4`
+contains 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC from the
+computed composite. Treat it as a bridge proof of audibility/sync, not the final
+native live DSP path.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`;
 it renders the bioacoustic timeline, decodes direct word anchors, and requires a
