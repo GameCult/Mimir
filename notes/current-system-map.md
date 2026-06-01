@@ -306,6 +306,19 @@ owns the production alignment, suppression, separation, and stem lane.
 synthetic delayed, colored, noisy mic paths: the uncalibrated mix measures
 -3.171 dB SNR, the calibrated composite measures 15.135 dB SNR, and response
 flatness improves from 0.548 to 1.000.
+`MimirTargetedBioacousticProbePlanner` is the matching "ask the room a better
+question" owner. It consumes per-source spectral residuals and optional source
+pathology notes, then emits gain-bounded shaped probe bands for the
+bioacoustic renderer to spend energy on. The first smoke models the two
+professional 192 kHz Scarlett mics only: `asio-ch0-shotgun` is explicitly
+noisy and low-heavy, `asio-ch1-cardioid` is cleaner, and the planner prioritizes
+the shotgun's weak/unmeasured high-band evidence before lower residuals.
+`Mimir.BufferSmoke --targeted-bioacoustic-probe-smoke` selects four probe
+bands, led by about 18.6 kHz as an unmeasured band at the max bounded gain,
+then about 9.9 kHz weak response, 3.6 kHz phase instability, and 910 Hz
+magnitude residual. This is the intended first physical strategy: improve
+shotgun/cardioid confidence at 192 kHz before asking every connected mic to
+help solve the room field.
 That real-world proof now has a first receipt:
 `calibration/bioacoustic/complex-contour-live-20260525-063229.md`. A freshly
 rendered canary-packet witness was played through Focusrite ASIO and captured

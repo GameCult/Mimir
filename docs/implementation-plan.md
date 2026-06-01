@@ -788,6 +788,11 @@ a named invariant that the native runtime cannot protect yet.
    states and measured band responses, emits a corrected composite plus scores,
    and is proved by `--calibrated-audio-composite-smoke`. Treat that as the
    contract and offline scorer for the native/Faust implementation, not as a
-   parallel live mixer authority.
+   parallel live mixer authority. The next matching probe loop also exists as
+   `MimirTargetedBioacousticProbePlanner`: residuals and mic pathology notes
+   select gain-bounded shaped probe bands for the bioacoustic renderer. Start
+   with the 192 kHz shotgun/cardioid pair; only widen to every connected mic
+   once those two paths have credible direct-path and frequency-response
+   confidence.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

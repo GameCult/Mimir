@@ -80,6 +80,11 @@ if (args.Any(arg => string.Equals(arg, "--calibrated-audio-composite-smoke", Str
     return RunCalibratedAudioCompositeSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunTargetedBioacousticProbeSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--synchronized-buffer-planner-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunSynchronizedBufferPlannerSmoke();
@@ -3361,6 +3366,57 @@ static int RunCalibratedAudioCompositeSmoke()
     return result.SourceReports.Count == 3 &&
         calibratedSnr > uncalibratedSnr + 2.0 &&
         result.ResponseFlatnessAfter > result.ResponseFlatnessBefore + 0.15
+            ? 0
+            : 1;
+}
+
+static int RunTargetedBioacousticProbeSmoke()
+{
+    var residuals = new[]
+    {
+        new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 240.0, 0.91, 0.4, ResponseEnergy: 0.62),
+        new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 240.0, 0.87, 0.6, ResponseEnergy: 0.58),
+        new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 890.0, 0.52, 4.8, DelayResidualMicroseconds: 11.0, ResponseEnergy: 0.30),
+        new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 910.0, 0.47, 5.2, DelayResidualMicroseconds: 14.0, ResponseEnergy: 0.27),
+        new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 3_600.0, 0.44, -6.4, PhaseResidualRadians: 1.4, ResponseEnergy: 0.11),
+        new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 3_690.0, 0.41, -5.8, PhaseResidualRadians: 1.2, ResponseEnergy: 0.09),
+        new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 9_800.0, 0.28, -9.5, PhaseResidualRadians: 2.0, ResponseEnergy: 0.035),
+        new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 9_950.0, 0.22, -10.2, PhaseResidualRadians: 1.8, ResponseEnergy: 0.030),
+        new MimirAudioCalibrationBandResidual("asio-ch0-shotgun", 18_500.0, 0.03, -18.0, DelayResidualMicroseconds: 34.0, PhaseResidualRadians: 2.7, ResponseEnergy: 0.0),
+        new MimirAudioCalibrationBandResidual("asio-ch1-cardioid", 18_700.0, 0.02, -16.0, DelayResidualMicroseconds: 28.0, PhaseResidualRadians: 2.4, ResponseEnergy: 0.0),
+    };
+    var plan = new MimirTargetedBioacousticProbePlanner().Plan(
+        residuals,
+        ["asio-ch0-shotgun", "asio-ch1-cardioid"],
+        [
+            new MimirAudioCalibrationSourcePathology(
+                "asio-ch0-shotgun",
+                NoiseFloorRms: 0.055,
+                LowHighTiltDb: 17.0,
+                HighBandConfidenceBias: 0.35),
+            new MimirAudioCalibrationSourcePathology(
+                "asio-ch1-cardioid",
+                NoiseFloorRms: 0.018,
+                LowHighTiltDb: 4.0)
+        ]);
+    var top = plan.Bands.FirstOrDefault();
+    var hasLowBand = plan.Bands.Any(band => band.CenterHz is > 800.0 and < 1_000.0);
+    var hasMidBand = plan.Bands.Any(band => band.CenterHz is > 3_300.0 and < 3_900.0);
+    var hasHighBand = plan.Bands.Any(band => band.CenterHz is > 17_000.0 and < 20_000.0);
+    Console.WriteLine(
+        $"targeted-bioacoustic-probe-smoke sampleRate={plan.SampleRate} sources={string.Join(",", plan.MeasurementSourceIds)} bands={plan.Bands.Count} " +
+        $"duration={plan.EstimatedDurationSeconds:0.000} top={top?.CenterHz:0}Hz reason={top?.Reason} gain={top?.Gain:0.000} priority={top?.Priority:0.000} " +
+        $"selected={string.Join(",", plan.Bands.Select(band => $"{band.CenterHz:0}Hz/{band.Reason}/{band.Gain:0.000}"))}");
+
+    return plan.SampleRate == 192_000 &&
+        plan.MeasurementSourceIds.SequenceEqual(new[] { "asio-ch0-shotgun", "asio-ch1-cardioid" }) &&
+        plan.Bands.Count >= 3 &&
+        hasLowBand &&
+        hasMidBand &&
+        hasHighBand &&
+        top is { CenterHz: > 17_000.0 and < 20_000.0 } &&
+        top.Reason is MimirBioacousticProbeReason.UnmeasuredBand or MimirBioacousticProbeReason.WeakResponse or MimirBioacousticProbeReason.PhaseUnstable &&
+        plan.Bands.All(band => band.Gain is >= 0.018 and <= 0.085)
             ? 0
             : 1;
 }
