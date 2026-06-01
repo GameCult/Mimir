@@ -673,6 +673,12 @@ accepted_design:
     stayed unusable at shotgun -54.910 dB and cardioid -63.258 dB relative to
     loopback. The current physical path should bias usable low/mid anchors
     while treating ultrasonic/high-band probes as failed-path evidence.
+    Routing correction: Starfire's Windows system default output is now
+    Scarlett for monitoring, while Starfire Realtek is the intended
+    chirp-emission and loopback-measurement path. The 20260601 targeted
+    ASIO-output artifacts remain useful Scarlett-output diagnostics, but the
+    next active probe runner must explicitly target Realtek output/loopback
+    instead of assuming default output or Scarlett ASIO playback.
     A fresh live Scarlett proof is preserved at
     `calibration/bioacoustic/complex-contour-live-20260525-063229.md`:
     Focusrite ASIO playback/capture measured Loopback 1 -> Loopback 2 at

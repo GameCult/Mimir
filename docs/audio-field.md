@@ -25,8 +25,12 @@ flowchart TD
 
 ## Invariants
 
-- Scarlett speaker loopback is the timing authority when calibration chirplets
-  are playing.
+- Starfire Realtek is the active chirp speaker and loopback-measurement path in
+  the current routing. The Windows system default output is now Scarlett for
+  monitoring, so default-output chirps are wrong unless they explicitly target
+  Realtek.
+- Scarlett ASIO is the professional mic and monitor interface. Its outputs are
+  not the current active chirp-emission authority.
 - Focusrite dialogue mics are the voice anchors.
 - Camera mics are spatial/context witnesses.
 - Loopback/program audio is timing evidence where available; it outranks

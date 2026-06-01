@@ -111,9 +111,13 @@ not become the synchronized program authority.
 
 ## Audio Field
 
-The six-microphone path is separate from the bridge. Scarlett speaker loopback
-is the current timing authority when active calibration is playing, but Scarlett
-production capture belongs on ASIO rather than WASAPI shared mode.
+The six-microphone path is separate from the bridge. Current local routing is:
+Windows system default output is Scarlett for monitoring, while Starfire
+Realtek is the active chirp-emission and loopback-measurement path. Any active
+chirp runner that emits to the default output is therefore wrong unless it
+explicitly selects Realtek. Scarlett production capture belongs on ASIO rather
+than WASAPI shared mode, and Scarlett remains the professional mic/monitor
+interface rather than the current chirp speaker authority.
 `MimirBioacousticTimeline` owns the active runtime watermark described in
 [[docs/bioacoustic-timeline-watermark|Bioacoustic Timeline Watermark]]: a
 low-gain birdsong-like word language with 128 self-identifying word positions,
