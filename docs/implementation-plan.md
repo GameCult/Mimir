@@ -817,7 +817,10 @@ a named invariant that the native runtime cannot protect yet.
    shared tones. `scripts/record-kiyo-dual-mic-composite.ps1` is the first
    listenable bridge: it records Kiyo video plus Scarlett ASIO raw channels,
    renders the channels 0/1 composite WAV with `--asio-dual-mic-composite-wav`,
-   and muxes the computed mono composite into the Kiyo MP4. Treat that as the
+   and muxes the computed mono composite into the Kiyo MP4. The bridge defaults
+   now cap measured-band boost at 1.18x, apply stronger incoherent-band
+   suppression, and enable a residual envelope expander so low-level post-sum
+   noise does not ride along as loudly in audition receipts. Treat that as the
    contract and offline scorer for the
    native/Faust implementation, not as a parallel live mixer authority. The
    next matching probe loop also exists as

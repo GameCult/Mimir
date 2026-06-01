@@ -325,7 +325,13 @@ The 2026-06-01 receipt
 `artifacts/runtime/kiyo-dual-mic-composite/kiyo-dual-mic-composite-latest.mp4`
 has 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC composite
 audio; the composite report estimated channel-1 delay at about -141.019 samples
-(-2937.889 us).
+(-2937.889 us). After user listening feedback, the bridge tightened audition
+defaults: measured-band boost is capped at 1.18x, incoherent calibrated bands
+are suppressed harder, and a residual envelope expander demotes the low-level
+post-sum bed. Reprocessing the same raw ASIO/Kiyo receipt lowered composite RMS
+from 0.046805 to 0.034400 while preserving the same delay estimate. This is a
+better listenable proof, not a claim that sparse-band C# has become the final
+studio denoiser.
 `MimirTargetedBioacousticProbePlanner` is the matching "ask the room a better
 question" owner. It consumes per-source spectral residuals and optional source
 pathology notes, then emits gain-bounded shaped probe bands for the

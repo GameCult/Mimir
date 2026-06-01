@@ -8,7 +8,11 @@ public sealed record MimirCalibratedAudioCompositeOptions(
     double MaximumBandGain = 4.00,
     double NoiseFloorRms = 1.0e-5,
     double MinimumCoherence = 0.35,
-    double IncoherentBandSuppression = 0.72);
+    double IncoherentBandSuppression = 0.72,
+    bool EnableResidualNoiseExpander = false,
+    double ResidualNoiseFloorMultiplier = 3.0,
+    double ResidualNoiseMinimumGain = 0.22,
+    double ResidualNoiseExpansionPower = 2.0);
 
 public sealed record MimirCalibratedAudioCompositeSource(
     string SourceId,
@@ -146,6 +150,11 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
             {
                 output[index] = (float)Math.Clamp(output[index] / totalWeight, -1.0, 1.0);
             }
+        }
+
+        if (options.EnableResidualNoiseExpander)
+        {
+            ApplyResidualNoiseExpander(output);
         }
 
         var reportCount = Math.Max(1, reports.Count);
@@ -415,6 +424,37 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
         var mean = energies.Average();
         var variance = energies.Sum(value => (value - mean) * (value - mean)) / energies.Length;
         return 1.0 / (1.0 + Math.Sqrt(variance));
+    }
+
+    private void ApplyResidualNoiseExpander(float[] samples)
+    {
+        if (samples.Length == 0)
+        {
+            return;
+        }
+
+        var absSorted = samples
+            .Select(static sample => Math.Abs(sample))
+            .Order()
+            .ToArray();
+        var floorIndex = Math.Clamp((int)Math.Round((absSorted.Length - 1) * 0.20), 0, absSorted.Length - 1);
+        var noiseFloor = Math.Max(options.NoiseFloorRms, absSorted[floorIndex] * 1.4826);
+        var threshold = Math.Max(options.NoiseFloorRms * 2.0, noiseFloor * Math.Max(1.0, options.ResidualNoiseFloorMultiplier));
+        var minGain = Math.Clamp(options.ResidualNoiseMinimumGain, 0.0, 1.0);
+        var power = Math.Clamp(options.ResidualNoiseExpansionPower, 0.25, 8.0);
+        var attack = 0.45;
+        var release = 0.996;
+        var envelope = 0.0;
+        for (var index = 0; index < samples.Length; index++)
+        {
+            var magnitude = Math.Abs(samples[index]);
+            envelope = magnitude > envelope
+                ? envelope * attack + magnitude * (1.0 - attack)
+                : envelope * release + magnitude * (1.0 - release);
+            var ratio = Math.Clamp(envelope / threshold, 0.0, 1.0);
+            var gain = minGain + (1.0 - minGain) * Math.Pow(ratio, power);
+            samples[index] = (float)Math.Clamp(samples[index] * gain, -1.0, 1.0);
+        }
     }
 
     private sealed record PreparedCompositeSource(

@@ -155,8 +155,13 @@ computed dual-mic composite WAV with `--asio-dual-mic-composite-wav`, then muxes
 that WAV with the Kiyo video. The 2026-06-01 receipt at
 `artifacts/runtime/kiyo-dual-mic-composite/kiyo-dual-mic-composite-latest.mp4`
 contains 10.000 s of 640x480 30 fps Kiyo video and 9.994 s of mono AAC from the
-computed composite. Treat it as a bridge proof of audibility/sync, not the final
-native live DSP path.
+computed composite. After listening feedback, the bridge tightened its audition
+defaults: measured-band gain is capped at `1.18x`, incoherent calibrated bands
+are suppressed more aggressively, and an optional residual envelope expander
+demotes the low-level post-sum noise bed. Reprocessing the same raw ASIO/Kiyo
+receipt lowered composite RMS from `0.046805` to `0.034400` while preserving the
+same `-141.019` sample mic-delay estimate. Treat it as a bridge proof of
+audibility/sync and a denoise scorer, not the final native live DSP path.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`;
 it renders the bioacoustic timeline, decodes direct word anchors, and requires a
