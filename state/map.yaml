@@ -633,6 +633,17 @@ accepted_design:
     rolling buffers, and publishes `evidence=complex-contour` reports. The
     synthetic runtime-shaped proof `--complex-contour-runtime-self-test` at
     192 kHz recovers a 693.5-sample delay with about 0.219 us error.
+    `MimirCalibratedAudioCompositeBuilder` is the first diagnostic composite
+    owner for corrected mic streams: it consumes audio samples plus
+    `MimirAudioSynchronizationState` delay/confidence and measured band
+    responses, applies fractional alignment, sparse measured-band
+    equalization, and confidence/noise-weighted summing, then emits composite
+    samples and flatness/weight reports. `Mimir.BufferSmoke
+    --calibrated-audio-composite-smoke` proves the contract on synthetic
+    delayed/noisy/colored mic paths, improving SNR from -3.171 dB uncalibrated
+    to 15.135 dB calibrated and response flatness from 0.548 to 1.000.
+    Faust/native DSP still owns the production hot lane; this C# path is a
+    contract, scorer, and offline diagnostic, not a competing live mixer.
     A fresh live Scarlett proof is preserved at
     `calibration/bioacoustic/complex-contour-live-20260525-063229.md`:
     Focusrite ASIO playback/capture measured Loopback 1 -> Loopback 2 at

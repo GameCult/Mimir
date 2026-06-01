@@ -783,6 +783,11 @@ a named invariant that the native runtime cannot protect yet.
    aggregation, calibrated projection constants, and then a global
    residual/calibration owner.
 9. Move mic alignment, room suppression, voice separation, spatialization, and
-   stem generation into Faust/native DSP.
+   stem generation into Faust/native DSP. The C# diagnostic bridge now exists
+   as `MimirCalibratedAudioCompositeBuilder`: it consumes synchronization
+   states and measured band responses, emits a corrected composite plus scores,
+   and is proved by `--calibrated-audio-composite-smoke`. Treat that as the
+   contract and offline scorer for the native/Faust implementation, not as a
+   parallel live mixer authority.
 10. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

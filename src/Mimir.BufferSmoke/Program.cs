@@ -75,6 +75,11 @@ if (args.Any(arg => string.Equals(arg, "--audio-actuator-bank-smoke", StringComp
     return RunAudioActuatorBankSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--calibrated-audio-composite-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunCalibratedAudioCompositeSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--synchronized-buffer-planner-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunSynchronizedBufferPlannerSmoke();
@@ -3323,6 +3328,43 @@ static int RunAudioActuatorBankSmoke()
             : 1;
 }
 
+static int RunCalibratedAudioCompositeSmoke()
+{
+    const int sampleRate = 48_000;
+    const int frameCount = sampleRate;
+    var bands = new[] { 220.0, 440.0, 880.0, 1760.0, 3520.0 };
+    var reference = RenderCalibrationToneStack(frameCount, sampleRate, bands, [1.0, 1.0, 1.0, 1.0, 1.0], noiseScale: 0.0, seed: 7);
+    var micA = RenderCalibrationToneStack(frameCount, sampleRate, bands, [0.45, 0.70, 1.25, 0.95, 0.35], noiseScale: 0.035, seed: 11);
+    var micB = RenderCalibrationToneStack(frameCount, sampleRate, bands, [1.15, 0.55, 0.40, 1.35, 0.80], noiseScale: 0.030, seed: 17);
+    var micC = RenderCalibrationToneStack(frameCount, sampleRate, bands, [0.75, 1.30, 0.85, 0.50, 1.10], noiseScale: 0.040, seed: 23);
+    micA = ApplyFractionalDelay(micA, 21.375);
+    micB = ApplyFractionalDelay(micB, -13.625);
+    micC = ApplyFractionalDelay(micC, 38.25);
+
+    var sources = new[]
+    {
+        NewCompositeSource("shotgun", micA, 21.375, 0.92, bands, [0.45, 0.70, 1.25, 0.95, 0.35], 0.035),
+        NewCompositeSource("cardioid", micB, -13.625, 0.88, bands, [1.15, 0.55, 0.40, 1.35, 0.80], 0.030),
+        NewCompositeSource("kiyo-pro-mic", micC, 38.25, 0.74, bands, [0.75, 1.30, 0.85, 0.50, 1.10], 0.040),
+    };
+    var uncalibrated = AverageSignals([micA, micB, micC]);
+    var result = new MimirCalibratedAudioCompositeBuilder().Build(sources);
+    var uncalibratedSnr = EstimateSnrDb(reference, uncalibrated);
+    var calibratedSnr = EstimateSnrDb(reference, result.Samples);
+    var flatnessGain = result.ResponseFlatnessAfter - result.ResponseFlatnessBefore;
+    Console.WriteLine(
+        $"calibrated-audio-composite-smoke sources={result.SourceReports.Count} compositeRms={result.CompositeRms:0.000000} " +
+        $"uncalibratedSnrDb={uncalibratedSnr:0.000} calibratedSnrDb={calibratedSnr:0.000} " +
+        $"flatnessBefore={result.ResponseFlatnessBefore:0.000} flatnessAfter={result.ResponseFlatnessAfter:0.000} flatnessGain={flatnessGain:0.000} " +
+        $"bands={string.Join(",", result.SourceReports.Select(report => $"{report.SourceId}:{report.CorrectedBandCount}"))}");
+
+    return result.SourceReports.Count == 3 &&
+        calibratedSnr > uncalibratedSnr + 2.0 &&
+        result.ResponseFlatnessAfter > result.ResponseFlatnessBefore + 0.15
+            ? 0
+            : 1;
+}
+
 static int RunSynchronizedBufferPlannerSmoke()
 {
     const long t0 = 1_000_000_000;
@@ -3571,6 +3613,100 @@ static MimirAudioSynchronizationState NewSyncState(string sourceId, double delay
         1_000_000_000L,
         10,
         10);
+
+static MimirCalibratedAudioCompositeSource NewCompositeSource(
+    string sourceId,
+    float[] samples,
+    double delaySamples,
+    double confidence,
+    IReadOnlyList<double> bandCenters,
+    IReadOnlyList<double> gains,
+    double noiseRms)
+{
+    var responses = bandCenters
+        .Select((center, index) => new MimirChirpletBandResponse(center, gains[index] * gains[index]))
+        .ToArray();
+    var state = new MimirAudioSynchronizationState(
+        "loopback-scarlett-speakers",
+        sourceId,
+        48_000,
+        delaySamples,
+        delaySamples,
+        delaySamples * 1000.0 / 48_000,
+        0.0,
+        confidence,
+        responses,
+        1_000_000_000L,
+        10,
+        10);
+    return new MimirCalibratedAudioCompositeSource(sourceId, 48_000, samples, state, responses, noiseRms);
+}
+
+static float[] RenderCalibrationToneStack(
+    int frameCount,
+    int sampleRate,
+    IReadOnlyList<double> bands,
+    IReadOnlyList<double> gains,
+    double noiseScale,
+    int seed)
+{
+    var random = new Random(seed);
+    var samples = new float[frameCount];
+    var normalization = 0.16 / Math.Max(1, bands.Count);
+    for (var band = 0; band < bands.Count; band++)
+    {
+        var omega = 2.0 * Math.PI * bands[band] / sampleRate;
+        for (var index = 0; index < samples.Length; index++)
+        {
+            samples[index] += (float)(Math.Sin(omega * index) * gains[band] * normalization);
+        }
+    }
+
+    if (noiseScale > 0.0)
+    {
+        for (var index = 0; index < samples.Length; index++)
+        {
+            samples[index] += (float)((random.NextDouble() * 2.0 - 1.0) * noiseScale);
+        }
+    }
+
+    return samples;
+}
+
+static float[] AverageSignals(IReadOnlyList<float[]> signals)
+{
+    var frameCount = signals.Min(signal => signal.Length);
+    var output = new float[frameCount];
+    foreach (var signal in signals)
+    {
+        for (var index = 0; index < frameCount; index++)
+        {
+            output[index] += signal[index] / signals.Count;
+        }
+    }
+
+    return output;
+}
+
+static double EstimateSnrDb(IReadOnlyList<float> reference, IReadOnlyList<float> candidate)
+{
+    var frameCount = Math.Min(reference.Count, candidate.Count);
+    var signal = 0.0;
+    var error = 0.0;
+    var referenceRms = RootMeanSquare(reference);
+    var candidateRms = RootMeanSquare(candidate);
+    var gain = candidateRms <= 1.0e-12 ? 1.0 : referenceRms / candidateRms;
+    for (var index = 0; index < frameCount; index++)
+    {
+        var expected = reference[index];
+        var actual = candidate[index] * gain;
+        signal += expected * expected;
+        var delta = expected - actual;
+        error += delta * delta;
+    }
+
+    return 10.0 * Math.Log10(Math.Max(1.0e-18, signal) / Math.Max(1.0e-18, error));
+}
 
 static MimirRollingStreamBuffer NewVideoBuffer(
     string sourceId,

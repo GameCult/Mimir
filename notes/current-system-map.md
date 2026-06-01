@@ -294,6 +294,18 @@ extracts Float32 windows from rolling audio buffers to publish
 with about 0.219 us error from rolling buffers. The next real-world proof is to
 run that lane through live Scarlett loopback and mics, not only stored ASIO
 artifacts.
+`MimirCalibratedAudioCompositeBuilder` is the first C# diagnostic owner for
+turning that acoustic evidence into a corrected composite stream. It consumes
+sample windows plus `MimirAudioSynchronizationState` delay/confidence and
+per-band response evidence, applies fractional alignment, sparse measured-band
+equalization, and confidence/noise-weighted summing, then emits composite
+samples plus source flatness/weight reports. This is not the hot room-DSP
+authority and it does not make room nulls disappear; Faust/native DSP still
+owns the production alignment, suppression, separation, and stem lane.
+`Mimir.BufferSmoke --calibrated-audio-composite-smoke` proves the contract on
+synthetic delayed, colored, noisy mic paths: the uncalibrated mix measures
+-3.171 dB SNR, the calibrated composite measures 15.135 dB SNR, and response
+flatness improves from 0.548 to 1.000.
 That real-world proof now has a first receipt:
 `calibration/bioacoustic/complex-contour-live-20260525-063229.md`. A freshly
 rendered canary-packet witness was played through Focusrite ASIO and captured
