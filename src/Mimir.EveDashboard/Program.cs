@@ -842,6 +842,7 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
         var confidence = snapshot.SyncStates.Count == 0
             ? snapshot.SyncReports.Select(static report => report.Confidence)
                 .Concat(snapshot.SyncDecodeAttempts.Select(static attempt => attempt.Confidence))
+                .Concat(snapshot.Well?.AudioSyncStates.Select(static state => state.Confidence) ?? [])
                 .DefaultIfEmpty(0.0)
                 .Max()
             : snapshot.SyncStates.Average(static state => state.Confidence);
@@ -860,7 +861,7 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             },
             new("mimir-audio-rms", $"Audio RMS\n{rms:0.000000}", "audio-rms", 0.0, -0.12, 0.28, 0.16, ToneFor(NormalizeRms(rms)))
             {
-                Detail = $"{snapshot.Spectra.Count} spectrum lanes",
+                Detail = $"{snapshot.Spectra.Count} spectrum lanes; Well audio buffers {snapshot.Well?.AudioBuffers ?? 0}",
             },
             new("mimir-observation-streams", $"Device Streams\n{liveObservationCount}/{snapshot.ObservationStreams.Count} active", "observation-streams", 0.44, -0.12, 0.28, 0.16, liveObservationCount > 0 ? "active" : "waiting")
             {
@@ -886,18 +887,39 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
         var pulse = Pulse();
         var children = new List<DashboardUiElement>
         {
-            UiElement.Pane("mimir-live-overview", "Mimir Live Stats", [
+            UiElement.Container(
+                "mimir-live-row-overview",
+                "row",
+                new DashboardUiLayout { Direction = "horizontal", Gap = 8 },
+                [
+                    UiElement.Pane("mimir-live-overview", "Mimir Live Stats", [
                 UiElement.Text("mimir-live-summary", $"{pulse} {snapshot.Summary}", "strong"),
                 UiElement.Text("mimir-live-sources", $"telemetry: {snapshot.TelemetrySource}\nobservations: {snapshot.ObservationSource}", "caption"),
                 StatBar("tracking-confidence", "tracking confidence", confidence, "cool"),
                 StatBar("audio-rms", "max channel RMS", NormalizeRms(rms), "warm", $"{rms:0.000000}"),
                 StatBar("observation-liveness", "device stream liveness", snapshot.ObservationStreams.Count == 0 ? 0.0 : liveObservationCount / (double)snapshot.ObservationStreams.Count, "cool"),
-            ]),
-            BuildAudioPane(snapshot.Spectra),
-            BuildSyncPane(snapshot),
-            BuildVideoPane(snapshot),
-            BuildObservationPane(snapshot.ObservationStreams),
-            BuildActuatorPane(snapshot.ActuatorCommands),
+                    ]),
+                    BuildMoveMusicPane(snapshot.MoveMusic),
+                    BuildWellPane(snapshot.Well),
+                ]),
+            UiElement.Container(
+                "mimir-live-row-runtime",
+                "row",
+                new DashboardUiLayout { Direction = "horizontal", Gap = 8 },
+                [
+                    BuildAudioPane(snapshot.Spectra, snapshot.Well),
+                    BuildSyncPane(snapshot),
+                    BuildVideoPane(snapshot),
+                ]),
+            UiElement.Container(
+                "mimir-live-row-witness",
+                "row",
+                new DashboardUiLayout { Direction = "horizontal", Gap = 8 },
+                [
+                    BuildObservationPane(snapshot.ObservationStreams),
+                    BuildActuatorPane(snapshot.ActuatorCommands),
+                    BuildCalibrationPane(snapshot),
+                ]),
         };
 
         return new DashboardSurface
@@ -908,14 +930,23 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             Root = UiElement.Container(
                 "mimir-live-stats-root",
                 "dashboard",
-                new DashboardUiLayout { Direction = "vertical", Gap = 8, Padding = 8, Overflow = "scroll" },
+                new DashboardUiLayout { Direction = "vertical", Gap = 6, Padding = 6, Overflow = "scroll" },
                 children),
         };
     }
 
-    private static DashboardUiElement BuildAudioPane(IReadOnlyList<MimirSpectrumStat> spectra)
+    private static DashboardUiElement BuildAudioPane(IReadOnlyList<MimirSpectrumStat> spectra, MimirWellStat? well)
     {
-        var items = spectra.Count == 0
+        var wellAudio = well?.Buffers
+            .Where(static buffer => string.Equals(buffer.Kind, "Audio", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static buffer => buffer.SourceId, StringComparer.Ordinal)
+            .Take(8)
+            .Select(buffer => UiElement.Text(
+                $"well-audio-{StableId(buffer.SourceId)}",
+                $"{buffer.SourceId}: {buffer.Count} blocks edge {NsAge(buffer.EdgeNs)}",
+                "caption"))
+            .ToArray() ?? [];
+        var items = spectra.Count == 0 && wellAudio.Length == 0
             ? [UiElement.Text("mimir-spectrum-empty", "no spectrum telemetry yet", "caption")]
             : spectra
                 .OrderBy(static spectrum => spectrum.SourceId, StringComparer.Ordinal)
@@ -930,9 +961,10 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
                         UiElement.Text($"spectrum-{StableId(spectrum.SourceId)}-detail", $"rms {spectrum.Rms:0.000000} peak {spectrum.Peak:0.000000} floor {spectrum.NoiseFloorDb:0.0} dB", "caption"),
                         UiElement.Text($"spectrum-{StableId(spectrum.SourceId)}-peaks", spectrum.Peaks, "caption"),
                     ]))
+                .Concat(wellAudio)
                 .ToArray();
 
-        return UiElement.Pane("mimir-audio-pane", "Per-Channel RMS", items);
+        return UiElement.Pane("mimir-audio-pane", "Audio", items);
     }
 
     private static DashboardUiElement BuildSyncPane(MimirLiveStatsSnapshot snapshot)
@@ -1039,6 +1071,64 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
         return UiElement.Pane("mimir-actuator-pane", "Alignment Actuator", children);
     }
 
+    private static DashboardUiElement BuildMoveMusicPane(MimirMoveMusicStat? music)
+    {
+        if (music == null)
+        {
+            return UiElement.Pane("mimir-move-music-pane", "Move Score", [UiElement.Text("mimir-move-music-empty", "no Move score trace yet", "caption")]);
+        }
+
+        var children = new List<DashboardUiElement>
+        {
+            UiElement.Text("mimir-move-music-head", $"bpm {music.Bpm:0.0} c={music.BpmConfidence:0.00} {music.KeyName} {music.KeyMode} chord {music.ChordName}", "mono"),
+            StatBar("mimir-move-loudness", "loudness gate", music.LoudnessGate, "warm", $"{music.LoudnessGate:0.000}"),
+            UiElement.Text("mimir-move-score", $"score {Bar(music.ScoreEnvelopeMax, 18)} max env {music.ScoreEnvelopeMax:0.000} max rgb {music.MaxRgb}", "caption"),
+            UiElement.Text("mimir-move-sources", string.Join(" | ", music.Sources.Take(4)), "caption"),
+        };
+
+        return UiElement.Pane("mimir-move-music-pane", "Move Score", children);
+    }
+
+    private static DashboardUiElement BuildWellPane(MimirWellStat? well)
+    {
+        if (well == null)
+        {
+            return UiElement.Pane("mimir-well-pane", "Well", [UiElement.Text("mimir-well-empty", "no Well snapshot yet", "caption")]);
+        }
+
+        return UiElement.Pane("mimir-well-pane", "Well", [
+            UiElement.Text("mimir-well-summary", $"seq {well.Sequence} {well.ElapsedSeconds:0}s ingested {well.IngestedSamples:0} sources {well.LiveSources}/{well.ConfiguredSources}", "mono"),
+            StatBar("mimir-well-completeness", "frame completeness", well.SynchronizedFrameComplete ? 1.0 : 0.0, well.SynchronizedFrameComplete ? "cool" : "danger"),
+            UiElement.Text("mimir-well-buffers", $"buffers {well.Buffers.Count} audio {well.AudioBuffers} video {well.VideoBuffers} ready {well.ReadySlices}/{well.TotalSlices}", "caption"),
+            UiElement.Text("mimir-well-probe", well.Probe == null ? "probe: none" : $"probe emit={well.Probe.ShouldEmit} sync={well.Probe.SyncConfidence:0.000} freq={well.Probe.FrequencyConfidence:0.000} {well.Probe.Reason}", "caption"),
+        ]);
+    }
+
+    private static DashboardUiElement BuildCalibrationPane(MimirLiveStatsSnapshot snapshot)
+    {
+        var leap = snapshot.Well?.Buffers.FirstOrDefault(static buffer => buffer.SourceId.Contains("leap", StringComparison.OrdinalIgnoreCase));
+        var eyeStreams = snapshot.ObservationStreams
+            .Where(static stream => stream.StreamId.Contains("eye", StringComparison.OrdinalIgnoreCase) || stream.StreamId.Contains("video2", StringComparison.OrdinalIgnoreCase) || stream.StreamId.Contains("video3", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static stream => stream.StreamId, StringComparer.Ordinal)
+            .Take(4)
+            .ToArray();
+        var moveStreams = snapshot.ObservationStreams
+            .Where(static stream => stream.Kind.Contains("move", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static stream => stream.StreamId, StringComparer.Ordinal)
+            .Take(4)
+            .ToArray();
+
+        var children = new List<DashboardUiElement>
+        {
+            UiElement.Text("mimir-calibration-leap", leap == null ? "Leap: no Well buffer" : $"Leap: {leap.Count} frames {leap.PixelFormat} {leap.Width:0}x{leap.Height:0} edge {NsAge(leap.EdgeNs)}", "mono"),
+            UiElement.Text("mimir-calibration-eyes", $"Eyes: {eyeStreams.Count(static stream => stream.State == "active")}/{eyeStreams.Length} active", "caption"),
+            UiElement.Text("mimir-calibration-moves", $"Moves: {moveStreams.Count(static stream => stream.State == "active")}/{moveStreams.Length} active", "caption"),
+        };
+        children.AddRange(eyeStreams.Select(stream => UiElement.Text($"mimir-eye-{StableId(stream.StreamId)}", $"{stream.StreamId} {stream.Shape} age {stream.AgeSeconds:0}s", "caption")));
+        children.AddRange(moveStreams.Select(stream => UiElement.Text($"mimir-move-{StableId(stream.StreamId)}", $"{stream.StreamId} {stream.Shape} age {stream.AgeSeconds:0}s", "caption")));
+        return UiElement.Pane("mimir-calibration-pane", "Leap / Eyes / Moves", children);
+    }
+
     private static DashboardUiElement StatBar(string id, string label, double value, string tone, string? displayValue = null) =>
         UiElement.Card(
             id,
@@ -1079,6 +1169,18 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
     private static string ToneFor(double value) =>
         value >= 0.70 ? "cool" : value >= 0.25 ? "warm" : "danger";
 
+    private static string NsAge(double timestampNs)
+    {
+        if (timestampNs <= 0)
+        {
+            return "unknown";
+        }
+
+        var nowNs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000.0;
+        var seconds = Math.Max(0.0, (nowNs - timestampNs) / 1_000_000_000.0);
+        return seconds < 1.0 ? $"{seconds * 1000.0:0}ms" : $"{seconds:0.0}s";
+    }
+
     private static string StableId(string value) =>
         string.Join("-", value.ToLowerInvariant().Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries))
             .Replace(":", "-", StringComparison.Ordinal)
@@ -1098,8 +1200,12 @@ internal sealed class MimirLiveStatsSnapshot
     public IReadOnlyList<MimirVideoBufferStat> VideoBuffers { get; init; } = [];
     public IReadOnlyList<MimirActuatorCommandStat> ActuatorCommands { get; init; } = [];
     public IReadOnlyList<MimirObservationStreamStat> ObservationStreams { get; init; } = [];
-    public bool HasAnyData => Telemetry != null || Spectra.Count > 0 || SyncStates.Count > 0 || VideoBuffers.Count > 0 || ObservationStreams.Count > 0;
-    public string Summary => $"{Spectra.Count} audio lanes / {SyncStates.Count} sync states / {SyncDecodeAttempts.Count} decode attempts / {VideoBuffers.Count} video buffers / {ObservationStreams.Count} device streams";
+    public MimirWellStat? Well { get; init; }
+    public MimirMoveMusicStat? MoveMusic { get; init; }
+    public bool HasAnyData => Telemetry != null || Well != null || MoveMusic != null || Spectra.Count > 0 || SyncStates.Count > 0 || VideoBuffers.Count > 0 || ObservationStreams.Count > 0;
+    public string Summary => Well == null
+        ? $"{Spectra.Count} audio lanes / {SyncStates.Count} sync states / {SyncDecodeAttempts.Count} decode attempts / {VideoBuffers.Count} video buffers / {ObservationStreams.Count} device streams"
+        : $"Well {Well.LiveSources}/{Well.ConfiguredSources} sources / {Well.AudioBuffers} audio / {Well.VideoBuffers} video / {ObservationStreams.Count} device streams";
 
     public static MimirLiveStatsSnapshot Load(string telemetryLogPath, string observationLogPath)
     {
@@ -1118,6 +1224,8 @@ internal sealed class MimirLiveStatsSnapshot
             VideoBuffers = LatestBySource(telemetryLines.Select(ParseVideoBuffer).Where(static value => value != null)!),
             ActuatorCommands = LatestBySource(telemetryLines.Select(ParseActuatorCommand).Where(static value => value != null)!),
             ObservationStreams = LatestObservationStreams(observationLines),
+            Well = LatestWellSnapshot(observationLines),
+            MoveMusic = LatestMoveMusicTrace(),
         };
     }
 
@@ -1190,6 +1298,152 @@ internal sealed class MimirLiveStatsSnapshot
             .OrderByDescending(static value => value.Confidence)
             .ThenBy(static value => value.SourceId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static MimirWellStat? LatestWellSnapshot(IEnumerable<string> lines)
+    {
+        MimirWellStat? latest = null;
+        foreach (var line in lines)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                var root = document.RootElement;
+                if (string.Equals(JsonStringAny(root, "document"), "mimir.well_snapshot.v1", StringComparison.Ordinal))
+                {
+                    latest = ParseWellSnapshot(root);
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return latest;
+    }
+
+    private static MimirWellStat ParseWellSnapshot(JsonElement root)
+    {
+        var buffers = ArrayItems(TryGetAny(root, "buffers"))
+            .Select(static buffer =>
+            {
+                var latest = TryGetAny(buffer, "latest");
+                var video = TryGetAny(latest, "video");
+                var audio = TryGetAny(latest, "audio");
+                return new MimirWellBufferStat(
+                    JsonStringAny(buffer, "SourceId", "sourceId") ?? "unknown",
+                    JsonStringAny(buffer, "Kind", "kind") ?? "unknown",
+                    (int)JsonNumberAny(buffer, "Count", "count"),
+                    JsonNumberAny(buffer, "EdgeNs", "edgeNs"),
+                    (int)JsonNumberAny(video, "Width", "width"),
+                    (int)JsonNumberAny(video, "Height", "height"),
+                    JsonStringAny(video, "PixelFormat", "pixelFormat") ?? "",
+                    (int)JsonNumberAny(audio, "SampleRate", "sampleRate"),
+                    (int)JsonNumberAny(audio, "Channels", "channels"));
+            })
+            .ToArray();
+        var frame = TryGetAny(root, "synchronizedFrame");
+        var slices = ArrayItems(TryGetAny(frame, "slices")).ToArray();
+        var audioSync = TryGetAny(root, "audioSync");
+        var states = ArrayItems(TryGetAny(audioSync, "states"))
+            .Select(static state => new MimirWellAudioSyncStateStat(
+                JsonStringAny(state, "SourceId", "sourceId") ?? "unknown",
+                JsonStringAny(state, "ReferenceSourceId", "referenceSourceId") ?? "unknown",
+                JsonNumberAny(state, "SmoothedDelaySamples", "smoothedDelaySamples"),
+                JsonNumberAny(state, "SamplingRateOffsetPpm", "samplingRateOffsetPpm"),
+                JsonNumberAny(state, "Confidence", "confidence")))
+            .ToArray();
+        var probeElement = TryGetAny(audioSync, "probe");
+        var probe = probeElement.ValueKind == JsonValueKind.Object
+            ? new MimirWellProbeStat(
+                JsonBoolAny(probeElement, "ShouldEmit", "shouldEmit"),
+                JsonNumberAny(probeElement, "AggregateSyncConfidence", "aggregateSyncConfidence"),
+                JsonNumberAny(probeElement, "AggregateFrequencyResponseConfidence", "aggregateFrequencyResponseConfidence"),
+                JsonStringAny(probeElement, "reason") ?? "unknown")
+            : null;
+        return new MimirWellStat(
+            (long)JsonNumberAny(root, "sequence"),
+            JsonNumberAny(root, "elapsedSeconds"),
+            JsonNumberAny(root, "ingestedSamples"),
+            (int)JsonNumberAny(root, "configuredSources"),
+            (int)JsonNumberAny(root, "liveSources"),
+            JsonBoolAny(frame, "IsComplete", "isComplete"),
+            slices.Count(static slice => string.Equals(JsonStringAny(slice, "Status", "status"), "Ready", StringComparison.OrdinalIgnoreCase)),
+            slices.Length,
+            buffers,
+            states,
+            probe);
+    }
+
+    private static MimirMoveMusicStat? LatestMoveMusicTrace()
+    {
+        var runtimeRoot = Path.Combine(AppContext.BaseDirectory, "artifacts", "runtime");
+        if (!Directory.Exists(runtimeRoot))
+        {
+            runtimeRoot = @"E:\Projects\Mimir\artifacts\runtime";
+        }
+
+        if (!Directory.Exists(runtimeRoot))
+        {
+            return null;
+        }
+
+        var trace = Directory.EnumerateFiles(runtimeRoot, "online-sync.jsonl", SearchOption.AllDirectories)
+            .Select(static path => new FileInfo(path))
+            .Where(static info => info.DirectoryName?.Contains("move", StringComparison.OrdinalIgnoreCase) == true)
+            .OrderByDescending(static info => info.LastWriteTimeUtc)
+            .FirstOrDefault();
+        if (trace == null || trace.Length == 0)
+        {
+            return null;
+        }
+
+        var line = TailTextFile(trace.FullName, 64 * 1024)
+            .Split("\n", StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault();
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(line);
+            var root = document.RootElement;
+            var maxRgb = 0;
+            var moves = TryGetAny(root, "moves");
+            if (moves.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var move in moves.EnumerateObject())
+                {
+                    if (move.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        maxRgb = Math.Max(maxRgb, move.Value.EnumerateArray().Select(JsonNumber).Select(static value => (int)value).DefaultIfEmpty(0).Max());
+                    }
+                }
+            }
+
+            var envelopes = ArrayItems(TryGetAny(root, "score_gesture_envelopes")).Select(JsonNumber).DefaultIfEmpty(0.0).ToArray();
+            var sources = ArrayItems(TryGetAny(root, "music_sources"))
+                .Select(static source => $"{JsonStringAny(source, "source") ?? "source"} {JsonNumberAny(source, "bpm"):0.0}/{JsonNumberAny(source, "bpm_confidence"):0.00}")
+                .ToArray();
+            return new MimirMoveMusicStat(
+                trace.FullName,
+                JsonNumberAny(root, "bpm"),
+                JsonNumberAny(root, "bpm_confidence"),
+                JsonNumberAny(root, "loudness_gate"),
+                JsonNumberAny(root, "loudness_percentile"),
+                JsonStringAny(root, "key_name") ?? "?",
+                JsonStringAny(root, "key_mode") ?? "?",
+                JsonStringAny(root, "chord_name") ?? "?",
+                envelopes.Max(),
+                maxRgb,
+                sources);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static IReadOnlyList<MimirObservationStreamStat> LatestObservationStreams(IEnumerable<string> lines)
@@ -1476,6 +1730,66 @@ internal sealed class MimirLiveStatsSnapshot
     private static double JsonNumber(JsonElement root, string property) =>
         root.TryGetProperty(property, out var child) && child.ValueKind == JsonValueKind.Number && child.TryGetDouble(out var value) ? value : 0.0;
 
+    private static JsonElement TryGetAny(JsonElement root, params string[] properties)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return default;
+        }
+
+        foreach (var property in properties)
+        {
+            if (root.TryGetProperty(property, out var child))
+            {
+                return child;
+            }
+        }
+
+        return default;
+    }
+
+    private static IEnumerable<JsonElement> ArrayItems(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Array)
+        {
+            yield break;
+        }
+
+        foreach (var item in element.EnumerateArray())
+        {
+            yield return item;
+        }
+    }
+
+    private static string? JsonStringAny(JsonElement root, params string[] properties)
+    {
+        var child = TryGetAny(root, properties);
+        return child.ValueKind == JsonValueKind.String ? child.GetString() : null;
+    }
+
+    private static double JsonNumberAny(JsonElement root, params string[] properties) => JsonNumber(TryGetAny(root, properties));
+
+    private static double JsonNumber(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var value) ? value : 0.0;
+
+    private static bool JsonBoolAny(JsonElement root, params string[] properties)
+    {
+        var child = TryGetAny(root, properties);
+        return child.ValueKind == JsonValueKind.True || (child.ValueKind == JsonValueKind.Number && child.TryGetDouble(out var value) && value != 0.0);
+    }
+
+    private static string NsAge(double timestampNs)
+    {
+        if (timestampNs <= 0)
+        {
+            return "unknown";
+        }
+
+        var nowNs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000.0;
+        var seconds = Math.Max(0.0, (nowNs - timestampNs) / 1_000_000_000.0);
+        return seconds < 1.0 ? $"{seconds * 1000.0:0}ms" : $"{seconds:0.0}s";
+    }
+
     private static string TailTextFile(string filePath, int maxBytes)
     {
         var info = new FileInfo(filePath);
@@ -1513,6 +1827,52 @@ internal sealed record MimirVideoBufferStat(string SourceId, int Count, string L
 internal sealed record MimirActuatorCommandStat(string SourceId, double DelaySamples, double Ratio, double Confidence) : IMimirSourceStat;
 
 internal sealed record MimirObservationStreamStat(string DeviceId, string StreamId, string Kind, double Sequence, string State, double AgeSeconds, string Shape);
+
+internal sealed record MimirWellStat(
+    long Sequence,
+    double ElapsedSeconds,
+    double IngestedSamples,
+    int ConfiguredSources,
+    int LiveSources,
+    bool SynchronizedFrameComplete,
+    int ReadySlices,
+    int TotalSlices,
+    IReadOnlyList<MimirWellBufferStat> Buffers,
+    IReadOnlyList<MimirWellAudioSyncStateStat> AudioSyncStates,
+    MimirWellProbeStat? Probe)
+{
+    public int AudioBuffers => Buffers.Count(static buffer => string.Equals(buffer.Kind, "Audio", StringComparison.OrdinalIgnoreCase));
+
+    public int VideoBuffers => Buffers.Count(static buffer => string.Equals(buffer.Kind, "Video", StringComparison.OrdinalIgnoreCase));
+}
+
+internal sealed record MimirWellBufferStat(
+    string SourceId,
+    string Kind,
+    int Count,
+    double EdgeNs,
+    int Width,
+    int Height,
+    string PixelFormat,
+    int SampleRate,
+    int Channels);
+
+internal sealed record MimirWellAudioSyncStateStat(string SourceId, string ReferenceSourceId, double DelaySamples, double SroPpm, double Confidence);
+
+internal sealed record MimirWellProbeStat(bool ShouldEmit, double SyncConfidence, double FrequencyConfidence, string Reason);
+
+internal sealed record MimirMoveMusicStat(
+    string TracePath,
+    double Bpm,
+    double BpmConfidence,
+    double LoudnessGate,
+    double LoudnessPercentile,
+    string KeyName,
+    string KeyMode,
+    string ChordName,
+    double ScoreEnvelopeMax,
+    int MaxRgb,
+    IReadOnlyList<string> Sources);
 
 internal sealed class MimirStreamLayoutProvider : MutableDashboardProvider
 {

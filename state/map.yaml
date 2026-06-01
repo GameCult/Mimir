@@ -226,6 +226,21 @@ invariants:
     own autocorrelation tempo estimates, chroma scoring estimates key and chord
     candidates, and a recent loudness-percentile gate owns whether the Moves
     are allowed to brighten. Flux alone no longer has authority to shout.
+    The current score cut adds `ScoreGestureScheduler` as the only owner of
+    Move visual gesture openings. Raw level, hit, flux, and color balance are
+    inputs; they no longer emit continuous RGB by themselves. The scheduler
+    divides the beat into score slots, assigns slots across Moves with
+    de-Bruijn/polyrhythmic identity, opens short envelopes only when recent
+    broadband spectral rise reaches the adaptive loudness gate, and maps the
+    top of that gate to the configured maximum envelope. Quiet frames are
+    black. The 2026-06-01 live worker
+    `artifacts/runtime/move-music-score-20260601-220807/online-sync.jsonl`
+    showed `max_env=0.4`, `max_rgb=4`, and only 9 lit frames in an 824-frame
+    short-window poll, which is the intended conservative instrument behavior.
+    AquaSynth Syrinx voices are the correct Realtek audio-signal target, but
+    the live emitter is still the Mimir bioacoustic/Move script until the
+    Realtek path is explicitly routed through AquaSynth.Faust/Syrinx patch
+    compilation.
     `tools/move_latency_probe.py` is the diagnostic PS Move latency receipt:
     PS3 Eyes are the default fast visual witnesses, Scarlett cardioid is the
     default chirp timing witness, and the event train uses an order-3 de Bruijn
@@ -332,6 +347,14 @@ invariants:
     and camera driver time are not in one canonical timeline, so sync frame
     publication is degraded until a camera-clock/global-time correction owner
     exists.
+    The Eve live-stats provider now reads the latest `mimir.well_snapshot.v1`
+    records from the observation ledger and the latest
+    `mimir.online_move_music_sync_frame.v1` trace from runtime artifacts. Its
+    compact retained surface subdivides into overview, Move score, Well,
+    audio, sync, video, Leap/Eyes/Moves calibration evidence, and actuator
+    panes. Leap usefulness is reported as live Well buffer health and edge age,
+    while Nightwing Eyes/Moves remain compact typed witness observations; the
+    dashboard observes those numbers and does not become placement authority.
     Eve follows the same distributed-witness rule for its own body:
     `eve-local-sensor-witness` / `eve-local-sensors` owns Eve camera, Eve mic,
     local flash/chirp decode, feature tracks, visual markers, and local frustum

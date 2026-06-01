@@ -450,6 +450,53 @@ def fuse_music_sources(primary: dict[str, object], source_states: list[dict[str,
     return primary
 
 
+class ScoreGestureScheduler:
+    def __init__(self, move_count: int, args: argparse.Namespace) -> None:
+        self.args = args
+        self.envelopes = [0.0 for _ in range(move_count)]
+        self.last_slots = [-1 for _ in range(move_count)]
+
+    def update(self, state: dict[str, object]) -> tuple[float, ...]:
+        beat = float(state.get("beat_phase", 0.0))
+        slot_count = max(1, int(self.args.score_subdivisions))
+        slot = int(math.floor((beat % 1.0) * slot_count))
+        loudness_rank = float(state.get("loudness_percentile", 0.0))
+        loudness_gate = float(state.get("loudness_gate", 0.0))
+        hit = float(state.get("hit", 0.0))
+        confidence = float(state.get("bpm_confidence", 0.0))
+        can_play = (
+            loudness_rank >= self.args.score_loudness_threshold
+            and loudness_gate >= self.args.score_min_loudness_gate
+            and confidence >= self.args.score_min_tempo_confidence
+        )
+        loud_span = max(1e-6, 1.0 - self.args.score_loudness_threshold)
+        loud_accent = max(0.0, min(1.0, (loudness_rank - self.args.score_loudness_threshold) / loud_span))
+        rise_accent = max(loud_accent, loudness_gate)
+        onset_accent = 0.5 + 0.5 * min(1.0, hit + loudness_gate * self.args.score_loudness_weight)
+        for index in range(len(self.envelopes)):
+            self.envelopes[index] *= self.args.score_release
+            if slot == self.last_slots[index]:
+                continue
+            self.last_slots[index] = slot
+            if not can_play:
+                continue
+            if not self._slot_belongs_to_instrument(slot, index):
+                continue
+            accent = (rise_accent ** self.args.score_loudness_exponent) * onset_accent
+            if accent < self.args.score_min_accent:
+                continue
+            self.envelopes[index] = max(self.envelopes[index], min(self.args.score_max_envelope, accent))
+        return tuple(float(value) for value in self.envelopes)
+
+    def _slot_belongs_to_instrument(self, slot: int, move_index: int) -> bool:
+        if self.args.debruijn_polyrhythm:
+            bit_index = (slot + move_index * 3) % len(DEBRUIJN_2_3)
+            if DEBRUIJN_2_3[bit_index] == "0":
+                return False
+        spacing = max(1, int(self.args.score_instrument_spacing))
+        return (slot + move_index) % spacing == 0
+
+
 DEBRUIJN_2_3 = "00010111"
 
 
@@ -463,6 +510,10 @@ def debruijn_accent(frame_phase: float, move_index: int, args: argparse.Namespac
 
 
 def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, object], args: argparse.Namespace) -> tuple[int, int, int]:
+    envelopes = state.get("score_gesture_envelopes", ())
+    score_envelope = float(envelopes[move_index]) if isinstance(envelopes, tuple) and move_index < len(envelopes) else 0.0
+    if score_envelope <= 0.0005:
+        return (0, 0, 0)
     level = float(state["level"])
     beat = float(state["beat_phase"])
     hit = float(state["hit"])
@@ -476,7 +527,7 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
     phase = (beat * harmonic * micro + move_index / max(1, move_count)) % 1.0
     poly = debruijn_accent(beat, move_index, args)
     gesture = poly * (0.42 + 0.58 * (0.5 + 0.5 * math.sin(2.0 * math.pi * phase)) ** 2.1)
-    accent = min(1.0, loudness_gate * (level * gesture + hit * (0.34 + 0.12 * poly)))
+    accent = min(1.0, score_envelope * loudness_gate * (level * gesture + hit * (0.22 + 0.08 * poly)))
     hue = (base_h + args.hue_bend * math.sin(2.0 * math.pi * phase) + math.log2(harmonic * micro) * 0.0833) % 1.0
     chord_confidence = float(state.get("chord_confidence", 0.0))
     chord_root = int(state.get("chord_root", 0))
@@ -497,7 +548,7 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
     r = rr * (0.45 + 0.55 * float(spectral[0]))
     g = gg * (0.45 + 0.55 * float(spectral[1]))
     b = bb * (0.45 + 0.55 * float(spectral[2]))
-    white = loudness_gate * max(0.0, hit - 0.94) / 0.06
+    white = score_envelope * loudness_gate * max(0.0, hit - 0.97) / 0.03
     return (
         int(min(255, 255 * r + 18 * white)),
         int(min(255, 255 * g + 18 * white)),
@@ -534,9 +585,19 @@ def main() -> int:
     parser.add_argument("--hit-loudness-threshold", type=float, default=0.82)
     parser.add_argument("--loudness-floor", type=float, default=0.006)
     parser.add_argument("--loudness-exponent", type=float, default=2.4)
-    parser.add_argument("--quiet-brightness", type=float, default=0.012)
-    parser.add_argument("--max-brightness", type=float, default=0.76)
-    parser.add_argument("--brightness-exponent", type=float, default=0.82)
+    parser.add_argument("--quiet-brightness", type=float, default=0.0)
+    parser.add_argument("--max-brightness", type=float, default=0.18)
+    parser.add_argument("--brightness-exponent", type=float, default=1.15)
+    parser.add_argument("--score-subdivisions", type=int, default=8)
+    parser.add_argument("--score-instrument-spacing", type=int, default=3)
+    parser.add_argument("--score-release", type=float, default=0.54)
+    parser.add_argument("--score-loudness-threshold", type=float, default=0.965)
+    parser.add_argument("--score-min-loudness-gate", type=float, default=0.16)
+    parser.add_argument("--score-loudness-exponent", type=float, default=2.8)
+    parser.add_argument("--score-loudness-weight", type=float, default=0.28)
+    parser.add_argument("--score-min-accent", type=float, default=0.035)
+    parser.add_argument("--score-max-envelope", type=float, default=0.45)
+    parser.add_argument("--score-min-tempo-confidence", type=float, default=0.0)
     parser.add_argument("--onset-decay", type=float, default=0.18)
     parser.add_argument("--onset-threshold", type=float, default=0.62)
     parser.add_argument("--onset-exponent", type=float, default=2.0)
@@ -601,6 +662,7 @@ def main() -> int:
     )
     assert wasapi.stdout is not None and ssh.stdin is not None
     analyzer = OnlineAnalyzer(args.sample_rate, args.fps, args.fft_size, args)
+    score_scheduler = ScoreGestureScheduler(len(moves), args)
     asio_reader = None
     asio_tracker = None
     if args.asio_music_channels.strip():
@@ -664,6 +726,7 @@ def main() -> int:
                         asio_reader = None
                         asio_tracker = None
                 state = fuse_music_sources(state, auxiliary_states)
+                state["score_gesture_envelopes"] = score_scheduler.update(state)
                 rgbs = {}
                 for index, move in enumerate(moves):
                     rgb = move_rgb(move, index, len(moves), state, args)
@@ -680,6 +743,7 @@ def main() -> int:
                     "color_balance": list(state["color_balance"]),  # type: ignore[index]
                     "chroma": list(state["chroma"]),  # type: ignore[index]
                     "music_sources": state["music_sources"],
+                    "score_gesture_envelopes": list(state["score_gesture_envelopes"]),  # type: ignore[index]
                     "moves": {name: list(rgb) for name, rgb in rgbs.items()},
                 }
                 trace.write(json.dumps(record, sort_keys=True) + "\n")
