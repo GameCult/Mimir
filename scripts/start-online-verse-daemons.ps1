@@ -2,7 +2,8 @@ param(
     [string]$NightwingHost = "nightwing",
     [string]$WitnessUrl = "ws://192.168.1.66:8796/eve/periwinkle",
     [string]$SubscribeUrl = "ws://127.0.0.1:8796/eve/periwinkle/subscribe",
-    [string]$ConfigPath = "E:\Projects\Mimir\config\mimir-runtime.mvp-leap-eyes-kiyo.local.json",
+    [string]$ConfigPath = "E:\Projects\Mimir\config\mimir-runtime.well.local.json",
+    [string]$WellPublishUrl = "ws://127.0.0.1:8796/eve/periwinkle",
     [string]$RecorderRoot = "C:\Users\Meta\Videos\Mimir\VerseCaptures",
     [int]$DurationSeconds = 0,
     [int]$MoveFps = 120,
@@ -70,6 +71,7 @@ $manifest = [ordered]@{
     runDir = $runDir
     witnessUrl = $WitnessUrl
     subscribeUrl = $SubscribeUrl
+    wellPublishUrl = $WellPublishUrl
     recorderRoot = $RecorderRoot
     configPath = $ConfigPath
     startedAt = (Get-Date).ToString("o")
@@ -82,7 +84,12 @@ Write-Host "Online Verse daemon run: $runDir"
 
 if (-not $DryRun) {
     Get-CimInstance Win32_Process |
-        Where-Object { $_.CommandLine -match "Mimir.EveSensorReceiver" -and $_.CommandLine -match "--port 8796" } |
+        Where-Object {
+            ($_.CommandLine -match "Mimir.EveSensorReceiver" -and $_.CommandLine -match "--port 8796") -or
+            ($_.CommandLine -match "Mimir.VerseRecorder") -or
+            ($_.CommandLine -match "Mimir.Well") -or
+            ($_.CommandLine -match "Mimir.BufferSmoke" -and $_.CommandLine -match "--poll-ms")
+        } |
         ForEach-Object {
             try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {}
         }
@@ -130,8 +137,16 @@ if (-not $SkipNightwing) {
         scp (Join-Path $repo "tools\nightwing_typed_witness_publisher.py") "${NightwingHost}:/tmp/nightwing_typed_witness_publisher.py" | Out-Null
         $remoteLog = "~/.local/state/gamecult/mimir-online-verse-witness-$runId.log"
         $remotePid = "~/.local/state/gamecult/mimir-online-verse-witness-$runId.pid"
-        $remote = "mkdir -p ~/.local/state/gamecult; pkill -f '/tmp/nightwing_typed_witness_publisher.py.*--track-eyes' || true; nohup python3 /tmp/nightwing_typed_witness_publisher.py --url '$WitnessUrl' --track-eyes --interval 0.10 --eye-devices /dev/video2,/dev/video3 --eye-window-seconds 0.08 --tracking-stride 6 > $remoteLog 2>&1 < /dev/null & sleep 0.2; pgrep -n -f '/tmp/nightwing_typed_witness_publisher.py.*--track-eyes' > $remotePid; cat $remotePid"
-        $nightwingPid = ssh $NightwingHost $remote
+        $remoteScript = @"
+mkdir -p ~/.local/state/gamecult
+pkill -f '/tmp/nightwing_typed_witness_publisher.py.*--track-eyes' || true
+nohup python3 /tmp/nightwing_typed_witness_publisher.py --url '$WitnessUrl' --track-eyes --track-builtin-camera --track-builtin-mic --interval 0.10 --eye-devices /dev/video2,/dev/video3 --eye-window-seconds 0.08 --tracking-stride 6 > $remoteLog 2>&1 < /dev/null &
+sleep 0.5
+pgrep -n -f '/tmp/nightwing_typed_witness_publisher.py.*--track-eyes' > $remotePid
+cat $remotePid
+"@
+        $remoteB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
+        $nightwingPid = ssh $NightwingHost "printf '%s' '$remoteB64' | base64 -d | bash"
         $manifest.processes["nightwingWitnessPid"] = ($nightwingPid | Select-Object -First 1)
         $manifest.processes["nightwingWitnessLog"] = $remoteLog
     }
@@ -154,7 +169,10 @@ if (-not $SkipMoves) {
         "--fps", "$MoveFps",
         "--fft-size", "$MoveFftSize",
         "--onset-cooldown-seconds", "0.065",
-        "--warmup-seconds", "0.25"
+        "--warmup-seconds", "0.25",
+        "--debruijn-polyrhythm",
+        "--harmonic-base", "1.5",
+        "--microtonal-cents", "17"
     )
     foreach ($spec in $Move) {
         $moveArgs += "--move"
@@ -167,17 +185,21 @@ if (-not $SkipMoves) {
 
 if (-not $SkipRuntime) {
     $runtime = Start-LoggedProcess `
-        -Name "mimir-runtime" `
+        -Name "mimir-well" `
         -FilePath "dotnet" `
         -ArgumentList @(
             "run",
             "--project",
-            (Join-Path $repo "src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj"),
+            (Join-Path $repo "src\Mimir.Well\Mimir.Well.csproj"),
             "--",
             "--seconds", $(if ($DurationSeconds -gt 0) { "$DurationSeconds" } else { "31536000" }),
             "--poll-ms", "5",
-            "--sync-reference", "asio-ch2",
-            "--require-samples"
+            "--publish-url", $WellPublishUrl,
+            "--node-id", "starfire",
+            "--publish-ms", "250",
+            "--sync-ms", "250",
+            "--presentation-delay-ms", "2500",
+            "--max-samples-per-source", "4"
         ) `
         -Environment @{
             "MIMIR_RUNTIME_CONFIG" = $ConfigPath

@@ -214,8 +214,9 @@ internal sealed class EveSensorReceiver(EveSensorReceiverOptions options) : IDis
                 return false;
             }
 
-            if (!root.TryGetProperty("sourceId", out var sourceId)
-                || !string.Equals(sourceId.GetString(), options.SourceId, StringComparison.Ordinal))
+            if (!string.Equals(options.ExpectedType, "cultmesh-observation", StringComparison.OrdinalIgnoreCase)
+                && (!root.TryGetProperty("sourceId", out var sourceId)
+                    || !string.Equals(sourceId.GetString(), options.SourceId, StringComparison.Ordinal)))
             {
                 return false;
             }

@@ -239,6 +239,18 @@ class OnlineAnalyzer:
         return best_f0, (float(bands[0]), float(bands[1]), float(bands[2]))
 
 
+DEBRUIJN_2_3 = "00010111"
+
+
+def debruijn_accent(frame_phase: float, move_index: int, args: argparse.Namespace) -> float:
+    if not args.debruijn_polyrhythm:
+        return 1.0
+    lane_rate = args.debruijn_rate + move_index
+    cursor = int(math.floor(frame_phase * max(1, lane_rate))) % len(DEBRUIJN_2_3)
+    bit = 1.0 if DEBRUIJN_2_3[(cursor + move_index) % len(DEBRUIJN_2_3)] == "1" else 0.0
+    return 0.58 + 0.42 * bit
+
+
 def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, object], args: argparse.Namespace) -> tuple[int, int, int]:
     level = float(state["level"])
     beat = float(state["beat_phase"])
@@ -246,10 +258,13 @@ def move_rgb(move: Move, move_index: int, move_count: int, state: dict[str, obje
     base_h, base_s, _ = rgb_to_hsv01(move.base_rgb)
     spectral = state["color_balance"]
     assert isinstance(spectral, tuple)
-    phase = (beat + move_index / max(1, move_count)) % 1.0
-    gesture = 0.52 + 0.48 * (0.5 + 0.5 * math.sin(2.0 * math.pi * phase)) ** 1.7
-    accent = min(1.0, level * gesture + hit * 0.55)
-    hue = (base_h + 0.045 * math.sin(2.0 * math.pi * phase)) % 1.0
+    harmonic = args.harmonic_base ** (move_index / max(1, move_count))
+    micro = 2.0 ** ((move_index - (move_count - 1) * 0.5) * args.microtonal_cents / 1200.0)
+    phase = (beat * harmonic * micro + move_index / max(1, move_count)) % 1.0
+    poly = debruijn_accent(beat, move_index, args)
+    gesture = poly * (0.42 + 0.58 * (0.5 + 0.5 * math.sin(2.0 * math.pi * phase)) ** 2.1)
+    accent = min(1.0, level * gesture + hit * (0.48 + 0.18 * poly))
+    hue = (base_h + args.hue_bend * math.sin(2.0 * math.pi * phase) + math.log2(harmonic * micro) * 0.0833) % 1.0
     sat = min(1.0, max(0.72, base_s) + 0.18 * hit)
     val = min(1.0, accent ** 0.55)
     rr, gg, bb = colorsys.hsv_to_rgb(hue, sat, val)
@@ -296,6 +311,11 @@ def main() -> int:
     parser.add_argument("--tempo-max-bpm", type=float, default=260.0)
     parser.add_argument("--fundamental-min", type=float, default=55.0)
     parser.add_argument("--fundamental-max", type=float, default=880.0)
+    parser.add_argument("--debruijn-polyrhythm", action="store_true")
+    parser.add_argument("--debruijn-rate", type=int, default=3)
+    parser.add_argument("--harmonic-base", type=float, default=1.5)
+    parser.add_argument("--microtonal-cents", type=float, default=17.0)
+    parser.add_argument("--hue-bend", type=float, default=0.075)
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)

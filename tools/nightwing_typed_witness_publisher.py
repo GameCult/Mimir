@@ -13,10 +13,12 @@ import argparse
 import base64
 import datetime as dt
 import glob
+import math
 import os
 import random
 import socket
 import struct
+import subprocess
 import time
 import urllib.parse
 
@@ -213,6 +215,83 @@ def observations(sequence: int) -> list[bytes]:
     return docs
 
 
+def builtin_camera_observations(args: argparse.Namespace, sequence: int) -> list[bytes]:
+    docs: list[bytes] = []
+    for node, index, name in video_devices():
+        lname = name.lower()
+        is_eye = "gspca" in lname or "playstation" in lname or "eye" in lname
+        if is_eye:
+            continue
+        docs.append(sensor_document(
+            observation_id=f"nightwing:{node}:builtin-camera:{sequence}",
+            device_id="nightwing",
+            stream_id=f"nightwing-{node}",
+            kind="mimir.nightwing_builtin_camera_witness.v1",
+            sequence=sequence,
+            values=[1.0, float(index), float(len(name)), float(args.interval)],
+            accuracy=2,
+        ))
+    if not docs:
+        docs.append(sensor_document(
+            observation_id=f"nightwing:builtin-camera:missing:{sequence}",
+            device_id="nightwing",
+            stream_id="nightwing-builtin-camera",
+            kind="mimir.nightwing_builtin_camera_witness.v1",
+            sequence=sequence,
+            values=[0.0],
+            accuracy=0,
+        ))
+    return docs
+
+
+def builtin_mic_observation(args: argparse.Namespace, sequence: int) -> bytes:
+    values = [0.0, 0.0, 0.0, float(args.mic_sample_rate)]
+    accuracy = 0
+    try:
+        result = subprocess.run(
+            [
+                "timeout",
+                str(max(0.05, args.mic_window_seconds)),
+                "arecord",
+                "-D",
+                args.mic_device,
+                "-f",
+                "S16_LE",
+                "-r",
+                str(args.mic_sample_rate),
+                "-c",
+                "1",
+                "-t",
+                "raw",
+                "-q",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=max(0.2, args.mic_window_seconds + 0.2),
+        )
+        data = result.stdout
+        count = len(data) // 2
+        if count > 0:
+            samples = struct.unpack("<" + "h" * count, data[:count * 2])
+            rms = math.sqrt(sum(float(sample) * float(sample) for sample in samples) / count) / 32768.0
+            peak = max(abs(sample) for sample in samples) / 32768.0
+            values = [1.0, rms, peak, float(args.mic_sample_rate), float(count)]
+            accuracy = 2 if rms > 0.0 else 1
+    except Exception:
+        values = [0.0, 0.0, 0.0, float(args.mic_sample_rate)]
+        accuracy = 0
+    return sensor_document(
+        observation_id=f"nightwing:builtin-mic:{sequence}",
+        device_id="nightwing",
+        stream_id="nightwing-builtin-mic",
+        kind="mimir.nightwing_builtin_mic_witness.v1",
+        sequence=sequence,
+        values=values,
+        accuracy=accuracy,
+    )
+
+
 def eye_tracking_observations(args: argparse.Namespace, sequence: int) -> list[bytes]:
     if nw_eye_cap is None or nw_move_hint is None:
         return []
@@ -297,6 +376,11 @@ def run(args: argparse.Namespace) -> None:
             while True:
                 for payload in observations(sequence):
                     ws.send_binary(payload)
+                if args.track_builtin_camera:
+                    for payload in builtin_camera_observations(args, sequence):
+                        ws.send_binary(payload)
+                if args.track_builtin_mic:
+                    ws.send_binary(builtin_mic_observation(args, sequence))
                 if args.track_eyes:
                     for payload in eye_tracking_observations(args, sequence):
                         ws.send_binary(payload)
@@ -318,6 +402,8 @@ def main() -> int:
     parser.add_argument("--reconnect-seconds", type=float, default=2.0)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--track-eyes", action="store_true", help="Publish compact Nightwing-local PS3 Eye Move-sphere observations.")
+    parser.add_argument("--track-builtin-camera", action="store_true", help="Publish compact status for Nightwing-local non-Eye camera devices.")
+    parser.add_argument("--track-builtin-mic", action="store_true", help="Publish compact ALSA microphone level observations.")
     parser.add_argument("--eye-devices", default="/dev/video2,/dev/video3")
     parser.add_argument("--eye-width", type=int, default=320)
     parser.add_argument("--eye-height", type=int, default=240)
@@ -325,6 +411,9 @@ def main() -> int:
     parser.add_argument("--eye-window-seconds", type=float, default=0.12)
     parser.add_argument("--tracking-stride", type=int, default=6)
     parser.add_argument("--min-confidence", type=float, default=0.25)
+    parser.add_argument("--mic-device", default="default")
+    parser.add_argument("--mic-sample-rate", type=int, default=16000)
+    parser.add_argument("--mic-window-seconds", type=float, default=0.08)
     args = parser.parse_args()
     run(args)
     return 0

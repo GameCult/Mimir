@@ -195,18 +195,23 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Native program-output recording/streaming should replace those actuators
   behind the same owner.
 - OBS receives final program surfaces; it does not own synchronization.
-- The first online Verse capture daemon pair exists. `Mimir.EveSensorReceiver`
-  now has a subscriber WebSocket path beside its observation ingest path, and
-  `Mimir.VerseRecorder` writes subscribed observations to
+- The online Well stack exists. `Mimir.EveSensorReceiver` has a subscriber
+  WebSocket path beside its observation ingest path, and `Mimir.VerseRecorder`
+  writes subscribed observations to
   `C:\Users\Meta\Videos\Mimir\VerseCaptures\<session>\session.json` plus
-  `observations.jsonl`. `scripts/start-online-verse-daemons.ps1` supervises
-  the local relay, recorder, Nightwing typed Eyes/Move witness, the
-  music-synced Move gesture worker, and a Starfire `Mimir.BufferSmoke`
-  runtime capture host for the MVP Leap/Eyes/Kiyo config. Treat this as the
-  typed observation/witness ledger. The next coherent cut is a
-  `MimirSynchronizationHub` publisher that emits aligned source windows, stem
-  descriptors, sync states, and actuator state into the same Verse surface
-  instead of leaving raw media/stem truth in local process memory only.
+  `observations.jsonl`. `Mimir.Well` loads
+  `config/mimir-runtime.well.local.json`, starts every configured source it
+  can, polls `MimirSynchronizationHub` with a bounded per-source budget, updates
+  audio sync/probe state, and publishes `mimir.well_snapshot.v1` records with
+  source buffers, composite controls, publication/stem contract, and sync
+  status. `scripts/start-online-verse-daemons.ps1` supervises the relay,
+  recorder, Nightwing typed Eyes/Move/builtin-camera/builtin-mic witness, the
+  music-synced de-Bruijn/microtonal Move gesture worker, and `Mimir.Well`.
+  Current live proof `online-verse-daemons-20260601-212502` wrote Well,
+  Nightwing builtin camera/mic, and Eye/Move records. Raven and Eve lanes are
+  configured but empty unless their producers are feeding the ports. Sync frame
+  status is degraded until a camera-clock/global-time correction owner maps
+  ASIO device time and camera driver time into one canonical timeline.
 
 ## Current Pressure
 

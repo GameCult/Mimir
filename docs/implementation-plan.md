@@ -575,14 +575,22 @@ a named invariant that the native runtime cannot protect yet.
   serves a WebSocket subscriber lane on `/eve/periwinkle/subscribe`.
   `Mimir.VerseRecorder` subscribes to that lane and writes a timestamped
   `session.json` plus `observations.jsonl` under
-  `C:\Users\Meta\Videos\Mimir\VerseCaptures` by default. The online supervisor
+  `C:\Users\Meta\Videos\Mimir\VerseCaptures` by default. `Mimir.Well` is the
+  long-running Starfire ingest/publish daemon: it loads
+  `config/mimir-runtime.well.local.json`, creates every configured source it
+  can, polls the `MimirSynchronizationHub` with a bounded daemon cadence,
+  updates audio sync/probe state, and publishes `mimir.well_snapshot.v1`
+  records with source buffers, composite controls, publication/stem contract,
+  and synchronized-frame status. The online supervisor
   `scripts/start-online-verse-daemons.ps1` starts the relay, recorder,
-  Nightwing Eyes/Move witness, music-synced Move gesture worker, and a local
-  Starfire `Mimir.BufferSmoke` runtime capture worker from
-  `config/mimir-runtime.mvp-leap-eyes-kiyo.local.json`. This cut records typed
-  observation evidence and keeps local rolling capture alive; raw camera/audio
-  payloads, aligned source windows, and stem descriptors still need a runtime
-  publisher bridge from `MimirSynchronizationHub` into the same Verse surface.
+  Nightwing Eyes/Move/builtin-camera/builtin-mic witness, music-synced
+  de-Bruijn/microtonal Move gesture worker, and `Mimir.Well` from the broad
+  Well profile. This cut records typed observation evidence and Well state;
+  raw camera/audio payload publication into CultMesh remains a future heavy
+  media surface. The current live scar is explicit: ASIO device timestamps and
+  camera driver timestamps are different domains, so `Mimir.Well` publishes
+  degraded sync status until a camera-clock/global-time correction owner maps
+  those domains.
   Eve now follows the same rule for its own device body:
   `MimirDistributedWitnessConfigurations.EveLocalSensors` and the
   `eve-local-sensors` Perfect Machine profile make Eve responsible for local
