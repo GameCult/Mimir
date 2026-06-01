@@ -113,6 +113,19 @@ if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-realtk-live
         ParseIntOption(args, "--channels", 4));
 }
 
+if (args.Any(arg => string.Equals(arg, "--bioacoustic-realtk-scheduled-calibration-live", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunBioacousticRealtekScheduledCalibrationLive(
+        ParseStringOption(args, "--wasapi", "src/Mimir.WasapiLoopback/bin/Debug/net10.0-windows/Mimir.WasapiLoopback.exe"),
+        ParseStringOption(args, "--probe", "native/probes/asio_audio_cadence/build/Release/asio_audio_cadence.exe"),
+        ParseStringOption(args, "--output", "artifacts/wasapi/realtk-scheduled-calibration-live"),
+        ParseStringOption(args, "--device", "Realtek"),
+        ParseIntOption(args, "--sample-rate", 48_000),
+        ParseDoubleOption(args, "--gain", 1.15),
+        ParseIntOption(args, "--channels", 4),
+        ParseIntOption(args, "--steps", 6));
+}
+
 if (args.Any(arg => string.Equals(arg, "--synchronized-buffer-planner-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunSynchronizedBufferPlannerSmoke();
@@ -3691,6 +3704,106 @@ static int RunTargetedBioacousticProbeRealtekLive(
     return 0;
 }
 
+static int RunBioacousticRealtekScheduledCalibrationLive(
+    string wasapiPath,
+    string probePath,
+    string outputDirectory,
+    string device,
+    int sampleRate,
+    double gain,
+    int channels,
+    int steps)
+{
+    steps = Math.Clamp(steps, 1, 16);
+    var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+    var runDirectory = Path.Combine(outputDirectory, stamp);
+    Directory.CreateDirectory(runDirectory);
+    var csvPath = Path.Combine(runDirectory, "scheduled-response-bands.csv");
+    var planPath = Path.Combine(runDirectory, "balance-plan.md");
+    var residuals = ScarlettProfessionalMicProbeResiduals();
+    var pathologies = ScarlettProfessionalMicPathologies();
+    var sourceIds = new[] { "asio-ch0-shotgun", "asio-ch1-cardioid" };
+    var scheduler = new MimirBioacousticProbeScheduler(new MimirBioacousticProbeSchedulerOptions(
+        SampleRate: sampleRate,
+        TargetSyncConfidence: 0.86,
+        TargetFrequencyResponseConfidence: 0.78,
+        MinimumIntervalSeconds: 0.0,
+        MaximumIntervalSeconds: 0.0,
+        MaxProbeBands: 4));
+    var allScores = new List<ScheduledProbeBandScore>();
+    var syncConfidence = 0.62;
+    var timestampNs = 1_000_000_000L;
+    Console.WriteLine(
+        $"bioacoustic-realtk-scheduled-calibration-start dir={runDirectory} device=\"{device}\" sampleRate={sampleRate} gain={gain:0.000} steps={steps}");
+
+    for (var step = 0; step < steps; step++)
+    {
+        var states = sourceIds
+            .Select((sourceId, index) => NewSyncState(sourceId, index == 0 ? 14.0 : -9.0, Math.Clamp(syncConfidence - index * 0.05, 0.0, 1.0)))
+            .ToArray();
+        var frame = scheduler.Update(states, residuals, timestampNs, sourceIds, pathologies);
+        if (!frame.ShouldEmit || frame.ProbePlan.Bands.Count == 0)
+        {
+            Console.WriteLine(
+                $"bioacoustic-realtk-scheduled-calibration-step step={step} emit=false reason={frame.Reason} sync={frame.AggregateSyncConfidence:0.000} freq={frame.AggregateFrequencyResponseConfidence:0.000}");
+            timestampNs += 1_000_000_000L;
+            continue;
+        }
+
+        var stepDirectory = Path.Combine(runDirectory, $"step-{step:00}");
+        Directory.CreateDirectory(stepDirectory);
+        var renderPath = Path.Combine(stepDirectory, "probe-f32.raw");
+        var capturePath = Path.Combine(stepDirectory, "scarlett-capture-f32.raw");
+        var samples = RenderTargetedProbePlan(frame.ProbePlan);
+        WriteFloat32(renderPath, samples);
+        var captureSeconds = samples.Length / (double)sampleRate + 0.65;
+        var capture = StartAsioCaptureOnly(probePath, capturePath, sampleRate, captureSeconds);
+        if (capture == null)
+        {
+            return 1;
+        }
+
+        using (capture)
+        {
+            Thread.Sleep(220);
+            var renderExit = RunWasapiRender(wasapiPath, renderPath, device, sampleRate, gain);
+            capture.WaitForExit();
+            if (renderExit != 0)
+            {
+                Console.Error.WriteLine($"Scheduled Realtek calibration failed: WASAPI renderer exited {renderExit}");
+                return renderExit;
+            }
+
+            if (capture.ExitCode != 0)
+            {
+                Console.Error.WriteLine($"Scheduled Realtek calibration failed: ASIO capture exited {capture.ExitCode}");
+                return capture.ExitCode;
+            }
+        }
+
+        var channelSamples = ReadInterleavedFloat32(capturePath, channels, out var frameCount);
+        if (frameCount == 0)
+        {
+            Console.Error.WriteLine($"Scheduled Realtek calibration failed: no frames in {capturePath}");
+            return 1;
+        }
+
+        var stepScores = ScoreScheduledProbeCapture(step, frame.ProbePlan, channelSamples, sampleRate);
+        allScores.AddRange(stepScores);
+        residuals = UpdateResidualsFromScheduledScores(residuals, stepScores);
+        syncConfidence = Math.Min(0.93, syncConfidence + 0.035);
+        Console.WriteLine(
+            $"bioacoustic-realtk-scheduled-calibration-step step={step} emit=true reason={frame.Reason} sync={frame.AggregateSyncConfidence:0.000} freq={frame.AggregateFrequencyResponseConfidence:0.000} " +
+            $"bands={frame.ProbePlan.Bands.Count} capture={capturePath} best={string.Join(",", stepScores.OrderByDescending(static score => score.Confidence).Take(4).Select(static score => $"{score.SourceId}:{score.CenterHz:0}Hz/{score.Confidence:0.00}/{score.SnrDb:0.0}dB"))}");
+        timestampNs += 1_000_000_000L;
+    }
+
+    WriteScheduledProbeCsv(csvPath, allScores);
+    WriteScheduledBalancePlan(planPath, allScores, gain, sampleRate);
+    Console.WriteLine($"bioacoustic-realtk-scheduled-calibration-artifacts csv={csvPath} plan={planPath} scores={allScores.Count}");
+    return 0;
+}
+
 static int RunSynchronizedBufferPlannerSmoke()
 {
     const long t0 = 1_000_000_000;
@@ -3994,6 +4107,151 @@ static MimirAudioCalibrationSourcePathology[] ScarlettProfessionalMicPathologies
         NoiseFloorRms: 0.018,
         LowHighTiltDb: 4.0),
 ];
+
+static ScheduledProbeBandScore[] ScoreScheduledProbeCapture(
+    int step,
+    MimirTargetedBioacousticProbePlan plan,
+    IReadOnlyList<float[]> channelSamples,
+    int sampleRate)
+{
+    var scores = new List<ScheduledProbeBandScore>();
+    for (var channel = 0; channel < Math.Min(2, channelSamples.Count); channel++)
+    {
+        var sourceId = channel == 0 ? "asio-ch0-shotgun" : "asio-ch1-cardioid";
+        foreach (var band in plan.Bands)
+        {
+            var (energy, floor) = SlidingToneEnergyStats(channelSamples[channel], sampleRate, band.CenterHz);
+            var snrDb = 20.0 * Math.Log10(Math.Max(1.0e-12, energy) / floor);
+            var confidence = Math.Clamp((snrDb - 6.0) / 30.0, 0.0, 1.0);
+            scores.Add(new ScheduledProbeBandScore(
+                step,
+                sourceId,
+                channel,
+                band.CenterHz,
+                band.Reason,
+                energy,
+                floor,
+                snrDb,
+                confidence));
+        }
+    }
+
+    return scores.ToArray();
+}
+
+static (double PeakEnergy, double FloorEnergy) SlidingToneEnergyStats(
+    IReadOnlyList<float> samples,
+    int sampleRate,
+    double centerHz)
+{
+    if (samples.Count == 0)
+    {
+        return (0.0, 1.0e-9);
+    }
+
+    var sampleArray = samples is float[] array ? array : samples.ToArray();
+    var windowSamples = Math.Clamp((int)Math.Round(sampleRate * 0.070), 256, Math.Max(256, sampleArray.Length));
+    var hopSamples = Math.Max(64, windowSamples / 4);
+    var energies = new List<double>();
+    for (var start = 0; start + windowSamples <= sampleArray.Length; start += hopSamples)
+    {
+        energies.Add(ToneEnergy(sampleArray.AsSpan(start, windowSamples), sampleRate, centerHz));
+    }
+
+    if (energies.Count == 0)
+    {
+        var energy = ToneEnergy(sampleArray, sampleRate, centerHz);
+        return (energy, Math.Max(1.0e-9, energy * 0.10));
+    }
+
+    energies.Sort();
+    var floorIndex = Math.Clamp((int)Math.Round((energies.Count - 1) * 0.35), 0, energies.Count - 1);
+    var floor = Math.Max(1.0e-9, energies[floorIndex]);
+    var peak = energies[^1];
+    return (peak, floor);
+}
+
+static MimirAudioCalibrationBandResidual[] UpdateResidualsFromScheduledScores(
+    IReadOnlyList<MimirAudioCalibrationBandResidual> residuals,
+    IReadOnlyList<ScheduledProbeBandScore> scores)
+{
+    return residuals
+        .Select(residual =>
+        {
+            var best = scores
+                .Where(score => string.Equals(score.SourceId, residual.SourceId, StringComparison.Ordinal))
+                .OrderBy(score => Math.Abs(Math.Log(Math.Max(1.0, residual.CenterHz) / Math.Max(1.0, score.CenterHz))))
+                .FirstOrDefault();
+            if (best == null)
+            {
+                return residual;
+            }
+
+            var distance = Math.Abs(Math.Log(Math.Max(1.0, residual.CenterHz) / Math.Max(1.0, best.CenterHz)));
+            var influence = Math.Clamp(1.0 - distance / 0.14, 0.0, 1.0);
+            if (influence <= 0.0)
+            {
+                return residual;
+            }
+
+            var earned = best.Confidence * influence;
+            return residual with
+            {
+                Confidence = Math.Clamp(Math.Max(residual.Confidence, earned), 0.0, 0.97),
+                ResidualDb = residual.ResidualDb * (1.0 - 0.45 * earned),
+                DelayResidualMicroseconds = residual.DelayResidualMicroseconds * (1.0 - 0.30 * earned),
+                PhaseResidualRadians = residual.PhaseResidualRadians * (1.0 - 0.30 * earned),
+                ResponseEnergy = Math.Clamp(Math.Max(residual.ResponseEnergy, best.Energy * 16.0), 0.0, 1.0),
+            };
+        })
+        .ToArray();
+}
+
+static void WriteScheduledProbeCsv(string csvPath, IReadOnlyList<ScheduledProbeBandScore> scores)
+{
+    using var writer = new StreamWriter(csvPath);
+    writer.WriteLine("step,sourceId,channel,centerHz,reason,peakEnergy,floorEnergy,snrDb,confidence");
+    foreach (var score in scores)
+    {
+        writer.WriteLine(string.Join(",",
+            score.Step.ToString(CultureInfo.InvariantCulture),
+            score.SourceId,
+            score.Channel.ToString(CultureInfo.InvariantCulture),
+            score.CenterHz.ToString("0.###", CultureInfo.InvariantCulture),
+            score.Reason,
+            score.Energy.ToString("0.000000000", CultureInfo.InvariantCulture),
+            score.FloorEnergy.ToString("0.000000000", CultureInfo.InvariantCulture),
+            score.SnrDb.ToString("0.###", CultureInfo.InvariantCulture),
+            score.Confidence.ToString("0.###", CultureInfo.InvariantCulture)));
+    }
+}
+
+static void WriteScheduledBalancePlan(
+    string planPath,
+    IReadOnlyList<ScheduledProbeBandScore> scores,
+    double gain,
+    int sampleRate)
+{
+    using var writer = new StreamWriter(planPath);
+    writer.WriteLine("# Scheduled Realtek Bioacoustic Calibration Plan");
+    writer.WriteLine();
+    writer.WriteLine($"- sampleRate: `{sampleRate}`");
+    writer.WriteLine($"- realtekGain: `{gain:0.###}`");
+    writer.WriteLine("- authority: scheduler-selected probes, not blind sweep");
+    writer.WriteLine();
+    foreach (var group in scores.GroupBy(static score => score.SourceId).OrderBy(static group => group.Key, StringComparer.Ordinal))
+    {
+        var best = group.OrderByDescending(static score => score.Confidence).Take(6).ToArray();
+        var weak = group.OrderBy(static score => score.Confidence).Take(6).ToArray();
+        writer.WriteLine($"## {group.Key}");
+        writer.WriteLine();
+        writer.WriteLine($"- averageConfidence: `{group.Average(static score => score.Confidence):0.000}`");
+        writer.WriteLine($"- bestBands: `{string.Join(", ", best.Select(static score => $"{score.CenterHz:0}Hz c={score.Confidence:0.00} snr={score.SnrDb:0.0}dB"))}`");
+        writer.WriteLine($"- weakBands: `{string.Join(", ", weak.Select(static score => $"{score.CenterHz:0}Hz c={score.Confidence:0.00}"))}`");
+        writer.WriteLine("- balanceMove: boost only measured usable bands; gate or downweight weak bands instead of amplifying noise.");
+        writer.WriteLine();
+    }
+}
 
 static MimirAudioCalibrationBandResidual[] ImproveResidualsFromProbe(
     IReadOnlyList<MimirAudioCalibrationBandResidual> residuals,
@@ -8759,6 +9017,17 @@ internal sealed class DisposableConfiguration : IDisposable
 }
 
 internal readonly record struct ChannelSignalStats(double Rms, double Peak, double Mean);
+
+internal sealed record ScheduledProbeBandScore(
+    int Step,
+    string SourceId,
+    int Channel,
+    double CenterHz,
+    MimirBioacousticProbeReason Reason,
+    double Energy,
+    double FloorEnergy,
+    double SnrDb,
+    double Confidence);
 
 internal sealed record CepstralDegradationSetting(
     string Name,

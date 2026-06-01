@@ -151,6 +151,15 @@ a named invariant that the native runtime cannot protect yet.
   The targeted probe planner defaults to a 12 kHz ceiling and low/mid-band bias
   because the current Realtek/speaker/Scarlett-mic path does not provide useful
   high-band calibration evidence.
+- `Mimir.BufferSmoke --bioacoustic-realtk-scheduled-calibration-live` is the
+  scheduler-owned live-I/O calibration receipt: the scheduler chooses each
+  probe step from seeded Scarlett residuals, Realtek emits it, Scarlett captures
+  it, residuals update, and the run writes a per-band CSV plus balance plan
+  instead of mowing the whole spectrum blindly. The remaining production cut is
+  feeding measured runtime confidence state into the same scheduler/emitter path.
+  Scheduler confidence/status uses the same 120 Hz-12 kHz measurable window as
+  the targeted planner, so dead ultrasonic-ish residuals cannot keep cadence
+  pinned to questions this room path cannot answer.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
   empty declared sensor buffer should fail the run. Use `--bioacoustic-self-test`

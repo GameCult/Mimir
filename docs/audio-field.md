@@ -116,6 +116,22 @@ in low/mid evidence: shotgun peak `0.407887`, cardioid peak `0.074494`, 18.6 kHz
 confidence near zero, and the best reported band was cardioid 3.6 kHz at
 confidence `0.098`. Treat high-band probes as poor questions for this route
 until a better speaker/mic/path proves otherwise.
+The live exploration path is scheduler-driven, not a blind sweep:
+`Mimir.BufferSmoke --bioacoustic-realtk-scheduled-calibration-live` repeatedly
+asks `MimirBioacousticProbeScheduler` for the next probe plan, emits that plan
+through Realtek, captures Scarlett, updates residuals, and asks again. This is
+a live physical I/O diagnostic harness seeded from the current Scarlett residual
+model; the production runtime still needs to feed measured confidence state into
+the same scheduler/emitter path. The 2026-06-01 receipt at
+`artifacts/wasapi/realtk-scheduled-calibration-live/20260601-035354` ran four
+scheduled probe steps at gain `1.15` and wrote `scheduled-response-bands.csv`
+plus `balance-plan.md`. Local peak-versus-percentile-floor scoring found strong
+usable response near `910 Hz`, `3.6 kHz`, and `9.84-9.87 kHz` on both Scarlett
+mics.
+The scheduler and planner share the same measurable frequency boundary
+(`120 Hz` through `12 kHz` by default). Residuals above that window may remain
+diagnostic scars, but they no longer own live probe cadence or the weakest-band
+status when the current room path cannot answer them.
 The receiver must consume persisted models to weight reliable symbols,
 downweight dead bands, apply phase-coherence weighting, apply first-order
 group-delay correction, and search joint global delay/frequency-shift hypotheses

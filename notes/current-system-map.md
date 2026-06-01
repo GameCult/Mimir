@@ -350,6 +350,20 @@ is still a bad physical question for this room/speaker path. The default
 targeted probe planner now caps selection at 12 kHz and biases measurable
 low/mid bands instead of favoring ultrasonic-ish uncertainty that ordinary
 speakers and mics cannot answer well.
+The calibration runner is now closed-loop instead of a blind full-spectrum
+sweep: `--bioacoustic-realtk-scheduled-calibration-live` asks the scheduler for
+each probe, emits through Realtek, captures Scarlett, updates residuals, and
+then asks the scheduler again. It is a live physical I/O diagnostic harness
+seeded from the current Scarlett residual model; production still needs measured
+runtime confidence state wired into the same scheduler/emitter path. The
+2026-06-01 receipt at
+`artifacts/wasapi/realtk-scheduled-calibration-live/20260601-035354` ran four
+scheduled steps at gain 1.15 and wrote `scheduled-response-bands.csv` plus
+`balance-plan.md`. Local peak-vs-percentile-floor scoring found strong usable
+response near 910 Hz, 3.6 kHz, and 9.84-9.87 kHz on both Scarlett mics.
+The scheduler now filters confidence/status to the same 120 Hz-12 kHz
+schedulable window as the targeted planner, so old 18.5 kHz residual scars can
+remain recorded without owning live cadence or weakest-band status.
 The first live run preserves two artifacts:
 `artifacts/asio/targeted-bioacoustic-live/20260601-030836` at playback gain
 1.0 and `artifacts/asio/targeted-bioacoustic-live/20260601-030857` at gain

@@ -16,7 +16,9 @@ public sealed record MimirBioacousticProbeSchedulerOptions(
     double RecheckFrequencyResponseConfidence = 0.94,
     double MinimumIntervalSeconds = 0.65,
     double MaximumIntervalSeconds = 8.0,
-    int MaxProbeBands = 6);
+    int MaxProbeBands = 6,
+    double MinFrequencyHz = 120.0,
+    double MaxFrequencyHz = 12_000.0);
 
 public sealed record MimirBioacousticProbeConfidenceState(
     string SourceId,
@@ -52,6 +54,8 @@ public sealed class MimirBioacousticProbeScheduler(
     private readonly MimirTargetedBioacousticProbePlanner planner = planner ?? new(new MimirTargetedBioacousticProbeOptions(
         SampleRate: options?.SampleRate ?? 192_000,
         MaxProbeBands: options?.MaxProbeBands ?? 6,
+        MinFrequencyHz: options?.MinFrequencyHz ?? 120.0,
+        MaxFrequencyHz: options?.MaxFrequencyHz ?? 12_000.0,
         TargetConfidence: options?.TargetFrequencyResponseConfidence ?? 0.82));
     private readonly Dictionary<string, int> probeCounts = new(StringComparer.Ordinal);
     private long lastProbeAtNs = long.MinValue;
@@ -70,7 +74,10 @@ public sealed class MimirBioacousticProbeScheduler(
         var syncBySource = synchronizationStates
             .GroupBy(state => state.SourceId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => Math.Clamp(group.Max(state => state.Confidence), 0.0, 1.0), StringComparer.Ordinal);
-        var residualsBySource = residuals
+        var schedulableResiduals = residuals
+            .Where(IsSchedulableResidual)
+            .ToArray();
+        var residualsBySource = schedulableResiduals
             .GroupBy(residual => residual.SourceId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var syncConfidence = AverageOrZero(sourceIds.Select(sourceId => syncBySource.TryGetValue(sourceId, out var confidence) ? confidence : 0.0));
@@ -89,7 +96,7 @@ public sealed class MimirBioacousticProbeScheduler(
         var reason = ChooseReason(syncConfidence, frequencyConfidence, pressure, secondsUntilEligible);
         var shouldEmit = reason != MimirBioacousticProbeScheduleReason.None && secondsUntilEligible <= 0.0;
         var plan = shouldEmit
-            ? planner.Plan(residuals, sourceIds, sourcePathologies)
+            ? planner.Plan(schedulableResiduals, sourceIds, sourcePathologies)
             : EmptyPlan(sourceIds);
         if (shouldEmit && plan.Bands.Count > 0)
         {
@@ -213,6 +220,10 @@ public sealed class MimirBioacousticProbeScheduler(
             [],
             0.0,
             "No active probe is scheduled for this frame.");
+
+    private bool IsSchedulableResidual(MimirAudioCalibrationBandResidual residual) =>
+        residual.CenterHz >= options.MinFrequencyHz &&
+        residual.CenterHz <= Math.Min(options.MaxFrequencyHz, options.SampleRate * 0.45);
 
     private double FrequencyResponseConfidence(IReadOnlyList<MimirAudioCalibrationBandResidual> residuals) =>
         AverageOrZero(residuals.Select(BandConfidence));
