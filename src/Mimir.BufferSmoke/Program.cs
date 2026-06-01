@@ -85,6 +85,11 @@ if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-smoke", Str
     return RunTargetedBioacousticProbeSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--bioacoustic-probe-scheduler-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunBioacousticProbeSchedulerSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-live", StringComparison.OrdinalIgnoreCase)))
 {
     return RunTargetedBioacousticProbeLive(
@@ -3432,6 +3437,74 @@ static int RunTargetedBioacousticProbeSmoke()
             : 1;
 }
 
+static int RunBioacousticProbeSchedulerSmoke()
+{
+    var scheduler = new MimirBioacousticProbeScheduler(new MimirBioacousticProbeSchedulerOptions(
+        TargetSyncConfidence: 0.88,
+        TargetFrequencyResponseConfidence: 0.82,
+        MinimumIntervalSeconds: 0.25,
+        MaximumIntervalSeconds: 1.25,
+        MaxProbeBands: 4));
+    var residuals = ScarlettProfessionalMicProbeResiduals();
+    var pathologies = ScarlettProfessionalMicPathologies();
+    var sources = new[] { "asio-ch0-shotgun", "asio-ch1-cardioid" };
+    var timestampNs = 10_000_000_000L;
+    var syncConfidence = 0.38;
+    var emitted = 0;
+    MimirScheduledBioacousticProbeFrame? firstEmission = null;
+    MimirScheduledBioacousticProbeFrame? previous = null;
+    for (var step = 0; step < 12; step++)
+    {
+        var states = sources
+            .Select((sourceId, index) => NewSyncState(
+                sourceId,
+                index == 0 ? 42.0 - step * 1.5 : -25.0 + step,
+                Math.Clamp(syncConfidence - index * 0.04, 0.0, 1.0)))
+            .ToArray();
+        var frame = scheduler.Update(states, residuals, timestampNs, sources, pathologies);
+        Console.WriteLine(
+            $"bioacoustic-probe-scheduler-step step={step} emit={frame.ShouldEmit} reason={frame.Reason} " +
+            $"sync={frame.AggregateSyncConfidence:0.000} freq={frame.AggregateFrequencyResponseConfidence:0.000} combined={frame.AggregateConfidence:0.000} " +
+            $"dSync={frame.SyncConfidenceDelta:0.000} dFreq={frame.FrequencyResponseConfidenceDelta:0.000} interval={frame.ScheduledIntervalSeconds:0.000} " +
+            $"bands={frame.ProbePlan.Bands.Count} probes={string.Join(",", frame.Sources.Select(source => $"{source.SourceId}:{source.ProbeCount}/{source.WeakBandCount}@{source.LowestConfidenceBandHz:0}Hz"))}");
+
+        if (frame.ShouldEmit)
+        {
+            emitted++;
+            firstEmission ??= frame;
+            residuals = ImproveResidualsFromProbe(residuals, frame.ProbePlan);
+            syncConfidence = Math.Min(0.94, syncConfidence + 0.13);
+        }
+        else
+        {
+            syncConfidence = Math.Min(0.94, syncConfidence + 0.025);
+        }
+
+        previous = frame;
+        timestampNs += 375_000_000L;
+    }
+
+    if (firstEmission == null || previous == null)
+    {
+        Console.Error.WriteLine("bioacoustic probe scheduler failed: no frames emitted");
+        return 1;
+    }
+
+    Console.WriteLine(
+        $"bioacoustic-probe-scheduler-smoke emitted={emitted} firstReason={firstEmission.Reason} " +
+        $"startSync={firstEmission.AggregateSyncConfidence:0.000} endSync={previous.AggregateSyncConfidence:0.000} " +
+        $"startFreq={firstEmission.AggregateFrequencyResponseConfidence:0.000} endFreq={previous.AggregateFrequencyResponseConfidence:0.000} " +
+        $"lastPlanBands={previous.ProbePlan.Bands.Count} sourceProbes={string.Join(",", previous.Sources.Select(source => $"{source.SourceId}:{source.ProbeCount}"))}");
+
+    return emitted >= 3 &&
+        firstEmission.ProbePlan.Bands.Count > 0 &&
+        previous.AggregateSyncConfidence > firstEmission.AggregateSyncConfidence + 0.25 &&
+        previous.AggregateFrequencyResponseConfidence > firstEmission.AggregateFrequencyResponseConfidence + 0.10 &&
+        previous.Sources.All(source => source.ProbeCount == emitted)
+            ? 0
+            : 1;
+}
+
 static int RunTargetedBioacousticProbeLive(
     string probePath,
     string outputDirectory,
@@ -3817,6 +3890,40 @@ static MimirAudioCalibrationSourcePathology[] ScarlettProfessionalMicPathologies
         NoiseFloorRms: 0.018,
         LowHighTiltDb: 4.0),
 ];
+
+static MimirAudioCalibrationBandResidual[] ImproveResidualsFromProbe(
+    IReadOnlyList<MimirAudioCalibrationBandResidual> residuals,
+    MimirTargetedBioacousticProbePlan plan)
+{
+    return residuals
+        .Select(residual =>
+        {
+            var nearest = plan.Bands
+                .OrderBy(band => Math.Abs(Math.Log(Math.Max(1.0, residual.CenterHz) / Math.Max(1.0, band.CenterHz))))
+                .FirstOrDefault();
+            if (nearest == null)
+            {
+                return residual;
+            }
+
+            var distance = Math.Abs(Math.Log(Math.Max(1.0, residual.CenterHz) / Math.Max(1.0, nearest.CenterHz)));
+            var influence = Math.Clamp(1.0 - distance / 0.16, 0.0, 1.0);
+            if (influence <= 0.0)
+            {
+                return residual;
+            }
+
+            return residual with
+            {
+                Confidence = Math.Clamp(residual.Confidence + 0.20 * influence, 0.0, 0.96),
+                ResidualDb = residual.ResidualDb * (1.0 - 0.38 * influence),
+                DelayResidualMicroseconds = residual.DelayResidualMicroseconds * (1.0 - 0.34 * influence),
+                PhaseResidualRadians = residual.PhaseResidualRadians * (1.0 - 0.35 * influence),
+                ResponseEnergy = Math.Clamp(residual.ResponseEnergy + 0.10 * influence, 0.0, 1.0),
+            };
+        })
+        .ToArray();
+}
 
 static float[] RenderTargetedProbePlan(MimirTargetedBioacousticProbePlan plan)
 {

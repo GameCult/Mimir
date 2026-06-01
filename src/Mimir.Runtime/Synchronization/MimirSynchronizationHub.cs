@@ -6,6 +6,7 @@ public sealed class MimirSynchronizationHub : IDisposable
     private readonly MimirAudioSynchronizationAnalyzer audioSynchronization = new();
     private readonly MimirComplexContourRuntimeAnalyzer? complexContourSynchronization;
     private readonly MimirAudioSynchronizationStateTracker audioSynchronizationState = new();
+    private readonly MimirBioacousticProbeScheduler bioacousticProbeScheduler = new();
     private readonly Dictionary<string, MimirAudioSynchronizationReport> audioSynchronizationReports = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MimirAudioSynchronizationReport> complexContourReports = new(StringComparer.Ordinal);
     private readonly MimirChirpBinCalibrationModel? chirpBinCalibrationModel;
@@ -56,6 +57,8 @@ public sealed class MimirSynchronizationHub : IDisposable
         chirpBinCalibrationModel?.EmissionPlan;
 
     public bool ComplexContourRuntimeEnabled => complexContourSynchronization != null;
+
+    public MimirScheduledBioacousticProbeFrame? LastBioacousticProbeSchedule { get; private set; }
 
     public MimirSynchronizedBufferFrame BuildSynchronizedBufferFrame(TimeSpan? presentationDelay = null)
     {
@@ -218,6 +221,22 @@ public sealed class MimirSynchronizationHub : IDisposable
         return reports;
     }
 
+    public MimirScheduledBioacousticProbeFrame UpdateBioacousticProbeSchedule(
+        long timestampNs,
+        IReadOnlyList<string>? preferredSourceIds = null,
+        IReadOnlyList<MimirAudioCalibrationSourcePathology>? sourcePathologies = null)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var residuals = BuildProbeResiduals();
+        LastBioacousticProbeSchedule = bioacousticProbeScheduler.Update(
+            audioSynchronizationState.States,
+            residuals,
+            timestampNs,
+            preferredSourceIds,
+            sourcePathologies);
+        return LastBioacousticProbeSchedule;
+    }
+
     private bool disposed;
 
     private static MimirChirpBinCalibrationModel? TryLoadCalibrationModel(string path)
@@ -238,6 +257,34 @@ public sealed class MimirSynchronizationHub : IDisposable
         }
 
         return MimirComplexContourChannelModelDocument.Load(path);
+    }
+
+    private IReadOnlyList<MimirAudioCalibrationBandResidual> BuildProbeResiduals()
+    {
+        var reports = audioSynchronizationReports.Values
+            .Concat(complexContourReports.Values)
+            .GroupBy(report => report.SourceId, StringComparer.Ordinal)
+            .Select(group => group.OrderByDescending(report => report.AnalysisTimestampNs).First())
+            .ToArray();
+        var residuals = new List<MimirAudioCalibrationBandResidual>();
+        foreach (var report in reports)
+        {
+            foreach (var band in report.BandResponses)
+            {
+                var response = Math.Clamp(band.Energy, 0.0, 1.0);
+                var confidence = Math.Clamp(report.Confidence * (0.35 + 0.65 * response), 0.0, 1.0);
+                var residualDb = -20.0 * Math.Log10(Math.Max(1.0e-4, response));
+                residuals.Add(new MimirAudioCalibrationBandResidual(
+                    report.SourceId,
+                    band.CenterHz,
+                    confidence,
+                    residualDb,
+                    PhaseResidualRadians: band.PhaseRadians,
+                    ResponseEnergy: response));
+            }
+        }
+
+        return residuals;
     }
 
     private void StoreAudioSynchronizationReports(

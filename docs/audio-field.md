@@ -90,6 +90,16 @@ not the active runtime sound.
 
 The raw profile is kept even when a timing report is rejected, because a failed
 sync window can still teach us which bands survived the speaker/room/mic path.
+`MimirBioacousticProbeScheduler` is now the runtime-side cadence owner for that
+feedback loop: it consumes smoothed sync states plus per-band frequency response
+residuals, schedules a targeted probe only when confidence pressure and duty
+budget allow it, and publishes aggregate/per-source sync and frequency-response
+confidence telemetry. `MimirSynchronizationHub.UpdateBioacousticProbeSchedule`
+is the live hub surface; `MimirRuntime` prints
+`mimir-bioacoustic-probe-schedule` and `mimir-bioacoustic-probe-source` lines so
+operators can watch confidence climb as probes are spent. The scheduler owns
+when to spend active sound. It does not own the output device: Starfire Realtek
+still must be selected explicitly by the eventual live renderer.
 The receiver must consume persisted models to weight reliable symbols,
 downweight dead bands, apply phase-coherence weighting, apply first-order
 group-delay correction, and search joint global delay/frequency-shift hypotheses

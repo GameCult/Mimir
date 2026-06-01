@@ -83,6 +83,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private MimirObsStemPublicationSnapshot lastObsStemPublication = MimirObsStemPublicationSnapshot.Empty;
+    private MimirScheduledBioacousticProbeFrame? lastBioacousticProbeSchedule;
     private long spectrumHistorySequence;
     private long audioActuatorFrameSequence;
     private bool audioActuatorProgramQueued;
@@ -1315,6 +1316,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         lastAudioSyncAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         lastAudioSynchronizationReports = synchronization.AudioSynchronizationReports;
         UpdatePassiveSynchronizationConfidence(lastAudioSynchronizationReports);
+        lastBioacousticProbeSchedule = synchronization.UpdateBioacousticProbeSchedule(
+            (long)Math.Round(runtimeSeconds * 1_000_000_000.0));
         lastAudioActuatorFrame = audioActuatorBank.Update(
             synchronization.AudioSynchronizationStates,
             audioSyncUpdateIntervalSeconds);
@@ -1572,6 +1575,17 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         {
             Console.WriteLine(
                 $"mimir-sync-state {state.ReferenceSourceId}->{state.SourceId} delaySamples={state.SmoothedDelaySamples:0.000000} delayUs={state.DelayMicroseconds:0.000} delayMs={state.DelayMilliseconds:0.000} sroPpm={state.SamplingRateOffsetPpm:0.000} confidence={state.Confidence:0.000}");
+        }
+
+        if (lastBioacousticProbeSchedule is { } probe)
+        {
+            Console.WriteLine(
+                $"mimir-bioacoustic-probe-schedule emit={probe.ShouldEmit} reason={probe.Reason} sync={probe.AggregateSyncConfidence:0.000} freq={probe.AggregateFrequencyResponseConfidence:0.000} combined={probe.AggregateConfidence:0.000} dSync={probe.SyncConfidenceDelta:0.000} dFreq={probe.FrequencyResponseConfidenceDelta:0.000} interval={probe.ScheduledIntervalSeconds:0.000} bands={probe.ProbePlan.Bands.Count}");
+            foreach (var source in probe.Sources.OrderBy(source => source.SourceId, StringComparer.Ordinal))
+            {
+                Console.WriteLine(
+                    $"mimir-bioacoustic-probe-source source={source.SourceId} sync={source.SyncConfidence:0.000} freq={source.FrequencyResponseConfidence:0.000} combined={source.AggregateConfidence:0.000} probes={source.ProbeCount} weakBands={source.WeakBandCount} weakestHz={source.LowestConfidenceBandHz:0}");
+            }
         }
 
         if (lastAudioActuatorFrame.Commands.Count > 0)

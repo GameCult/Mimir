@@ -136,6 +136,12 @@ a named invariant that the native runtime cannot protect yet.
   production-shaped Focusrite path: a native in-process ASIO callback source
   feeds sample-bearing 192 kHz Float32 blocks directly into `Mimir.Runtime`
   rolling buffers on one interface clock domain.
+- `MimirBioacousticProbeScheduler` closes the first active-probe control loop:
+  sync confidence and per-band frequency-response confidence decide whether a
+  targeted probe should be emitted, and `MimirRuntime` publishes live telemetry
+  for aggregate confidence, deltas, source probe counts, and weak-band pressure.
+  The scheduler is output-device neutral; a later renderer must explicitly
+  target Starfire Realtek for physical chirp emission in the current routing.
 - `src/Mimir.BufferSmoke` loads the runtime config, polls the synchronization
   hub, and prints the actual rolling buffers. Use `--require-samples` when an
   empty declared sensor buffer should fail the run. Use `--bioacoustic-self-test`

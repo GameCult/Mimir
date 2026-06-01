@@ -323,6 +323,17 @@ then about 9.9 kHz weak response, 3.6 kHz phase instability, and 910 Hz
 magnitude residual. This is the intended first physical strategy: improve
 shotgun/cardioid confidence at 192 kHz before asking every connected mic to
 help solve the room field.
+`MimirBioacousticProbeScheduler` now owns the first closed-loop cadence layer
+above that planner. It reads smoothed sync states plus derived per-band
+frequency-response residuals from `MimirSynchronizationHub`, backs probe cadence
+off as aggregate sync/frequency confidence rises, emits targeted probe plans
+only when the confidence/duty budget says to spend sound, and exposes
+`mimir-bioacoustic-probe-schedule` plus per-source telemetry in `MimirRuntime`.
+`Mimir.BufferSmoke --bioacoustic-probe-scheduler-smoke` proves the visible
+climb: simulated probe feedback raises sync confidence from 0.360 to 0.920 and
+frequency-response confidence from 0.558 to 0.955 over four scheduled probes.
+The scheduler is not the output-device authority; in the current physical
+routing the eventual live renderer must explicitly select Starfire Realtek.
 The first live run preserves two artifacts:
 `artifacts/asio/targeted-bioacoustic-live/20260601-030836` at playback gain
 1.0 and `artifacts/asio/targeted-bioacoustic-live/20260601-030857` at gain

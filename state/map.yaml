@@ -656,6 +656,16 @@ accepted_design:
     residual. Use the two good mics first; every connected mic can become room
     field evidence later, but it should not dilute the initial direct-path
     calibration loop.
+    `MimirBioacousticProbeScheduler` now closes the first control loop above
+    that planner: smoothed sync confidence and derived per-band frequency
+    response confidence decide when active sound is worth spending. The hub
+    exposes `LastBioacousticProbeSchedule` / `UpdateBioacousticProbeSchedule`,
+    and `MimirRuntime` logs `mimir-bioacoustic-probe-schedule` plus per-source
+    probe confidence lines. `Mimir.BufferSmoke --bioacoustic-probe-scheduler-smoke`
+    proves the visible climb: simulated feedback raises sync confidence from
+    0.360 to 0.920 and frequency-response confidence from 0.558 to 0.955 over
+    four scheduled probes. The scheduler owns cadence and telemetry only; it
+    does not override the Realtek routing authority for physical emission.
     The first live targeted probe ran through Focusrite ASIO at 192 kHz. Gain
     1.0 artifact `artifacts/asio/targeted-bioacoustic-live/20260601-030836`
     measured shotgun low/high tilt 20.199 dB and cardioid 15.082 dB. Gain 2.0
