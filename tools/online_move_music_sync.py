@@ -14,6 +14,7 @@ import base64
 import colorsys
 import json
 import math
+import errno
 import os
 import subprocess
 import sys
@@ -45,8 +46,14 @@ with open(log, "a", encoding="utf-8") as f:
 last = {}
 
 def write_rgb(path, r, g, b):
-    with open(path, "wb", buffering=0) as device:
-        device.write(bytes([0x06, 0, max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)), 0, 0, 0, 0]))
+    try:
+        with open(path, "wb", buffering=0) as device:
+            device.write(bytes([0x06, 0, max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)), 0, 0, 0, 0]))
+        return True
+    except OSError as ex:
+        if ex.errno in (errno.ENOENT, errno.ENODEV, errno.EACCES):
+            return False
+        raise
 
 for path in moves.values():
     write_rgb(path, 0, 0, 0)
@@ -65,8 +72,8 @@ for line in sys.stdin:
         continue
     if last.get(name) == rgb:
         continue
-    write_rgb(path, rgb[0], rgb[1], rgb[2])
-    last[name] = rgb
+    if write_rgb(path, rgb[0], rgb[1], rgb[2]):
+        last[name] = rgb
 
 for path in moves.values():
     write_rgb(path, 0, 0, 0)
