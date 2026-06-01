@@ -346,6 +346,14 @@ proves the boundary: alignment frames queue the cleaner DSP and input block, and
 cleaner output frames are what enter `NativeProgram` stem publication. This is
 the first hot-lane cleaner socket, not proof that the final studio denoiser is
 solved.
+`MimirProgramRecorder` now makes that receipt an app feature. The Video Sources
+rail exposes `Record` / `Stop`; the recorder owns child-process status, latest
+output path, and process-tree shutdown. Its current actuator is still
+`scripts/record-kiyo-dual-mic-composite.ps1`, which means app recording now
+produces the known Kiyo plus Scarlett/Faust MP4 under
+`artifacts/runtime/mimir-app-recordings/` without pretending the native
+program-output recorder exists yet. Later native recording should replace the
+actuator behind this owner, not add another UI truth.
 `MimirTargetedBioacousticProbePlanner` is the matching "ask the room a better
 question" owner. It consumes per-source spectral residuals and optional source
 pathology notes, then emits gain-bounded shaped probe bands for the

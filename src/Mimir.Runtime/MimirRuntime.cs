@@ -44,6 +44,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirAlignmentActuatorBank audioActuatorBank = new();
     private readonly MimirPresentationControlState presentationControls = new();
     private readonly MimirSceneEditorState sceneEditor = new();
+    private readonly MimirProgramRecorder programRecorder = new();
     private readonly MimirProgramSurfaceConfigDocument programSurfaceConfig;
     private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.NativeProgram);
     private readonly MimirObsStemSharedMemoryPublisher? obsStemPublisher;
@@ -825,6 +826,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         QueueCalibrationTimeline();
         UpdateAudioSpectra();
         UpdateAudioSynchronization();
+        programRecorder.Refresh();
         EmitTelemetry();
     }
 
@@ -855,6 +857,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     public void Dispose()
     {
         obsStemPublisher?.Dispose();
+        programRecorder.Dispose();
         synchronization.Dispose();
     }
 
@@ -868,6 +871,12 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     shell.Pane("mimir.video-sources", "Video Sources", graph =>
                     {
                         graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f);
+                        graph.Row("video.program-recording", row =>
+                        {
+                            row.Button("program.record", "Record", StartProgramRecording, weight: 0.7f);
+                            row.Button("program.record-stop", "Stop", programRecorder.Stop, weight: 0.55f);
+                            row.Text("program.record-status", programRecorder.Describe, "caption", weight: 1.65f);
+                        }, weight: 0.65f);
                         graph.Text("video.source-list-title", "Program Sources", "strong", weight: 0.55f);
                         for (var slot = 0; slot < VideoSourceListSlotCount; slot++)
                         {
@@ -1107,6 +1116,11 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         }
 
         SelectVideoLayer(index);
+    }
+
+    private void StartProgramRecording()
+    {
+        programRecorder.Start();
     }
 
     private string DescribeVideoSourceSlot(int index)
