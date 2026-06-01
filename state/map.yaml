@@ -220,6 +220,12 @@ invariants:
     rises approach full brightness. The ASIO reader now drains the native
     capture queue to the newest loopback blocks before each LED frame, because
     stale queued audio was the plausible seconds-late music-pulse cause.
+    `tools/online_move_music_sync.py` is now the live multi-Move music witness:
+    Realtek loopback remains the primary program reference, optional Scarlett
+    ASIO channels contribute auxiliary mic/loopback onset streams with their
+    own autocorrelation tempo estimates, chroma scoring estimates key and chord
+    candidates, and a recent loudness-percentile gate owns whether the Moves
+    are allowed to brighten. Flux alone no longer has authority to shout.
     `tools/move_latency_probe.py` is the diagnostic PS Move latency receipt:
     PS3 Eyes are the default fast visual witnesses, Scarlett cardioid is the
     default chirp timing witness, and the event train uses an order-3 de Bruijn
@@ -319,7 +325,8 @@ invariants:
     `mimir.well_snapshot.v1` records containing buffer health, composite
     controls, publication/stem contract, and sync status. The online supervisor
     now starts relay, recorder, Nightwing Eyes/Move/builtin-camera/builtin-mic
-    witness publication, de-Bruijn/microtonal music-synced Move gestures, and
+    witness publication, conservative de-Bruijn/microtonal music-synced Move
+    gestures with Realtek plus opportunistic ASIO music evidence, and
     `Mimir.Well`. This owns typed state publication, not raw CultMesh media
     payloads yet. The live timestamp-domain scar is explicit: ASIO device time
     and camera driver time are not in one canonical timeline, so sync frame
