@@ -45,6 +45,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly MimirPresentationControlState presentationControls = new();
     private readonly MimirSceneEditorState sceneEditor = new();
     private readonly MimirProgramRecorder programRecorder = new();
+    private readonly MimirProgramStreamer programStreamer = new();
     private readonly MimirProgramSurfaceConfigDocument programSurfaceConfig;
     private readonly MimirObsStemPublicationState obsStemPublication = new(MimirObsPublicationConfigurations.NativeProgram);
     private readonly MimirObsStemSharedMemoryPublisher? obsStemPublisher;
@@ -827,6 +828,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         UpdateAudioSpectra();
         UpdateAudioSynchronization();
         programRecorder.Refresh();
+        programStreamer.Refresh();
         EmitTelemetry();
     }
 
@@ -858,6 +860,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     {
         obsStemPublisher?.Dispose();
         programRecorder.Dispose();
+        programStreamer.Dispose();
         synchronization.Dispose();
     }
 
@@ -871,12 +874,6 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                     shell.Pane("mimir.video-sources", "Video Sources", graph =>
                     {
                         graph.Text("video.program-summary", DescribeProgramVideo, "caption", weight: 0.75f);
-                        graph.Row("video.program-recording", row =>
-                        {
-                            row.Button("program.record", "Record", StartProgramRecording, weight: 0.7f);
-                            row.Button("program.record-stop", "Stop", programRecorder.Stop, weight: 0.55f);
-                            row.Text("program.record-status", programRecorder.Describe, "caption", weight: 1.65f);
-                        }, weight: 0.65f);
                         graph.Text("video.source-list-title", "Program Sources", "strong", weight: 0.55f);
                         for (var slot = 0; slot < VideoSourceListSlotCount; slot++)
                         {
@@ -926,34 +923,56 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                         }, weight: 0.95f);
                     }, weight: 1.75f);
 
-                    shell.Pane("mimir.inspector", "Inspector", inspector =>
+                    shell.Vertical("mimir.right-rail", right =>
                     {
-                        inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
-                        inspector.Options("inspector.video-feed", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
-                        inspector.Vertical("inspector.source-controls", source =>
+                        right.Pane("mimir.inspector", "Inspector", inspector =>
                         {
-                            source.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
-                            source.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
-                            source.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
-                            source.Text("inspector.program-placement", "Program Frame", "strong");
-                            source.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
-                            source.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
-                            source.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
-                            source.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
-                            source.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
-                            source.Options("program.fit-mode", "Fit", () => sceneEditor.SelectedFitModeIndex, sceneEditor.SetSelectedFitModeIndex, sceneEditor.FitModeOptions);
-                            source.Row("program.fit", fit =>
+                            inspector.Text("inspector.selection", sceneEditor.DescribeSelection, "strong");
+                            inspector.Options("inspector.video-feed", "Feed", () => presentationControls.SelectedVideoIndex, SelectVideoLayer, VideoFeedOptions());
+                            inspector.Vertical("inspector.source-controls", source =>
                             {
-                                fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer);
-                                fit.Button("program.fit-selected", "Fit", sceneEditor.FitSelectedProgramLayer);
-                                fit.Button("program.fill-selected", "Fill", sceneEditor.FillSelectedProgramLayer);
-                            });
-                            source.Row("program.order", order =>
+                                source.Toggle("video.visible", "Visible", () => sceneEditor.SelectedNode?.Visible ?? false, SetSelectedVideoVisible);
+                                source.Toggle("video.solo", "Solo", () => presentationControls.SelectedVideo?.Solo ?? false, SetSelectedVideoSolo);
+                                source.Slider("video.opacity", "Opacity", () => presentationControls.SelectedVideo?.Opacity ?? 1.0f, SetSelectedVideoOpacity, 0.0f, 1.0f, "0.00");
+                                source.Text("inspector.program-placement", "Program Frame", "strong");
+                                source.Slider("program.x", "X", () => sceneEditor.SelectedProgramX, sceneEditor.SetSelectedProgramX, 0.0f, 1.0f, "0.000");
+                                source.Slider("program.y", "Y", () => sceneEditor.SelectedProgramY, sceneEditor.SetSelectedProgramY, 0.0f, 1.0f, "0.000");
+                                source.Slider("program.w", "W", () => sceneEditor.SelectedProgramWidth, sceneEditor.SetSelectedProgramWidth, 0.01f, 1.0f, "0.000");
+                                source.Slider("program.h", "H", () => sceneEditor.SelectedProgramHeight, sceneEditor.SetSelectedProgramHeight, 0.01f, 1.0f, "0.000");
+                                source.Slider("program.rotation", "Rotation", () => sceneEditor.SelectedNode?.Transform.RotationRadians ?? 0.0f, sceneEditor.SetSelectedRotation, -MathF.PI, MathF.PI, "0.00");
+                                source.Options("program.fit-mode", "Fit", () => sceneEditor.SelectedFitModeIndex, sceneEditor.SetSelectedFitModeIndex, sceneEditor.FitModeOptions);
+                                source.Row("program.fit", fit =>
+                                {
+                                    fit.Button("program.center", "Center", sceneEditor.CenterSelectedProgramLayer);
+                                    fit.Button("program.fit-selected", "Fit", sceneEditor.FitSelectedProgramLayer);
+                                    fit.Button("program.fill-selected", "Fill", sceneEditor.FillSelectedProgramLayer);
+                                });
+                                source.Row("program.order", order =>
+                                {
+                                    order.Button("program.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
+                                    order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
+                                });
+                            }, isVisible: () => sceneEditor.HasSelectedProgramSource);
+                        }, weight: 1.05f);
+
+                        right.Pane("mimir.output", "Output", output =>
+                        {
+                            output.Text("output.program-summary", DescribeProgramOutput, "caption", weight: 0.6f);
+                            output.Row("output.recording", row =>
                             {
-                                order.Button("program.layer-up", "Layer Up", () => MoveSelectedVideoLayer(-1));
-                                order.Button("program.layer-down", "Layer Down", () => MoveSelectedVideoLayer(1));
-                            });
-                        }, isVisible: () => sceneEditor.HasSelectedProgramSource);
+                                row.Button("program.record", "Record", StartProgramRecording, weight: 0.7f);
+                                row.Button("program.record-stop", "Stop", programRecorder.Stop, weight: 0.55f);
+                                row.Text("program.record-status", programRecorder.Describe, "caption", weight: 1.75f);
+                            }, weight: 0.7f);
+                            output.Text("output.record-path", () => $"folder {programRecorder.OutputDirectory}", "caption", weight: 0.7f);
+                            output.Row("output.streaming", row =>
+                            {
+                                row.Button("program.stream", "Live", StartProgramStreaming, weight: 0.7f);
+                                row.Button("program.stream-stop", "Stop", programStreamer.Stop, weight: 0.55f);
+                                row.Text("program.stream-status", programStreamer.Describe, "caption", weight: 1.75f);
+                            }, weight: 0.7f);
+                            output.Text("output.stream-target", () => $"target {programStreamer.TargetUrl}", "caption", weight: 0.7f);
+                        }, weight: 0.95f);
                     }, weight: 0.95f);
                 });
             });
@@ -1133,6 +1152,11 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private void StartProgramRecording()
     {
         programRecorder.Start();
+    }
+
+    private void StartProgramStreaming()
+    {
+        programStreamer.Start();
     }
 
     private string DescribeVideoSourceSlot(int index)
@@ -1318,6 +1342,13 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             .Select(feed => $"{feed.SourceId}:{presentationControls.AudioGain(feed.SourceId):0.00}")
             .ToArray();
         return string.Join(" | ", active);
+    }
+
+    private string DescribeProgramOutput()
+    {
+        var videoCount = presentationControls.VideoFeeds.Count(feed => presentationControls.IncludesVideo(feed.SourceId));
+        var audioCount = presentationControls.AudioFeeds.Count;
+        return $"program {videoCount} video / {audioCount} audio";
     }
 
     private string DescribePostprocess()

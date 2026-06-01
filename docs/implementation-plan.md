@@ -281,17 +281,22 @@ a named invariant that the native runtime cannot protect yet.
   with preset paths and strength; until the renderer grows LUT texture sampling,
   preset exposure and bloom are mapped into existing `GraphicsSettings`.
   `Mimir.BufferSmoke --presentation-control-smoke` proves the state owner.
-- `MimirProgramRecorder` is the first app-owned recording control. The Mimir UI
-  exposes `Record` / `Stop` in the Video Sources rail, tracks child-process
-  status, writes the latest MP4 under `artifacts/runtime/stream-proof/`,
-  and kills the process tree on stop. The current actuator deliberately delegates
-  to `scripts/record-stream-proof-output.ps1`, so the app records the same
-  stream-proof composite intended for the Yggdrasil/public path: Raven program
-  feed, Kiyo picture-in-picture, Starfire Scarlett audio, and NVENC/AAC
-  broadcast settings. `MIMIR_RECORD_START_RAVEN=1` lets the app ask the script
-  to start Raven's sender; otherwise it records from the already-running feed.
-  Native program-output recording can replace that actuator later behind the
-  same UI owner.
+- The right rail `Output` panel owns OBS-like program actions below the
+  inspector. `MimirProgramRecorder` exposes `Record` / `Stop`, tracks
+  child-process status, writes timestamped MP4 receipts under
+  `C:\Users\Meta\Videos\Mimir` by default, and kills the process tree on stop.
+  `MIMIR_RECORD_OUTPUT_DIR` can redirect receipts. The current actuator
+  deliberately delegates to `scripts/record-stream-proof-output.ps1`, so app
+  recording produces the same stream-proof composite intended for the
+  Yggdrasil/public path: Raven program feed, Kiyo picture-in-picture, Starfire
+  Scarlett audio, and NVENC/AAC broadcast settings.
+  `MIMIR_RECORD_START_RAVEN=1` lets the app ask the script to start Raven's
+  sender; otherwise it records from the already-running feed. `MimirProgramStreamer`
+  exposes `Live` / `Stop` for the configured `Mimir.Broadcast` RTMP path, but it
+  refuses to publish unless `MIMIR_STREAM_INPUT` is set or
+  `MIMIR_STREAM_ALLOW_TEST_PATTERN=1` explicitly authorizes a synthetic smoke.
+  Native program-output recording/streaming can replace those actuators later
+  behind the same UI owner.
 - `MimirSceneEditorState` owns the new Mimir-window editor graph. It is not the
   OBS program output: it owns editor camera, selected node, sensor-feed panels,
   SDF text-panel nodes, model placeholders, visibility, locks, transforms, reset

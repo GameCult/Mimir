@@ -346,16 +346,19 @@ proves the boundary: alignment frames queue the cleaner DSP and input block, and
 cleaner output frames are what enter `NativeProgram` stem publication. This is
 the first hot-lane cleaner socket, not proof that the final studio denoiser is
 solved.
-`MimirProgramRecorder` is the app feature for local broadcast-proof recording,
-not for the isolated Kiyo/Faust mic receipt. The Video Sources rail exposes
-`Record` / `Stop`; the recorder owns child-process status, latest output path,
-and process-tree shutdown. Its current actuator is
-`scripts/record-stream-proof-output.ps1`, so app recording produces the same
-stream-proof composite intended for Yggdrasil/public judgment: Raven program
-feed, Kiyo picture-in-picture, Starfire Scarlett audio, and NVENC/AAC broadcast
-settings under `artifacts/runtime/stream-proof/`. `MIMIR_RECORD_START_RAVEN=1`
-asks the app to start Raven's sender for the receipt. Later native recording
-should replace the actuator behind this owner, not add another UI truth.
+The right rail `Output` panel is the app feature for local broadcast-proof
+recording and live publish control, not the isolated Kiyo/Faust mic receipt.
+`MimirProgramRecorder` owns `Record` / `Stop`, child-process status, timestamped
+MP4 receipts under `C:\Users\Meta\Videos\Mimir` by default, and process-tree
+shutdown. Its current actuator is `scripts/record-stream-proof-output.ps1`, so
+app recording produces the same stream-proof composite intended for
+Yggdrasil/public judgment: Raven program feed, Kiyo picture-in-picture, Starfire
+Scarlett audio, and NVENC/AAC broadcast settings. `MIMIR_RECORD_START_RAVEN=1`
+asks the app to start Raven's sender for the receipt. `MimirProgramStreamer`
+owns `Live` / `Stop` for the `Mimir.Broadcast` RTMP path; it requires
+`MIMIR_STREAM_INPUT` unless `MIMIR_STREAM_ALLOW_TEST_PATTERN=1` explicitly
+authorizes a synthetic smoke stream. Later native recording/streaming should
+replace these actuators behind this owner, not add another UI truth.
 `MimirTargetedBioacousticProbePlanner` is the matching "ask the room a better
 question" owner. It consumes per-source spectral residuals and optional source
 pathology notes, then emits gain-bounded shaped probe bands for the

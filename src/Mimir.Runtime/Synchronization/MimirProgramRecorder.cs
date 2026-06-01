@@ -15,12 +15,15 @@ public sealed class MimirProgramRecorder : IDisposable
         this.repositoryRoot = string.IsNullOrWhiteSpace(repositoryRoot)
             ? ResolveRepositoryRoot()
             : Path.GetFullPath(repositoryRoot);
-        LatestOutputPath = Path.Combine(this.repositoryRoot, "artifacts", "runtime", "stream-proof", "mimir-program-record-latest.mp4");
+        OutputDirectory = ResolveOutputDirectory();
+        LatestOutputPath = CreateDefaultOutputPath(OutputDirectory);
     }
 
     public bool IsRecording => process is { HasExited: false };
 
     public string LatestOutputPath { get; private set; }
+
+    public string OutputDirectory { get; }
 
     public string Describe()
     {
@@ -53,7 +56,7 @@ public sealed class MimirProgramRecorder : IDisposable
 
         var duration = Math.Max(1, durationSeconds ?? ReadDurationSeconds());
         LatestOutputPath = Path.GetFullPath(string.IsNullOrWhiteSpace(outputPath)
-            ? Path.Combine(repositoryRoot, "artifacts", "runtime", "stream-proof", "mimir-program-record-latest.mp4")
+            ? CreateDefaultOutputPath(OutputDirectory)
             : Path.IsPathRooted(outputPath) ? outputPath : Path.Combine(repositoryRoot, outputPath));
         var logRoot = Path.Combine(repositoryRoot, "artifacts", "runtime", "stream-proof");
         Directory.CreateDirectory(logRoot);
@@ -162,6 +165,32 @@ public sealed class MimirProgramRecorder : IDisposable
         return int.TryParse(raw, out var parsed)
             ? parsed
             : DefaultDurationSeconds;
+    }
+
+    private static string ResolveOutputDirectory()
+    {
+        var configured = Environment.GetEnvironmentVariable("MIMIR_RECORD_OUTPUT_DIR");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return Path.GetFullPath(configured);
+        }
+
+        var videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        if (string.IsNullOrWhiteSpace(videos))
+        {
+            var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            videos = string.IsNullOrWhiteSpace(profile)
+                ? @"C:\Users\Meta\Videos"
+                : Path.Combine(profile, "Videos");
+        }
+
+        return Path.Combine(videos, "Mimir");
+    }
+
+    private static string CreateDefaultOutputPath(string outputDirectory)
+    {
+        var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        return Path.Combine(outputDirectory, $"mimir-program-{stamp}.mp4");
     }
 
     private static bool IsTruthy(string? value) =>

@@ -70,15 +70,19 @@ invariants:
     CultUI preview state; keyboard arrows nudge selected layers without
     snapping, PageUp/PageDown reorder layers, and the inspector owns the
     selected source contain/cover/stretch fit mode.
-  - `MimirProgramRecorder` owns the first app-level recording control. The Video
-    Sources rail exposes `Record` / `Stop`, status text, latest output path, and
+  - The right rail `Output` panel owns OBS-like program actions below the
+    inspector. `MimirProgramRecorder` owns `Record` / `Stop`, status text,
+    timestamped receipts under `C:\Users\Meta\Videos\Mimir` by default, and
     process-tree shutdown. Its current actuator delegates to
     `scripts/record-stream-proof-output.ps1`, so the app records the same Raven
     + Kiyo PIP + Starfire Scarlett NVENC/AAC composite intended for
-    Yggdrasil/public judgment under `artifacts/runtime/stream-proof/`.
+    Yggdrasil/public judgment. `MIMIR_RECORD_OUTPUT_DIR` redirects receipts and
     `MIMIR_RECORD_START_RAVEN=1` asks the app to launch Raven's sender too.
-    Native program-output recording should replace that actuator behind the
-    same owner.
+    `MimirProgramStreamer` owns `Live` / `Stop` for the `Mimir.Broadcast` RTMP
+    path and requires `MIMIR_STREAM_INPUT` unless
+    `MIMIR_STREAM_ALLOW_TEST_PATTERN=1` explicitly authorizes a synthetic
+    smoke. Native program-output recording/streaming should replace those
+    actuators behind the same owner.
   - Fast stereo depth belongs to Fensalir's D3D12 compute/resource authority.
     `research/d3d12-stereo-depth-provenance-2026-05-29.md` records libSGM as
     the permissive north-star reference for a future SGM-shaped stereo
