@@ -6,7 +6,9 @@ public sealed record MimirCalibratedAudioCompositeOptions(
     double MinimumBandEnergy = 0.01,
     double MinimumBandGain = 0.20,
     double MaximumBandGain = 4.00,
-    double NoiseFloorRms = 1.0e-5);
+    double NoiseFloorRms = 1.0e-5,
+    double MinimumCoherence = 0.35,
+    double IncoherentBandSuppression = 0.72);
 
 public sealed record MimirCalibratedAudioCompositeSource(
     string SourceId,
@@ -25,12 +27,20 @@ public sealed record MimirCalibratedAudioCompositeSourceReport(
     double ResponseFlatnessBefore,
     double ResponseFlatnessAfter,
     double Confidence,
-    double NoiseRms);
+    double NoiseRms,
+    double AverageCoherence);
+
+public sealed record MimirCalibratedAudioCompositeBandReport(
+    double CenterHz,
+    double Coherence,
+    double Suppression,
+    int SourceCount);
 
 public sealed record MimirCalibratedAudioCompositeResult(
     int SampleRate,
     float[] Samples,
     IReadOnlyList<MimirCalibratedAudioCompositeSourceReport> SourceReports,
+    IReadOnlyList<MimirCalibratedAudioCompositeBandReport> BandReports,
     double CompositeRms,
     double SourceMeanRms,
     double ResponseFlatnessBefore,
@@ -47,7 +57,7 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
             .ToArray();
         if (accepted.Length == 0)
         {
-            return new MimirCalibratedAudioCompositeResult(0, [], [], 0.0, 0.0, 0.0, 0.0);
+            return new MimirCalibratedAudioCompositeResult(0, [], [], [], 0.0, 0.0, 0.0, 0.0);
         }
 
         var sampleRate = accepted[0].SampleRate;
@@ -59,6 +69,7 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
         var frameCount = accepted.Min(source => source.Samples.Length);
         var output = new float[frameCount];
         var reports = new List<MimirCalibratedAudioCompositeSourceReport>(accepted.Length);
+        var prepared = new List<PreparedCompositeSource>(accepted.Length);
         var totalWeight = 0.0;
         var sourceRmsTotal = 0.0;
         var beforeFlatnessTotal = 0.0;
@@ -90,25 +101,43 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
             var noise = Math.Max(options.NoiseFloorRms, source.NoiseRms);
             var responseWeight = Math.Clamp(afterFlatness <= 0.0 ? 1.0 : afterFlatness, 0.10, 1.0);
             var weight = confidence * responseWeight / (noise * noise);
-            totalWeight += weight;
             sourceRmsTotal += RootMeanSquare(source.Samples.AsSpan(0, frameCount));
             beforeFlatnessTotal += beforeFlatness;
             afterFlatnessTotal += afterFlatness;
-            for (var index = 0; index < frameCount; index++)
-            {
-                output[index] += (float)(corrected[index] * weight);
-            }
-
-            reports.Add(new MimirCalibratedAudioCompositeSourceReport(
+            prepared.Add(new PreparedCompositeSource(
                 source.SourceId,
+                corrected,
+                weight,
                 delaySamples,
                 appliedGain,
-                weight,
                 correctedBands,
                 beforeFlatness,
                 afterFlatness,
                 confidence,
-                source.NoiseRms));
+                source.NoiseRms,
+                source.BandResponses));
+        }
+
+        var bandReports = ApplyCoherenceSuppression(prepared, sampleRate);
+        foreach (var source in prepared)
+        {
+            totalWeight += source.Weight;
+            for (var index = 0; index < frameCount; index++)
+            {
+                output[index] += (float)(source.Samples[index] * source.Weight);
+            }
+
+            reports.Add(new MimirCalibratedAudioCompositeSourceReport(
+                source.SourceId,
+                source.AppliedDelaySamples,
+                source.AppliedGain,
+                source.Weight,
+                source.CorrectedBandCount,
+                source.ResponseFlatnessBefore,
+                source.ResponseFlatnessAfter,
+                source.Confidence,
+                source.NoiseRms,
+                AverageSourceCoherence(source, bandReports)));
         }
 
         if (totalWeight > 0.0)
@@ -124,10 +153,71 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
             sampleRate,
             output,
             reports,
+            bandReports,
             RootMeanSquare(output),
             sourceRmsTotal / reportCount,
             beforeFlatnessTotal / reportCount,
             afterFlatnessTotal / reportCount);
+    }
+
+    private IReadOnlyList<MimirCalibratedAudioCompositeBandReport> ApplyCoherenceSuppression(
+        IReadOnlyList<PreparedCompositeSource> sources,
+        int sampleRate)
+    {
+        if (sources.Count < 2)
+        {
+            return [];
+        }
+
+        var bandCenters = sources
+            .SelectMany(source => source.BandResponses.Select(response => response.CenterHz))
+            .Where(centerHz => centerHz > 0.0 && centerHz < sampleRate * 0.48)
+            .DistinctBy(centerHz => Math.Round(12.0 * Math.Log2(centerHz / 110.0)))
+            .Order()
+            .ToArray();
+        var reports = new List<MimirCalibratedAudioCompositeBandReport>(bandCenters.Length);
+        foreach (var centerHz in bandCenters)
+        {
+            var measurements = sources
+                .Select(source => new BandMeasurement(source, ToneCoefficient(source.Samples, sampleRate, centerHz)))
+                .Where(measurement => measurement.Coefficient.Magnitude > 1.0e-9)
+                .ToArray();
+            if (measurements.Length < 2)
+            {
+                continue;
+            }
+
+            var coherence = PairwiseCoherence(measurements.Select(static measurement => measurement.Coefficient).ToArray());
+            var suppression = Math.Clamp((options.MinimumCoherence - coherence) / Math.Max(1.0e-6, options.MinimumCoherence), 0.0, 1.0) *
+                Math.Clamp(options.IncoherentBandSuppression, 0.0, 1.0);
+            if (suppression > 0.0)
+            {
+                foreach (var measurement in measurements)
+                {
+                    AddBandGainDelta(measurement.Source.Samples, measurement.Source.Samples, sampleRate, centerHz, -suppression);
+                }
+            }
+
+            reports.Add(new MimirCalibratedAudioCompositeBandReport(
+                centerHz,
+                coherence,
+                suppression,
+                measurements.Length));
+        }
+
+        return reports;
+    }
+
+    private static double AverageSourceCoherence(
+        PreparedCompositeSource source,
+        IReadOnlyList<MimirCalibratedAudioCompositeBandReport> reports)
+    {
+        var centers = source.BandResponses.Select(response => response.CenterHz).ToArray();
+        var matched = reports
+            .Where(report => centers.Any(center => BandsTooClose(center, report.CenterHz)))
+            .Select(report => report.Coherence)
+            .ToArray();
+        return matched.Length == 0 ? 1.0 : matched.Average();
     }
 
     private float[] ApplySparseBandEqualization(
@@ -184,6 +274,60 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
             var component = sine * Math.Sin(phase) + cosine * Math.Cos(phase);
             output[index] = (float)Math.Clamp(output[index] + component * gainDelta, -4.0, 4.0);
         }
+    }
+
+    private static ComplexToneCoefficient ToneCoefficient(ReadOnlySpan<float> samples, int sampleRate, double centerHz)
+    {
+        var sine = 0.0;
+        var cosine = 0.0;
+        var omega = 2.0 * Math.PI * centerHz / sampleRate;
+        for (var index = 0; index < samples.Length; index++)
+        {
+            var phase = omega * index;
+            sine += samples[index] * Math.Sin(phase);
+            cosine += samples[index] * Math.Cos(phase);
+        }
+
+        var scale = 2.0 / Math.Max(1, samples.Length);
+        sine *= scale;
+        cosine *= scale;
+        return new ComplexToneCoefficient(cosine, sine);
+    }
+
+    private static double PairwiseCoherence(IReadOnlyList<ComplexToneCoefficient> coefficients)
+    {
+        var total = 0.0;
+        var count = 0;
+        for (var left = 0; left < coefficients.Count; left++)
+        {
+            for (var right = left + 1; right < coefficients.Count; right++)
+            {
+                var leftCoefficient = coefficients[left];
+                var rightCoefficient = coefficients[right];
+                var magnitude = leftCoefficient.Magnitude * rightCoefficient.Magnitude;
+                if (magnitude <= 1.0e-12)
+                {
+                    continue;
+                }
+
+                var phaseAgreement = (leftCoefficient.Real * rightCoefficient.Real + leftCoefficient.Imaginary * rightCoefficient.Imaginary) / magnitude;
+                var energyBalance = Math.Min(leftCoefficient.Magnitude, rightCoefficient.Magnitude) / Math.Max(leftCoefficient.Magnitude, rightCoefficient.Magnitude);
+                total += Math.Clamp((phaseAgreement + 1.0) * 0.5, 0.0, 1.0) * Math.Sqrt(Math.Clamp(energyBalance, 0.0, 1.0));
+                count++;
+            }
+        }
+
+        return count == 0 ? 0.0 : total / count;
+    }
+
+    private static bool BandsTooClose(double leftHz, double rightHz)
+    {
+        if (leftHz <= 0.0 || rightHz <= 0.0)
+        {
+            return false;
+        }
+
+        return Math.Abs(Math.Log(leftHz / rightHz)) < 0.06;
     }
 
     private double OverallGain(IReadOnlyList<MimirChirpletBandResponse> responses)
@@ -271,5 +415,25 @@ public sealed class MimirCalibratedAudioCompositeBuilder(MimirCalibratedAudioCom
         var mean = energies.Average();
         var variance = energies.Sum(value => (value - mean) * (value - mean)) / energies.Length;
         return 1.0 / (1.0 + Math.Sqrt(variance));
+    }
+
+    private sealed record PreparedCompositeSource(
+        string SourceId,
+        float[] Samples,
+        double Weight,
+        double AppliedDelaySamples,
+        double AppliedGain,
+        int CorrectedBandCount,
+        double ResponseFlatnessBefore,
+        double ResponseFlatnessAfter,
+        double Confidence,
+        double NoiseRms,
+        IReadOnlyList<MimirChirpletBandResponse> BandResponses);
+
+    private sealed record BandMeasurement(PreparedCompositeSource Source, ComplexToneCoefficient Coefficient);
+
+    private readonly record struct ComplexToneCoefficient(double Real, double Imaginary)
+    {
+        public double Magnitude => Math.Sqrt(Real * Real + Imaginary * Imaginary);
     }
 }

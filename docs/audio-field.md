@@ -139,6 +139,15 @@ before selecting the coherent anchor path. If the measured path only leaves a
 smaller alphabet, Mimir should use that reliable symbol set and raise the
 sequence order so the timeline remains unique without pretending dead bands
 still carry code.
+The first concrete two-mic cancellation owner is
+`MimirCalibratedAudioCompositeBuilder`: after fractional alignment and measured
+band correction, it scores calibrated-band coherence across mics, suppresses
+incoherent measured-band components, then performs the confidence/noise-weighted
+sum. `Mimir.BufferSmoke --dual-mic-coherence-cancellation-smoke` proves the
+contract on synthetic shotgun/cardioid witnesses: coherent shared tones survive,
+a mic-local `3.52 kHz` interferer is suppressed, and SNR rises from `1.366 dB`
+to `16.304 dB`. This is still the C# diagnostic/offline contract; Faust/native
+DSP owns the production hot lane.
 The synthetic invariant is
 `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-self-test`;
 it renders the bioacoustic timeline, decodes direct word anchors, and requires a

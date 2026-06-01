@@ -80,6 +80,11 @@ if (args.Any(arg => string.Equals(arg, "--calibrated-audio-composite-smoke", Str
     return RunCalibratedAudioCompositeSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--dual-mic-coherence-cancellation-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunDualMicCoherenceCancellationSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--targeted-bioacoustic-probe-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunTargetedBioacousticProbeSmoke();
@@ -3411,6 +3416,63 @@ static int RunCalibratedAudioCompositeSmoke()
             : 1;
 }
 
+static int RunDualMicCoherenceCancellationSmoke()
+{
+    const int sampleRate = 48_000;
+    const int frameCount = sampleRate;
+    const double poisonHz = 3_520.0;
+    var targetBands = new[] { 440.0, 880.0, 1_760.0 };
+    var measuredBands = new[] { 440.0, 880.0, 1_760.0, poisonHz };
+    var reference = RenderCalibrationToneStack(frameCount, sampleRate, targetBands, [1.0, 0.85, 0.70], noiseScale: 0.0, seed: 31);
+    var micA = reference.ToArray();
+    var micB = reference.ToArray();
+    AddSine(micA, sampleRate, poisonHz, amplitude: 0.080, phaseRadians: 0.30);
+    AddSine(micB, sampleRate, 250.0, amplitude: 0.018, phaseRadians: 1.70);
+    micA = ApplyFractionalDelay(micA, 9.25);
+    micB = ApplyFractionalDelay(micB, -6.50);
+
+    var uncalibrated = AverageSignals([micA, micB]);
+    var result = new MimirCalibratedAudioCompositeBuilder(new MimirCalibratedAudioCompositeOptions(
+        MinimumConfidence: 0.05,
+        TargetBandEnergy: 1.0,
+        MinimumBandEnergy: 0.001,
+        MinimumBandGain: 0.90,
+        MaximumBandGain: 1.10,
+        NoiseFloorRms: 1.0e-5,
+        MinimumCoherence: 0.55,
+        IncoherentBandSuppression: 0.95)).Build(
+        [
+            NewCompositeSource("shotgun", micA, 9.25, 0.96, measuredBands, [1.0, 1.0, 1.0, 1.0], 0.020),
+            NewCompositeSource("cardioid", micB, -6.50, 0.96, measuredBands, [1.0, 1.0, 1.0, 1.0], 0.014),
+        ]);
+    var uncalibratedSnr = EstimateSnrDb(reference, uncalibrated);
+    var cancelledSnr = EstimateSnrDb(reference, result.Samples);
+    var uncalibratedPoison = ToneEnergy(uncalibrated, sampleRate, poisonHz);
+    var cancelledPoison = ToneEnergy(result.Samples, sampleRate, poisonHz);
+    var poisonBand = result.BandReports
+        .OrderBy(report => Math.Abs(report.CenterHz - poisonHz))
+        .FirstOrDefault();
+    var sharedCoherence = result.BandReports
+        .Where(report => targetBands.Any(targetHz => Math.Abs(report.CenterHz - targetHz) < 1.0))
+        .Select(report => report.Coherence)
+        .DefaultIfEmpty(0.0)
+        .Average();
+    Console.WriteLine(
+        $"dual-mic-coherence-cancellation-smoke sources={result.SourceReports.Count} bands={result.BandReports.Count} " +
+        $"uncalibratedSnrDb={uncalibratedSnr:0.000} cancelledSnrDb={cancelledSnr:0.000} " +
+        $"poisonBefore={uncalibratedPoison:0.000000} poisonAfter={cancelledPoison:0.000000} " +
+        $"poisonCoherence={poisonBand?.Coherence:0.000} poisonSuppression={poisonBand?.Suppression:0.000} sharedCoherence={sharedCoherence:0.000}");
+
+    return result.SourceReports.Count == 2 &&
+        result.BandReports.Count >= measuredBands.Length &&
+        poisonBand is { Coherence: < 0.45, Suppression: > 0.15 } &&
+        sharedCoherence > 0.80 &&
+        cancelledPoison < uncalibratedPoison * 0.70 &&
+        cancelledSnr > uncalibratedSnr + 3.0
+            ? 0
+            : 1;
+}
+
 static int RunTargetedBioacousticProbeSmoke()
 {
     var residuals = new[]
@@ -4396,6 +4458,15 @@ static float[] RenderCalibrationToneStack(
     }
 
     return samples;
+}
+
+static void AddSine(float[] samples, int sampleRate, double centerHz, double amplitude, double phaseRadians)
+{
+    var omega = 2.0 * Math.PI * centerHz / sampleRate;
+    for (var index = 0; index < samples.Length; index++)
+    {
+        samples[index] += (float)(Math.Sin(omega * index + phaseRadians) * amplitude);
+    }
 }
 
 static float[] AverageSignals(IReadOnlyList<float[]> signals)

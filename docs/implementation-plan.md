@@ -810,9 +810,13 @@ a named invariant that the native runtime cannot protect yet.
    stem generation into Faust/native DSP. The C# diagnostic bridge now exists
    as `MimirCalibratedAudioCompositeBuilder`: it consumes synchronization
    states and measured band responses, emits a corrected composite plus scores,
-   and is proved by `--calibrated-audio-composite-smoke`. Treat that as the
-   contract and offline scorer for the native/Faust implementation, not as a
-   parallel live mixer authority. The next matching probe loop also exists as
+   and is proved by `--calibrated-audio-composite-smoke`. It now also scores
+   calibrated-band coherence and suppresses incoherent measured-band components
+   before summing; `--dual-mic-coherence-cancellation-smoke` proves the two-mic
+   case by cutting a mic-local 3.52 kHz interferer while preserving coherent
+   shared tones. Treat that as the contract and offline scorer for the
+   native/Faust implementation, not as a parallel live mixer authority. The
+   next matching probe loop also exists as
    `MimirTargetedBioacousticProbePlanner`: residuals and mic pathology notes
    select gain-bounded shaped probe bands for the bioacoustic renderer. Start
    with the 192 kHz shotgun/cardioid pair; only widen to every connected mic

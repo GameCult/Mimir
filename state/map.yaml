@@ -637,11 +637,18 @@ accepted_design:
     owner for corrected mic streams: it consumes audio samples plus
     `MimirAudioSynchronizationState` delay/confidence and measured band
     responses, applies fractional alignment, sparse measured-band
-    equalization, and confidence/noise-weighted summing, then emits composite
-    samples and flatness/weight reports. `Mimir.BufferSmoke
+    equalization, calibrated-band coherence scoring, incoherent-band
+    suppression, and confidence/noise-weighted summing, then emits composite
+    samples plus flatness/weight/coherence reports and per-band
+    coherence/suppression reports. `Mimir.BufferSmoke
     --calibrated-audio-composite-smoke` proves the contract on synthetic
     delayed/noisy/colored mic paths, improving SNR from -3.171 dB uncalibrated
     to 15.135 dB calibrated and response flatness from 0.548 to 1.000.
+    `Mimir.BufferSmoke --dual-mic-coherence-cancellation-smoke` proves the
+    two-witness cancellation cut: shared tones keep about 0.999 coherence, a
+    mic-local 3.52 kHz interferer scores about 0.001 coherence and 0.948
+    suppression, its measured energy falls from 0.039195 to 0.001306, and SNR
+    rises from 1.366 dB to 16.304 dB.
     Faust/native DSP still owns the production hot lane; this C# path is a
     contract, scorer, and offline diagnostic, not a competing live mixer.
     `MimirTargetedBioacousticProbePlanner` is now the residual-driven probe

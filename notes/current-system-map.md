@@ -302,14 +302,21 @@ artifacts.
 turning that acoustic evidence into a corrected composite stream. It consumes
 sample windows plus `MimirAudioSynchronizationState` delay/confidence and
 per-band response evidence, applies fractional alignment, sparse measured-band
-equalization, and confidence/noise-weighted summing, then emits composite
-samples plus source flatness/weight reports. This is not the hot room-DSP
+equalization, calibrated-band coherence scoring, incoherent-band suppression,
+and confidence/noise-weighted summing, then emits composite samples plus source
+flatness/weight/coherence reports and per-band coherence/suppression reports.
+This is not the hot room-DSP
 authority and it does not make room nulls disappear; Faust/native DSP still
 owns the production alignment, suppression, separation, and stem lane.
 `Mimir.BufferSmoke --calibrated-audio-composite-smoke` proves the contract on
 synthetic delayed, colored, noisy mic paths: the uncalibrated mix measures
 -3.171 dB SNR, the calibrated composite measures 15.135 dB SNR, and response
 flatness improves from 0.548 to 1.000.
+`Mimir.BufferSmoke --dual-mic-coherence-cancellation-smoke` proves the
+two-witness cancellation cut: shared tones keep about 0.999 coherence, a
+mic-local 3.52 kHz interferer scores about 0.001 coherence and 0.948
+suppression, its measured energy falls from 0.039195 to 0.001306, and SNR rises
+from 1.366 dB to 16.304 dB.
 `MimirTargetedBioacousticProbePlanner` is the matching "ask the room a better
 question" owner. It consumes per-source spectral residuals and optional source
 pathology notes, then emits gain-bounded shaped probe bands for the
