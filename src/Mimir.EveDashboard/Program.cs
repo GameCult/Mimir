@@ -1549,15 +1549,20 @@ internal sealed class MimirLiveStatsSnapshot
             return null;
         }
 
-        var line = TailTextFile(trace.FullName, 64 * 1024)
-            .Split("\n", StringSplitOptions.RemoveEmptyEntries)
-            .LastOrDefault();
-        if (string.IsNullOrWhiteSpace(line))
+        foreach (var line in TailTextFile(trace.FullName, 4 * 1024 * 1024)
+            .Split("\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Reverse()
+            .Where(static candidate => candidate.Contains("\"live_score\"", StringComparison.OrdinalIgnoreCase) ||
+                candidate.Contains("\"score_gesture_envelopes\"", StringComparison.OrdinalIgnoreCase)))
         {
-            return null;
+            var parsed = ParseMoveMusicTrace(trace.FullName, line);
+            if (parsed != null)
+            {
+                return parsed;
+            }
         }
 
-        return ParseMoveMusicTrace(trace.FullName, line);
+        return null;
     }
 
     private static MimirMoveMusicStat? ParseMoveMusicTrace(string sourcePath, string line)
