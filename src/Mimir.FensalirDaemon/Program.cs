@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -1040,6 +1041,7 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
         var readiness = doc.TotalSlices <= 0 ? 0.0 : doc.ReadySlices / (double)doc.TotalSlices;
         var streamPressure = Math.Clamp(Math.Max(doc.PollAverageMs / 16.0, doc.PublishAverageMs / 16.0), 0.0, 1.0);
         var workerPressure = Math.Clamp(worker.GpuQueueMs / 1000.0, 0.0, 1.0);
+        var observedDaemons = FensalirDaemonObserver.Collect(options);
         var nodes = new List<DashboardNode>
         {
             new("daemon", $"Fensalir Daemon\n{doc.Status}", "daemon", 0.0, -0.42, 0.70, 0.18, doc.Status),
@@ -1047,6 +1049,7 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
             new("capture", $"Capture Pages\nseq {doc.LastCaptureSequence}", "cultcache", 0.0, -0.08, 0.32, 0.18, doc.LastCaptureSequence >= 0 ? "paged" : "waiting"),
             new("budget", $"Budget\nGPU {doc.GpuBudget:0.00} CPU {doc.CpuBudget:0.00}", "budget", 0.38, -0.08, 0.32, 0.18, "configured"),
             new("worker", $"Reservoir Worker\n{worker.Status}", "worker", 0.0, 0.26, 0.54, 0.18, worker.Status),
+            new("online-daemons", $"Online Daemons\n{observedDaemons.Count(static daemon => daemon.Status == "online")}/{observedDaemons.Count}", "daemon-status", -0.38, 0.48, 0.70, 0.18, "observed"),
         };
         return new DashboardState
         {
@@ -1104,6 +1107,17 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
                             Ui.Text("pressure-distance", $"bytes {pressure.CapturePageBytes} max distance {pressure.MaxDistanceFromPresentationNs}ns", "caption", PressureBind("/capturePageBytes")),
                             Ui.Text("notes", string.Join("\n", doc.Notes.Take(4)), "caption", Bind("/notes")),
                         ]),
+                    ]),
+                    Ui.Row("daemon-row-observed",
+                    [
+                        Ui.Pane("observed-daemon-pane", "Observed Daemons",
+                            observedDaemons.Select(static daemon =>
+                                Ui.Text(
+                                    $"observed-{daemon.Id}",
+                                    $"{daemon.Name}: {daemon.Status} pid {daemon.Pid} {daemon.Detail}",
+                                    daemon.Status == "online" ? "mono" : "caption"))
+                                .Cast<UiElement>()
+                                .ToArray()),
                     ]),
                 ]),
             },
@@ -1244,6 +1258,84 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
         stopping.Dispose();
     }
 }
+
+internal static class FensalirDaemonObserver
+{
+    private static readonly (string Id, string Name, string[] PidFiles)[] LocalDaemons =
+    [
+        ("verse-relay", "Verse relay", ["verse-relay-direct.pid", "verse-relay.pid"]),
+        ("verse-recorder", "Verse recorder", ["verse-recorder.pid"]),
+        ("mimir-well", "Mimir Well", ["mimir-well-rebased.pid", "mimir-well-fixed.pid", "mimir-well.pid"]),
+        ("move-sync", "Move sync", ["move-sync-lean.pid", "move-sync.pid"]),
+        ("fensalir", "Fensalir", ["fensalir-daemon.pid"]),
+    ];
+
+    public static IReadOnlyList<ObservedDaemonStatus> Collect(FensalirDaemonOptions options)
+    {
+        var runDir = Path.GetDirectoryName(options.CultCachePath) ?? "";
+        var statuses = new List<ObservedDaemonStatus>
+        {
+            new("fensalir-self", "Fensalir self", Environment.ProcessId, "online", "eve/cultmesh provider")
+        };
+        if (string.IsNullOrWhiteSpace(runDir) || !Directory.Exists(runDir))
+        {
+            statuses.Add(new("supervisor-run", "Supervisor run", 0, "missing", "run directory missing"));
+            return statuses;
+        }
+
+        foreach (var daemon in LocalDaemons)
+        {
+            statuses.Add(ObserveLocal(runDir, daemon.Id, daemon.Name, daemon.PidFiles));
+        }
+
+        return statuses
+            .GroupBy(static status => status.Id, StringComparer.Ordinal)
+            .Select(static group => group.First())
+            .OrderBy(static status => status.Name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static ObservedDaemonStatus ObserveLocal(string runDir, string id, string name, IReadOnlyList<string> pidFiles)
+    {
+        foreach (var pidFile in pidFiles)
+        {
+            var path = Path.Combine(runDir, pidFile);
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            var raw = File.ReadAllText(path).Trim();
+            if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid) || pid <= 0)
+            {
+                return new ObservedDaemonStatus(id, name, 0, "invalid", pidFile);
+            }
+
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                return new ObservedDaemonStatus(id, name, pid, process.HasExited ? "stopped" : "online", pidFile);
+            }
+            catch (ArgumentException)
+            {
+                return new ObservedDaemonStatus(id, name, pid, "stopped", pidFile);
+            }
+            catch (InvalidOperationException)
+            {
+                return new ObservedDaemonStatus(id, name, pid, "stopped", pidFile);
+            }
+        }
+
+        return new ObservedDaemonStatus(id, name, 0, "missing", "no pid file");
+    }
+}
+
+internal sealed record ObservedDaemonStatus(
+    string Id,
+    string Name,
+    int Pid,
+    string Status,
+    string Detail);
 
 internal sealed class WellLogTailState
 {

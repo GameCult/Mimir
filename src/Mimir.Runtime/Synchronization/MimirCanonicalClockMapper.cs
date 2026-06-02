@@ -2,6 +2,7 @@ namespace Mimir.Runtime.Synchronization;
 
 public sealed class MimirCanonicalClockMapper
 {
+    private const long MaxArrivalDriftBeforeRebaseNs = 10_000_000_000L;
     private readonly Dictionary<string, ClockMap> maps = new(StringComparer.Ordinal);
 
     public IReadOnlyList<MimirCanonicalClockMapSnapshot> Snapshots =>
@@ -32,6 +33,14 @@ public sealed class MimirCanonicalClockMapper
             map = new ClockMap(checked(arrivalNs - sourceTimestampNs), sourceTimestampNs, arrivalNs);
             maps.Add(key, map);
         }
+        else
+        {
+            var projectedArrivalNs = checked(sourceTimestampNs + map.OffsetNs);
+            if (Math.Abs(projectedArrivalNs - arrivalNs) > MaxArrivalDriftBeforeRebaseNs)
+            {
+                map.OffsetNs = checked(arrivalNs - sourceTimestampNs);
+            }
+        }
 
         var canonicalTimestampNs = checked(sourceTimestampNs + map.OffsetNs);
         map.LatestSourceTimestampNs = sourceTimestampNs;
@@ -48,7 +57,7 @@ public sealed class MimirCanonicalClockMapper
 
     private sealed class ClockMap(long offsetNs, long firstSourceTimestampNs, long firstArrivalNs)
     {
-        public long OffsetNs { get; } = offsetNs;
+        public long OffsetNs { get; set; } = offsetNs;
 
         public long FirstSourceTimestampNs { get; } = firstSourceTimestampNs;
 

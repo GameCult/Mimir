@@ -1,9 +1,10 @@
 param(
     [string]$NightwingHost = "nightwing",
-    [string]$WitnessUrl = "ws://192.168.1.66:8796/eve/periwinkle",
-    [string]$SubscribeUrl = "ws://127.0.0.1:8796/eve/periwinkle/subscribe",
+    [int]$VerseRelayPort = 8798,
+    [string]$WitnessUrl = "ws://192.168.1.66:8798/eve/periwinkle",
+    [string]$SubscribeUrl = "ws://127.0.0.1:8798/eve/periwinkle/subscribe",
     [string]$ConfigPath = "E:\Projects\Mimir\config\mimir-runtime.well.local.json",
-    [string]$WellPublishUrl = "ws://127.0.0.1:8796/eve/periwinkle",
+    [string]$WellPublishUrl = "ws://127.0.0.1:8798/eve/periwinkle",
     [string]$RecorderRoot = "C:\Users\Meta\Videos\Mimir\VerseCaptures",
     [int]$FensalirPort = 8799,
     [int]$FensalirWorkerMs = 2,
@@ -103,6 +104,7 @@ $manifest = [ordered]@{
     witnessUrl = $WitnessUrl
     subscribeUrl = $SubscribeUrl
     wellPublishUrl = $WellPublishUrl
+    verseRelayPort = $VerseRelayPort
     recorderRoot = $RecorderRoot
     fensalirPort = $FensalirPort
     configPath = $ConfigPath
@@ -117,7 +119,7 @@ Write-Host "Online Verse daemon run: $runDir"
 if (-not $DryRun) {
     Get-CimInstance Win32_Process |
         Where-Object {
-            ($_.CommandLine -match "Mimir.EveSensorReceiver" -and $_.CommandLine -match "--port 8796") -or
+            ($_.CommandLine -match "Mimir.EveSensorReceiver" -and $_.CommandLine -match "--port $VerseRelayPort") -or
             ($_.CommandLine -match "Mimir.VerseRecorder") -or
             ($_.CommandLine -match "Mimir.FensalirDaemon") -or
             ($_.CommandLine -match "Mimir.Well") -or
@@ -136,7 +138,7 @@ $receiver = Start-LoggedProcess `
         "--project",
         (Join-Path $repo "src\Mimir.EveSensorReceiver\Mimir.EveSensorReceiver.csproj"),
         "--",
-        "--port", "8796",
+        "--port", "$VerseRelayPort",
         "--path", "/eve/periwinkle",
         "--subscribe-path", "/eve/periwinkle/subscribe",
         "--source-id", "nightwing-witness",
@@ -144,7 +146,7 @@ $receiver = Start-LoggedProcess `
     )
 if ($receiver) { $manifest.processes["verseRelayPid"] = $receiver.Id }
 
-Wait-HttpHealth -Url "http://127.0.0.1:8796/health"
+Wait-HttpHealth -Url "http://127.0.0.1:$VerseRelayPort/health"
 
 $recorderArgs = @(
     "run",
