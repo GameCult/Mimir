@@ -679,6 +679,17 @@ accepted_design:
     through the native plugin, raw feeds remain debug inputs, and the ledger
     records the live texture, texture ring, producer-fence, and consumer-fence
     proofs.
+    `Mimir.WellObsDaemon` is the first Well-to-OBS daemon for the tightest
+    configured composite. It tails a Well relay/log, reads synchronized
+    `mimir.well_capture_page.v1` pages with inline audio bodies, applies the
+    page's configured audio mute/solo/gain selection, publishes a mono
+    `well_composite` stem plus per-source `well_<source>` stems into the
+    existing `Local\MimirObsStemBus` ABI, and refuses to invent audio when the
+    Well only emitted metadata-only bodies. `scripts/start-well-obs-daemon.ps1`
+    starts it detached with a supervisor manifest and real daemon PID. Video
+    remains owned by the existing Fensalir shared-texture path; a future cut can
+    add a Well/Fensalir texture producer, but this daemon does not create a
+    second OBS video authority.
     `MimirSynchronizedBufferPlanner` is the first aligned-buffer readout
     primitive: it chooses one canonical presentation time inside the rolling
     window and returns per-stream slices for local cameras, network display

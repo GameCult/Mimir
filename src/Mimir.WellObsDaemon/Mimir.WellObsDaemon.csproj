@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>Mimir.WellObsDaemon</AssemblyName>
+    <RootNamespace>Mimir.WellObsDaemon</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Mimir.Runtime\Mimir.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>
