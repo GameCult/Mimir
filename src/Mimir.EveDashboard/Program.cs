@@ -366,16 +366,23 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
             element.AssetUri,
             element.BindNodeId,
             element.CommandId,
-            element.Layout == null
-                ? null
-                : new MimirEveDashboardUiLayoutSnapshot(
-                    element.Layout.Direction,
-                    element.Layout.Width,
-                    element.Layout.Height,
-                    element.Layout.Grow,
-                    element.Layout.Gap,
-                    element.Layout.Padding,
-                    element.Layout.Overflow),
+                    element.Layout == null
+                        ? null
+                        : new MimirEveDashboardUiLayoutSnapshot(
+                            element.Layout.Direction,
+                            element.Layout.Width,
+                            element.Layout.Height,
+                            element.Layout.Grow,
+                            element.Layout.Gap,
+                            element.Layout.Padding,
+                            element.Layout.Overflow,
+                            element.Layout.MinWidth,
+                            element.Layout.MinHeight,
+                            element.Layout.PreferredWidth,
+                            element.Layout.PreferredHeight,
+                            element.Layout.Priority,
+                            element.Layout.Density,
+                            element.Layout.ViewportMode),
             element.Style == null
                 ? null
                 : new MimirEveDashboardUiStyleSnapshot(element.Style.Variant, element.Style.Tone),
@@ -899,8 +906,8 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
                 StatBar("audio-rms", "max channel RMS", NormalizeRms(rms), "warm", $"{rms:0.000000}"),
                 StatBar("observation-liveness", "device stream liveness", snapshot.ObservationStreams.Count == 0 ? 0.0 : liveObservationCount / (double)snapshot.ObservationStreams.Count, "cool"),
                     ]),
-                    BuildMoveMusicPane(snapshot.MoveMusic),
                     BuildWellPane(snapshot.Well),
+                    BuildMoveMusicPane(snapshot.MoveMusic),
                 ]),
             UiElement.Container(
                 "mimir-live-row-runtime",
@@ -930,7 +937,21 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             Root = UiElement.Container(
                 "mimir-live-stats-root",
                 "dashboard",
-                new DashboardUiLayout { Direction = "vertical", Gap = 6, Padding = 6, Overflow = "scroll" },
+                new DashboardUiLayout
+                {
+                    Direction = "vertical",
+                    Gap = 6,
+                    Padding = 6,
+                    Overflow = "scroll",
+                    Grow = 4,
+                    MinWidth = 96,
+                    MinHeight = 56,
+                    PreferredWidth = 156,
+                    PreferredHeight = 128,
+                    Priority = -80,
+                    Density = "continuous",
+                    ViewportMode = "continuous-metrics",
+                },
                 children),
         };
     }
@@ -1085,6 +1106,19 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             UiElement.Text("mimir-move-score", $"score {Bar(music.ScoreEnvelopeMax, 18)} max env {music.ScoreEnvelopeMax:0.000} max rgb {music.MaxRgb}", "caption"),
             UiElement.Text("mimir-move-sources", string.Join(" | ", music.Sources.Take(4)), "caption"),
         };
+        children.AddRange(music.Voices
+            .Take(5)
+            .Select(voice => UiElement.Text(
+                $"mimir-move-voice-{StableId(voice.SourceId)}",
+                $"{voice.SourceId}: {voice.NoteName} {voice.FrequencyHz:0.0}Hz c={voice.Confidence:0.000} {voice.Role}",
+                "caption")));
+        children.Add(UiElement.Text("mimir-move-piano-roll", music.PianoRoll, "mono"));
+        children.AddRange(music.MoveTargets
+            .Take(5)
+            .Select(target => UiElement.Text(
+                $"mimir-move-target-{target.MoveIndex}",
+                $"move {target.MoveIndex}: {target.NoteName} {target.SourceId} priority {target.CalibrationPriority:0.000}",
+                "caption")));
 
         return UiElement.Pane("mimir-move-music-pane", "Move Score", children);
     }
@@ -1096,12 +1130,47 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             return UiElement.Pane("mimir-well-pane", "Well", [UiElement.Text("mimir-well-empty", "no Well snapshot yet", "caption")]);
         }
 
-        return UiElement.Pane("mimir-well-pane", "Well", [
-            UiElement.Text("mimir-well-summary", $"seq {well.Sequence} {well.ElapsedSeconds:0}s ingested {well.IngestedSamples:0} sources {well.LiveSources}/{well.ConfiguredSources}", "mono"),
+        var children = new List<DashboardUiElement>
+        {
+            UiElement.Text("mimir-well-summary", $"seq {well.Sequence} {well.ElapsedSeconds:0}s ingested {well.IngestedSamples:0} sources {well.LiveSources}/{well.ConfiguredSources} source errors {well.SourceErrorCount}", "mono"),
             StatBar("mimir-well-completeness", "frame completeness", well.SynchronizedFrameComplete ? 1.0 : 0.0, well.SynchronizedFrameComplete ? "cool" : "danger"),
-            UiElement.Text("mimir-well-buffers", $"buffers {well.Buffers.Count} audio {well.AudioBuffers} video {well.VideoBuffers} ready {well.ReadySlices}/{well.TotalSlices}", "caption"),
+            UiElement.Text("mimir-well-frame", $"frame ready {well.ReadySlices}/{well.TotalSlices} delay {well.PresentationDelayMs:0}ms degraded {well.FrameDegradedKind} {well.FrameDegradedReason}", "caption"),
+            UiElement.Text("mimir-well-latency", $"latency {well.LatencyCurrentMs:0}ms floor {well.LatencyFloorMs:0} ceiling {well.LatencyCeilingMs:0} overlap {well.LatencyRetainedOverlapMs:0}ms skew {well.LatencyEdgeSkewMs:0.0}ms {well.LatencyReason}", "caption"),
+            UiElement.Text("mimir-well-pressure", $"poll {well.PollAverageMs:0.000}/{well.PollMaxMs:0.000}ms zero {well.ZeroPollIterations} publish {well.PublishAverageMs:0.000}/{well.PublishMaxMs:0.000}ms bytes {well.PublishedBytes:0}", "caption"),
+            UiElement.Text("mimir-well-buffers", $"buffers {well.Buffers.Count} audio {well.AudioBuffers} video {well.VideoBuffers} capture bodies {well.CaptureInlineBodies}", "caption"),
+            UiElement.Text("mimir-well-clock-maps", $"canonical clocks {well.CanonicalClockMaps.Count} max offset {well.MaxCanonicalClockOffsetMs:0.000}ms", "caption"),
+            UiElement.Text("mimir-well-features", $"video features stable {well.FeatureStableTracks} c={well.FeatureMeanConfidence:0.000} motion {well.FeatureMeanMotionPixelsPerSecond:0.0}px/s faust signals {well.FeatureSignals.Count}", "caption"),
             UiElement.Text("mimir-well-probe", well.Probe == null ? "probe: none" : $"probe emit={well.Probe.ShouldEmit} sync={well.Probe.SyncConfidence:0.000} freq={well.Probe.FrequencyConfidence:0.000} {well.Probe.Reason}", "caption"),
-        ]);
+        };
+        children.AddRange(well.FeatureSignals
+            .OrderByDescending(static signal => signal.Confidence)
+            .ThenBy(static signal => signal.SourceId, StringComparer.Ordinal)
+            .Take(5)
+            .Select(signal => UiElement.Text(
+                $"mimir-well-feature-{StableId(signal.SourceId)}",
+                $"{signal.SourceId}: tracks {signal.StableTrackCount} c={signal.Confidence:0.000} motion {signal.MotionEnergy:0.000} centroid {signal.CentroidX:0.00},{signal.CentroidY:0.00}",
+                "caption")));
+        children.AddRange(well.ClockDomains
+            .Take(6)
+            .Select(domain => UiElement.Text(
+                $"mimir-well-clock-{StableId(domain.ClockDomainId)}",
+                $"{domain.ClockDomainId}: {domain.SourceCount} src overlap {domain.OverlapMs:0.000}ms offset {domain.OffsetMs:0.000}ms {(domain.IsReference ? "ref" : "")}",
+                "caption")));
+        children.AddRange(well.CanonicalClockMaps
+            .OrderByDescending(static map => Math.Abs(map.OffsetMs))
+            .ThenBy(static map => map.StreamKey, StringComparer.Ordinal)
+            .Take(4)
+            .Select(map => UiElement.Text(
+                $"mimir-well-clock-map-{StableId(map.StreamKey)}",
+                $"{map.StreamKey}: ingress offset {map.OffsetMs:0.000}ms samples {map.SampleCount}",
+                "caption")));
+        children.AddRange(well.VisualCalibration
+            .Take(6)
+            .Select(camera => UiElement.Text(
+                $"mimir-well-cal-{StableId(camera.SourceId)}",
+                $"{camera.SourceId}: score {camera.BestScore:0.000} leds {camera.BestDetectedLedCount} exp {camera.BestExposure:0} gain {camera.BestGain:0} {camera.State}",
+                "caption")));
+        return UiElement.Pane("mimir-well-pane", "Well", children);
     }
 
     private static DashboardUiElement BuildCalibrationPane(MimirLiveStatsSnapshot snapshot)
@@ -1225,7 +1294,7 @@ internal sealed class MimirLiveStatsSnapshot
             ActuatorCommands = LatestBySource(telemetryLines.Select(ParseActuatorCommand).Where(static value => value != null)!),
             ObservationStreams = LatestObservationStreams(observationLines),
             Well = LatestWellSnapshot(observationLines),
-            MoveMusic = LatestMoveMusicTrace(),
+            MoveMusic = LatestMoveMusicTrace(telemetrySource, telemetryLines),
         };
     }
 
@@ -1361,21 +1430,103 @@ internal sealed class MimirLiveStatsSnapshot
                 JsonNumberAny(probeElement, "AggregateFrequencyResponseConfidence", "aggregateFrequencyResponseConfidence"),
                 JsonStringAny(probeElement, "reason") ?? "unknown")
             : null;
+        var streamPressure = TryGetAny(root, "streamPressure");
+        var pollPressure = TryGetAny(streamPressure, "poll");
+        var publishPressure = TryGetAny(streamPressure, "publish");
+        var latency = TryGetAny(root, "latency");
+        var featureSignals = TryGetAny(root, "featureSignals");
+        var featureSignalStats = ArrayItems(TryGetAny(featureSignals, "signals"))
+            .Select(static signal => new MimirWellFeatureSignalStat(
+                JsonStringAny(signal, "SourceId", "sourceId") ?? "unknown",
+                (int)JsonNumberAny(signal, "StableTrackCount", "stableTrackCount"),
+                JsonNumberAny(signal, "Confidence", "confidence"),
+                JsonNumberAny(signal, "MeanMotionPixelsPerSecond", "meanMotionPixelsPerSecond"),
+                JsonNumberAny(signal, "MotionEnergy", "motionEnergy"),
+                JsonNumberAny(signal, "NormalizedCentroidX", "normalizedCentroidX"),
+                JsonNumberAny(signal, "NormalizedCentroidY", "normalizedCentroidY")))
+            .ToArray();
+        var canonicalClockMaps = ArrayItems(TryGetAny(root, "canonicalClockMaps"))
+            .Select(static map => new MimirWellCanonicalClockMapStat(
+                JsonStringAny(map, "StreamKey", "streamKey") ?? "unknown",
+                JsonNumberAny(map, "offsetMs"),
+                (long)JsonNumberAny(map, "SampleCount", "sampleCount")))
+            .ToArray();
+        var clockDomains = ArrayItems(TryGetAny(TryGetAny(root, "clockDomains"), "domains"))
+            .Select(static domain => new MimirWellClockDomainStat(
+                JsonStringAny(domain, "ClockDomainId", "clockDomainId") ?? "unknown",
+                (int)JsonNumberAny(domain, "SourceCount", "sourceCount"),
+                JsonNumberAny(domain, "OverlapNs", "overlapNs") / 1_000_000.0,
+                JsonBoolAny(domain, "HasLocalOverlap", "hasLocalOverlap"),
+                JsonBoolAny(domain, "IsReferenceDomain", "isReferenceDomain"),
+                JsonNumberAny(domain, "ProvisionalOffsetToReferenceMs", "provisionalOffsetToReferenceMs")))
+            .ToArray();
+        var visualCalibration = ArrayItems(TryGetAny(TryGetAny(root, "visualCalibration"), "cameras"))
+            .Select(static camera => new MimirWellVisualCalibrationStat(
+                JsonStringAny(camera, "SourceId", "sourceId") ?? "unknown",
+                JsonStringAny(camera, "State", "state") ?? "unknown",
+                JsonNumberAny(camera, "BestScore", "bestScore"),
+                (int)JsonNumberAny(camera, "BestDetectedLedCount", "bestDetectedLedCount"),
+                JsonBoolAny(camera, "BestUsableForCalibration", "bestUsableForCalibration"),
+                JsonNumberAny(camera, "BestExposure", "bestExposure"),
+                JsonNumberAny(camera, "BestGain", "bestGain")))
+            .ToArray();
+        var captureStorage = TryGetAny(TryGetAny(root, "capture"), "storage");
+        var publication = TryGetAny(root, "publication");
+        var stems = ArrayItems(TryGetAny(publication, "stems")).ToArray();
         return new MimirWellStat(
             (long)JsonNumberAny(root, "sequence"),
             JsonNumberAny(root, "elapsedSeconds"),
             JsonNumberAny(root, "ingestedSamples"),
             (int)JsonNumberAny(root, "configuredSources"),
             (int)JsonNumberAny(root, "liveSources"),
+            ArrayItems(TryGetAny(root, "sourceErrors")).Count(),
             JsonBoolAny(frame, "IsComplete", "isComplete"),
+            JsonNumberAny(frame, "PresentationDelayMs", "presentationDelayMs"),
+            JsonStringAny(frame, "degradedKind") ?? "",
+            JsonStringAny(frame, "degradedReason") ?? "",
             slices.Count(static slice => string.Equals(JsonStringAny(slice, "Status", "status"), "Ready", StringComparison.OrdinalIgnoreCase)),
             slices.Length,
+            JsonNumberAny(latency, "currentDelayMs"),
+            JsonNumberAny(latency, "ceilingDelayMs"),
+            JsonNumberAny(latency, "floorDelayMs"),
+            JsonNumberAny(latency, "retainedOverlapMs"),
+            JsonNumberAny(latency, "edgeSkewMs"),
+            JsonStringAny(latency, "Reason", "reason") ?? "",
+            JsonNumberAny(pollPressure, "averageMilliseconds"),
+            JsonNumberAny(pollPressure, "maxMilliseconds"),
+            (long)JsonNumberAny(pollPressure, "zeroPollIterations"),
+            JsonNumberAny(publishPressure, "averageMilliseconds"),
+            JsonNumberAny(publishPressure, "maxMilliseconds"),
+            (long)JsonNumberAny(publishPressure, "bytes"),
+            JsonStringAny(captureStorage, "bodyTransport") ?? "unknown",
+            stems.Length,
             buffers,
+            clockDomains,
             states,
+            visualCalibration,
+            JsonNumberAny(featureSignals, "MeanConfidence", "meanConfidence"),
+            JsonNumberAny(featureSignals, "MeanMotionPixelsPerSecond", "meanMotionPixelsPerSecond"),
+            (int)JsonNumberAny(featureSignals, "StableTrackCount", "stableTrackCount"),
+            featureSignalStats,
+            canonicalClockMaps,
             probe);
     }
 
-    private static MimirMoveMusicStat? LatestMoveMusicTrace()
+    private static MimirMoveMusicStat? LatestMoveMusicTrace(string telemetrySource, IReadOnlyList<string> telemetryLines)
+    {
+        var configuredLine = telemetryLines
+            .Reverse()
+            .FirstOrDefault(static line => line.Contains("\"live_score\"", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("\"score_gesture_envelopes\"", StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(configuredLine))
+        {
+            return ParseMoveMusicTrace(telemetrySource, configuredLine);
+        }
+
+        return LatestMoveMusicTraceFromRuntime();
+    }
+
+    private static MimirMoveMusicStat? LatestMoveMusicTraceFromRuntime()
     {
         var runtimeRoot = Path.Combine(AppContext.BaseDirectory, "artifacts", "runtime");
         if (!Directory.Exists(runtimeRoot))
@@ -1406,6 +1557,11 @@ internal sealed class MimirLiveStatsSnapshot
             return null;
         }
 
+        return ParseMoveMusicTrace(trace.FullName, line);
+    }
+
+    private static MimirMoveMusicStat? ParseMoveMusicTrace(string sourcePath, string line)
+    {
         try
         {
             using var document = JsonDocument.Parse(line);
@@ -1424,6 +1580,30 @@ internal sealed class MimirLiveStatsSnapshot
             }
 
             var envelopes = ArrayItems(TryGetAny(root, "score_gesture_envelopes")).Select(JsonNumber).DefaultIfEmpty(0.0).ToArray();
+            var liveScore = TryGetAny(root, "live_score");
+            var voices = ArrayItems(TryGetAny(liveScore, "voices"))
+                .Select(static voice => new MimirMoveMusicVoiceStat(
+                    JsonStringAny(voice, "source") ?? "unknown",
+                    JsonStringAny(voice, "role") ?? "voice",
+                    JsonStringAny(voice, "note_name") ?? "?",
+                    JsonNumberAny(voice, "frequency_hz"),
+                    JsonNumberAny(voice, "midi"),
+                    JsonNumberAny(voice, "confidence"),
+                    JsonNumberAny(voice, "strength"),
+                    JsonBoolAny(voice, "active")))
+                .OrderByDescending(static voice => voice.Active)
+                .ThenByDescending(static voice => voice.Confidence)
+                .ToArray();
+            var targets = ArrayItems(TryGetAny(liveScore, "move_targets"))
+                .Select(static target => new MimirMoveMusicTargetStat(
+                    (int)JsonNumberAny(target, "move_index"),
+                    JsonStringAny(target, "source") ?? "unknown",
+                    JsonStringAny(target, "note_name") ?? "?",
+                    JsonNumberAny(target, "target_note"),
+                    JsonNumberAny(target, "confidence"),
+                    JsonNumberAny(target, "calibration_priority")))
+                .OrderBy(static target => target.MoveIndex)
+                .ToArray();
             var sources = ArrayItems(TryGetAny(root, "music_sources"))
                 .Select(static source =>
                 {
@@ -1438,7 +1618,7 @@ internal sealed class MimirLiveStatsSnapshot
                 })
                 .ToArray();
             return new MimirMoveMusicStat(
-                trace.FullName,
+                sourcePath,
                 JsonNumberAny(root, "bpm"),
                 JsonNumberAny(root, "bpm_confidence"),
                 JsonNumberAny(root, "loudness_gate"),
@@ -1448,12 +1628,52 @@ internal sealed class MimirLiveStatsSnapshot
                 JsonStringAny(root, "chord_name") ?? "?",
                 envelopes.Max(),
                 maxRgb,
-                sources);
+                sources,
+                voices,
+                targets,
+                BuildPianoRoll(voices, targets));
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    private static string BuildPianoRoll(
+        IReadOnlyList<MimirMoveMusicVoiceStat> voices,
+        IReadOnlyList<MimirMoveMusicTargetStat> targets)
+    {
+        var marks = new char[36];
+        Array.Fill(marks, '.');
+        foreach (var voice in voices.Where(static voice => voice.Active))
+        {
+            var index = PianoIndex(voice.MidiNote);
+            if (index >= 0)
+            {
+                marks[index] = voice.Confidence >= 0.65 ? '#' : '+';
+            }
+        }
+
+        foreach (var target in targets)
+        {
+            var index = PianoIndex(target.TargetNote);
+            if (index >= 0 && marks[index] == '.')
+            {
+                marks[index] = 'o';
+            }
+        }
+
+        return $"C3 {new string(marks)} C6";
+    }
+
+    private static int PianoIndex(double midiNote)
+    {
+        if (midiNote <= 0.0)
+        {
+            return -1;
+        }
+
+        return (int)Math.Clamp(Math.Round(midiNote) - 48, 0, 35);
     }
 
     private static IReadOnlyList<MimirObservationStreamStat> LatestObservationStreams(IEnumerable<string> lines)
@@ -1844,16 +2064,45 @@ internal sealed record MimirWellStat(
     double IngestedSamples,
     int ConfiguredSources,
     int LiveSources,
+    int SourceErrorCount,
     bool SynchronizedFrameComplete,
+    double PresentationDelayMs,
+    string FrameDegradedKind,
+    string FrameDegradedReason,
     int ReadySlices,
     int TotalSlices,
+    double LatencyCurrentMs,
+    double LatencyCeilingMs,
+    double LatencyFloorMs,
+    double LatencyRetainedOverlapMs,
+    double LatencyEdgeSkewMs,
+    string LatencyReason,
+    double PollAverageMs,
+    double PollMaxMs,
+    long ZeroPollIterations,
+    double PublishAverageMs,
+    double PublishMaxMs,
+    long PublishedBytes,
+    string CaptureInlineBodies,
+    int PublicationStemCount,
     IReadOnlyList<MimirWellBufferStat> Buffers,
+    IReadOnlyList<MimirWellClockDomainStat> ClockDomains,
     IReadOnlyList<MimirWellAudioSyncStateStat> AudioSyncStates,
+    IReadOnlyList<MimirWellVisualCalibrationStat> VisualCalibration,
+    double FeatureMeanConfidence,
+    double FeatureMeanMotionPixelsPerSecond,
+    int FeatureStableTracks,
+    IReadOnlyList<MimirWellFeatureSignalStat> FeatureSignals,
+    IReadOnlyList<MimirWellCanonicalClockMapStat> CanonicalClockMaps,
     MimirWellProbeStat? Probe)
 {
     public int AudioBuffers => Buffers.Count(static buffer => string.Equals(buffer.Kind, "Audio", StringComparison.OrdinalIgnoreCase));
 
     public int VideoBuffers => Buffers.Count(static buffer => string.Equals(buffer.Kind, "Video", StringComparison.OrdinalIgnoreCase));
+
+    public double MaxCanonicalClockOffsetMs => CanonicalClockMaps.Count == 0
+        ? 0.0
+        : CanonicalClockMaps.Max(static map => Math.Abs(map.OffsetMs));
 }
 
 internal sealed record MimirWellBufferStat(
@@ -1869,6 +2118,14 @@ internal sealed record MimirWellBufferStat(
 
 internal sealed record MimirWellAudioSyncStateStat(string SourceId, string ReferenceSourceId, double DelaySamples, double SroPpm, double Confidence);
 
+internal sealed record MimirWellClockDomainStat(string ClockDomainId, int SourceCount, double OverlapMs, bool HasLocalOverlap, bool IsReference, double OffsetMs);
+
+internal sealed record MimirWellVisualCalibrationStat(string SourceId, string State, double BestScore, int BestDetectedLedCount, bool BestUsableForCalibration, double BestExposure, double BestGain);
+
+internal sealed record MimirWellFeatureSignalStat(string SourceId, int StableTrackCount, double Confidence, double MeanMotionPixelsPerSecond, double MotionEnergy, double CentroidX, double CentroidY);
+
+internal sealed record MimirWellCanonicalClockMapStat(string StreamKey, double OffsetMs, long SampleCount);
+
 internal sealed record MimirWellProbeStat(bool ShouldEmit, double SyncConfidence, double FrequencyConfidence, string Reason);
 
 internal sealed record MimirMoveMusicStat(
@@ -1882,7 +2139,14 @@ internal sealed record MimirMoveMusicStat(
     string ChordName,
     double ScoreEnvelopeMax,
     int MaxRgb,
-    IReadOnlyList<string> Sources);
+    IReadOnlyList<string> Sources,
+    IReadOnlyList<MimirMoveMusicVoiceStat> Voices,
+    IReadOnlyList<MimirMoveMusicTargetStat> MoveTargets,
+    string PianoRoll);
+
+internal sealed record MimirMoveMusicVoiceStat(string SourceId, string Role, string NoteName, double FrequencyHz, double MidiNote, double Confidence, double Strength, bool Active);
+
+internal sealed record MimirMoveMusicTargetStat(int MoveIndex, string SourceId, string NoteName, double TargetNote, double Confidence, double CalibrationPriority);
 
 internal sealed class MimirStreamLayoutProvider : MutableDashboardProvider
 {
@@ -2016,6 +2280,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
         var summary = TryGet(root, "summary");
         var controls = TryGet(root, "controls");
         var cultMesh = TryGet(root, "cultMesh");
+        var orchestrator = TryGet(root, "orchestrator");
         var participants = ArrayItems(TryGet(root, "participants")).ToArray();
         var upcoming = ArrayItems(TryGet(root, "upcomingTurns")).ToArray();
 
@@ -2070,7 +2335,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
             SelectedNodeId = selectedNodeId,
             Nodes = nodes,
         };
-        state.Surface = BuildVoidBotSurface(state, summary, cultMesh, controls, upcoming, participants, selectedAgent);
+        state.Surface = BuildVoidBotSurface(state, summary, cultMesh, controls, orchestrator, upcoming, participants, selectedAgent);
         return state;
     }
 
@@ -2079,6 +2344,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
         JsonElement summary,
         JsonElement cultMesh,
         JsonElement controls,
+        JsonElement orchestrator,
         IReadOnlyList<JsonElement> upcoming,
         IReadOnlyList<JsonElement> participants,
         JsonElement selectedAgent)
@@ -2096,13 +2362,35 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
             Root = UiElement.Container(
                 "voidbot-cockpit",
                 "cockpit",
-                new DashboardUiLayout { Direction = "vertical", Gap = 10, Padding = 10 },
+                new DashboardUiLayout
+                {
+                    Direction = "vertical",
+                    Gap = 8,
+                    Padding = 8,
+                    Overflow = "scroll",
+                    Grow = 5,
+                    MinWidth = 112,
+                    MinHeight = 30,
+                    PreferredWidth = 156,
+                    PreferredHeight = 58,
+                    Priority = -30,
+                    Density = "continuous",
+                    ViewportMode = "continuous-ops",
+                },
                 [
                     BuildTurnRail(upcoming),
                     UiElement.Container(
+                        "voidbot-ops-row",
+                        "ops-row",
+                        new DashboardUiLayout { Direction = "horizontal", Gap = 8, Grow = 1 },
+                        [
+                            BuildUpcomingFacesPane(upcoming),
+                            BuildWatchdogPane(orchestrator),
+                        ]),
+                    UiElement.Container(
                         "voidbot-workspace",
                         "workspace",
-                        new DashboardUiLayout { Direction = "horizontal", Gap = 10, Grow = 1 },
+                        new DashboardUiLayout { Direction = "horizontal", Gap = 8, Grow = 2 },
                         [
                             BuildSelectedFacePane(summary, cultMesh, selectedAgent, cadence, generatedAt),
                             BuildStateGraphPane(leaves),
@@ -2123,7 +2411,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
 
     private DashboardUiElement BuildTurnRail(IReadOnlyList<JsonElement> upcoming)
     {
-        var count = Math.Min(8, upcoming.Count);
+        var count = Math.Min(14, upcoming.Count);
         var cards = new List<DashboardUiElement>();
         for (var index = 0; index < count; index++)
         {
@@ -2150,6 +2438,70 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
             "ctb-rail",
             new DashboardUiLayout { Direction = "horizontal", Gap = 8, Height = 112, Overflow = "scroll-x" },
             cards);
+    }
+
+    private DashboardUiElement BuildUpcomingFacesPane(IReadOnlyList<JsonElement> upcoming)
+    {
+        var rows = upcoming
+            .Take(10)
+            .Select((turn, index) =>
+            {
+                var identityId = StringValue(turn, "identityId") ?? $"turn-{index}";
+                var active = !string.IsNullOrWhiteSpace(StringValue(turn, "activeJobId"));
+                var mentionCount = NumberValue(turn, "pendingMentionCount") ?? 0;
+                var rest = TryGet(turn, "restState");
+                var napping = BoolValue(rest, "isNapping") == true;
+                var state = active ? "active" : mentionCount > 0 ? "mention" : napping ? "nap" : Minutes(NumberValue(turn, "nextTurnInMinutes"));
+                var heat = NumberValue(turn, "heat") ?? 0;
+                var speed = NumberValue(turn, "effectiveSpeed") ?? 0;
+                return UiElement.Text(
+                    $"upcoming-face-{index}-{identityId}",
+                    $"{index + 1,2}. {(StringValue(turn, "displayName") ?? identityId),-10} {state,-8} {StringValue(turn, "repoName") ?? "repo"}  spd {speed:0.###} heat {heat:0.##}",
+                    "mono");
+            })
+            .ToArray();
+
+        return UiElement.Pane(
+            "upcoming-faces-pane",
+            "Next Faces",
+            rows.Length > 0
+                ? rows
+                : [UiElement.Text("upcoming-faces-empty", "no upcoming Face turns", "caption")]);
+    }
+
+    private DashboardUiElement BuildWatchdogPane(JsonElement orchestrator)
+    {
+        var state = StringValue(orchestrator, "state") ?? "unknown";
+        var organs = ArrayItems(TryGet(orchestrator, "organs")).ToArray();
+        var watchdog = organs.FirstOrDefault(organ => string.Equals(StringValue(organ, "id"), "voidbot-operations-watchdog", StringComparison.OrdinalIgnoreCase));
+        var children = new List<DashboardUiElement>
+        {
+            UiElement.Text("watchdog-summary", $"orchestrator {state}  organs {organs.Length}", "mono"),
+        };
+
+        if (watchdog.ValueKind != JsonValueKind.Undefined)
+        {
+            children.Add(UiElement.Text(
+                "watchdog-status",
+                $"watchdog {StringValue(watchdog, "lastStatus") ?? "unknown"} exit {(NumberValue(watchdog, "lastExitCode") ?? 0):0}\nlast {ShortIso(StringValue(watchdog, "lastFinishedAt") ?? StringValue(watchdog, "lastStartedAt"))}",
+                "strong"));
+        }
+        else
+        {
+            children.Add(UiElement.Text("watchdog-missing", "watchdog organ not present in snapshot", "caption"));
+        }
+
+        children.AddRange(organs
+            .Where(static organ => organ.ValueKind != JsonValueKind.Undefined)
+            .OrderBy(organ => string.Equals(StringValue(organ, "id"), "voidbot-operations-watchdog", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(organ => StringValue(organ, "id"))
+            .Take(7)
+            .Select(organ => UiElement.Text(
+                $"watchdog-organ-{StableId(StringValue(organ, "id") ?? "organ")}",
+                $"{StringValue(organ, "label") ?? StringValue(organ, "id") ?? "organ"}: {StringValue(organ, "lastStatus") ?? "unknown"}",
+                "caption")));
+
+        return UiElement.Pane("voidbot-watchdog-pane", "VoidBot Watchdog", children);
     }
 
     private DashboardUiElement BuildSelectedFacePane(JsonElement summary, JsonElement cultMesh, JsonElement selectedAgent, double cadence, string generatedAt)
@@ -2447,6 +2799,29 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..Math.Max(0, max - 1)] + "...";
+
+    private static string StableId(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value.ToLowerInvariant())
+        {
+            builder.Append(char.IsLetterOrDigit(ch) ? ch : '-');
+        }
+
+        return builder.ToString().Trim('-');
+    }
+
+    private static string ShortIso(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "unknown";
+        }
+
+        return DateTimeOffset.TryParse(value, out var timestamp)
+            ? timestamp.ToLocalTime().ToString("MM-dd HH:mm")
+            : value;
+    }
 }
 
 internal sealed record VoidBotStateLeaf(string Label, string Path, string Preview, string Detail);
@@ -2647,6 +3022,20 @@ internal sealed class DashboardUiLayout
     public double? Padding { get; set; }
 
     public string? Overflow { get; set; }
+
+    public double? MinWidth { get; set; }
+
+    public double? MinHeight { get; set; }
+
+    public double? PreferredWidth { get; set; }
+
+    public double? PreferredHeight { get; set; }
+
+    public double? Priority { get; set; }
+
+    public string? Density { get; set; }
+
+    public string? ViewportMode { get; set; }
 }
 
 internal sealed class DashboardUiStyle

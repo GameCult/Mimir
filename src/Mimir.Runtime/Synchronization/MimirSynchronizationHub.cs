@@ -7,6 +7,7 @@ public sealed class MimirSynchronizationHub : IDisposable
     private readonly MimirComplexContourRuntimeAnalyzer? complexContourSynchronization;
     private readonly MimirAudioSynchronizationStateTracker audioSynchronizationState = new();
     private readonly MimirBioacousticProbeScheduler bioacousticProbeScheduler = new();
+    private readonly MimirCanonicalClockMapper clockMapper = new();
     private readonly Dictionary<string, MimirAudioSynchronizationReport> audioSynchronizationReports = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MimirAudioSynchronizationReport> complexContourReports = new(StringComparer.Ordinal);
     private readonly MimirChirpBinCalibrationModel? chirpBinCalibrationModel;
@@ -43,6 +44,9 @@ public sealed class MimirSynchronizationHub : IDisposable
 
     public IReadOnlyList<MimirAudioSynchronizationState> AudioSynchronizationStates =>
         audioSynchronizationState.States;
+
+    public IReadOnlyList<MimirCanonicalClockMapSnapshot> CanonicalClockMaps =>
+        clockMapper.Snapshots;
 
     public IReadOnlyList<MimirAudioSynchronizationReport> AudioSynchronizationReports =>
         audioSynchronizationReports.Values.OrderBy(report => report.SourceId, StringComparer.Ordinal).ToArray();
@@ -110,9 +114,13 @@ public sealed class MimirSynchronizationHub : IDisposable
         var consumed = 0;
         foreach (var source in sources)
         {
-            for (var index = 0; index < maxSamplesPerSource && source.TryRead(out var sample); index++)
+            var logicalStreamCount = source is IMimirMultiplexedStreamSource multiplexed
+                ? Math.Max(1, multiplexed.LogicalStreamCount)
+                : 1;
+            var sourceBudget = checked(Math.Max(1, maxSamplesPerSource) * logicalStreamCount);
+            for (var index = 0; index < sourceBudget && source.TryRead(out var sample); index++)
             {
-                Buffers.Append(sample);
+                Buffers.Append(clockMapper.ToCanonical(sample));
                 consumed++;
                 ingestedSamples++;
             }

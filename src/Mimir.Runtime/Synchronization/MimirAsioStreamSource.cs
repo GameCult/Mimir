@@ -11,7 +11,7 @@ public sealed record MimirAsioStreamSourceOptions(
     IReadOnlyList<string> SourceIds);
 
 [SupportedOSPlatform("windows")]
-public sealed class MimirAsioStreamSource : IMimirStreamSource
+public sealed class MimirAsioStreamSource : IMimirMultiplexedStreamSource
 {
     private const string DefaultClsid = "{AC4D0455-50D7-4498-B3CD-9A41D130B759}";
     private const int MaxQueuedBlocks = 32768;
@@ -56,6 +56,8 @@ public sealed class MimirAsioStreamSource : IMimirStreamSource
     public MimirAsioStreamSourceOptions Options { get; }
 
     public bool ExposesDescriptorBuffer => false;
+
+    public int LogicalStreamCount => Math.Max(1, sourceIds.Length);
 
     public bool TryRead(out MimirStreamSample sample)
     {

@@ -58,6 +58,8 @@ var nextVisualCalibration = DateTimeOffset.MinValue;
 var frameDegradedCount = 0L;
 var nextFrameDegradedLog = DateTimeOffset.MinValue;
 var streamTelemetry = new MimirWellStreamTelemetry();
+var latencyController = new MimirWellLatencyController(options);
+var featureSignals = new MimirWellFeatureSignalBank(options);
 var presentation = new MimirPresentationControlState();
 var exposureController = new MimirCameraExposureController(new MimirCameraExposureControlOptions(
     options.VisualCalibrationEnabled,
@@ -102,7 +104,10 @@ while (!stopping.IsCancellationRequested)
     if (now >= nextPublish)
     {
         presentation.SyncFromBuffers(hub.Buffers.Buffers);
-        var frameResult = BuildFrameOrEmpty(hub, TimeSpan.FromMilliseconds(options.PresentationDelayMs));
+        var latencyDecision = latencyController.Decide(hub, now);
+        var frameResult = BuildFrameOrEmpty(hub, latencyDecision.PresentationDelay);
+        latencyController.ObserveFrame(frameResult);
+        var featureSignalFrame = featureSignals.Update(hub.Buffers.Buffers, frameResult.Frame);
         if (!string.IsNullOrWhiteSpace(frameResult.DegradedReason))
         {
             frameDegradedCount++;
@@ -121,6 +126,8 @@ while (!stopping.IsCancellationRequested)
             hub,
             presentation,
             frameResult,
+            latencyDecision,
+            featureSignalFrame,
             exposureController.Statuses,
             sourceErrors,
             streamTelemetry.Snapshot(now, subscribersAreExternal: true),
@@ -130,6 +137,21 @@ while (!stopping.IsCancellationRequested)
             await publisher.PublishAsync(snapshot, "mimir.well_snapshot.v1", stopping.Token).ConfigureAwait(false));
         if (options.CapturePagesEnabled && now >= nextCapture)
         {
+            var nextStreamSequence = captureSequence + 1;
+            if (options.StreamFramesEnabled)
+            {
+                foreach (var streamFrame in MimirWellCapturePage.BuildStreamFrames(
+                             options,
+                             frameResult,
+                             hub.Buffers.Buffers,
+                             nextStreamSequence,
+                             startedAt))
+                {
+                    streamTelemetry.ObservePublish(
+                        await publisher.PublishAsync(streamFrame, "mimir.cultmesh_stream_frame.v1", stopping.Token).ConfigureAwait(false));
+                }
+            }
+
             var capturePage = MimirWellCapturePage.Build(
                 options,
                 presentation,
@@ -194,6 +216,386 @@ internal sealed record MimirWellFrameBuildResult(
     MimirSynchronizedBufferFrame Frame,
     string DegradedKind,
     string DegradedReason);
+
+internal sealed record MimirWellLatencyDecision(
+    TimeSpan PresentationDelay,
+    TimeSpan CeilingDelay,
+    TimeSpan FloorDelay,
+    TimeSpan RetainedOverlap,
+    TimeSpan EdgeSkew,
+    double ReadinessConfidence,
+    double SyncConfidence,
+    int ActiveBufferCount,
+    int ReadySliceCount,
+    int TotalSliceCount,
+    string Reason);
+
+internal sealed class MimirWellLatencyController
+{
+    private readonly MimirWellOptions options;
+    private readonly TimeSpan floor;
+    private TimeSpan current;
+    private int completeStreak;
+    private int degradedStreak;
+    private MimirWellFrameBuildResult? lastFrame;
+
+    public MimirWellLatencyController(MimirWellOptions options)
+    {
+        this.options = options;
+        floor = TimeSpan.FromMilliseconds(Math.Clamp(options.MinPresentationDelayMs, 0, options.PresentationDelayMs));
+        current = TimeSpan.FromMilliseconds(Math.Clamp(
+            options.TargetPresentationDelayMs,
+            options.MinPresentationDelayMs,
+            options.PresentationDelayMs));
+    }
+
+    public MimirWellLatencyDecision Decide(MimirSynchronizationHub hub, DateTimeOffset now)
+    {
+        var active = hub.Buffers.Buffers
+            .Where(static buffer => buffer.Latest.HasValue)
+            .ToArray();
+        if (active.Length == 0)
+        {
+            current = TimeSpan.FromMilliseconds(options.PresentationDelayMs);
+            return Decision(TimeSpan.Zero, TimeSpan.Zero, 0.0, 0.0, 0, 0, 0, "waiting-for-sources");
+        }
+
+        var latestEdges = active
+            .Select(static buffer => buffer.Latest?.TimestampNs ?? 0L)
+            .Where(static value => value > 0)
+            .ToArray();
+        var starts = active
+            .Select(static buffer => buffer.OldestSampleTimestampNs > 0 ? buffer.OldestSampleTimestampNs : buffer.WindowStartNs)
+            .Where(static value => value > 0)
+            .ToArray();
+        var minEdge = latestEdges.Length == 0 ? 0L : latestEdges.Min();
+        var maxEdge = latestEdges.Length == 0 ? 0L : latestEdges.Max();
+        var maxStart = starts.Length == 0 ? 0L : starts.Max();
+        var retainedOverlap = minEdge > 0 && maxStart > 0 ? TimeSpan.FromTicks(Math.Max(0L, (minEdge - maxStart) / 100L)) : TimeSpan.Zero;
+        var edgeSkew = minEdge > 0 && maxEdge > minEdge ? TimeSpan.FromTicks((maxEdge - minEdge) / 100L) : TimeSpan.Zero;
+        var syncConfidence = hub.AudioSynchronizationStates.Count == 0
+            ? 0.0
+            : hub.AudioSynchronizationStates.Average(static state => Math.Clamp(state.Confidence, 0.0, 1.0));
+        var previousReady = lastFrame?.Frame.Slices.Count(static slice => slice.Status == MimirSynchronizedSliceStatus.Ready) ?? 0;
+        var previousTotal = lastFrame?.Frame.Slices.Count ?? 0;
+        var readiness = previousTotal == 0 ? 0.0 : previousReady / (double)previousTotal;
+
+        var ceiling = TimeSpan.FromMilliseconds(options.PresentationDelayMs);
+        var target = TimeSpan.FromMilliseconds(Math.Clamp(
+            Math.Max(options.MinPresentationDelayMs, edgeSkew.TotalMilliseconds + options.LatencyGuardMs),
+            options.MinPresentationDelayMs,
+            options.PresentationDelayMs));
+        var reason = "edge-skew-plus-guard";
+        if (retainedOverlap > TimeSpan.Zero)
+        {
+            var overlapBound = retainedOverlap - TimeSpan.FromMilliseconds(options.LatencyGuardMs);
+            if (overlapBound > floor)
+            {
+                target = target < overlapBound ? target : overlapBound;
+            }
+            else
+            {
+                target = floor;
+                reason = "overlap-thin";
+            }
+        }
+
+        if (lastFrame != null && !lastFrame.Frame.IsComplete)
+        {
+            target += TimeSpan.FromMilliseconds(options.LatencyStepMs * Math.Max(1, degradedStreak));
+            reason = "backoff-after-incomplete-frame";
+        }
+        else if (completeStreak >= Math.Max(1, options.LatencyConvergenceFrames) && readiness >= options.LatencyReadinessTarget)
+        {
+            target -= TimeSpan.FromMilliseconds(options.LatencyStepMs);
+            reason = "complete-frame-convergence";
+        }
+
+        current = ClampDelay(Smooth(current, target), floor, ceiling);
+        return Decision(retainedOverlap, edgeSkew, readiness, syncConfidence, active.Length, previousReady, previousTotal, reason);
+    }
+
+    public void ObserveFrame(MimirWellFrameBuildResult result)
+    {
+        lastFrame = result;
+        if (result.Frame.IsComplete)
+        {
+            completeStreak++;
+            degradedStreak = 0;
+        }
+        else
+        {
+            degradedStreak++;
+            completeStreak = 0;
+        }
+    }
+
+    private MimirWellLatencyDecision Decision(
+        TimeSpan retainedOverlap,
+        TimeSpan edgeSkew,
+        double readiness,
+        double syncConfidence,
+        int activeBuffers,
+        int readySlices,
+        int totalSlices,
+        string reason) =>
+        new(
+            current,
+            TimeSpan.FromMilliseconds(options.PresentationDelayMs),
+            floor,
+            retainedOverlap,
+            edgeSkew,
+            readiness,
+            syncConfidence,
+            activeBuffers,
+            readySlices,
+            totalSlices,
+            reason);
+
+    private static TimeSpan Smooth(TimeSpan current, TimeSpan target)
+    {
+        var alpha = target > current ? 0.65 : 0.20;
+        return TimeSpan.FromTicks((long)Math.Round(current.Ticks + (target.Ticks - current.Ticks) * alpha));
+    }
+
+    private static TimeSpan ClampDelay(TimeSpan value, TimeSpan floor, TimeSpan ceiling) =>
+        value < floor ? floor : value > ceiling ? ceiling : value;
+}
+
+internal sealed record MimirWellFeatureSignalFrame(
+    string Document,
+    long Sequence,
+    IReadOnlyList<MimirWellFeatureSignal> Signals,
+    double MeanConfidence,
+    double MeanMotionPixelsPerSecond,
+    int StableTrackCount,
+    string FaustSignalContract);
+
+internal sealed record MimirWellFeatureSignal(
+    string SourceId,
+    long TimestampNs,
+    int Width,
+    int Height,
+    int StableTrackCount,
+    double Confidence,
+    double MeanMotionPixelsPerSecond,
+    double MotionEnergy,
+    double NormalizedCentroidX,
+    double NormalizedCentroidY,
+    IReadOnlyDictionary<string, float> FaustControls);
+
+internal sealed class MimirWellFeatureSignalBank
+{
+    private readonly MimirWellOptions options;
+    private readonly Dictionary<string, MimirSparseFeatureTracker> trackers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ulong> lastSequences = new(StringComparer.Ordinal);
+    private long sequence;
+
+    public MimirWellFeatureSignalBank(MimirWellOptions options)
+    {
+        this.options = options;
+    }
+
+    public MimirWellFeatureSignalFrame Update(
+        IEnumerable<MimirRollingStreamBuffer> buffers,
+        MimirSynchronizedBufferFrame frame)
+    {
+        if (!options.VideoFeatureSignalsEnabled)
+        {
+            return Empty();
+        }
+
+        var signals = frame.VideoSlices
+            .Where(static slice => slice.Sample.HasValue)
+            .Select(slice => BuildSignal(slice.Sample!.Value))
+            .Where(static signal => signal != null)
+            .Select(static signal => signal!)
+            .ToArray();
+        if (signals.Length == 0)
+        {
+            signals = buffers
+                .Where(static buffer => buffer.Descriptor.Kind == MimirStreamKind.Video && buffer.Latest.HasValue)
+                .Select(buffer => BuildSignal(buffer.Latest!.Value))
+                .Where(static signal => signal != null)
+                .Select(static signal => signal!)
+                .ToArray();
+        }
+
+        if (signals.Length == 0)
+        {
+            return Empty();
+        }
+
+        return new MimirWellFeatureSignalFrame(
+            "mimir.well_feature_signals.v1",
+            ++sequence,
+            signals,
+            signals.Average(static signal => signal.Confidence),
+            signals.Average(static signal => signal.MeanMotionPixelsPerSecond),
+            signals.Sum(static signal => signal.StableTrackCount),
+            "Faust controls are normalized scalar signals under video/<source>/{motion_energy,confidence,centroid_x,centroid_y}; Mimir estimates, Faust/native DSP consumes.");
+    }
+
+    private MimirWellFeatureSignalFrame Empty() =>
+        new("mimir.well_feature_signals.v1", sequence, [], 0.0, 0.0, 0, "no feature-bearing CPU video slice available");
+
+    private MimirWellFeatureSignal? BuildSignal(MimirStreamSample sample)
+    {
+        if (sample.VideoFrame is not { } video ||
+            sample.Data.IsEmpty ||
+            sample.Sequence == (lastSequences.TryGetValue(sample.SourceId, out var previous) ? previous : ulong.MaxValue))
+        {
+            return null;
+        }
+
+        var luma = ExtractLuma(video, sample.Data.Span);
+        if (luma.Length == 0)
+        {
+            return null;
+        }
+
+        lastSequences[sample.SourceId] = sample.Sequence;
+        if (!trackers.TryGetValue(sample.SourceId, out var tracker))
+        {
+            tracker = new MimirSparseFeatureTracker(new MimirSparseFeatureTrackerOptions(
+                MaxFeatures: options.VideoFeatureMaxTracks,
+                CellSizePixels: options.VideoFeatureCellSizePixels,
+                SearchRadiusPixels: options.VideoFeatureSearchRadiusPixels));
+            trackers.Add(sample.SourceId, tracker);
+        }
+
+        var tracked = tracker.Update(
+            sample.SourceId,
+            video.Width,
+            video.Height,
+            luma,
+            sample.TimestampNs);
+        if (tracked.Tracks.Count == 0)
+        {
+            return new MimirWellFeatureSignal(
+                sample.SourceId,
+                sample.TimestampNs,
+                video.Width,
+                video.Height,
+                0,
+                0.0,
+                0.0,
+                0.0,
+                0.5,
+                0.5,
+                FaustControls(sample.SourceId, 0.0, 0.0, 0.5, 0.5));
+        }
+
+        var stableTracks = tracked.Tracks.Where(track => track.AgeFrames >= 3).ToArray();
+        var points = stableTracks.Length == 0 ? tracked.Tracks : stableTracks;
+        var centroidX = points.Average(static track => track.ImageX) / Math.Max(1.0, video.Width);
+        var centroidY = points.Average(static track => track.ImageY) / Math.Max(1.0, video.Height);
+        var motionEnergy = Math.Clamp(tracked.MeanSpeedPixelsPerSecond / Math.Max(1.0, Math.Max(video.Width, video.Height)), 0.0, 1.0);
+        return new MimirWellFeatureSignal(
+            sample.SourceId,
+            sample.TimestampNs,
+            video.Width,
+            video.Height,
+            tracked.StableTrackCount,
+            tracked.Confidence,
+            tracked.MeanSpeedPixelsPerSecond,
+            motionEnergy,
+            Math.Clamp(centroidX, 0.0, 1.0),
+            Math.Clamp(centroidY, 0.0, 1.0),
+            FaustControls(sample.SourceId, tracked.Confidence, motionEnergy, centroidX, centroidY));
+    }
+
+    private static IReadOnlyDictionary<string, float> FaustControls(
+        string sourceId,
+        double confidence,
+        double motionEnergy,
+        double centroidX,
+        double centroidY)
+    {
+        var prefix = $"video/{sourceId}";
+        return new Dictionary<string, float>(StringComparer.Ordinal)
+        {
+            [$"{prefix}/confidence"] = (float)Math.Clamp(confidence, 0.0, 1.0),
+            [$"{prefix}/motion_energy"] = (float)Math.Clamp(motionEnergy, 0.0, 1.0),
+            [$"{prefix}/centroid_x"] = (float)Math.Clamp(centroidX, 0.0, 1.0),
+            [$"{prefix}/centroid_y"] = (float)Math.Clamp(centroidY, 0.0, 1.0),
+        };
+    }
+
+    private static byte[] ExtractLuma(MimirVideoFrameDescriptor video, ReadOnlySpan<byte> data) =>
+        video.PixelFormat switch
+        {
+            MimirVideoPixelFormat.Gray8 or MimirVideoPixelFormat.R8 or MimirVideoPixelFormat.Bayer8 =>
+                CopySinglePlane(video.Width, video.Height, Math.Max(video.Width, video.StrideBytes), data),
+            MimirVideoPixelFormat.LeapStereoIr or MimirVideoPixelFormat.Rg8 =>
+                CopyInterleavedLuma(video.Width, video.Height, Math.Max(video.Width * 2, video.StrideBytes), 2, data),
+            MimirVideoPixelFormat.Yuy2 =>
+                CopyInterleavedLuma(video.Width, video.Height, Math.Max(video.Width * 2, video.StrideBytes), 2, data),
+            MimirVideoPixelFormat.Bgra8 =>
+                CopyBgraLuma(video.Width, video.Height, Math.Max(video.Width * 4, video.StrideBytes), data),
+            _ => [],
+        };
+
+    private static byte[] CopySinglePlane(int width, int height, int stride, ReadOnlySpan<byte> data)
+    {
+        if (width <= 0 || height <= 0 || data.Length < stride * Math.Max(0, height - 1) + width)
+        {
+            return [];
+        }
+
+        var luma = new byte[width * height];
+        for (var y = 0; y < height; y++)
+        {
+            data.Slice(y * stride, width).CopyTo(luma.AsSpan(y * width, width));
+        }
+
+        return luma;
+    }
+
+    private static byte[] CopyInterleavedLuma(int width, int height, int stride, int step, ReadOnlySpan<byte> data)
+    {
+        if (width <= 0 || height <= 0 || step <= 0 || data.Length < stride * Math.Max(0, height - 1) + width * step)
+        {
+            return [];
+        }
+
+        var luma = new byte[width * height];
+        for (var y = 0; y < height; y++)
+        {
+            var row = data.Slice(y * stride, width * step);
+            for (var x = 0; x < width; x++)
+            {
+                luma[y * width + x] = row[x * step];
+            }
+        }
+
+        return luma;
+    }
+
+    private static byte[] CopyBgraLuma(int width, int height, int stride, ReadOnlySpan<byte> data)
+    {
+        if (width <= 0 || height <= 0 || data.Length < stride * Math.Max(0, height - 1) + width * 4)
+        {
+            return [];
+        }
+
+        var luma = new byte[width * height];
+        for (var y = 0; y < height; y++)
+        {
+            var row = data.Slice(y * stride, width * 4);
+            for (var x = 0; x < width; x++)
+            {
+                var offset = x * 4;
+                luma[y * width + x] = (byte)Math.Clamp(
+                    (int)Math.Round(row[offset] * 0.114 + row[offset + 1] * 0.587 + row[offset + 2] * 0.299),
+                    0,
+                    255);
+            }
+        }
+
+        return luma;
+    }
+}
 
 internal sealed record MimirWellPublishReceipt(
     string Document,
@@ -284,8 +686,18 @@ internal sealed record MimirWellOptions(
     int PublishIntervalMs,
     int SyncIntervalMs,
     int PresentationDelayMs,
+    int TargetPresentationDelayMs,
+    int MinPresentationDelayMs,
+    int LatencyGuardMs,
+    int LatencyStepMs,
+    int LatencyConvergenceFrames,
+    double LatencyReadinessTarget,
     int MaxSamplesPerSource,
     int SyncCandidatesPerStep,
+    bool VideoFeatureSignalsEnabled,
+    int VideoFeatureMaxTracks,
+    int VideoFeatureCellSizePixels,
+    int VideoFeatureSearchRadiusPixels,
     bool VisualCalibrationEnabled,
     int VisualCalibrationIntervalMs,
     int VisualExpectedLedCount,
@@ -296,6 +708,8 @@ internal sealed record MimirWellOptions(
     int CaptureIntervalMs,
     int CaptureMaxBodyBytes,
     bool CaptureInlineBodies,
+    bool StreamFramesEnabled,
+    bool StreamFrameInlineBodies,
     int MeterEvery)
 {
     public static MimirWellOptions Parse(string[] args) => new(
@@ -306,8 +720,18 @@ internal sealed record MimirWellOptions(
         ParseInt(args, "--publish-ms", 250),
         ParseInt(args, "--sync-ms", 250),
         ParseInt(args, "--presentation-delay-ms", 2500),
+        ParseInt(args, "--target-presentation-delay-ms", 750),
+        ParseInt(args, "--min-presentation-delay-ms", 40),
+        ParseInt(args, "--latency-guard-ms", 35),
+        ParseInt(args, "--latency-step-ms", 25),
+        ParseInt(args, "--latency-convergence-frames", 8),
+        ParseDouble(args, "--latency-readiness-target", 0.98),
         ParseInt(args, "--max-samples-per-source", 4),
         ParseInt(args, "--sync-candidates", 1),
+        ParseBool(args, "--video-feature-signals", true),
+        ParseInt(args, "--video-feature-max-tracks", 96),
+        ParseInt(args, "--video-feature-cell-size", 12),
+        ParseInt(args, "--video-feature-search-radius", 18),
         ParseBool(args, "--visual-calibration", true),
         ParseInt(args, "--visual-calibration-ms", 250),
         ParseInt(args, "--visual-expected-leds", 38),
@@ -318,6 +742,8 @@ internal sealed record MimirWellOptions(
         ParseInt(args, "--capture-ms", 250),
         ParseInt(args, "--capture-max-body-bytes", 4 * 1024 * 1024),
         ParseBool(args, "--capture-inline-bodies", true),
+        ParseBool(args, "--stream-frames", true),
+        ParseBool(args, "--stream-frame-inline-bodies", true),
         ParseInt(args, "--meter-every", 20));
 
     private static string ParseString(IReadOnlyList<string> args, string name, string fallback)
@@ -475,6 +901,29 @@ internal static class MimirWellCapturePage
     };
     }
 
+    public static IEnumerable<object> BuildStreamFrames(
+        MimirWellOptions options,
+        MimirWellFrameBuildResult frameResult,
+        IEnumerable<MimirRollingStreamBuffer> buffers,
+        long captureSequence,
+        DateTimeOffset startedAt)
+    {
+        var frame = frameResult.Frame;
+        var sliceFrames = frame.Slices
+            .Where(slice => slice.Sample.HasValue)
+            .Select(slice => CaptureStreamFrame(options, captureSequence, startedAt, slice))
+            .ToArray();
+        if (sliceFrames.Length > 0)
+        {
+            return sliceFrames;
+        }
+
+        return buffers
+            .Where(buffer => buffer.Latest.HasValue)
+            .Select(buffer => CaptureLatestFallbackStreamFrame(options, captureSequence, startedAt, buffer))
+            .ToArray();
+    }
+
     private static IEnumerable<object> CaptureSamples(
         MimirWellOptions options,
         long captureSequence,
@@ -521,7 +970,7 @@ internal static class MimirWellCapturePage
                 slice.TimingEvidenceKind,
             },
             sample = SampleMetadata(sample),
-            body = CaptureBody(options, sample),
+            body = CaptureBody(options, sample, options.CaptureInlineBodies),
         };
     }
 
@@ -551,7 +1000,115 @@ internal static class MimirWellCapturePage
                 TimingEvidenceKind = "unsynchronized-fallback",
             },
             sample = SampleMetadata(sample),
-            body = CaptureBody(options, sample),
+            body = CaptureBody(options, sample, options.CaptureInlineBodies),
+        };
+    }
+
+    private static object CaptureStreamFrame(
+        MimirWellOptions options,
+        long captureSequence,
+        DateTimeOffset startedAt,
+        MimirSynchronizedStreamSlice slice)
+    {
+        var sample = slice.Sample!.Value;
+        return CaptureStreamFrame(
+            options,
+            captureSequence,
+            startedAt,
+            sample,
+            new
+            {
+                slice.SourceId,
+                Kind = slice.Kind.ToString(),
+                Origin = slice.Origin.ToString(),
+                Status = slice.Status.ToString(),
+                slice.SourceTimestampNs,
+                slice.CanonicalStartNs,
+                slice.CanonicalEndNs,
+                slice.PresentationTimeNs,
+                slice.TimingOffsetNs,
+                slice.DistanceFromPresentationNs,
+                slice.TimingConfidence,
+                slice.TimingEvidenceKind,
+            });
+    }
+
+    private static object CaptureLatestFallbackStreamFrame(
+        MimirWellOptions options,
+        long captureSequence,
+        DateTimeOffset startedAt,
+        MimirRollingStreamBuffer buffer)
+    {
+        var sample = buffer.Latest!.Value;
+        return CaptureStreamFrame(
+            options,
+            captureSequence,
+            startedAt,
+            sample,
+            new
+            {
+                sample.SourceId,
+                Kind = sample.Kind.ToString(),
+                Origin = sample.Origin.ToString(),
+                Status = "LatestUnalignedFallback",
+                SourceTimestampNs = sample.TimestampNs,
+                CanonicalStartNs = sample.TimestampNs,
+                CanonicalEndNs = sample.TimestampNs,
+                PresentationTimeNs = 0L,
+                TimingOffsetNs = 0L,
+                DistanceFromPresentationNs = 0L,
+                TimingConfidence = 0.0,
+                TimingEvidenceKind = "unsynchronized-fallback",
+            });
+    }
+
+    private static object CaptureStreamFrame(
+        MimirWellOptions options,
+        long captureSequence,
+        DateTimeOffset startedAt,
+        MimirStreamSample sample,
+        object slice)
+    {
+        var bodyId = $"{options.NodeId}:{captureSequence}:{sample.SourceId}:{sample.Sequence}";
+        var transport = PreferredBodyTransport(sample);
+        return new
+        {
+            type = "cultmesh-observation",
+            document = "mimir.cultmesh_stream_frame.v1",
+            sourceId = "mimir-well",
+            nodeId = options.NodeId,
+            captureSequence,
+            wallClockUtc = DateTimeOffset.UtcNow.ToString("O"),
+            elapsedSeconds = (DateTimeOffset.UtcNow - startedAt).TotalSeconds,
+            bodyId,
+            stream = new
+            {
+                streamId = sample.SourceId,
+                verseId = "mimir-live",
+                ownerPeerId = options.NodeId,
+                kind = sample.Kind.ToString(),
+                origin = sample.Origin.ToString(),
+                preferredTransports = StreamTransports(sample),
+                clockDomainId = sample.SourceId,
+            },
+            frame = new
+            {
+                streamId = sample.SourceId,
+                sequence = sample.Sequence,
+                timestampNs = sample.TimestampNs,
+                arrivalNs = sample.ArrivalNs,
+                byteLength = sample.ByteLength,
+                bodyTransport = transport,
+                nativeHandle = NativeHandle(sample),
+                nativeHandleKind = NativeHandleKind(sample),
+                resourceKey = sample.VideoFrame?.ResourceKey,
+                producerFenceHandle = sample.VideoFrame?.ProducerFenceHandle,
+                producerFenceValue = sample.VideoFrame?.ProducerFenceValue ?? 0UL,
+                unavoidableCopyCount = sample.VideoFrame?.UnavoidableCopyCount ?? 0,
+            },
+            slice,
+            sample = SampleMetadata(sample),
+            body = CaptureBody(options, sample, options.StreamFrameInlineBodies),
         };
     }
 
@@ -591,9 +1148,43 @@ internal static class MimirWellCapturePage
         },
     };
 
-    private static object CaptureBody(MimirWellOptions options, MimirStreamSample sample)
+    private static string PreferredBodyTransport(MimirStreamSample sample)
     {
-        if (!options.CaptureInlineBodies)
+        var kind = NativeHandleKind(sample);
+        if (!string.IsNullOrWhiteSpace(kind))
+        {
+            return kind.Contains("d3d12", StringComparison.OrdinalIgnoreCase)
+                ? "shared-d3d12-texture"
+                : kind.Contains("d3d11", StringComparison.OrdinalIgnoreCase)
+                    ? "shared-d3d11-texture"
+                    : "native-handle";
+        }
+
+        return sample.Data.IsEmpty ? "metadata-only" : "inline-bytes";
+    }
+
+    private static string[] StreamTransports(MimirStreamSample sample)
+    {
+        var transport = PreferredBodyTransport(sample);
+        return transport switch
+        {
+            "shared-d3d12-texture" => ["shared-d3d12-texture", "mimir-recorder-page", "cultcache-page"],
+            "shared-d3d11-texture" => ["shared-d3d11-texture", "mimir-recorder-page", "cultcache-page"],
+            "native-handle" => ["native-handle", "mimir-recorder-page", "cultcache-page"],
+            "inline-bytes" => ["mimir-recorder-page", "inline-bytes", "cultcache-page"],
+            _ => ["metadata-only"],
+        };
+    }
+
+    private static ulong NativeHandle(MimirStreamSample sample) =>
+        sample.VideoFrame?.NativeHandle ?? sample.AudioBlock?.NativeHandle ?? 0UL;
+
+    private static string NativeHandleKind(MimirStreamSample sample) =>
+        sample.VideoFrame?.NativeHandleKind ?? sample.AudioBlock?.NativeHandleKind ?? "";
+
+    private static object CaptureBody(MimirWellOptions options, MimirStreamSample sample, bool inlineBodies)
+    {
+        if (!inlineBodies)
         {
             return new { status = "not-inline", sample.ByteLength };
         }
@@ -728,6 +1319,8 @@ internal static class MimirWellSnapshot
         MimirSynchronizationHub hub,
         MimirPresentationControlState presentation,
         MimirWellFrameBuildResult frameResult,
+        MimirWellLatencyDecision latencyDecision,
+        MimirWellFeatureSignalFrame featureSignals,
         IReadOnlyList<MimirCameraExposureControlStatus> visualCalibration,
         IReadOnlyList<object> sourceErrors,
         object streamPressure,
@@ -760,11 +1353,66 @@ internal static class MimirWellSnapshot
             degradedReason = frameResult.DegradedReason,
             slices = frame.Slices.Select(SliceSnapshot).ToArray(),
         },
+        latency = new
+        {
+            document = "mimir.well_latency_policy.v1",
+            mode = "adaptive-bounded-ceiling",
+            currentDelayMs = latencyDecision.PresentationDelay.TotalMilliseconds,
+            ceilingDelayMs = latencyDecision.CeilingDelay.TotalMilliseconds,
+            floorDelayMs = latencyDecision.FloorDelay.TotalMilliseconds,
+            retainedOverlapMs = latencyDecision.RetainedOverlap.TotalMilliseconds,
+            edgeSkewMs = latencyDecision.EdgeSkew.TotalMilliseconds,
+            latencyDecision.ReadinessConfidence,
+            latencyDecision.SyncConfidence,
+            latencyDecision.ActiveBufferCount,
+            latencyDecision.ReadySliceCount,
+            latencyDecision.TotalSliceCount,
+            latencyDecision.Reason,
+            invariant = "Five seconds is a ceiling; the Well lowers requested presentation delay when overlap, slice readiness, and sync evidence allow it.",
+        },
         clockDomains = MimirWellClockDiagnostics.Build(
             hub.Buffers.Buffers,
             runtimeConfig.Settings.Audio.ReferenceSourceId,
             frameResult),
+        canonicalClockMaps = hub.CanonicalClockMaps.Select(map => new
+        {
+            map.StreamKey,
+            map.OffsetNs,
+            offsetMs = map.OffsetNs / 1_000_000.0,
+            map.FirstSourceTimestampNs,
+            map.FirstArrivalNs,
+            map.LatestSourceTimestampNs,
+            map.LatestCanonicalTimestampNs,
+            map.SampleCount,
+        }).ToArray(),
         streamPressure,
+        featureSignals = new
+        {
+            featureSignals.Document,
+            featureSignals.Sequence,
+            featureSignals.MeanConfidence,
+            featureSignals.MeanMotionPixelsPerSecond,
+            featureSignals.StableTrackCount,
+            featureSignals.FaustSignalContract,
+            signals = featureSignals.Signals.Select(signal => new
+            {
+                signal.SourceId,
+                signal.TimestampNs,
+                signal.Width,
+                signal.Height,
+                signal.StableTrackCount,
+                signal.Confidence,
+                signal.MeanMotionPixelsPerSecond,
+                signal.MotionEnergy,
+                signal.NormalizedCentroidX,
+                signal.NormalizedCentroidY,
+                faustControls = signal.FaustControls.Select(pair => new
+                {
+                    path = pair.Key,
+                    value = pair.Value,
+                }).ToArray(),
+            }).ToArray(),
+        },
         audioSync = new
         {
             referenceSourceId = runtimeConfig.Settings.Audio.ReferenceSourceId,

@@ -198,7 +198,14 @@ public sealed record MimirEveDashboardUiLayoutSnapshot(
     [property: Key(3)] double? Grow,
     [property: Key(4)] double? Gap,
     [property: Key(5)] double? Padding,
-    [property: Key(6)] string? Overflow);
+    [property: Key(6)] string? Overflow,
+    [property: Key(7)] double? MinWidth = null,
+    [property: Key(8)] double? MinHeight = null,
+    [property: Key(9)] double? PreferredWidth = null,
+    [property: Key(10)] double? PreferredHeight = null,
+    [property: Key(11)] double? Priority = null,
+    [property: Key(12)] string? Density = null,
+    [property: Key(13)] string? ViewportMode = null);
 
 [MessagePackObject]
 public sealed record MimirEveDashboardUiStyleSnapshot(

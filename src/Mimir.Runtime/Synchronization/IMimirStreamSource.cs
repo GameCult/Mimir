@@ -8,3 +8,8 @@ public interface IMimirStreamSource : IDisposable
 
     bool TryRead(out MimirStreamSample sample);
 }
+
+public interface IMimirMultiplexedStreamSource : IMimirStreamSource
+{
+    int LogicalStreamCount { get; }
+}
