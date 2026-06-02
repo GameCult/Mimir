@@ -6,7 +6,9 @@ using System.Text.Json.Nodes;
 
 var options = VerseRecorderOptions.Parse(args);
 Directory.CreateDirectory(options.OutputDirectory);
-var runId = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss");
+var runId = string.IsNullOrWhiteSpace(options.RunId)
+    ? DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss")
+    : options.RunId;
 var runDirectory = Path.Combine(options.OutputDirectory, runId);
 Directory.CreateDirectory(runDirectory);
 var jsonlPath = Path.Combine(runDirectory, "observations.jsonl");
@@ -35,6 +37,11 @@ await File.WriteAllTextAsync(
                     directory = bodyPager.BodyDirectory,
                     index = bodyPager.IndexPath,
                     document = "mimir.recorder_body_index.v1",
+                    acceptedBodyDocuments = new[]
+                    {
+                        "mimir.cultmesh_stream_frame.v1",
+                        "mimir.well_capture_page.v1",
+                    },
                 },
         },
         new JsonSerializerOptions { WriteIndented = true }));
@@ -80,6 +87,11 @@ while (!stopping.IsCancellationRequested)
             if (DateTimeOffset.UtcNow - lastMeter >= TimeSpan.FromSeconds(options.MeterSeconds))
             {
                 await output.FlushAsync();
+                if (bodyPager is not null)
+                {
+                    await bodyPager.FlushAsync(stopping.Token).ConfigureAwait(false);
+                }
+
                 Console.Error.WriteLine($"verse-recorder observations={count} path={jsonlPath}");
                 lastMeter = DateTimeOffset.UtcNow;
             }
@@ -134,6 +146,7 @@ static async Task<string?> ReceiveTextAsync(ClientWebSocket socket, Cancellation
 internal sealed record VerseRecorderOptions(
     Uri Url,
     string OutputDirectory,
+    string RunId,
     double Seconds,
     double ReconnectSeconds,
     double MeterSeconds,
@@ -149,6 +162,7 @@ internal sealed record VerseRecorderOptions(
         return new VerseRecorderOptions(
             new Uri(ParseString(args, "--url", "ws://127.0.0.1:8796/eve/periwinkle/subscribe")),
             ParseString(args, "--out-dir", defaultOutput),
+            ParseString(args, "--run-id", ""),
             ParseDouble(args, "--seconds", 0.0),
             ParseDouble(args, "--reconnect-seconds", 2.0),
             ParseDouble(args, "--meter-seconds", 5.0),
@@ -240,8 +254,17 @@ internal sealed class MimirRecorderBodyPager : IAsyncDisposable
             return text;
         }
 
-        if (root is not JsonObject rootObject ||
-            !string.Equals(rootObject["document"]?.GetValue<string>(), "mimir.well_capture_page.v1", StringComparison.Ordinal) ||
+        if (root is not JsonObject rootObject)
+        {
+            return text;
+        }
+
+        if (string.Equals(rootObject["document"]?.GetValue<string>(), "mimir.cultmesh_stream_frame.v1", StringComparison.Ordinal))
+        {
+            return await PageStreamFrameBodyAsync(rootObject, text, stopping).ConfigureAwait(false);
+        }
+
+        if (!string.Equals(rootObject["document"]?.GetValue<string>(), "mimir.well_capture_page.v1", StringComparison.Ordinal) ||
             rootObject["samples"] is not JsonArray samples)
         {
             return text;
@@ -284,6 +307,41 @@ internal sealed class MimirRecorderBodyPager : IAsyncDisposable
         return wroteAny
             ? rootObject.ToJsonString()
             : text;
+    }
+
+    private async Task<string> PageStreamFrameBodyAsync(
+        JsonObject rootObject,
+        string originalText,
+        CancellationToken stopping)
+    {
+        if (rootObject["body"] is not JsonObject bodyObject ||
+            !string.Equals(bodyObject["status"]?.GetValue<string>(), "inline", StringComparison.Ordinal) ||
+            !string.Equals(bodyObject["encoding"]?.GetValue<string>(), "base64", StringComparison.Ordinal))
+        {
+            return originalText;
+        }
+
+        var encoded = bodyObject["data"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(encoded))
+        {
+            return originalText;
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(encoded);
+        }
+        catch (FormatException)
+        {
+            return originalText;
+        }
+
+        var bodyId = rootObject["bodyId"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
+        var bodyRef = await WriteBodyAsync(bodyId, bytes, rootObject, stopping).ConfigureAwait(false);
+        rootObject.Remove("body");
+        rootObject["bodyRef"] = bodyRef;
+        return rootObject.ToJsonString();
     }
 
     private async Task<JsonObject> WriteBodyAsync(
@@ -353,13 +411,23 @@ internal sealed class MimirRecorderBodyPager : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await FlushAsync(CancellationToken.None).ConfigureAwait(false);
+
         if (currentPage is not null)
         {
-            await currentPage.FlushAsync().ConfigureAwait(false);
             await currentPage.DisposeAsync().ConfigureAwait(false);
         }
 
-        await indexWriter.FlushAsync().ConfigureAwait(false);
         await indexWriter.DisposeAsync().ConfigureAwait(false);
+    }
+
+    public async Task FlushAsync(CancellationToken stopping)
+    {
+        if (currentPage is not null)
+        {
+            await currentPage.FlushAsync(stopping).ConfigureAwait(false);
+        }
+
+        await indexWriter.FlushAsync().ConfigureAwait(false);
     }
 }

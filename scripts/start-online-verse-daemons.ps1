@@ -5,6 +5,9 @@ param(
     [string]$ConfigPath = "E:\Projects\Mimir\config\mimir-runtime.well.local.json",
     [string]$WellPublishUrl = "ws://127.0.0.1:8796/eve/periwinkle",
     [string]$RecorderRoot = "C:\Users\Meta\Videos\Mimir\VerseCaptures",
+    [int]$FensalirPort = 8799,
+    [int]$FensalirWorkerMs = 2,
+    [int]$FensalirMaxReservoirQueue = 120,
     [int]$DurationSeconds = 0,
     [int]$MoveFps = 120,
     [int]$MoveFftSize = 256,
@@ -14,6 +17,7 @@ param(
         "move-00-06-f5-23-e2-d1=/dev/hidraw3:#00a8ff"
     ),
     [switch]$SkipRuntime,
+    [switch]$SkipFensalir,
     [switch]$SkipMoves,
     [switch]$SkipNightwing,
     [switch]$DryRun
@@ -100,6 +104,7 @@ $manifest = [ordered]@{
     subscribeUrl = $SubscribeUrl
     wellPublishUrl = $WellPublishUrl
     recorderRoot = $RecorderRoot
+    fensalirPort = $FensalirPort
     configPath = $ConfigPath
     startedAt = (Get-Date).ToString("o")
     durationSeconds = $DurationSeconds
@@ -114,6 +119,7 @@ if (-not $DryRun) {
         Where-Object {
             ($_.CommandLine -match "Mimir.EveSensorReceiver" -and $_.CommandLine -match "--port 8796") -or
             ($_.CommandLine -match "Mimir.VerseRecorder") -or
+            ($_.CommandLine -match "Mimir.FensalirDaemon") -or
             ($_.CommandLine -match "Mimir.Well") -or
             ($_.CommandLine -match "Mimir.BufferSmoke" -and $_.CommandLine -match "--poll-ms")
         } |
@@ -147,6 +153,7 @@ $recorderArgs = @(
     "--",
     "--url", $SubscribeUrl,
     "--out-dir", $RecorderRoot,
+    "--run-id", $runId,
     "--write-bodies", "true",
     "--body-page-bytes", "134217728"
 )
@@ -156,6 +163,33 @@ if ($DurationSeconds -gt 0) {
 }
 $recorder = Start-LoggedProcess -Name "verse-recorder" -FilePath "dotnet" -ArgumentList $recorderArgs
 if ($recorder) { $manifest.processes["verseRecorderPid"] = $recorder.Id }
+
+if (-not $SkipFensalir) {
+    $fensalirWellLog = Join-Path (Join-Path $RecorderRoot $runId) "observations.jsonl"
+    $fensalirCache = Join-Path $runDir "fensalir-daemon.ccmp"
+    $fensalir = Start-LoggedProcess `
+        -Name "fensalir-daemon" `
+        -FilePath "dotnet" `
+        -ArgumentList @(
+            "run",
+            "--project",
+            (Join-Path $repo "src\Mimir.FensalirDaemon\Mimir.FensalirDaemon.csproj"),
+            "--",
+            "--port", "$FensalirPort",
+            "--well-log", $fensalirWellLog,
+            "--cultcache", $fensalirCache,
+            "--poll-ms", "50",
+            "--worker-ms", "$FensalirWorkerMs",
+            "--max-reservoir-queue", "$FensalirMaxReservoirQueue"
+        )
+    if ($fensalir) {
+        $manifest.processes["fensalirDaemonPid"] = $fensalir.Id
+        $manifest.processes["fensalirWellLog"] = $fensalirWellLog
+        $manifest.processes["fensalirCultCache"] = $fensalirCache
+        $manifest.processes["fensalirProviderSpec"] = "mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:$FensalirPort/eve/deck"
+        Wait-HttpHealth -Url "http://127.0.0.1:$FensalirPort/health"
+    }
+}
 
 if (-not $SkipNightwing) {
     if ($DryRun) {
@@ -307,7 +341,9 @@ if (-not $SkipRuntime) {
             "--capture-pages", "true",
             "--capture-ms", "250",
             "--capture-max-body-bytes", "4194304",
-            "--capture-inline-bodies", "true"
+            "--capture-inline-bodies", "false",
+            "--stream-frames", "true",
+            "--stream-frame-inline-bodies", "true"
         ) `
         -Environment @{
             "MIMIR_RUNTIME_CONFIG" = $ConfigPath

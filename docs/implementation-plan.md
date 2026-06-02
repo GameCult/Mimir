@@ -51,6 +51,10 @@ confidence, and estimated GPU queue pressure are now CultCache/Eve-visible.
 The current worker uses a budget-derived cost model; real Fensalir GPU kernels
 and Faust-assisted feature signals should replace that cost model without
 moving ownership back into the editor.
+The online supervisor now gives `Mimir.VerseRecorder` the supervisor `runId`
+and starts `Mimir.FensalirDaemon` against that exact
+`VerseCaptures/<runId>/observations.jsonl`, with a run-local CultCache. Fensalir
+no longer has to discover the Well stream by scanning old artifacts.
 
 Any path that only paints pixels is not the spatiotemporal machine, but the
 editor still needs a real flat video compositor backend. The current
