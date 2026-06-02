@@ -50,3 +50,36 @@ The remaining gap is real: Fensalir still lacks a flat program-layer video
 backend that draws Fensalir-owned camera texture leases as 2D synced layers.
 That backend is separate from the reservoir daemon. Build it as the editor's
 presentation path; do not smuggle it through field diagnostics.
+
+## Current Daemon Cut
+
+`src/Mimir.FensalirDaemon` is the first owner-shaped daemon:
+
+- eats CultCache through `state/fensalir-daemon.ccmp`, using the canonical
+  MessagePack CultCache backing store;
+- drinks Well JSONL logs containing `mimir.well_snapshot.v1`,
+  `mimir.well_capture_page.v1`, and `mimir.well_stream_pressure.v1`;
+- publishes typed `mimir.fensalir_daemon_state.v1` state;
+- speaks a CultNet-shaped WebSocket Eve provider at `/eve/deck`;
+- speaks binary CultMesh dashboard documents at `/eve/deck/cultmesh`;
+- exposes `/health` and `/eve/deck/manifest`;
+- presents a retained `cultmesh.eve_surface.v0` surface with compact text and
+  metrics that Eve GUI and Odin/Nightwing TUI can lower.
+
+Start it with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-fensalir-daemon.ps1
+```
+
+The launcher writes a supervisor manifest under
+`artifacts/runtime/fensalir-daemon-*` with provider specs:
+
+```text
+mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:8799/eve/deck
+mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:8799/eve/deck/cultmesh
+```
+
+The current worker mode is `surface-owner-installed`: kernel scheduling,
+GPU-resident reservoir compute, and actual fused program-surface publication
+belong behind this daemon next. Do not move those back into the editor.

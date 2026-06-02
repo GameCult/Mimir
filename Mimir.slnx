@@ -6,6 +6,7 @@
     <Project Path="src/Mimir.EveDialogue/Mimir.EveDialogue.csproj" />
     <Project Path="src/Mimir.EveDashboard/Mimir.EveDashboard.csproj" />
     <Project Path="src/Mimir.EveSensorReceiver/Mimir.EveSensorReceiver.csproj" />
+    <Project Path="src/Mimir.FensalirDaemon/Mimir.FensalirDaemon.csproj" />
     <Project Path="src/Mimir.Well/Mimir.Well.csproj" />
     <Project Path="src/Mimir.WellObsDaemon/Mimir.WellObsDaemon.csproj" />
     <Project Path="src/Mimir.VerseRecorder/Mimir.VerseRecorder.csproj" />

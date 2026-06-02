@@ -104,6 +104,31 @@ public sealed record MimirFaustControlSnapshot(
     [property: Key(0)] string Path,
     [property: Key(1)] float Value);
 
+[CultDocument("mimir.fensalir_daemon_state", "mimir.fensalir_daemon_state.v1")]
+[MessagePackObject]
+public sealed record MimirFensalirDaemonStateDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string DaemonId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string VerseId,
+    [property: Key(3)] string Status,
+    [property: Key(4)] string WellSource,
+    [property: Key(5)] long LastWellSequence,
+    [property: Key(6)] long LastCaptureSequence,
+    [property: Key(7)] int AudioSources,
+    [property: Key(8)] int VideoSources,
+    [property: Key(9)] int ReadySlices,
+    [property: Key(10)] int TotalSlices,
+    [property: Key(11)] double PresentationDelayMs,
+    [property: Key(12)] double PollAverageMs,
+    [property: Key(13)] double PublishAverageMs,
+    [property: Key(14)] double GpuBudget,
+    [property: Key(15)] double CpuBudget,
+    [property: Key(16)] string WorkerMode,
+    [property: Key(17)] string[] Capabilities,
+    [property: Key(18)] string[] Notes);
+
 [CultDocument("mimir.eve_dashboard_manifest", "mimir.eve_dashboard_manifest.v1")]
 [MessagePackObject]
 public sealed record MimirEveDashboardManifestDocument(

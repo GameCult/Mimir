@@ -36,6 +36,13 @@ video compositor/control surface and must stay responsive even while the
 reservoir worker is absent, paused, or saturated. Field diagnostics, Leap
 surface splats, spectrum tubes, and reservoir proof visuals are opt-in
 diagnostics or daemon outputs, not default editor presentation.
+`Mimir.FensalirDaemon` is now the first daemon-shaped owner for that path: it
+tails Well documents, persists `mimir.fensalir_daemon_state.v1` into
+CultCache, exposes `/health`, and serves JSON plus binary CultMesh
+`mimir.eve_dashboard_state.v1` Eve surfaces at `/eve/deck` and
+`/eve/deck/cultmesh`. The current worker mode is deliberately
+`surface-owner-installed`; dense GPU kernels and fused program output belong
+behind this daemon next.
 
 Any path that only paints pixels is not the spatiotemporal machine, but the
 editor still needs a real flat video compositor backend. The current

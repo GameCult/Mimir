@@ -56,6 +56,12 @@ invariants:
     Well pages/configured composites, owns reservoir budgets, job scheduling,
     GPU residency, and CPU/GPU worker share, then publishes typed
     reservoir/program surfaces. The Mimir editor is not this daemon.
+    `src/Mimir.FensalirDaemon` is the first live owner surface: it tails Well
+    documents, persists `mimir.fensalir_daemon_state.v1` into
+    `state/fensalir-daemon.ccmp`, serves `/health`, and publishes JSON plus
+    binary CultMesh Eve dashboard state on port 8799. Its current
+    `workerMode=surface-owner-installed` means dense kernels and fused program
+    output are still pending behind the daemon, not silently owned elsewhere.
   - `FieldEvidenceFrame` is not a flat video compositor. Camera Texture2D
     resources and claims are typed evidence declarations; they do not draw live
     Fensalir-owned texture leases as 2D program layers until Fensalir has an
