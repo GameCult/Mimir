@@ -55,6 +55,9 @@ The online supervisor now gives `Mimir.VerseRecorder` the supervisor `runId`
 and starts `Mimir.FensalirDaemon` against that exact
 `VerseCaptures/<runId>/observations.jsonl`, with a run-local CultCache. Fensalir
 no longer has to discover the Well stream by scanning old artifacts.
+Fensalir also consumes `mimir.cultmesh_stream_frame.v1` as the fine-grained
+stream lane, so accepted timed frames can feed reservoir jobs before a whole
+capture-page batch is useful.
 
 Any path that only paints pixels is not the spatiotemporal machine, but the
 editor still needs a real flat video compositor backend. The current

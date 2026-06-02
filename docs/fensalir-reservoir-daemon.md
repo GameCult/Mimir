@@ -92,6 +92,9 @@ The worker state is the owner surface for reservoir job selection and pressure:
 
 - capture pages enqueue reservoir jobs only when they contain accepted timing
   slices;
+- `mimir.cultmesh_stream_frame.v1` records enqueue fine-grained reservoir jobs
+  from timed stream frames, including paged, inline, native, or shared-handle
+  body transport evidence;
 - unusable pages are dropped with rejection reasons instead of being hidden by
   the editor;
 - queue depth, running jobs, completed jobs, dropped jobs, timing confidence,

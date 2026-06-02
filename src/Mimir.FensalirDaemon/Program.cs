@@ -351,6 +351,26 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             return true;
         }
 
+        if (kind == "mimir.cultmesh_stream_frame.v1")
+        {
+            var captureSequence = (long)DaemonUtil.JsonNumber(root, "captureSequence");
+            reservoirWorker.Enqueue(BuildStreamFrameReservoirJob(root, current, captureSequence));
+            var stream = DaemonUtil.JsonGet(root, "stream");
+            next = current with
+            {
+                UpdatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+                Status = "drinking-stream-frames",
+                WellSource = string.IsNullOrWhiteSpace(options.WellLogPath) ? "missing" : options.WellLogPath,
+                LastCaptureSequence = captureSequence,
+                Notes = [
+                    $"stream={DaemonUtil.JsonText(stream, "streamId") ?? "unknown"}",
+                    $"kind={DaemonUtil.JsonText(stream, "kind") ?? "unknown"}",
+                    "reservoir-worker=stream-frame-lane"
+                ],
+            };
+            return true;
+        }
+
         if (kind == "mimir.well_stream_pressure.v1")
         {
             var poll = DaemonUtil.JsonGet(root, "poll");
@@ -387,7 +407,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             options.GpuBudget,
             options.CpuBudget,
             "surface-owner-installed",
-            ["cultcache-state", "cultnet-websocket", "cultmesh-eve-dashboard", "well-tail"],
+            ["cultcache-state", "cultnet-websocket", "cultmesh-eve-dashboard", "well-tail", "stream-frame-tail"],
             ["reservoir kernels pending"],
             0,
             0,
@@ -543,6 +563,58 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             reasons.ToArray(),
             Math.Max(0, current.AudioSources),
             Math.Max(0, current.VideoSources));
+    }
+
+    private static ReservoirJob BuildStreamFrameReservoirJob(JsonElement root, MimirFensalirDaemonStateDocument current, long captureSequence)
+    {
+        var slice = DaemonUtil.JsonGet(root, "slice");
+        var stream = DaemonUtil.JsonGet(root, "stream");
+        var frame = DaemonUtil.JsonGet(root, "frame");
+        var sample = DaemonUtil.JsonGet(root, "sample");
+        var body = DaemonUtil.JsonGet(root, "body");
+        var bodyRef = DaemonUtil.JsonGet(root, "bodyRef");
+        var kind = DaemonUtil.JsonText(stream, "kind") ?? DaemonUtil.JsonText(sample, "Kind", "kind") ?? "";
+        var status = DaemonUtil.JsonText(slice, "status", "Status") ?? "";
+        var confidence = DaemonUtil.JsonNumber(slice, "timingConfidence", "TimingConfidence");
+        var accepted = string.Equals(status, "Ready", StringComparison.OrdinalIgnoreCase) && confidence >= 0.20 ? 1 : 0;
+        var reasons = new SortedSet<string>(StringComparer.Ordinal);
+        if (accepted == 0)
+        {
+            reasons.Add(string.IsNullOrWhiteSpace(status) ? "missing-status" : $"slice-{status.ToLowerInvariant()}");
+            if (confidence < 0.20)
+            {
+                reasons.Add("low-timing-confidence");
+            }
+        }
+
+        var bodyStatus = DaemonUtil.JsonText(body, "status") ?? "";
+        var hasBodyRef = bodyRef.ValueKind == JsonValueKind.Object;
+        var transport = DaemonUtil.JsonText(frame, "bodyTransport") ?? bodyStatus;
+        if (string.Equals(transport, "metadata-only", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(bodyStatus, "empty", StringComparison.OrdinalIgnoreCase))
+        {
+            reasons.Add("body-metadata-only");
+            accepted = 0;
+        }
+
+        var videoSources = string.Equals(kind, "Video", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        var audioSources = string.Equals(kind, "Audio", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        return new ReservoirJob(
+            captureSequence,
+            1,
+            accepted,
+            accepted == 1 ? 0 : 1,
+            (long)DaemonUtil.JsonNumber(slice, "canonicalStartNs", "CanonicalStartNs"),
+            (long)DaemonUtil.JsonNumber(slice, "canonicalEndNs", "CanonicalEndNs"),
+            confidence,
+            Math.Abs((long)DaemonUtil.JsonNumber(slice, "distanceFromPresentationNs", "DistanceFromPresentationNs")),
+            0.0,
+            current.PollAverageMs,
+            current.PublishAverageMs,
+            $"streamFrame/{DaemonUtil.JsonText(stream, "streamId") ?? "unknown"}:{(hasBodyRef ? "paged" : transport)}",
+            reasons.ToArray(),
+            audioSources,
+            videoSources);
     }
 }
 
