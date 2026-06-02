@@ -46,7 +46,7 @@ public sealed class MimirNativeIngestStreamSource : IMimirStreamSource
         }
 
         Push(
-            frame.DeviceTimestampNs,
+            arrivalNs,
             arrivalNs,
             frame.NativeHandle,
             data.Length,

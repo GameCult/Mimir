@@ -333,7 +333,7 @@ if (-not $SkipRuntime) {
             "--publish-ms", "250",
             "--sync-ms", "250",
             "--presentation-delay-ms", "2500",
-            "--max-samples-per-source", "4",
+            "--max-samples-per-source", "32",
             "--visual-calibration", "true",
             "--visual-calibration-ms", "250",
             "--visual-expected-leds", "38",

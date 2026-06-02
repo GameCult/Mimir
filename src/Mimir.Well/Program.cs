@@ -1341,6 +1341,9 @@ internal static class MimirWellSnapshot
         configuredSources = runtimeConfig.SourceFactories.Count,
         liveSources = hub.SourceCount,
         sourceErrors,
+        sourceHealth = runtimeConfig.SourceFactories
+            .Select(factory => SourceHealthSnapshot(factory.Descriptor, hub.Buffers.Buffers, sourceErrors, startedAt))
+            .ToArray(),
         buffers = hub.Buffers.Buffers.Select(BufferSnapshot).ToArray(),
         synchronizedFrame = new
         {
@@ -1517,6 +1520,78 @@ internal static class MimirWellSnapshot
             }).ToArray(),
         },
     };
+    }
+
+    private static object SourceHealthSnapshot(
+        MimirStreamDescriptor descriptor,
+        IEnumerable<MimirRollingStreamBuffer> buffers,
+        IReadOnlyList<object> sourceErrors,
+        DateTimeOffset startedAt)
+    {
+        var matchingBuffers = buffers
+            .Where(buffer => string.Equals(buffer.Descriptor.SourceId, descriptor.SourceId, StringComparison.Ordinal))
+            .ToArray();
+        if (matchingBuffers.Length == 0 && descriptor.SourceId.Contains("asio", StringComparison.OrdinalIgnoreCase))
+        {
+            matchingBuffers = buffers
+                .Where(buffer =>
+                    buffer.Descriptor.Kind == descriptor.Kind &&
+                    buffer.Descriptor.Origin == descriptor.Origin &&
+                    buffer.Descriptor.SourceId.StartsWith("asio-ch", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
+
+        var samples = matchingBuffers.Sum(static buffer => buffer.Count);
+        var latest = matchingBuffers
+            .Select(static buffer => buffer.Latest)
+            .Where(static sample => sample.HasValue)
+            .OrderByDescending(static sample => sample!.Value.TimestampNs)
+            .FirstOrDefault();
+        var errored = sourceErrors.Any(error =>
+            TryReadAnonymousString(error, "SourceId", "sourceId") is { } id &&
+            string.Equals(id, descriptor.SourceId, StringComparison.Ordinal));
+        var elapsedMs = Math.Max(0.0, (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+        var status = errored
+            ? "create-error"
+            : samples > 0
+                ? "live"
+                : "created-no-samples";
+
+        return new
+        {
+            descriptor.SourceId,
+            Kind = descriptor.Kind.ToString(),
+            Origin = descriptor.Origin.ToString(),
+            descriptor.Label,
+            status,
+            reason = status switch
+            {
+                "create-error" => "source creation failed; see sourceErrors",
+                "created-no-samples" => "source was created but has not emitted a sample",
+                _ => "samples arriving",
+            },
+            buffers = matchingBuffers.Length,
+            samples,
+            latestTimestampNs = latest?.TimestampNs ?? 0L,
+            latestAgeMs = latest.HasValue
+                ? Math.Round(Math.Max(0.0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000.0 - latest.Value.TimestampNs) / 1_000_000.0), 1)
+                : Math.Round(elapsedMs, 1),
+            latestByteLength = latest?.ByteLength ?? 0,
+        };
+    }
+
+    private static string? TryReadAnonymousString(object value, params string[] names)
+    {
+        var type = value.GetType();
+        foreach (var name in names)
+        {
+            if (type.GetProperty(name)?.GetValue(value) is string text && !string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+        }
+
+        return null;
     }
 
     private static object BufferSnapshot(MimirRollingStreamBuffer buffer) => new

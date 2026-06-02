@@ -1142,6 +1142,14 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             UiElement.Text("mimir-well-features", $"video features stable {well.FeatureStableTracks} c={well.FeatureMeanConfidence:0.000} motion {well.FeatureMeanMotionPixelsPerSecond:0.0}px/s faust signals {well.FeatureSignals.Count}", "caption"),
             UiElement.Text("mimir-well-probe", well.Probe == null ? "probe: none" : $"probe emit={well.Probe.ShouldEmit} sync={well.Probe.SyncConfidence:0.000} freq={well.Probe.FrequencyConfidence:0.000} {well.Probe.Reason}", "caption"),
         };
+        children.AddRange(well.SourceHealth
+            .OrderBy(static source => source.Kind, StringComparer.Ordinal)
+            .ThenBy(static source => source.SourceId, StringComparer.Ordinal)
+            .Take(10)
+            .Select(source => UiElement.Text(
+                $"mimir-well-source-health-{StableId(source.SourceId)}",
+                $"{source.SourceId}: {source.Kind} {source.Status} samples {source.Samples} age {source.LatestAgeMs:0}ms {source.Reason}",
+                source.Status == "live" ? "caption" : "danger")));
         children.AddRange(well.FeatureSignals
             .OrderByDescending(static signal => signal.Confidence)
             .ThenBy(static signal => signal.SourceId, StringComparer.Ordinal)
@@ -1473,6 +1481,19 @@ internal sealed class MimirLiveStatsSnapshot
         var captureStorage = TryGetAny(TryGetAny(root, "capture"), "storage");
         var publication = TryGetAny(root, "publication");
         var stems = ArrayItems(TryGetAny(publication, "stems")).ToArray();
+        var sourceHealth = ArrayItems(TryGetAny(root, "sourceHealth"))
+            .Select(static source => new MimirWellSourceHealthStat(
+                JsonStringAny(source, "SourceId", "sourceId") ?? "unknown",
+                JsonStringAny(source, "Kind", "kind") ?? "unknown",
+                JsonStringAny(source, "Origin", "origin") ?? "unknown",
+                JsonStringAny(source, "Label", "label") ?? "",
+                JsonStringAny(source, "status") ?? "unknown",
+                JsonStringAny(source, "reason") ?? "",
+                (int)JsonNumberAny(source, "buffers"),
+                (int)JsonNumberAny(source, "samples"),
+                JsonNumberAny(source, "latestAgeMs"),
+                (int)JsonNumberAny(source, "latestByteLength")))
+            .ToArray();
         return new MimirWellStat(
             (long)JsonNumberAny(root, "sequence"),
             JsonNumberAny(root, "elapsedSeconds"),
@@ -1500,6 +1521,7 @@ internal sealed class MimirLiveStatsSnapshot
             (long)JsonNumberAny(publishPressure, "bytes"),
             JsonStringAny(captureStorage, "bodyTransport") ?? "unknown",
             stems.Length,
+            sourceHealth,
             buffers,
             clockDomains,
             states,
@@ -2090,6 +2112,7 @@ internal sealed record MimirWellStat(
     long PublishedBytes,
     string CaptureInlineBodies,
     int PublicationStemCount,
+    IReadOnlyList<MimirWellSourceHealthStat> SourceHealth,
     IReadOnlyList<MimirWellBufferStat> Buffers,
     IReadOnlyList<MimirWellClockDomainStat> ClockDomains,
     IReadOnlyList<MimirWellAudioSyncStateStat> AudioSyncStates,
@@ -2120,6 +2143,18 @@ internal sealed record MimirWellBufferStat(
     string PixelFormat,
     int SampleRate,
     int Channels);
+
+internal sealed record MimirWellSourceHealthStat(
+    string SourceId,
+    string Kind,
+    string Origin,
+    string Label,
+    string Status,
+    string Reason,
+    int Buffers,
+    int Samples,
+    double LatestAgeMs,
+    int LatestByteLength);
 
 internal sealed record MimirWellAudioSyncStateStat(string SourceId, string ReferenceSourceId, double DelaySamples, double SroPpm, double Confidence);
 

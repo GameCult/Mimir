@@ -14,7 +14,7 @@ public sealed record MimirAsioStreamSourceOptions(
 public sealed class MimirAsioStreamSource : IMimirMultiplexedStreamSource
 {
     private const string DefaultClsid = "{AC4D0455-50D7-4498-B3CD-9A41D130B759}";
-    private const int MaxQueuedBlocks = 32768;
+    private const int MaxQueuedBlocks = 256;
     private readonly ConcurrentQueue<MimirStreamSample> samples = new();
     private readonly ManualResetEventSlim started = new();
     private readonly Thread captureThread;
@@ -130,13 +130,14 @@ public sealed class MimirAsioStreamSource : IMimirMultiplexedStreamSource
 
                 var sourceId = channel < sourceIds.Length ? sourceIds[channel] : $"asio-ch{channel}";
                 var bytes = new byte[frameCount * sizeof(float)];
+                var arrivalNs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
                 MemoryMarshal.AsBytes(sampleBuffer.AsSpan(0, frameCount)).CopyTo(bytes);
                 samples.Enqueue(new MimirStreamSample(
                     sourceId,
                     MimirStreamKind.Audio,
                     Descriptor.Origin,
-                    timestampNs,
-                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L,
+                    arrivalNs,
+                    arrivalNs,
                     sequence,
                     0,
                     bytes.Length,

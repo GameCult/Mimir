@@ -237,8 +237,8 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         var cache = await CultCacheMessagePack.OpenAsync(options.CultCachePath, new CultCacheOpenOptions
         {
             UseDirectoryStore = true,
-            FlushOnDispose = true,
-            StoreFlushOnDispose = true,
+            FlushOnDispose = false,
+            StoreFlushOnDispose = false,
         }).ConfigureAwait(false);
         var key = new CultRecordKey(options.DaemonId);
         var existing = cache.Get<MimirFensalirDaemonStateDocument>(key);
@@ -252,7 +252,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         var existingPressure = cache.Get<MimirFensalirReservoirPressureDocument>(pressureKey);
         var pressureDocument = existingPressure ?? BuildInitialPressureDocument(options);
         var pressureHandle = await cache.UpsertAsync(pressureDocument, new CultRecordHandle<MimirFensalirReservoirPressureDocument>(pressureKey)).ConfigureAwait(false);
-        await cache.FlushAsync().ConfigureAwait(false);
+        await SafeFlushAsync(cache, soft: false).ConfigureAwait(false);
         return new FensalirDaemonState(options, cache, handle, document, workerHandle, workerDocument, pressureHandle, pressureDocument);
     }
 
@@ -292,7 +292,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
                 await cache.UpsertAsync(document, handle).ConfigureAwait(false);
                 await cache.UpsertAsync(workerDocument, workerHandle).ConfigureAwait(false);
                 await cache.UpsertAsync(pressureDocument, pressureHandle).ConfigureAwait(false);
-                await cache.FlushAsync(soft: true).ConfigureAwait(false);
+                await SafeFlushAsync(cache, soft: true).ConfigureAwait(false);
                 if (options.Once)
                 {
                     return;
@@ -320,8 +320,28 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        cache.Dispose();
+        try
+        {
+            cache.Dispose();
+        }
+        catch (IOException ex)
+        {
+            Console.Error.WriteLine($"mimir-fensalir-daemon state-cache-dispose-warning {ex.Message}");
+        }
+
         return ValueTask.CompletedTask;
+    }
+
+    private static async Task SafeFlushAsync(CultCache cache, bool soft)
+    {
+        try
+        {
+            await cache.FlushAsync(soft).ConfigureAwait(false);
+        }
+        catch (IOException ex)
+        {
+            Console.Error.WriteLine($"mimir-fensalir-daemon state-cache-flush-warning soft={soft} {ex.Message}");
+        }
     }
 
     private bool TryDrink(JsonElement root, out MimirFensalirDaemonStateDocument next)
@@ -595,7 +615,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             var distanceNs = Math.Abs((long)DaemonUtil.JsonNumber(slice, "distanceFromPresentationNs", "DistanceFromPresentationNs"));
             var startNs = (long)DaemonUtil.JsonNumber(slice, "canonicalStartNs", "CanonicalStartNs");
             var endNs = (long)DaemonUtil.JsonNumber(slice, "canonicalEndNs", "CanonicalEndNs");
-            if (string.Equals(status, "Ready", StringComparison.OrdinalIgnoreCase) && confidence >= 0.20)
+            if (string.Equals(status, "Ready", StringComparison.OrdinalIgnoreCase) && (confidence >= 0.20 || distanceNs == 0))
             {
                 accepted++;
                 minConfidence = Math.Min(minConfidence, confidence);
@@ -664,7 +684,8 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         var kind = DaemonUtil.JsonText(stream, "kind") ?? DaemonUtil.JsonText(sample, "Kind", "kind") ?? "";
         var status = DaemonUtil.JsonText(slice, "status", "Status") ?? "";
         var confidence = DaemonUtil.JsonNumber(slice, "timingConfidence", "TimingConfidence");
-        var accepted = string.Equals(status, "Ready", StringComparison.OrdinalIgnoreCase) && confidence >= 0.20 ? 1 : 0;
+        var distanceNs = Math.Abs((long)DaemonUtil.JsonNumber(slice, "distanceFromPresentationNs", "DistanceFromPresentationNs"));
+        var accepted = string.Equals(status, "Ready", StringComparison.OrdinalIgnoreCase) && (confidence >= 0.20 || distanceNs == 0) ? 1 : 0;
         var reasons = new SortedSet<string>(StringComparer.Ordinal);
         if (accepted == 0)
         {
@@ -681,7 +702,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         var droppedBecauseBodyMissing = 0;
         var droppedBecauseFenceUnavailable = 0;
         var droppedBecauseTimingDegraded = 0;
-        if (confidence < 0.20)
+        if (accepted == 0 && confidence < 0.20)
         {
             droppedBecauseTimingDegraded++;
         }
@@ -694,7 +715,11 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             droppedBecauseBodyMissing++;
         }
 
+        var hasInlineBody = string.Equals(transport, "inline-bytes", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(bodyStatus, "inline-bytes", StringComparison.OrdinalIgnoreCase);
         if (string.Equals(kind, "Video", StringComparison.OrdinalIgnoreCase) &&
+            !hasInlineBody &&
+            !hasBodyRef &&
             DaemonUtil.JsonNumber(frame, "producerFenceValue", "ProducerFenceValue") <= 0.0 &&
             string.IsNullOrWhiteSpace(DaemonUtil.JsonText(frame, "nativeHandleKind", "NativeHandleKind")))
         {
@@ -712,7 +737,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             (long)DaemonUtil.JsonNumber(slice, "canonicalStartNs", "CanonicalStartNs"),
             (long)DaemonUtil.JsonNumber(slice, "canonicalEndNs", "CanonicalEndNs"),
             confidence,
-            Math.Abs((long)DaemonUtil.JsonNumber(slice, "distanceFromPresentationNs", "DistanceFromPresentationNs")),
+            distanceNs,
             0.0,
             current.PollAverageMs,
             current.PublishAverageMs,

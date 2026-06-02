@@ -172,7 +172,7 @@ public sealed class MimirRuntimeConfiguration
                     stream.MinimumFramesPerSecond,
                     stream.QueueDepth,
                     ParsePixelFormat(stream.PixelFormat))),
-                static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
+                UtcNowNs));
         }
 
         if (string.Equals(stream.Adapter, "ps3eye", StringComparison.OrdinalIgnoreCase)
@@ -192,7 +192,7 @@ public sealed class MimirRuntimeConfiguration
                     stream.Width,
                     stream.Height,
                     stream.FramesPerSecond)),
-                static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
+                UtcNowNs));
         }
 
         if (string.Equals(stream.Adapter, "mf-gpu", StringComparison.OrdinalIgnoreCase)
@@ -214,7 +214,7 @@ public sealed class MimirRuntimeConfiguration
                     stream.InputFormat,
                     stream.OutputFormat,
                     stream.MinimumFramesPerSecond)),
-                static () => StopwatchTicksToNs(System.Diagnostics.Stopwatch.GetTimestamp())));
+                UtcNowNs));
         }
 
         if (string.Equals(stream.Adapter, "frame-events", StringComparison.OrdinalIgnoreCase)
@@ -305,10 +305,7 @@ public sealed class MimirRuntimeConfiguration
         return Path.GetFullPath(Path.Combine(configDirectory, command));
     }
 
-    private static long StopwatchTicksToNs(long ticks)
-    {
-        return checked((long)(ticks * (1_000_000_000.0 / System.Diagnostics.Stopwatch.Frequency)));
-    }
+    private static long UtcNowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
 
     private static MimirStreamKind ParseKind(string value)
     {
