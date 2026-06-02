@@ -52,6 +52,18 @@ invariants:
   - Mimir publishes physical observations, calibration constraints, and surface
     intent. Fensalir owns field claims, selected lowerings, evidence reservoirs,
     temporal guide lanes, and program presentation.
+  - The production reservoir owner should be a Fensalir daemon that drinks typed
+    Well pages/configured composites, owns reservoir budgets, job scheduling,
+    GPU residency, and CPU/GPU worker share, then publishes typed
+    reservoir/program surfaces. The Mimir editor is not this daemon.
+  - `FieldEvidenceFrame` is not a flat video compositor. Camera Texture2D
+    resources and claims are typed evidence declarations; they do not draw live
+    Fensalir-owned texture leases as 2D program layers until Fensalir has an
+    explicit video compositor backend.
+  - Fensalir reservoir history presentation must be source-derived: it runs only
+    when reservoir-producing inputs are active. A responsive synced-video
+    editor frame must not pay reservoir history cost just because the renderer
+    is presenting a backbuffer.
   - The Mimir editor is currently a 2D program mixer. `MimirSceneEditorState`
     owns normalized video-layer placement for synced video streams and emits
     only video-source preview items; camera/SDF/model authoring has no live UI
@@ -678,7 +690,12 @@ accepted_design:
     complete: OBS consumes final Mimir/Fensalir program surfaces and stems
     through the native plugin, raw feeds remain debug inputs, and the ledger
     records the live texture, texture ring, producer-fence, and consumer-fence
-    proofs.
+    proofs. The OBS program-texture source treats a producer fence that opens
+    or later reports `UINT64_MAX` as a dead producer handle: it releases the
+    bridge and retries instead of preserving a stale white/empty program path.
+    This keeps OBS as a reconnecting consumer; producer lifetime still belongs
+    to Fensalir/Mimir, and a producer restart publishes the fresh texture/fence
+    pair OBS consumes.
     `Mimir.WellObsDaemon` is the first Well-to-OBS daemon for the tightest
     configured composite. It tails a Well relay/log, reads synchronized
     `mimir.well_capture_page.v1` pages with inline audio bodies, applies the
@@ -830,7 +847,13 @@ accepted_design:
     loads `complexContourChannelModelPath`, extracts Float32 windows from the
     rolling buffers, and publishes `evidence=complex-contour` reports. The
     synthetic runtime-shaped proof `--complex-contour-runtime-self-test` at
-    192 kHz recovers a 693.5-sample delay with about 0.219 us error.
+    192 kHz recovers a 693.5-sample delay with about 0.219 us error. A live
+    dump on 2026-06-02 showed the heavy matched-filter analyzer running
+    `MimirComplexContourMatchedFilterBank.ScoreAt` inline on the Fensalir render
+    thread at 192 kHz, hanging the app. Runtime complex-contour analysis is now
+    suppressed on the render thread by default; `MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1`
+    is a diagnostic override, and the proper live owner is a bounded worker/job
+    lane that returns reports to the runtime without owning frame cadence.
     `MimirCalibratedAudioCompositeBuilder` is the first diagnostic composite
     owner for corrected mic streams: it consumes audio samples plus
     `MimirAudioSynchronizationState` delay/confidence and measured band

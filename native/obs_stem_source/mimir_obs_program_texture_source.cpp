@@ -339,32 +339,40 @@ static bool open_source_texture(MimirProgramTextureSource *ctx)
     return ctx->source_textures.size() == ctx->ring_count;
 }
 
-static void open_producer_fence(MimirProgramTextureSource *ctx)
+static bool open_producer_fence(MimirProgramTextureSource *ctx)
 {
     const auto wide_name = utf8_to_wide(ctx->fence_name);
     if (wide_name.empty()) {
-        return;
+        return true;
     }
 
     HANDLE fence_handle = nullptr;
     HRESULT hr = ctx->d3d12_device->OpenSharedHandleByName(wide_name.c_str(), GENERIC_ALL, &fence_handle);
     if (FAILED(hr)) {
         log_retry_failure(ctx, "OpenSharedHandleByName producer fence failed", hr);
-        return;
+        return true;
     }
 
     hr = ctx->d3d12_device->OpenSharedHandle(fence_handle, IID_PPV_ARGS(&ctx->producer_fence));
     CloseHandle(fence_handle);
     if (FAILED(hr)) {
         log_retry_failure(ctx, "OpenSharedHandle producer fence failed", hr);
-        return;
+        ctx->producer_fence.Reset();
+        return true;
     }
 
     ctx->last_producer_fence_value = ctx->producer_fence->GetCompletedValue();
+    if (ctx->last_producer_fence_value == UINT64_MAX) {
+        log_retry_failure(ctx, "producer fence opened in device-removed state");
+        ctx->producer_fence.Reset();
+        return false;
+    }
+
     blog(LOG_INFO,
          "Mimir OBS program texture producer fence opened %s value=%llu",
          ctx->fence_name.c_str(),
          static_cast<unsigned long long>(ctx->last_producer_fence_value));
+    return true;
 }
 
 static bool read_producer_fence(MimirProgramTextureSource *ctx, uint64_t *completed)
@@ -376,7 +384,7 @@ static bool read_producer_fence(MimirProgramTextureSource *ctx, uint64_t *comple
 
     *completed = ctx->producer_fence->GetCompletedValue();
     if (*completed == UINT64_MAX) {
-        blog(LOG_WARNING, "Mimir OBS program texture: producer fence reported device removal");
+        log_retry_failure(ctx, "producer fence reported device removal");
         return false;
     }
 
@@ -459,7 +467,10 @@ static bool ensure_bridge(MimirProgramTextureSource *ctx)
         return false;
     }
 
-    open_producer_fence(ctx);
+    if (!open_producer_fence(ctx)) {
+        release_bridge(ctx);
+        return false;
+    }
 
     blog(LOG_INFO, "Mimir OBS program texture source opened %s (%ux%u ring=%u)",
          ctx->texture_name.c_str(),
@@ -478,6 +489,7 @@ static bool copy_source_to_bridge(MimirProgramTextureSource *ctx)
 
     uint64_t completed_producer_value = 0;
     if (!read_producer_fence(ctx, &completed_producer_value)) {
+        release_bridge(ctx);
         return false;
     }
 

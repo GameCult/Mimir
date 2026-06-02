@@ -17,7 +17,9 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
         IEnumerable<MimirRollingStreamWindow> windows,
         IEnumerable<MimirObservation> observations,
         IEnumerable<MimirCalibrationConstraint> calibrationConstraints,
-        IEnumerable<MimirSurfaceIntent> surfaceIntents)
+        IEnumerable<MimirSurfaceIntent> surfaceIntents,
+        bool includeObservationClaims = true,
+        bool includeCalibrationClaims = true)
     {
         var observationByKey = observations.ToDictionary(static observation => observation.ObservationKey, StringComparer.Ordinal);
         var domains = new List<AquariumFieldDomain>();
@@ -35,25 +37,31 @@ public sealed class MimirFensalirFieldLowering(MimirFensalirLoweringOptions? opt
             AddResource(resources, seenResources, ResourceForWindow(window));
         }
 
-        foreach (var observation in observations)
+        if (includeObservationClaims)
         {
-            var domain = DomainForObservation(observation);
-            AddDomain(domains, seenDomains, domain);
-            AddResource(resources, seenResources, ResourceForObservation(observation));
+            foreach (var observation in observations)
+            {
+                var domain = DomainForObservation(observation);
+                AddDomain(domains, seenDomains, domain);
+                AddResource(resources, seenResources, ResourceForObservation(observation));
 
-            var claim = ClaimForObservation(observation, domain.DomainKey);
-            claims.Add(claim);
-            candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+                var claim = ClaimForObservation(observation, domain.DomainKey);
+                claims.Add(claim);
+                candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+            }
         }
 
-        foreach (var constraint in calibrationConstraints)
+        if (includeCalibrationClaims)
         {
-            var domain = DomainForCalibrationConstraint(constraint);
-            AddDomain(domains, seenDomains, domain);
+            foreach (var constraint in calibrationConstraints)
+            {
+                var domain = DomainForCalibrationConstraint(constraint);
+                AddDomain(domains, seenDomains, domain);
 
-            var claim = ClaimForCalibrationConstraint(constraint, domain.DomainKey);
-            claims.Add(claim);
-            candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+                var claim = ClaimForCalibrationConstraint(constraint, domain.DomainKey);
+                claims.Add(claim);
+                candidates.Add(CandidateForClaim(claim, AquariumFieldGuide.Valid(claim.Confidence)));
+            }
         }
 
         foreach (var intent in surfaceIntents)

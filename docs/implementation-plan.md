@@ -23,11 +23,28 @@ For the source-level ownership map, read [[code-algorithm-map|Code Algorithm Map
 Fensalir is not a conventional renderer bolted onto Mimir. It is the engine-side
 field/evidence machine. Mimir must submit synchronized buffers, constraints,
 surface intent, and calibration evidence; Fensalir lowers them into claims with
-travel/depth, metadata, control, and reservoir-guide lanes. Any path that only
-paints pixels is a fallback/debug draw and must not be mistaken for the
-spatiotemporal machine. The shared Fensalir spatiotemporal reservoir is the
-organ that owns temporally reused field presentation; TubeField is only the
-current rolling-buffer tube claim/candidate producer feeding that organ.
+travel/depth, metadata, control, and reservoir-guide lanes. The shared Fensalir
+spatiotemporal reservoir is the organ that owns temporally reused field
+presentation; TubeField is only the current rolling-buffer tube claim/candidate
+producer feeding that organ.
+
+That organ should live as a Fensalir reservoir daemon for production: it drinks
+typed Well pages/configured composites, owns reservoir budgets and CPU/GPU work
+allocation, and publishes typed reservoir/program surfaces. The Mimir editor is
+not that daemon. For the current OBS-shaped cut, the editor is a thin synced
+video compositor/control surface and must stay responsive even while the
+reservoir worker is absent, paused, or saturated. Field diagnostics, Leap
+surface splats, spectrum tubes, and reservoir proof visuals are opt-in
+diagnostics or daemon outputs, not default editor presentation.
+
+Any path that only paints pixels is not the spatiotemporal machine, but the
+editor still needs a real flat video compositor backend. The current
+`FieldEvidenceFrame` camera resources are typed declarations/claims; they do
+not by themselves draw Fensalir-owned live camera texture leases as program
+layers. Until Fensalir has that 2D textured-quad/program-layer backend, the
+editor can be responsive and still fail to show synced video. Do not paper over
+that with reservoir diagnostics.
+
 Because Fensalir often samples visible field candidates directly rather than
 lighting samples after a known primary hit, claim producers may need
 deterministic local visibility generation before reservoir reuse. Reservoir

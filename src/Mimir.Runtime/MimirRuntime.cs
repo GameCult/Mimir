@@ -63,6 +63,8 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private readonly int spectrumTubeSubdivisions;
     private readonly int spectrumSourceLaneCapacity;
     private readonly bool obsProofVisualEnabled;
+    private readonly bool diagnosticFieldOutputEnabled;
+    private readonly bool inlineComplexContourRuntimeEnabled;
     private readonly float calibrationGain;
     private readonly float watermarkGain;
     private readonly bool syntheticSpectrumPreview;
@@ -90,6 +92,7 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private MimirObsStemPublicationSnapshot lastObsStemPublication = MimirObsStemPublicationSnapshot.Empty;
     private MimirScheduledBioacousticProbeFrame? lastBioacousticProbeSchedule;
+    private bool inlineComplexContourRuntimeSuppressionLogged;
     private long spectrumHistorySequence;
     private long audioActuatorFrameSequence;
     private bool audioActuatorProgramQueued;
@@ -145,10 +148,15 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         spectrumTubeSubdivisions = ParseSpectrumTubeSubdivisions();
         spectrumSourceLaneCapacity = ParseSpectrumSourceLaneCapacity();
         obsProofVisualEnabled = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_OBS_PROOF_VISUAL"));
+        inlineComplexContourRuntimeEnabled = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE"));
         calibrationGain = settings.Audio.CalibrationGain;
         watermarkGain = settings.Audio.WatermarkGain;
         syntheticSpectrumPreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SPECTRUM_PREVIEW"));
         syntheticSingleTubePreview = IsTruthy(Environment.GetEnvironmentVariable("MIMIR_SYNTHETIC_SINGLE_TUBE_PREVIEW"));
+        diagnosticFieldOutputEnabled =
+            syntheticSpectrumPreview ||
+            syntheticSingleTubePreview ||
+            IsTruthy(Environment.GetEnvironmentVariable("MIMIR_FIELD_DIAGNOSTICS"));
         if (syntheticSingleTubePreview)
         {
             GraphicsSettings = new GraphicsSettings(
@@ -228,13 +236,13 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
             new AquariumSceneState
             {
                 TraceHeightFieldSurface = false,
-                UseStudioBackground = !syntheticSingleTubePreview,
-                UseStarfieldBackground = obsProofVisualEnabled,
+                UseStudioBackground = diagnosticFieldOutputEnabled && !syntheticSingleTubePreview,
+                UseStarfieldBackground = diagnosticFieldOutputEnabled && obsProofVisualEnabled,
                 SdfObjects = MergeSdfObjects(
-                    obsProofVisualEnabled ? BuildObsProofSdfObjects(runtimeSeconds) : [],
+                    diagnosticFieldOutputEnabled && obsProofVisualEnabled ? BuildObsProofSdfObjects(runtimeSeconds) : [],
                     []),
                 SdfLights = MergeSdfLights(
-                    obsProofVisualEnabled ? BuildObsProofSdfLights(runtimeSeconds) : [],
+                    diagnosticFieldOutputEnabled && obsProofVisualEnabled ? BuildObsProofSdfLights(runtimeSeconds) : [],
                     []),
                 FieldEvidenceFrame = fieldEvidenceFrame,
                 BufferFieldFrame = AquariumBufferFieldFrame.Empty,
@@ -322,7 +330,18 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
                 sceneEditor.PlacementForSource(window.StreamId)));
         }
 
-        var frame = fieldLowering.BuildFieldEvidenceFrame(windows, observations, constraints, intents);
+        var frame = fieldLowering.BuildFieldEvidenceFrame(
+            windows,
+            observations,
+            constraints,
+            intents,
+            includeObservationClaims: diagnosticFieldOutputEnabled,
+            includeCalibrationClaims: diagnosticFieldOutputEnabled);
+        if (!diagnosticFieldOutputEnabled)
+        {
+            return frame;
+        }
+
         frame = AddSpectrumFieldEvidence(frame);
         return AddLeapGeometryFieldEvidence(frame, windows);
     }
@@ -1393,9 +1412,14 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
 
         var stopwatch = Stopwatch.StartNew();
         synchronization.AnalyzeAudioSynchronizationStep(audioSyncSettings.ReferenceSourceId, audioSyncSettings.Mode);
-        if (synchronization.ComplexContourRuntimeEnabled)
+        if (synchronization.ComplexContourRuntimeEnabled && inlineComplexContourRuntimeEnabled)
         {
             synchronization.AnalyzeComplexContourSynchronizationStep(audioSyncSettings.ReferenceSourceId, runtimeSeconds);
+        }
+        else if (synchronization.ComplexContourRuntimeEnabled && !inlineComplexContourRuntimeSuppressionLogged)
+        {
+            inlineComplexContourRuntimeSuppressionLogged = true;
+            Console.WriteLine("mimir-complex-contour-runtime inline=false reason=render-thread-budget set MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1 to run the heavy matched filter inline");
         }
         stopwatch.Stop();
         lastAudioSyncAnalysisMilliseconds = stopwatch.Elapsed.TotalMilliseconds;

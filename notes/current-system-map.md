@@ -23,10 +23,14 @@ flowchart TD
     C["Leap timing/IR driver"] --> R
     D["network feed producers"] --> R
     R --> N["native reservoir handles"]
-    N --> E["Fensalir GPU fusion + UI"]
+    R --> W["Mimir Well typed pages + timing state"]
+    W --> D["Fensalir reservoir daemon"]
+    N --> D
+    D --> E["Fensalir GPU fusion surfaces"]
+    R --> U["Mimir editor thin synced-video UI"]
     N --> F["Faust/native DSP"]
     E --> G["Spout2/program video"]
-    E --> V["EVE native shared-texture stream"]
+    U --> V["EVE/native shared-texture program stream"]
     F --> H["program stems + spatial bed"]
     G --> I["OBS"]
     H --> I
@@ -41,10 +45,21 @@ Ownership:
   phones, microcontrollers, Raven, and Starfire can participate without
   becoming independent clock authorities.
 - `Mimir.Runtime` owns app-level stream buffers and synchronization.
+- `Mimir.Well` owns typed live pages, configured composites, timing pressure,
+  feature signals, and capture-body publication. It is the source the heavy
+  reservoir worker drinks from; it is not a renderer.
 - Native capture workers own device reads.
-- Fensalir owns dense visual fusion, material/brush/splat reconciliation,
-  D3D12 interop, runtime UI, Spout2 publication, and the completed backbuffer
-  texture copied into the EVE shared D3D12 program-output surface.
+- The future Fensalir reservoir daemon owns dense visual fusion,
+  material/brush/splat reconciliation, reservoir budgets, job scheduling, GPU
+  residency, and any CPU/GPU worker share thrown at field reconstruction. It
+  drinks from the Well and publishes typed reservoir/program surfaces.
+- The Mimir editor owns only responsive 2D synced-video presentation controls
+  and program-layer placement for the current cut. It must not accidentally run
+  reservoir history work just because a frame is being drawn.
+- Fensalir's in-app renderer owns D3D12 interop and lowering of explicit
+  surfaces. A flat video compositor backend is still missing: current
+  FieldEvidence camera resources are declarations/claims, not a production
+  textured-quad draw path.
 - Faust/native DSP owns hot audio alignment, suppression, separation,
   spatialization, and stem generation.
 - OBS owns broadcast controls.
