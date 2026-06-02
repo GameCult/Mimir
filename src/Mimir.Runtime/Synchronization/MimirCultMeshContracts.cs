@@ -168,6 +168,27 @@ public sealed record MimirFensalirReservoirWorkerStateDocument(
     [property: Key(25)] long MaxDistanceFromPresentationNs,
     [property: Key(26)] double GpuQueueMs);
 
+[CultDocument("mimir.fensalir_reservoir_pressure", "mimir.fensalir_reservoir_pressure.v1")]
+[MessagePackObject]
+public sealed record MimirFensalirReservoirPressureDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string PressureId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string DaemonId,
+    [property: Key(3)] double WellPollMs,
+    [property: Key(4)] double WellPublishMs,
+    [property: Key(5)] long CapturePageBytes,
+    [property: Key(6)] double ReadySliceRatio,
+    [property: Key(7)] double TimingConfidenceMin,
+    [property: Key(8)] long MaxDistanceFromPresentationNs,
+    [property: Key(9)] double GpuQueueMs,
+    [property: Key(10)] int ReservoirHistoryRowsUsed,
+    [property: Key(11)] long DroppedBecauseBodyMissing,
+    [property: Key(12)] long DroppedBecauseFenceUnavailable,
+    [property: Key(13)] long DroppedBecauseTimingDegraded,
+    [property: Key(14)] string PressureReason);
+
 [CultDocument("mimir.eve_dashboard_manifest", "mimir.eve_dashboard_manifest.v1")]
 [MessagePackObject]
 public sealed record MimirEveDashboardManifestDocument(

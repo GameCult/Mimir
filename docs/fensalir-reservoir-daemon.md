@@ -100,6 +100,10 @@ The worker state is the owner surface for reservoir job selection and pressure:
 - queue depth, running jobs, completed jobs, dropped jobs, timing confidence,
   accepted/rejected slice counts, and estimated GPU queue milliseconds are
   persisted in CultCache;
+- `mimir.fensalir_reservoir_pressure.v1` reports Well poll/publish pressure,
+  capture bytes, ready-slice ratio, timing confidence, max presentation
+  distance, GPU queue milliseconds, and drop causes for missing bodies,
+  unavailable fences, or degraded timing;
 - Eve surfaces bind worker metrics to the worker document, not to ad hoc
   renderer telemetry.
 

@@ -73,6 +73,9 @@ invariants:
     authority path.
     `mimir.cultmesh_stream_frame.v1` records are also accepted as fine-grained
     reservoir jobs when their slice timing and body transport are usable.
+    `mimir.fensalir_reservoir_pressure.v1` is the daemon-owned pressure surface
+    for capture bytes, ready ratio, timing confidence/distance, GPU queue
+    pressure, and drop-cause counters.
   - `FieldEvidenceFrame` is not a flat video compositor. Camera Texture2D
     resources and claims are typed evidence declarations; they do not draw live
     Fensalir-owned texture leases as 2D program layers until Fensalir has an

@@ -167,11 +167,13 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
     private readonly CultCache cache;
     private readonly CultRecordHandle<MimirFensalirDaemonStateDocument> handle;
     private readonly CultRecordHandle<MimirFensalirReservoirWorkerStateDocument> workerHandle;
+    private readonly CultRecordHandle<MimirFensalirReservoirPressureDocument> pressureHandle;
     private readonly WellLogTailState tail;
     private readonly ReservoirWorkerState reservoirWorker;
     private readonly object gate = new();
     private MimirFensalirDaemonStateDocument document;
     private MimirFensalirReservoirWorkerStateDocument workerDocument;
+    private MimirFensalirReservoirPressureDocument pressureDocument;
     private DateTimeOffset lastStatus = DateTimeOffset.MinValue;
 
     private FensalirDaemonState(
@@ -180,14 +182,18 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         CultRecordHandle<MimirFensalirDaemonStateDocument> handle,
         MimirFensalirDaemonStateDocument document,
         CultRecordHandle<MimirFensalirReservoirWorkerStateDocument> workerHandle,
-        MimirFensalirReservoirWorkerStateDocument workerDocument)
+        MimirFensalirReservoirWorkerStateDocument workerDocument,
+        CultRecordHandle<MimirFensalirReservoirPressureDocument> pressureHandle,
+        MimirFensalirReservoirPressureDocument pressureDocument)
     {
         this.options = options;
         this.cache = cache;
         this.handle = handle;
         this.workerHandle = workerHandle;
+        this.pressureHandle = pressureHandle;
         this.document = document;
         this.workerDocument = workerDocument;
+        this.pressureDocument = pressureDocument;
         tail = new WellLogTailState(options.WellLogPath, options.FromStart);
         reservoirWorker = new ReservoirWorkerState(options);
     }
@@ -214,6 +220,17 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         }
     }
 
+    public MimirFensalirReservoirPressureDocument PressureDocument
+    {
+        get
+        {
+            lock (gate)
+            {
+                return pressureDocument;
+            }
+        }
+    }
+
     public static async Task<FensalirDaemonState> OpenAsync(FensalirDaemonOptions options)
     {
         var cache = await CultCacheMessagePack.OpenAsync(options.CultCachePath, new CultCacheOpenOptions
@@ -230,8 +247,12 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         var existingWorker = cache.Get<MimirFensalirReservoirWorkerStateDocument>(workerKey);
         var workerDocument = existingWorker ?? BuildInitialWorkerDocument(options);
         var workerHandle = await cache.UpsertAsync(workerDocument, new CultRecordHandle<MimirFensalirReservoirWorkerStateDocument>(workerKey)).ConfigureAwait(false);
+        var pressureKey = new CultRecordKey(options.DaemonId + "-reservoir-pressure");
+        var existingPressure = cache.Get<MimirFensalirReservoirPressureDocument>(pressureKey);
+        var pressureDocument = existingPressure ?? BuildInitialPressureDocument(options);
+        var pressureHandle = await cache.UpsertAsync(pressureDocument, new CultRecordHandle<MimirFensalirReservoirPressureDocument>(pressureKey)).ConfigureAwait(false);
         await cache.FlushAsync().ConfigureAwait(false);
-        return new FensalirDaemonState(options, cache, handle, document, workerHandle, workerDocument);
+        return new FensalirDaemonState(options, cache, handle, document, workerHandle, workerDocument, pressureHandle, pressureDocument);
     }
 
     public async Task RunAsync(CancellationToken stopping)
@@ -259,6 +280,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
                 {
                     document = ApplyWorkerSample(document, workerSample);
                     workerDocument = BuildWorkerDocument(options, document, workerSample);
+                    pressureDocument = BuildPressureDocument(options, document, workerSample);
                 }
 
                 touched = true;
@@ -268,6 +290,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             {
                 await cache.UpsertAsync(document, handle).ConfigureAwait(false);
                 await cache.UpsertAsync(workerDocument, workerHandle).ConfigureAwait(false);
+                await cache.UpsertAsync(pressureDocument, pressureHandle).ConfigureAwait(false);
                 await cache.FlushAsync(soft: true).ConfigureAwait(false);
                 if (options.Once)
                 {
@@ -446,6 +469,24 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             0,
             0.0);
 
+    private static MimirFensalirReservoirPressureDocument BuildInitialPressureDocument(FensalirDaemonOptions options) =>
+        new(
+            options.DaemonId + "-reservoir-pressure",
+            DateTimeOffset.UtcNow.ToString("O"),
+            options.DaemonId,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0,
+            0,
+            0,
+            0,
+            "no capture pressure observed yet");
+
     private static MimirFensalirDaemonStateDocument ApplyWorkerSample(
         MimirFensalirDaemonStateDocument current,
         ReservoirWorkerSample sample)
@@ -507,14 +548,39 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             sample.MaxDistanceFromPresentationNs,
             sample.GpuQueueMs);
 
+    private static MimirFensalirReservoirPressureDocument BuildPressureDocument(
+        FensalirDaemonOptions options,
+        MimirFensalirDaemonStateDocument current,
+        ReservoirWorkerSample sample) =>
+        new(
+            options.DaemonId + "-reservoir-pressure",
+            DateTimeOffset.UtcNow.ToString("O"),
+            options.DaemonId,
+            current.PollAverageMs,
+            current.PublishAverageMs,
+            sample.CapturePageBytes,
+            current.TotalSlices <= 0 ? 0.0 : current.ReadySlices / (double)current.TotalSlices,
+            sample.TimingConfidenceMin,
+            sample.MaxDistanceFromPresentationNs,
+            sample.GpuQueueMs,
+            sample.ReservoirHistoryRowsUsed,
+            sample.DroppedBecauseBodyMissing,
+            sample.DroppedBecauseFenceUnavailable,
+            sample.DroppedBecauseTimingDegraded,
+            sample.PressureReason);
+
     private static ReservoirJob BuildReservoirJob(JsonElement root, MimirFensalirDaemonStateDocument current, long captureSequence)
     {
         var samples = DaemonUtil.JsonArray(DaemonUtil.JsonGet(root, "samples")).ToArray();
         var frame = DaemonUtil.JsonGet(root, "frame");
         var composite = DaemonUtil.JsonGet(root, "configuredComposite");
         var videoComposite = DaemonUtil.JsonArray(DaemonUtil.JsonGet(composite, "video")).ToArray();
+        var rawBytes = Encoding.UTF8.GetByteCount(root.GetRawText());
         var accepted = 0;
         var rejected = 0;
+        var droppedBecauseBodyMissing = 0;
+        var droppedBecauseFenceUnavailable = 0;
+        var droppedBecauseTimingDegraded = 0;
         var oldestNs = long.MaxValue;
         var newestNs = long.MinValue;
         var minConfidence = 1.0;
@@ -543,7 +609,24 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
                 if (confidence < 0.20)
                 {
                     reasons.Add("low-timing-confidence");
+                    droppedBecauseTimingDegraded++;
                 }
+            }
+
+            var body = DaemonUtil.JsonGet(sample, "body");
+            var sampleMeta = DaemonUtil.JsonGet(sample, "sample");
+            var video = DaemonUtil.JsonGet(sampleMeta, "video");
+            var bodyStatus = DaemonUtil.JsonText(body, "status") ?? "";
+            var producerFence = DaemonUtil.JsonNumber(video, "producerFenceValue", "ProducerFenceValue");
+            if (string.Equals(bodyStatus, "empty", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(bodyStatus, "metadata-only", StringComparison.OrdinalIgnoreCase))
+            {
+                droppedBecauseBodyMissing++;
+            }
+
+            if (video.ValueKind == JsonValueKind.Object && producerFence <= 0.0)
+            {
+                droppedBecauseFenceUnavailable++;
             }
         }
 
@@ -562,7 +645,11 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             videoComposite.Length == 0 ? "configuredComposite" : $"configuredComposite/video:{videoComposite.Length}",
             reasons.ToArray(),
             Math.Max(0, current.AudioSources),
-            Math.Max(0, current.VideoSources));
+            Math.Max(0, current.VideoSources),
+            rawBytes,
+            droppedBecauseBodyMissing,
+            droppedBecauseFenceUnavailable,
+            droppedBecauseTimingDegraded);
     }
 
     private static ReservoirJob BuildStreamFrameReservoirJob(JsonElement root, MimirFensalirDaemonStateDocument current, long captureSequence)
@@ -590,11 +677,28 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         var bodyStatus = DaemonUtil.JsonText(body, "status") ?? "";
         var hasBodyRef = bodyRef.ValueKind == JsonValueKind.Object;
         var transport = DaemonUtil.JsonText(frame, "bodyTransport") ?? bodyStatus;
+        var droppedBecauseBodyMissing = 0;
+        var droppedBecauseFenceUnavailable = 0;
+        var droppedBecauseTimingDegraded = 0;
+        if (confidence < 0.20)
+        {
+            droppedBecauseTimingDegraded++;
+        }
+
         if (string.Equals(transport, "metadata-only", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(bodyStatus, "empty", StringComparison.OrdinalIgnoreCase))
         {
             reasons.Add("body-metadata-only");
             accepted = 0;
+            droppedBecauseBodyMissing++;
+        }
+
+        if (string.Equals(kind, "Video", StringComparison.OrdinalIgnoreCase) &&
+            DaemonUtil.JsonNumber(frame, "producerFenceValue", "ProducerFenceValue") <= 0.0 &&
+            string.IsNullOrWhiteSpace(DaemonUtil.JsonText(frame, "nativeHandleKind", "NativeHandleKind")))
+        {
+            reasons.Add("fence-unavailable");
+            droppedBecauseFenceUnavailable++;
         }
 
         var videoSources = string.Equals(kind, "Video", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
@@ -614,7 +718,11 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             $"streamFrame/{DaemonUtil.JsonText(stream, "streamId") ?? "unknown"}:{(hasBodyRef ? "paged" : transport)}",
             reasons.ToArray(),
             audioSources,
-            videoSources);
+            videoSources,
+            Encoding.UTF8.GetByteCount(root.GetRawText()),
+            droppedBecauseBodyMissing,
+            droppedBecauseFenceUnavailable,
+            droppedBecauseTimingDegraded);
     }
 }
 
@@ -729,7 +837,12 @@ internal sealed class ReservoirWorkerState
             job?.TimingConfidenceMin ?? 0.0,
             job?.MaxDistanceFromPresentationNs ?? 0,
             queueMs,
-            running > 0 ? WorkerBudget() : 0.0);
+            running > 0 ? WorkerBudget() : 0.0,
+            job?.CapturePageBytes ?? 0,
+            Math.Max(1, job?.AcceptedSlices ?? 0),
+            job?.DroppedBecauseBodyMissing ?? 0,
+            job?.DroppedBecauseFenceUnavailable ?? 0,
+            job?.DroppedBecauseTimingDegraded ?? 0);
     }
 
     private double WorkerBudget() => Math.Clamp(options.GpuBudget * 0.70 + options.CpuBudget * 0.30, 0.05, 1.0);
@@ -760,7 +873,11 @@ internal sealed record ReservoirJob(
     string SelectedCompositeVersion,
     string[] RejectionReasons,
     int AudioSources,
-    int VideoSources);
+    int VideoSources,
+    long CapturePageBytes,
+    long DroppedBecauseBodyMissing,
+    long DroppedBecauseFenceUnavailable,
+    long DroppedBecauseTimingDegraded);
 
 internal sealed record ReservoirWorkerSample(
     long InputCaptureSequence,
@@ -781,7 +898,12 @@ internal sealed record ReservoirWorkerSample(
     double TimingConfidenceMin,
     long MaxDistanceFromPresentationNs,
     double GpuQueueMs,
-    double Utilization)
+    double Utilization,
+    long CapturePageBytes,
+    int ReservoirHistoryRowsUsed,
+    long DroppedBecauseBodyMissing,
+    long DroppedBecauseFenceUnavailable,
+    long DroppedBecauseTimingDegraded)
 {
     public static ReservoirWorkerSample Empty { get; } = new(
         -1,
@@ -802,7 +924,12 @@ internal sealed record ReservoirWorkerSample(
         0.0,
         0,
         0.0,
-        0.0);
+        0.0,
+        0,
+        0,
+        0,
+        0,
+        0);
 }
 
 internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, FensalirDaemonState state) : IDisposable
@@ -854,6 +981,7 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
                 cultCache = options.CultCachePath,
                 cultMeshDocument = "mimir.fensalir_daemon_state",
                 workerDocument = "mimir.fensalir_reservoir_worker_state",
+                pressureDocument = "mimir.fensalir_reservoir_pressure",
             }, JsonOptions);
             await DaemonUtil.WriteHttpResponseAsync(stream, "200 OK", "application/json", Encoding.UTF8.GetBytes(health)).ConfigureAwait(false);
             return;
@@ -883,7 +1011,8 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
     {
         var document = state.Document;
         var worker = state.WorkerDocument;
-        var dashboard = BuildDashboard(document, worker);
+        var pressure = state.PressureDocument;
+        var dashboard = BuildDashboard(document, worker, pressure);
         if (binary)
         {
             var cultMesh = ToCultMesh(dashboard);
@@ -894,10 +1023,13 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
         await DaemonUtil.SendTextFrameAsync(stream, JsonSerializer.Serialize(dashboard, JsonOptions)).ConfigureAwait(false);
     }
 
-    private DashboardState BuildDashboard(MimirFensalirDaemonStateDocument doc, MimirFensalirReservoirWorkerStateDocument worker)
+    private DashboardState BuildDashboard(
+        MimirFensalirDaemonStateDocument doc,
+        MimirFensalirReservoirWorkerStateDocument worker,
+        MimirFensalirReservoirPressureDocument pressure)
     {
         var readiness = doc.TotalSlices <= 0 ? 0.0 : doc.ReadySlices / (double)doc.TotalSlices;
-        var pressure = Math.Clamp(Math.Max(doc.PollAverageMs / 16.0, doc.PublishAverageMs / 16.0), 0.0, 1.0);
+        var streamPressure = Math.Clamp(Math.Max(doc.PollAverageMs / 16.0, doc.PublishAverageMs / 16.0), 0.0, 1.0);
         var workerPressure = Math.Clamp(worker.GpuQueueMs / 1000.0, 0.0, 1.0);
         var nodes = new List<DashboardNode>
         {
@@ -957,8 +1089,10 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
                         ]),
                         Ui.Pane("pressure-pane", "Pressure",
                         [
-                            Ui.Bar("pressure-bar", "publish/poll pressure", pressure, DaemonUtil.Tone(1.0 - pressure), $"{Math.Max(doc.PollAverageMs, doc.PublishAverageMs):0.000}ms"),
+                            Ui.Bar("pressure-bar", "publish/poll pressure", streamPressure, DaemonUtil.Tone(1.0 - streamPressure), $"{Math.Max(doc.PollAverageMs, doc.PublishAverageMs):0.000}ms"),
                             Ui.Text("pressure-detail", $"poll {doc.PollAverageMs:0.000}ms publish {doc.PublishAverageMs:0.000}ms", "caption", Bind("/pollAverageMs")),
+                            Ui.Text("pressure-drops", $"body {pressure.DroppedBecauseBodyMissing} fence {pressure.DroppedBecauseFenceUnavailable} timing {pressure.DroppedBecauseTimingDegraded}", "caption", PressureBind("/droppedBecauseBodyMissing")),
+                            Ui.Text("pressure-distance", $"bytes {pressure.CapturePageBytes} max distance {pressure.MaxDistanceFromPresentationNs}ns", "caption", PressureBind("/capturePageBytes")),
                             Ui.Text("notes", string.Join("\n", doc.Notes.Take(4)), "caption", Bind("/notes")),
                         ]),
                     ]),
@@ -981,6 +1115,16 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
     {
         DocumentSchema = "mimir.fensalir_reservoir_worker_state.v1",
         DocumentId = options.DaemonId + "-reservoir-worker",
+        Path = path,
+        ValueKind = "state",
+        Access = "read",
+        Authority = "Mimir.FensalirDaemon",
+    };
+
+    private UiBinding PressureBind(string path) => new()
+    {
+        DocumentSchema = "mimir.fensalir_reservoir_pressure.v1",
+        DocumentId = options.DaemonId + "-reservoir-pressure",
         Path = path,
         ValueKind = "state",
         Access = "read",
