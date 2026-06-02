@@ -1293,7 +1293,7 @@ internal sealed class MimirLiveStatsSnapshot
             VideoBuffers = LatestBySource(telemetryLines.Select(ParseVideoBuffer).Where(static value => value != null)!),
             ActuatorCommands = LatestBySource(telemetryLines.Select(ParseActuatorCommand).Where(static value => value != null)!),
             ObservationStreams = LatestObservationStreams(observationLines),
-            Well = LatestWellSnapshot(observationLines),
+            Well = LatestWellSnapshot(telemetryLines.Concat(observationLines)),
             MoveMusic = LatestMoveMusicTrace(telemetrySource, telemetryLines),
         };
     }
