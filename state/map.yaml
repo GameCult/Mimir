@@ -62,6 +62,11 @@ invariants:
     binary CultMesh Eve dashboard state on port 8799. Its current
     `workerMode=surface-owner-installed` means dense kernels and fused program
     output are still pending behind the daemon, not silently owned elsewhere.
+    It also publishes `mimir.fensalir_reservoir_worker_state.v1` for scheduler
+    ownership: accepted/rejected capture slices, queue/running/completed/dropped
+    jobs, timing confidence, and estimated GPU queue pressure. The editor may
+    observe these values but must not repair, schedule, or publish reservoir
+    work.
   - `FieldEvidenceFrame` is not a flat video compositor. Camera Texture2D
     resources and claims are typed evidence declarations; they do not draw live
     Fensalir-owned texture leases as 2D program layers until Fensalir has an

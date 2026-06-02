@@ -43,6 +43,14 @@ CultCache, exposes `/health`, and serves JSON plus binary CultMesh
 `/eve/deck/cultmesh`. The current worker mode is deliberately
 `surface-owner-installed`; dense GPU kernels and fused program output belong
 behind this daemon next.
+It also publishes `mimir.fensalir_reservoir_worker_state.v1`, a separate
+worker document for reservoir scheduling. Capture pages with accepted timing
+slices become jobs; unusable pages are dropped with reasons. Queue depth,
+running/completed/dropped jobs, accepted/rejected slice counts, timing
+confidence, and estimated GPU queue pressure are now CultCache/Eve-visible.
+The current worker uses a budget-derived cost model; real Fensalir GPU kernels
+and Faust-assisted feature signals should replace that cost model without
+moving ownership back into the editor.
 
 Any path that only paints pixels is not the spatiotemporal machine, but the
 editor still needs a real flat video compositor backend. The current

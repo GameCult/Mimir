@@ -127,7 +127,46 @@ public sealed record MimirFensalirDaemonStateDocument(
     [property: Key(15)] double CpuBudget,
     [property: Key(16)] string WorkerMode,
     [property: Key(17)] string[] Capabilities,
-    [property: Key(18)] string[] Notes);
+    [property: Key(18)] string[] Notes,
+    [property: Key(19)] int PendingReservoirJobs,
+    [property: Key(20)] int ActiveReservoirWorkers,
+    [property: Key(21)] long CompletedReservoirJobs,
+    [property: Key(22)] long DroppedReservoirJobs,
+    [property: Key(23)] double ReservoirQueueMs,
+    [property: Key(24)] double ReservoirWorkerUtilization);
+
+[CultDocument("mimir.fensalir_reservoir_worker_state", "mimir.fensalir_reservoir_worker_state.v1")]
+[MessagePackObject]
+public sealed record MimirFensalirReservoirWorkerStateDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string WorkerId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string DaemonId,
+    [property: Key(3)] string WorkerMode,
+    [property: Key(4)] long InputCaptureSequence,
+    [property: Key(5)] string SelectedCompositeVersion,
+    [property: Key(6)] int AcceptedSlices,
+    [property: Key(7)] int RejectedSlices,
+    [property: Key(8)] string[] RejectionReasons,
+    [property: Key(9)] double GpuBudget,
+    [property: Key(10)] double CpuBudget,
+    [property: Key(11)] int QueuedJobs,
+    [property: Key(12)] int RunningJobs,
+    [property: Key(13)] long CompletedJobs,
+    [property: Key(14)] long DroppedJobs,
+    [property: Key(15)] long OldestAcceptedCanonicalNs,
+    [property: Key(16)] long NewestAcceptedCanonicalNs,
+    [property: Key(17)] string OutputProgramSurfaceId,
+    [property: Key(18)] long OutputFenceValue,
+    [property: Key(19)] string Status,
+    [property: Key(20)] string PressureReason,
+    [property: Key(21)] double WellPollMs,
+    [property: Key(22)] double WellPublishMs,
+    [property: Key(23)] double ReadySliceRatio,
+    [property: Key(24)] double TimingConfidenceMin,
+    [property: Key(25)] long MaxDistanceFromPresentationNs,
+    [property: Key(26)] double GpuQueueMs);
 
 [CultDocument("mimir.eve_dashboard_manifest", "mimir.eve_dashboard_manifest.v1")]
 [MessagePackObject]

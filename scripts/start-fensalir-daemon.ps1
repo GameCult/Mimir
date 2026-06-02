@@ -3,6 +3,8 @@ param(
     [string]$CultCache = "",
     [int]$Port = 8799,
     [int]$PollMs = 100,
+    [int]$WorkerMs = 4,
+    [int]$MaxReservoirQueue = 120,
     [double]$GpuBudget = 0.50,
     [double]$CpuBudget = 0.25,
     [switch]$NoBuild,
@@ -50,6 +52,8 @@ $arguments = @(
     "--port", $Port,
     "--cultcache", $CultCache,
     "--poll-ms", $PollMs,
+    "--worker-ms", $WorkerMs,
+    "--max-reservoir-queue", $MaxReservoirQueue,
     "--gpu-budget", $GpuBudget.ToString([Globalization.CultureInfo]::InvariantCulture),
     "--cpu-budget", $CpuBudget.ToString([Globalization.CultureInfo]::InvariantCulture)
 )
@@ -68,6 +72,8 @@ $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -WorkingDir
     daemon = "Mimir.FensalirDaemon"
     pid = $process.Id
     port = $Port
+    workerMs = $WorkerMs
+    maxReservoirQueue = $MaxReservoirQueue
     wellLog = $WellLog
     cultCache = $CultCache
     providerSpec = "mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:$Port/eve/deck"

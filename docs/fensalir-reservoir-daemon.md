@@ -83,3 +83,24 @@ mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:8799/eve/deck/cultmes
 The current worker mode is `surface-owner-installed`: kernel scheduling,
 GPU-resident reservoir compute, and actual fused program-surface publication
 belong behind this daemon next. Do not move those back into the editor.
+
+## Worker-State Cut
+
+`Mimir.FensalirDaemon` now also publishes
+`mimir.fensalir_reservoir_worker_state.v1` beside the daemon summary state.
+The worker state is the owner surface for reservoir job selection and pressure:
+
+- capture pages enqueue reservoir jobs only when they contain accepted timing
+  slices;
+- unusable pages are dropped with rejection reasons instead of being hidden by
+  the editor;
+- queue depth, running jobs, completed jobs, dropped jobs, timing confidence,
+  accepted/rejected slice counts, and estimated GPU queue milliseconds are
+  persisted in CultCache;
+- Eve surfaces bind worker metrics to the worker document, not to ad hoc
+  renderer telemetry.
+
+The current worker still simulates cost from capture-page shape and configured
+CPU/GPU share. That is intentional scaffolding: the next cut replaces the cost
+model with real GPU/Faust/Fensalir kernel dispatch while preserving the same
+owner and state contract.

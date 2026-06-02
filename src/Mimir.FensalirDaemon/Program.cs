@@ -39,6 +39,8 @@ internal sealed record FensalirDaemonOptions(
     int Port,
     int PollMs,
     int StatusSeconds,
+    int WorkerTickMs,
+    int MaxReservoirQueue,
     double GpuBudget,
     double CpuBudget,
     bool FromStart,
@@ -56,6 +58,8 @@ internal sealed record FensalirDaemonOptions(
             Math.Clamp(ParseInt(args, "--port", 8799), 1024, 65535),
             Math.Max(10, ParseInt(args, "--poll-ms", 100)),
             Math.Max(1, ParseInt(args, "--status-seconds", 5)),
+            Math.Max(1, ParseInt(args, "--worker-ms", 4)),
+            Math.Max(1, ParseInt(args, "--max-reservoir-queue", 120)),
             Math.Clamp(ParseDouble(args, "--gpu-budget", 0.50), 0.0, 1.0),
             Math.Clamp(ParseDouble(args, "--cpu-budget", 0.25), 0.0, 1.0),
             ParseBool(args, "--from-start", false),
@@ -162,22 +166,30 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
     private readonly FensalirDaemonOptions options;
     private readonly CultCache cache;
     private readonly CultRecordHandle<MimirFensalirDaemonStateDocument> handle;
+    private readonly CultRecordHandle<MimirFensalirReservoirWorkerStateDocument> workerHandle;
     private readonly WellLogTailState tail;
+    private readonly ReservoirWorkerState reservoirWorker;
     private readonly object gate = new();
     private MimirFensalirDaemonStateDocument document;
+    private MimirFensalirReservoirWorkerStateDocument workerDocument;
     private DateTimeOffset lastStatus = DateTimeOffset.MinValue;
 
     private FensalirDaemonState(
         FensalirDaemonOptions options,
         CultCache cache,
         CultRecordHandle<MimirFensalirDaemonStateDocument> handle,
-        MimirFensalirDaemonStateDocument document)
+        MimirFensalirDaemonStateDocument document,
+        CultRecordHandle<MimirFensalirReservoirWorkerStateDocument> workerHandle,
+        MimirFensalirReservoirWorkerStateDocument workerDocument)
     {
         this.options = options;
         this.cache = cache;
         this.handle = handle;
+        this.workerHandle = workerHandle;
         this.document = document;
+        this.workerDocument = workerDocument;
         tail = new WellLogTailState(options.WellLogPath, options.FromStart);
+        reservoirWorker = new ReservoirWorkerState(options);
     }
 
     public MimirFensalirDaemonStateDocument Document
@@ -187,6 +199,17 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             lock (gate)
             {
                 return document;
+            }
+        }
+    }
+
+    public MimirFensalirReservoirWorkerStateDocument WorkerDocument
+    {
+        get
+        {
+            lock (gate)
+            {
+                return workerDocument;
             }
         }
     }
@@ -203,8 +226,12 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
         var existing = cache.Get<MimirFensalirDaemonStateDocument>(key);
         var document = existing ?? BuildInitialDocument(options);
         var handle = await cache.UpsertAsync(document, new CultRecordHandle<MimirFensalirDaemonStateDocument>(key)).ConfigureAwait(false);
+        var workerKey = new CultRecordKey(options.DaemonId + "-reservoir-worker");
+        var existingWorker = cache.Get<MimirFensalirReservoirWorkerStateDocument>(workerKey);
+        var workerDocument = existingWorker ?? BuildInitialWorkerDocument(options);
+        var workerHandle = await cache.UpsertAsync(workerDocument, new CultRecordHandle<MimirFensalirReservoirWorkerStateDocument>(workerKey)).ConfigureAwait(false);
         await cache.FlushAsync().ConfigureAwait(false);
-        return new FensalirDaemonState(options, cache, handle, document);
+        return new FensalirDaemonState(options, cache, handle, document, workerHandle, workerDocument);
     }
 
     public async Task RunAsync(CancellationToken stopping)
@@ -226,9 +253,21 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
                 }
             }
 
+            if (reservoirWorker.Advance(DateTimeOffset.UtcNow, out var workerSample))
+            {
+                lock (gate)
+                {
+                    document = ApplyWorkerSample(document, workerSample);
+                    workerDocument = BuildWorkerDocument(options, document, workerSample);
+                }
+
+                touched = true;
+            }
+
             if (touched)
             {
                 await cache.UpsertAsync(document, handle).ConfigureAwait(false);
+                await cache.UpsertAsync(workerDocument, workerHandle).ConfigureAwait(false);
                 await cache.FlushAsync(soft: true).ConfigureAwait(false);
                 if (options.Once)
                 {
@@ -241,7 +280,7 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
                 lastStatus = DateTimeOffset.UtcNow;
                 var state = Document;
                 Console.Error.WriteLine(
-                    $"mimir-fensalir-daemon status={state.Status} wellSeq={state.LastWellSequence} captureSeq={state.LastCaptureSequence} slices={state.ReadySlices}/{state.TotalSlices} offset={tail.Position}");
+                    $"mimir-fensalir-daemon status={state.Status} wellSeq={state.LastWellSequence} captureSeq={state.LastCaptureSequence} slices={state.ReadySlices}/{state.TotalSlices} jobs={state.PendingReservoirJobs} active={state.ActiveReservoirWorkers} done={state.CompletedReservoirJobs} drop={state.DroppedReservoirJobs} offset={tail.Position}");
             }
 
             try
@@ -300,12 +339,14 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
 
         if (kind == "mimir.well_capture_page.v1")
         {
+            var captureSequence = (long)DaemonUtil.JsonNumber(root, "captureSequence");
+            reservoirWorker.Enqueue(BuildReservoirJob(root, current, captureSequence));
             next = current with
             {
                 UpdatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                 Status = "drinking-capture-pages",
                 WellSource = string.IsNullOrWhiteSpace(options.WellLogPath) ? "missing" : options.WellLogPath,
-                LastCaptureSequence = (long)DaemonUtil.JsonNumber(root, "captureSequence"),
+                LastCaptureSequence = captureSequence,
             };
             return true;
         }
@@ -347,7 +388,349 @@ internal sealed class FensalirDaemonState : IAsyncDisposable
             options.CpuBudget,
             "surface-owner-installed",
             ["cultcache-state", "cultnet-websocket", "cultmesh-eve-dashboard", "well-tail"],
-            ["reservoir kernels pending"]);
+            ["reservoir kernels pending"],
+            0,
+            0,
+            0,
+            0,
+            0.0,
+            0.0);
+
+    private static MimirFensalirReservoirWorkerStateDocument BuildInitialWorkerDocument(FensalirDaemonOptions options) =>
+        new(
+            options.DaemonId + "-reservoir-worker",
+            DateTimeOffset.UtcNow.ToString("O"),
+            options.DaemonId,
+            "surface-owner-installed",
+            -1,
+            "configuredComposite",
+            0,
+            0,
+            [],
+            options.GpuBudget,
+            options.CpuBudget,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            "",
+            0,
+            string.IsNullOrWhiteSpace(options.WellLogPath) ? "waiting-for-well" : "booting",
+            "no capture page accepted yet",
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0,
+            0.0);
+
+    private static MimirFensalirDaemonStateDocument ApplyWorkerSample(
+        MimirFensalirDaemonStateDocument current,
+        ReservoirWorkerSample sample)
+    {
+        var status = current.Status;
+        if (sample.RunningJobs > 0)
+        {
+            status = "reservoir-worker-active";
+        }
+        else if (sample.QueuedJobs > 0)
+        {
+            status = "reservoir-worker-queued";
+        }
+
+        return current with
+        {
+            UpdatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+            Status = status,
+            WorkerMode = "reservoir-worker-scheduled",
+            PendingReservoirJobs = sample.QueuedJobs + sample.RunningJobs,
+            ActiveReservoirWorkers = sample.RunningJobs,
+            CompletedReservoirJobs = sample.CompletedJobs,
+            DroppedReservoirJobs = sample.DroppedJobs,
+            ReservoirQueueMs = sample.GpuQueueMs,
+            ReservoirWorkerUtilization = sample.Utilization,
+        };
+    }
+
+    private static MimirFensalirReservoirWorkerStateDocument BuildWorkerDocument(
+        FensalirDaemonOptions options,
+        MimirFensalirDaemonStateDocument current,
+        ReservoirWorkerSample sample) =>
+        new(
+            options.DaemonId + "-reservoir-worker",
+            DateTimeOffset.UtcNow.ToString("O"),
+            options.DaemonId,
+            "reservoir-worker-scheduled",
+            sample.InputCaptureSequence,
+            sample.SelectedCompositeVersion,
+            sample.AcceptedSlices,
+            sample.RejectedSlices,
+            sample.RejectionReasons,
+            options.GpuBudget,
+            options.CpuBudget,
+            sample.QueuedJobs,
+            sample.RunningJobs,
+            sample.CompletedJobs,
+            sample.DroppedJobs,
+            sample.OldestAcceptedCanonicalNs,
+            sample.NewestAcceptedCanonicalNs,
+            sample.OutputProgramSurfaceId,
+            sample.OutputFenceValue,
+            sample.Status,
+            sample.PressureReason,
+            current.PollAverageMs,
+            current.PublishAverageMs,
+            current.TotalSlices <= 0 ? 0.0 : current.ReadySlices / (double)current.TotalSlices,
+            sample.TimingConfidenceMin,
+            sample.MaxDistanceFromPresentationNs,
+            sample.GpuQueueMs);
+
+    private static ReservoirJob BuildReservoirJob(JsonElement root, MimirFensalirDaemonStateDocument current, long captureSequence)
+    {
+        var samples = DaemonUtil.JsonArray(DaemonUtil.JsonGet(root, "samples")).ToArray();
+        var frame = DaemonUtil.JsonGet(root, "frame");
+        var composite = DaemonUtil.JsonGet(root, "configuredComposite");
+        var videoComposite = DaemonUtil.JsonArray(DaemonUtil.JsonGet(composite, "video")).ToArray();
+        var accepted = 0;
+        var rejected = 0;
+        var oldestNs = long.MaxValue;
+        var newestNs = long.MinValue;
+        var minConfidence = 1.0;
+        var maxDistanceNs = 0L;
+        var reasons = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var sample in samples)
+        {
+            var slice = DaemonUtil.JsonGet(sample, "slice");
+            var status = DaemonUtil.JsonText(slice, "status", "Status") ?? "";
+            var confidence = DaemonUtil.JsonNumber(slice, "timingConfidence", "TimingConfidence");
+            var distanceNs = Math.Abs((long)DaemonUtil.JsonNumber(slice, "distanceFromPresentationNs", "DistanceFromPresentationNs"));
+            var startNs = (long)DaemonUtil.JsonNumber(slice, "canonicalStartNs", "CanonicalStartNs");
+            var endNs = (long)DaemonUtil.JsonNumber(slice, "canonicalEndNs", "CanonicalEndNs");
+            if (string.Equals(status, "Ready", StringComparison.OrdinalIgnoreCase) && confidence >= 0.20)
+            {
+                accepted++;
+                minConfidence = Math.Min(minConfidence, confidence);
+                maxDistanceNs = Math.Max(maxDistanceNs, distanceNs);
+                oldestNs = Math.Min(oldestNs, startNs);
+                newestNs = Math.Max(newestNs, endNs);
+            }
+            else
+            {
+                rejected++;
+                reasons.Add(string.IsNullOrWhiteSpace(status) ? "missing-status" : $"slice-{status.ToLowerInvariant()}");
+                if (confidence < 0.20)
+                {
+                    reasons.Add("low-timing-confidence");
+                }
+            }
+        }
+
+        return new ReservoirJob(
+            captureSequence,
+            samples.Length,
+            accepted,
+            rejected,
+            oldestNs == long.MaxValue ? 0 : oldestNs,
+            newestNs == long.MinValue ? 0 : newestNs,
+            minConfidence == 1.0 && accepted == 0 ? 0.0 : minConfidence,
+            maxDistanceNs,
+            DaemonUtil.JsonNumber(frame, "presentationDelayMs", "PresentationDelayMs", "PresentationDelayMilliseconds"),
+            current.PollAverageMs,
+            current.PublishAverageMs,
+            videoComposite.Length == 0 ? "configuredComposite" : $"configuredComposite/video:{videoComposite.Length}",
+            reasons.ToArray(),
+            Math.Max(0, current.AudioSources),
+            Math.Max(0, current.VideoSources));
+    }
+}
+
+internal sealed class ReservoirWorkerState
+{
+    private const double BaseSliceCostMs = 4.0;
+    private readonly FensalirDaemonOptions options;
+    private readonly Queue<ReservoirJob> queue = new();
+    private DateTimeOffset lastAdvanced = DateTimeOffset.UtcNow;
+    private ReservoirJob? active;
+    private double activeRemainingMs;
+    private long completed;
+    private long dropped;
+    private long outputFenceValue;
+    private ReservoirWorkerSample lastSample = ReservoirWorkerSample.Empty;
+
+    public ReservoirWorkerState(FensalirDaemonOptions options)
+    {
+        this.options = options;
+    }
+
+    public void Enqueue(ReservoirJob job)
+    {
+        if (job.CaptureSequence < 0 || job.AcceptedSlices <= 0)
+        {
+            dropped++;
+            lastSample = lastSample with
+            {
+                DroppedJobs = dropped,
+                Status = "dropping-unusable-capture-page",
+                PressureReason = job.RejectionReasons.Length == 0 ? "no accepted slices" : string.Join(",", job.RejectionReasons.Take(3)),
+            };
+            return;
+        }
+
+        while (queue.Count >= options.MaxReservoirQueue)
+        {
+            queue.Dequeue();
+            dropped++;
+        }
+
+        queue.Enqueue(job);
+    }
+
+    public bool Advance(DateTimeOffset now, out ReservoirWorkerSample sample)
+    {
+        var elapsedMs = Math.Max(0.0, (now - lastAdvanced).TotalMilliseconds);
+        if (elapsedMs < options.WorkerTickMs && active == null && queue.Count == 0)
+        {
+            sample = lastSample;
+            return false;
+        }
+
+        lastAdvanced = now;
+        var budget = WorkerBudget();
+        var availableMs = Math.Max(options.WorkerTickMs, elapsedMs) * budget;
+        var completedJob = active;
+        while (availableMs > 0.0)
+        {
+            if (active == null)
+            {
+                if (!queue.TryDequeue(out var next))
+                {
+                    break;
+                }
+
+                active = next;
+                activeRemainingMs = Cost(next);
+            }
+
+            var spent = Math.Min(activeRemainingMs, availableMs);
+            activeRemainingMs -= spent;
+            availableMs -= spent;
+            if (activeRemainingMs <= 0.0001)
+            {
+                completedJob = active;
+                active = null;
+                activeRemainingMs = 0.0;
+                completed++;
+                outputFenceValue++;
+            }
+        }
+
+        sample = BuildSample(completedJob);
+        lastSample = sample;
+        return true;
+    }
+
+    private ReservoirWorkerSample BuildSample(ReservoirJob? latest)
+    {
+        var job = active ?? latest ?? queue.LastOrDefault();
+        var queueMs = (activeRemainingMs + queue.Sum(Cost)) / Math.Max(0.05, WorkerBudget());
+        var running = active == null ? 0 : 1;
+        var status = running > 0 ? "running" : queue.Count > 0 ? "queued" : completed > 0 ? "caught-up" : lastSample.Status;
+        var reason = queue.Count >= options.MaxReservoirQueue ? "queue at ceiling" : "within configured worker budget";
+        return new ReservoirWorkerSample(
+            job?.CaptureSequence ?? lastSample.InputCaptureSequence,
+            job?.SelectedCompositeVersion ?? lastSample.SelectedCompositeVersion,
+            job?.AcceptedSlices ?? 0,
+            job?.RejectedSlices ?? 0,
+            job?.RejectionReasons ?? [],
+            queue.Count,
+            running,
+            completed,
+            dropped,
+            job?.OldestAcceptedCanonicalNs ?? 0,
+            job?.NewestAcceptedCanonicalNs ?? 0,
+            "mimir.fensalir.program.surface.pending",
+            outputFenceValue,
+            status,
+            reason,
+            job?.TimingConfidenceMin ?? 0.0,
+            job?.MaxDistanceFromPresentationNs ?? 0,
+            queueMs,
+            running > 0 ? WorkerBudget() : 0.0);
+    }
+
+    private double WorkerBudget() => Math.Clamp(options.GpuBudget * 0.70 + options.CpuBudget * 0.30, 0.05, 1.0);
+
+    private static double Cost(ReservoirJob job)
+    {
+        var sliceCost = Math.Max(1, job.AcceptedSlices) * BaseSliceCostMs;
+        var rejectedPenalty = Math.Max(0, job.RejectedSlices) * 0.25;
+        var videoCost = Math.Max(0, job.VideoSources) * 2.0;
+        var audioCost = Math.Max(0, job.AudioSources) * 0.5;
+        var pressureCost = Math.Max(job.WellPollMs, job.WellPublishMs) * 0.10;
+        return Math.Max(1.0, sliceCost + rejectedPenalty + videoCost + audioCost + pressureCost);
+    }
+}
+
+internal sealed record ReservoirJob(
+    long CaptureSequence,
+    int TotalSlices,
+    int AcceptedSlices,
+    int RejectedSlices,
+    long OldestAcceptedCanonicalNs,
+    long NewestAcceptedCanonicalNs,
+    double TimingConfidenceMin,
+    long MaxDistanceFromPresentationNs,
+    double PresentationDelayMs,
+    double WellPollMs,
+    double WellPublishMs,
+    string SelectedCompositeVersion,
+    string[] RejectionReasons,
+    int AudioSources,
+    int VideoSources);
+
+internal sealed record ReservoirWorkerSample(
+    long InputCaptureSequence,
+    string SelectedCompositeVersion,
+    int AcceptedSlices,
+    int RejectedSlices,
+    string[] RejectionReasons,
+    int QueuedJobs,
+    int RunningJobs,
+    long CompletedJobs,
+    long DroppedJobs,
+    long OldestAcceptedCanonicalNs,
+    long NewestAcceptedCanonicalNs,
+    string OutputProgramSurfaceId,
+    long OutputFenceValue,
+    string Status,
+    string PressureReason,
+    double TimingConfidenceMin,
+    long MaxDistanceFromPresentationNs,
+    double GpuQueueMs,
+    double Utilization)
+{
+    public static ReservoirWorkerSample Empty { get; } = new(
+        -1,
+        "configuredComposite",
+        0,
+        0,
+        [],
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        "",
+        0,
+        "waiting",
+        "no capture page accepted yet",
+        0.0,
+        0,
+        0.0,
+        0.0);
 }
 
 internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, FensalirDaemonState state) : IDisposable
@@ -391,8 +774,14 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
                 providerId = options.DaemonId,
                 verse = options.VerseId,
                 status = state.Document.Status,
+                workerStatus = state.WorkerDocument.Status,
+                queuedJobs = state.WorkerDocument.QueuedJobs,
+                runningJobs = state.WorkerDocument.RunningJobs,
+                completedJobs = state.WorkerDocument.CompletedJobs,
+                droppedJobs = state.WorkerDocument.DroppedJobs,
                 cultCache = options.CultCachePath,
                 cultMeshDocument = "mimir.fensalir_daemon_state",
+                workerDocument = "mimir.fensalir_reservoir_worker_state",
             }, JsonOptions);
             await DaemonUtil.WriteHttpResponseAsync(stream, "200 OK", "application/json", Encoding.UTF8.GetBytes(health)).ConfigureAwait(false);
             return;
@@ -421,7 +810,8 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
     private async Task SendStateAsync(NetworkStream stream, bool binary)
     {
         var document = state.Document;
-        var dashboard = BuildDashboard(document);
+        var worker = state.WorkerDocument;
+        var dashboard = BuildDashboard(document, worker);
         if (binary)
         {
             var cultMesh = ToCultMesh(dashboard);
@@ -432,16 +822,18 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
         await DaemonUtil.SendTextFrameAsync(stream, JsonSerializer.Serialize(dashboard, JsonOptions)).ConfigureAwait(false);
     }
 
-    private DashboardState BuildDashboard(MimirFensalirDaemonStateDocument doc)
+    private DashboardState BuildDashboard(MimirFensalirDaemonStateDocument doc, MimirFensalirReservoirWorkerStateDocument worker)
     {
         var readiness = doc.TotalSlices <= 0 ? 0.0 : doc.ReadySlices / (double)doc.TotalSlices;
         var pressure = Math.Clamp(Math.Max(doc.PollAverageMs / 16.0, doc.PublishAverageMs / 16.0), 0.0, 1.0);
+        var workerPressure = Math.Clamp(worker.GpuQueueMs / 1000.0, 0.0, 1.0);
         var nodes = new List<DashboardNode>
         {
             new("daemon", $"Fensalir Daemon\n{doc.Status}", "daemon", 0.0, -0.42, 0.70, 0.18, doc.Status),
             new("well", $"Well Drink\nseq {doc.LastWellSequence}", "well", -0.38, -0.08, 0.32, 0.18, doc.LastWellSequence >= 0 ? "live" : "waiting"),
             new("capture", $"Capture Pages\nseq {doc.LastCaptureSequence}", "cultcache", 0.0, -0.08, 0.32, 0.18, doc.LastCaptureSequence >= 0 ? "paged" : "waiting"),
             new("budget", $"Budget\nGPU {doc.GpuBudget:0.00} CPU {doc.CpuBudget:0.00}", "budget", 0.38, -0.08, 0.32, 0.18, "configured"),
+            new("worker", $"Reservoir Worker\n{worker.Status}", "worker", 0.0, 0.26, 0.54, 0.18, worker.Status),
         };
         return new DashboardState
         {
@@ -473,6 +865,16 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
                             Ui.Text("well-counts", $"audio {doc.AudioSources} video {doc.VideoSources} delay {doc.PresentationDelayMs:0.0}ms", "caption", Bind("/presentationDelayMs")),
                         ]),
                     ]),
+                    Ui.Row("daemon-row-worker",
+                    [
+                        Ui.Pane("worker-pane", "Reservoir Worker",
+                        [
+                            Ui.Text("worker-status", $"{worker.Status} | {worker.PressureReason}", "strong", WorkerBind("/status")),
+                            Ui.Text("worker-counts", $"queued {worker.QueuedJobs} running {worker.RunningJobs} completed {worker.CompletedJobs} dropped {worker.DroppedJobs}", "mono", WorkerBind("/queuedJobs")),
+                            Ui.Text("worker-slices", $"accepted {worker.AcceptedSlices} rejected {worker.RejectedSlices} confidence {worker.TimingConfidenceMin:0.000}", "caption", WorkerBind("/acceptedSlices")),
+                            Ui.Bar("worker-queue", "GPU queue", workerPressure, DaemonUtil.Tone(1.0 - workerPressure), $"{worker.GpuQueueMs:0.0}ms"),
+                        ]),
+                    ]),
                     Ui.Row("daemon-row-bottom",
                     [
                         Ui.Pane("budget-pane", "Budgets",
@@ -497,6 +899,16 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
     {
         DocumentSchema = "mimir.fensalir_daemon_state.v1",
         DocumentId = options.DaemonId,
+        Path = path,
+        ValueKind = "state",
+        Access = "read",
+        Authority = "Mimir.FensalirDaemon",
+    };
+
+    private UiBinding WorkerBind(string path) => new()
+    {
+        DocumentSchema = "mimir.fensalir_reservoir_worker_state.v1",
+        DocumentId = options.DaemonId + "-reservoir-worker",
         Path = path,
         ValueKind = "state",
         Access = "read",
