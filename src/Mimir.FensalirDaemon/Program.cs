@@ -993,6 +993,15 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
             return;
         }
 
+        if (request.Path == "/eve/deck/providers")
+        {
+            await DaemonUtil.WriteHttpResponseAsync(stream, "200 OK", "application/json", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+            {
+                providers = new[] { Manifest() },
+            }, JsonOptions))).ConfigureAwait(false);
+            return;
+        }
+
         if (!IsDashboardPath(request.Path, out var binary) || !request.Headers.TryGetValue("Sec-WebSocket-Key", out var key))
         {
             await DaemonUtil.WriteHttpResponseAsync(stream, "404 Not Found", "text/plain", Encoding.UTF8.GetBytes("not found")).ConfigureAwait(false);
