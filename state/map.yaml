@@ -301,6 +301,19 @@ invariants:
     audio renderer uses separate AquaSynth contestant renders with
     role-specific durations/gains; true per-role physical timbre remains a
     future AquaSynth/Faust renderer cut, not hidden scheduler behavior.
+    Starfire now has a USB-local PS Move paired chirp actuator in
+    `Mimir.PsMoveProbe`: `--paired-chirp-train` renders a mono Float32 chirp
+    train, emits it through `Mimir.WasapiLoopback`, and writes PS Move LED
+    pulses from the same `PairedChirpEvent` schedule. The invariant is that
+    audio chirp samples and visual LED phases share one event id and planned
+    offset; visual pulses must not be independent reactions. The
+    2026-06-02 receipt
+    `artifacts/runtime/starfire-usb-move-paired-20260602-144135/paired-events.jsonl`
+    proved three WASAPI chirps plus three USB Move LED pulses with observed LED
+    onsets matching planned 150/400/650 ms at millisecond receipt resolution.
+    This is a proven Starfire-local timing actuator, but the final production
+    cut should still move emission into a persistent native/Faust-owned worker
+    before claiming hard realtime physical sync.
     MIDI keyboard notes should later enter as an explicit typed score source,
     but today AquaSynth is observed through whatever audio channel carries its
     rendered voice.

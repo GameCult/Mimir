@@ -399,6 +399,16 @@ is still a bad physical question for this room/speaker path. The default
 targeted probe planner now caps selection at 12 kHz and biases measurable
 low/mid bands instead of favoring ultrasonic-ish uncertainty that ordinary
 speakers and mics cannot answer well.
+Starfire's USB-connected PS Move is now a paired audio/visual timing actuator
+through `Mimir.PsMoveProbe --paired-chirp-train`. The worker renders one raw
+Float32 chirp train, asks `Mimir.WasapiLoopback` to emit it, and schedules Move
+LED on/off phases from the same `PairedChirpEvent` documents. The schedule is
+the owner: every visual pulse must share the same event id and planned offset
+as its audio chirp. The 2026-06-02 receipt
+`artifacts/runtime/starfire-usb-move-paired-20260602-144135/paired-events.jsonl`
+proved three emitted chirps and three USB LED pulses, with LED onsets matching
+planned 150/400/650 ms at millisecond receipt resolution after the HID train
+moved to high-resolution stopwatch waits.
 The calibration runner is now closed-loop instead of a blind full-spectrum
 sweep: `--bioacoustic-realtk-scheduled-calibration-live` asks the scheduler for
 each probe, emits through Realtek, captures Scarlett, updates residuals, and

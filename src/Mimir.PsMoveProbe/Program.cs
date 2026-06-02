@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -7,6 +8,23 @@ const ushort PsMovePid = 0x03D5;
 
 var readReports = args.Any(arg => string.Equals(arg, "--read", StringComparison.OrdinalIgnoreCase));
 var pairHost = TryGetOption(args, "--pair-host");
+var rgb = TryGetOption(args, "--rgb");
+var pulseMs = TryGetIntOption(args, "--pulse-ms", 0);
+var pulseCount = TryGetIntOption(args, "--pulse-count", 1);
+var intervalMs = TryGetIntOption(args, "--interval-ms", 500);
+var eventLog = TryGetOption(args, "--event-log");
+var pairedChirpTrain = args.Any(arg => string.Equals(arg, "--paired-chirp-train", StringComparison.OrdinalIgnoreCase));
+var outputAudio = TryGetOption(args, "--output-audio");
+var eventCount = TryGetIntOption(args, "--event-count", pulseCount);
+var startDelayMs = TryGetIntOption(args, "--start-delay-ms", 150);
+var chirpMs = TryGetIntOption(args, "--chirp-ms", Math.Max(1, pulseMs));
+var sampleRate = TryGetIntOption(args, "--sample-rate", 48_000);
+var startHz = TryGetDoubleOption(args, "--start-hz", 2400.0);
+var endHz = TryGetDoubleOption(args, "--end-hz", 7200.0);
+var gain = TryGetDoubleOption(args, "--gain", 0.12);
+var renderDevice = TryGetOption(args, "--render-device");
+var wasapiExe = TryGetOption(args, "--wasapi-exe");
+var noAudioEmit = args.Any(arg => string.Equals(arg, "--no-audio-emit", StringComparison.OrdinalIgnoreCase));
 var showAll = args.Any(arg => string.Equals(arg, "--all", StringComparison.OrdinalIgnoreCase));
 if (showAll)
 {
@@ -34,6 +52,64 @@ if (devices.Count == 0)
     return 1;
 }
 
+if (pairedChirpTrain)
+{
+    var move = devices.FirstOrDefault(static device =>
+        device.Caps.OutputReportByteLength > 0 &&
+        device.Path.IndexOf("&col01#", StringComparison.OrdinalIgnoreCase) >= 0);
+    if (move == null)
+    {
+        Console.WriteLine("No PS Move col01 output collection is available for paired chirp train.");
+        return 1;
+    }
+
+    var audioPath = string.IsNullOrWhiteSpace(outputAudio)
+        ? Path.Combine("artifacts", "runtime", $"starfire-usb-move-chirp-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.f32")
+        : outputAudio;
+    if (string.IsNullOrWhiteSpace(rgb) || !WindowsHid.TryParseRgb(rgb, out var r, out var g, out var b))
+    {
+        Console.WriteLine("Paired chirp train requires --rgb #rrggbb or --rgb r,g,b.");
+        return 1;
+    }
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(audioPath)) ?? ".");
+    if (!string.IsNullOrWhiteSpace(eventLog))
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(eventLog)) ?? ".");
+    }
+
+    var events = PairedChirpTrain.RenderAudio(
+        audioPath,
+        Math.Max(1, eventCount),
+        TimeSpan.FromMilliseconds(Math.Max(0, startDelayMs)),
+        TimeSpan.FromMilliseconds(Math.Max(1, intervalMs)),
+        TimeSpan.FromMilliseconds(Math.Max(1, chirpMs)),
+        sampleRate,
+        startHz,
+        endHz,
+        gain);
+    PairedChirpTrain.AppendScheduleEvents(eventLog, events, audioPath, sampleRate, gain);
+    var audioTask = noAudioEmit
+        ? Task.FromResult("skipped: --no-audio-emit")
+        : PairedChirpTrain.EmitAudioAsync(audioPath, sampleRate, gain, renderDevice, wasapiExe, eventLog);
+    var ledTask = WindowsHid.TryWriteScheduledLedTrainAsync(
+        move,
+        events,
+        r,
+        g,
+        b,
+        TimeSpan.FromMilliseconds(Math.Max(1, pulseMs)),
+        eventLog);
+    var result = await ledTask.ConfigureAwait(false);
+    var audioResult = await audioTask.ConfigureAwait(false);
+    Console.WriteLine(
+        $"pairedChirpTrain audio={audioPath} events={events.Count} sampleRate={sampleRate} startDelayMs={startDelayMs} chirpMs={chirpMs} intervalMs={intervalMs} led={result} audio={audioResult}");
+    return result.StartsWith("ok", StringComparison.OrdinalIgnoreCase) &&
+        (audioResult.StartsWith("ok", StringComparison.OrdinalIgnoreCase) || audioResult.StartsWith("skipped", StringComparison.OrdinalIgnoreCase))
+        ? 0
+        : 1;
+}
+
 foreach (var device in devices)
 {
     PrintDevice(device);
@@ -48,6 +124,18 @@ foreach (var device in devices)
     {
         var result = await WindowsHid.TryReadInputReportAsync(device, TimeSpan.FromMilliseconds(350));
         Console.WriteLine($"  read={result}");
+    }
+
+    if (!string.IsNullOrWhiteSpace(rgb))
+    {
+        var result = await WindowsHid.TryWriteLedPulseTrainAsync(
+            device,
+            rgb,
+            Math.Max(1, pulseCount),
+            TimeSpan.FromMilliseconds(Math.Max(0, pulseMs)),
+            TimeSpan.FromMilliseconds(Math.Max(1, intervalMs)),
+            eventLog);
+        Console.WriteLine($"  led={result}");
     }
 
     Console.WriteLine();
@@ -86,6 +174,12 @@ static string? TryGetOption(string[] values, string name)
     return null;
 }
 
+static int TryGetIntOption(string[] values, string name, int fallback) =>
+    int.TryParse(TryGetOption(values, name), out var value) ? value : fallback;
+
+static double TryGetDoubleOption(string[] values, string name, double fallback) =>
+    double.TryParse(TryGetOption(values, name), out var value) ? value : fallback;
+
 internal sealed record HidDeviceInfo(
     string Path,
     ushort VendorId,
@@ -95,11 +189,243 @@ internal sealed record HidDeviceInfo(
     string? SerialNumber,
     HidpCaps Caps);
 
+internal sealed record PairedChirpEvent(
+    string EventId,
+    int Index,
+    double OffsetSeconds,
+    int AudioStartSample,
+    int AudioEndSample,
+    double StartHz,
+    double EndHz);
+
+internal static class PairedChirpTrain
+{
+    public static IReadOnlyList<PairedChirpEvent> RenderAudio(
+        string path,
+        int count,
+        TimeSpan startDelay,
+        TimeSpan interval,
+        TimeSpan chirpDuration,
+        int sampleRate,
+        double startHz,
+        double endHz,
+        double gain)
+    {
+        var events = new List<PairedChirpEvent>(count);
+        var intervalSeconds = Math.Max(0.001, interval.TotalSeconds);
+        var startDelaySeconds = Math.Max(0.0, startDelay.TotalSeconds);
+        var chirpSeconds = Math.Max(0.001, chirpDuration.TotalSeconds);
+        var chirpSamples = Math.Max(1, (int)Math.Round(chirpSeconds * sampleRate));
+        var totalSamples = Math.Max(
+            chirpSamples,
+            (int)Math.Ceiling((startDelaySeconds + (count - 1) * intervalSeconds + chirpSeconds + 0.05) * sampleRate));
+        var samples = new float[totalSamples];
+        var runId = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        for (var index = 0; index < count; index++)
+        {
+            var offsetSeconds = startDelaySeconds + index * intervalSeconds;
+            var startSample = Math.Min(samples.Length - 1, (int)Math.Round(offsetSeconds * sampleRate));
+            var endSample = Math.Min(samples.Length, startSample + chirpSamples);
+            events.Add(new PairedChirpEvent(
+                $"starfire-usb-move-chirp:{runId}:{index}",
+                index,
+                offsetSeconds,
+                startSample,
+                endSample,
+                startHz,
+                endHz));
+
+            for (var sample = startSample; sample < endSample; sample++)
+            {
+                var local = sample - startSample;
+                var normalized = chirpSamples <= 1 ? 0.0 : local / (double)(chirpSamples - 1);
+                var frequency = startHz + (endHz - startHz) * normalized;
+                var phase = 2.0 * Math.PI * (startHz * local / sampleRate +
+                    0.5 * (endHz - startHz) * local * local / Math.Max(1.0, chirpSamples) / sampleRate);
+                var envelope = 0.5 - 0.5 * Math.Cos(2.0 * Math.PI * normalized);
+                samples[sample] += (float)Math.Clamp(Math.Sin(phase) * envelope * gain, -1.0, 1.0);
+                _ = frequency; // keep the linear-frequency intent explicit for receipts.
+            }
+        }
+
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        var bytes = new byte[samples.Length * sizeof(float)];
+        Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
+        stream.Write(bytes);
+        return events;
+    }
+
+    public static void AppendScheduleEvents(
+        string? eventLogPath,
+        IReadOnlyList<PairedChirpEvent> events,
+        string audioPath,
+        int sampleRate,
+        double gain)
+    {
+        if (string.IsNullOrWhiteSpace(eventLogPath))
+        {
+            return;
+        }
+
+        foreach (var item in events)
+        {
+            var line = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                document = "mimir.psmove_usb_audio_visual_pulse_event.v1",
+                invariant = "visual pulse and audio chirp share one event id and one planned offset",
+                item.EventId,
+                item.Index,
+                item.OffsetSeconds,
+                item.AudioStartSample,
+                item.AudioEndSample,
+                item.StartHz,
+                item.EndHz,
+                phase = "schedule",
+                audioPath,
+                sampleRate,
+                gain,
+                result = "planned"
+            });
+            File.AppendAllText(eventLogPath, line + Environment.NewLine);
+        }
+    }
+
+    public static async Task<string> EmitAudioAsync(
+        string audioPath,
+        int sampleRate,
+        double gain,
+        string? renderDevice,
+        string? wasapiExe,
+        string? eventLogPath)
+    {
+        var resolvedExe = ResolveWasapiExecutable(wasapiExe);
+        var args = new List<string>
+        {
+            "--play-f32-mono",
+            "--input",
+            Path.GetFullPath(audioPath),
+            "--sample-rate",
+            sampleRate.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "--gain",
+            gain.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "--render-buffer-seconds",
+            "0.02",
+            "--render-drain-seconds",
+            "0.08"
+        };
+        if (!string.IsNullOrWhiteSpace(renderDevice))
+        {
+            args.Add("--device");
+            args.Add(renderDevice);
+        }
+
+        var startedNs = WindowsHid.NowNs();
+        AppendRenderEvent(eventLogPath, "render-start", audioPath, sampleRate, gain, startedNs, startedNs, "starting");
+        using var process = new Process();
+        process.StartInfo.FileName = resolvedExe;
+        foreach (var arg in args)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
+
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.RedirectStandardOutput = true;
+        try
+        {
+            process.Start();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync().ConfigureAwait(false);
+            var completedNs = WindowsHid.NowNs();
+            var stderr = await stderrTask.ConfigureAwait(false);
+            var stdout = await stdoutTask.ConfigureAwait(false);
+            var result = process.ExitCode == 0
+                ? $"ok renderExit=0 pid={process.Id}"
+                : $"render failed exit={process.ExitCode} pid={process.Id}";
+            AppendRenderEvent(eventLogPath, "render-complete", audioPath, sampleRate, gain, startedNs, completedNs, result, stdout, stderr);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            var completedNs = WindowsHid.NowNs();
+            var result = "render failed: " + ex.Message;
+            AppendRenderEvent(eventLogPath, "render-complete", audioPath, sampleRate, gain, startedNs, completedNs, result);
+            return result;
+        }
+    }
+
+    private static string ResolveWasapiExecutable(string? explicitPath)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitPath))
+        {
+            return explicitPath;
+        }
+
+        var current = new DirectoryInfo(Environment.CurrentDirectory);
+        while (current != null)
+        {
+            var candidate = Path.Combine(
+                current.FullName,
+                "src",
+                "Mimir.WasapiLoopback",
+                "bin",
+                "Debug",
+                "net10.0-windows",
+                "Mimir.WasapiLoopback.exe");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        return "Mimir.WasapiLoopback.exe";
+    }
+
+    private static void AppendRenderEvent(
+        string? eventLogPath,
+        string phase,
+        string audioPath,
+        int sampleRate,
+        double gain,
+        long startedNs,
+        long completedNs,
+        string result,
+        string? stdout = null,
+        string? stderr = null)
+    {
+        if (string.IsNullOrWhiteSpace(eventLogPath))
+        {
+            return;
+        }
+
+        var line = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            document = "mimir.psmove_usb_audio_visual_pulse_event.v1",
+            invariant = "visual pulse and audio chirp share one event id and one planned offset",
+            phase,
+            audioPath,
+            sampleRate,
+            gain,
+            startedNs,
+            completedNs,
+            result,
+            stdout,
+            stderr
+        });
+        File.AppendAllText(eventLogPath, line + Environment.NewLine);
+    }
+}
+
 internal static class WindowsHid
 {
     private const int DigcfPresent = 0x00000002;
     private const int DigcfDeviceinterface = 0x00000010;
     private const uint GenericRead = 0x80000000;
+    private const uint GenericWrite = 0x40000000;
     private const uint FileShareRead = 0x00000001;
     private const uint FileShareWrite = 0x00000002;
     private const uint OpenExisting = 3;
@@ -110,6 +436,7 @@ internal static class WindowsHid
     private const int HidpStatusSuccess = 0x00110000;
     private const byte GetBtAddressReport = 0x04;
     private const byte SetBtAddressReport = 0x05;
+    private const byte LedReport = 0x06;
     private const int BtAddressGetSize = 16;
     private const int BtAddressSetSize = 23;
 
@@ -266,6 +593,267 @@ internal static class WindowsHid
         var controller = after.Controller ?? before.Controller ?? "(unknown)";
         var assigned = after.Host ?? FormatBluetoothAddress(host);
         return $"ok controller={controller} host={assigned}";
+    }
+
+    public static async Task<string> TryWriteLedPulseTrainAsync(
+        HidDeviceInfo device,
+        string rgb,
+        int pulseCount,
+        TimeSpan pulseDuration,
+        TimeSpan interval,
+        string? eventLogPath)
+    {
+        if (device.Caps.OutputReportByteLength == 0 || device.Path.IndexOf("&col01#", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return "skipped: LED output uses the PS Move col01 output-report collection";
+        }
+
+        if (!TryParseRgb(rgb, out var r, out var g, out var b))
+        {
+            return $"invalid rgb: {rgb}";
+        }
+
+        var written = 0;
+        for (var index = 0; index < Math.Max(1, pulseCount); index++)
+        {
+            var eventId = $"starfire-usb-move:{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}:{index}";
+            var onStarted = NowNs();
+            var on = TryWriteLed(device, r, g, b);
+            var onCompleted = NowNs();
+            AppendPulseEvent(eventLogPath, eventId, index, "on", r, g, b, onStarted, onCompleted, on);
+            if (!on.StartsWith("ok", StringComparison.OrdinalIgnoreCase))
+            {
+                return on;
+            }
+
+            if (pulseDuration > TimeSpan.Zero)
+            {
+                await Task.Delay(pulseDuration).ConfigureAwait(false);
+            }
+
+            var offStarted = NowNs();
+            var off = TryWriteLed(device, 0, 0, 0);
+            var offCompleted = NowNs();
+            AppendPulseEvent(eventLogPath, eventId, index, "off", 0, 0, 0, offStarted, offCompleted, off);
+            if (!off.StartsWith("ok", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"off failed after {written} pulses: {off}";
+            }
+
+            written++;
+            if (index + 1 < pulseCount)
+            {
+                var rest = interval - pulseDuration;
+                if (rest > TimeSpan.Zero)
+                {
+                    await Task.Delay(rest).ConfigureAwait(false);
+                }
+            }
+        }
+
+        return $"ok pulses={written} rgb=#{r:X2}{g:X2}{b:X2} pulseMs={pulseDuration.TotalMilliseconds:0} intervalMs={interval.TotalMilliseconds:0}";
+    }
+
+    public static async Task<string> TryWriteScheduledLedTrainAsync(
+        HidDeviceInfo device,
+        IReadOnlyList<PairedChirpEvent> events,
+        byte r,
+        byte g,
+        byte b,
+        TimeSpan pulseDuration,
+        string? eventLogPath)
+    {
+        if (device.Caps.OutputReportByteLength == 0 || device.Path.IndexOf("&col01#", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return "skipped: LED output uses the PS Move col01 output-report collection";
+        }
+
+        TimeBeginPeriod(1);
+        try
+        {
+            var started = NowNs();
+            var stopwatch = Stopwatch.StartNew();
+            var written = 0;
+            foreach (var item in events)
+            {
+                WaitUntil(stopwatch, TimeSpan.FromSeconds(item.OffsetSeconds));
+
+                var onStarted = NowNs();
+                var on = TryWriteLed(device, r, g, b);
+                var onCompleted = NowNs();
+                AppendPairedPulseEvent(eventLogPath, item, "on", r, g, b, started, onStarted, onCompleted, on);
+                if (!on.StartsWith("ok", StringComparison.OrdinalIgnoreCase))
+                {
+                    return on;
+                }
+
+                if (pulseDuration > TimeSpan.Zero)
+                {
+                    WaitUntil(stopwatch, TimeSpan.FromSeconds(item.OffsetSeconds) + pulseDuration);
+                }
+
+                var offStarted = NowNs();
+                var off = TryWriteLed(device, 0, 0, 0);
+                var offCompleted = NowNs();
+                AppendPairedPulseEvent(eventLogPath, item, "off", 0, 0, 0, started, offStarted, offCompleted, off);
+                if (!off.StartsWith("ok", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"off failed after {written} events: {off}";
+                }
+
+                written++;
+            }
+
+            return $"ok pairedEvents={written}";
+        }
+        finally
+        {
+            TimeEndPeriod(1);
+        }
+    }
+
+    private static void WaitUntil(Stopwatch stopwatch, TimeSpan due)
+    {
+        while (true)
+        {
+            var remaining = due - stopwatch.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                return;
+            }
+
+            if (remaining > TimeSpan.FromMilliseconds(8))
+            {
+                Thread.Sleep(Math.Max(1, (int)Math.Floor(remaining.TotalMilliseconds) - 4));
+                continue;
+            }
+
+            if (remaining > TimeSpan.FromMilliseconds(1.5))
+            {
+                Thread.Sleep(0);
+                continue;
+            }
+
+            Thread.SpinWait(256);
+        }
+    }
+
+    private static string TryWriteLed(HidDeviceInfo device, byte r, byte g, byte b)
+    {
+        using var handle = CreateFile(
+            device.Path,
+            GenericWrite,
+            FileShareRead | FileShareWrite,
+            IntPtr.Zero,
+            OpenExisting,
+            0,
+            IntPtr.Zero);
+
+        if (handle.IsInvalid)
+        {
+            return $"open failed: {new Win32Exception(Marshal.GetLastWin32Error()).Message}";
+        }
+
+        var report = new byte[Math.Max(9, (int)device.Caps.OutputReportByteLength)];
+        report[0] = LedReport;
+        report[1] = 0;
+        report[2] = r;
+        report[3] = g;
+        report[4] = b;
+        return WriteFile(handle, report, (uint)report.Length, out var written, IntPtr.Zero)
+            ? $"ok rgb=#{r:X2}{g:X2}{b:X2} bytes={written}"
+            : $"WriteFile failed: {new Win32Exception(Marshal.GetLastWin32Error()).Message}";
+    }
+
+    public static bool TryParseRgb(string value, out byte r, out byte g, out byte b)
+    {
+        r = 0;
+        g = 0;
+        b = 0;
+        var normalized = value.Trim().TrimStart('#');
+        if (normalized.Length == 6)
+        {
+            return byte.TryParse(normalized.AsSpan(0, 2), System.Globalization.NumberStyles.HexNumber, null, out r) &&
+                byte.TryParse(normalized.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber, null, out g) &&
+                byte.TryParse(normalized.AsSpan(4, 2), System.Globalization.NumberStyles.HexNumber, null, out b);
+        }
+
+        var parts = normalized.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 3 &&
+            byte.TryParse(parts[0], out r) &&
+            byte.TryParse(parts[1], out g) &&
+            byte.TryParse(parts[2], out b);
+    }
+
+    public static long NowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
+
+    private static void AppendPulseEvent(
+        string? eventLogPath,
+        string eventId,
+        int index,
+        string phase,
+        byte r,
+        byte g,
+        byte b,
+        long startedNs,
+        long completedNs,
+        string result)
+    {
+        if (string.IsNullOrWhiteSpace(eventLogPath))
+        {
+            return;
+        }
+
+        var line = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            document = "mimir.psmove_usb_pulse_event.v1",
+            eventId,
+            index,
+            phase,
+            rgb = new[] { (int)r, (int)g, (int)b },
+            startedNs,
+            completedNs,
+            result,
+        });
+        File.AppendAllText(eventLogPath, line + Environment.NewLine);
+    }
+
+    private static void AppendPairedPulseEvent(
+        string? eventLogPath,
+        PairedChirpEvent item,
+        string phase,
+        byte r,
+        byte g,
+        byte b,
+        long trainStartNs,
+        long startedNs,
+        long completedNs,
+        string result)
+    {
+        if (string.IsNullOrWhiteSpace(eventLogPath))
+        {
+            return;
+        }
+
+        var line = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            document = "mimir.psmove_usb_audio_visual_pulse_event.v1",
+            invariant = "visual pulse and audio chirp share one event id and one planned offset",
+            item.EventId,
+            item.Index,
+            item.OffsetSeconds,
+            item.AudioStartSample,
+            item.AudioEndSample,
+            item.StartHz,
+            item.EndHz,
+            phase,
+            rgb = new[] { (int)r, (int)g, (int)b },
+            trainStartNs,
+            startedNs,
+            completedNs,
+            result,
+        });
+        File.AppendAllText(eventLogPath, line + Environment.NewLine);
     }
 
     private static (string? Controller, string? Host) ReadBluetoothAddresses(SafeFileHandle handle)
@@ -500,6 +1088,14 @@ internal static class WindowsHid
         ref NativeOverlapped overlapped);
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool WriteFile(
+        SafeFileHandle file,
+        byte[] buffer,
+        uint numberOfBytesToWrite,
+        out uint numberOfBytesWritten,
+        IntPtr overlapped);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetOverlappedResult(
         SafeFileHandle file,
         ref NativeOverlapped overlapped,
@@ -516,6 +1112,12 @@ internal static class WindowsHid
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+    private static extern uint TimeBeginPeriod(uint period);
+
+    [DllImport("winmm.dll", EntryPoint = "timeEndPeriod")]
+    private static extern uint TimeEndPeriod(uint period);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct SpDeviceInterfaceData
