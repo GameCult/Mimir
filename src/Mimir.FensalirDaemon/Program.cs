@@ -1209,7 +1209,16 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
             "Well-drinking Fensalir reservoir owner: CultCache state, CultNet/WebSocket transport, CultMesh/Eve surface.",
             "1",
             $"/eve/deck/{options.DaemonId}",
-            ["cultcache-state", "cultnet-websocket", "cultmesh-eve-dashboard", "well-tail", "reservoir-owner"],
+            [
+                "cultcache-state",
+                "cultnet-websocket",
+                "cultmesh-eve-dashboard",
+                "well-tail",
+                "stream-frame-tail",
+                "reservoir-owner",
+                "reservoir-worker-state",
+                "reservoir-pressure-state"
+            ],
             UsesCultMesh: true,
             Transport: "CultCache .ccmp + Eve/CultMesh MessagePack WebSocket provider");
 
