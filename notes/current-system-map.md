@@ -183,14 +183,17 @@ diagnostic reference for constrained chirplet-transform work. The active
 receiver is the bioacoustic motif timeline; the analyzer only emits active
 timing reports from matched canonical anchors. The hub also owns cached reports
 plus smoothed per-source sync state with delay-slope/SRO in ppm.
-`MimirRuntime` runs analysis
-online as a bounded rotating service and can print live telemetry with
-`MIMIR_SYNC_TELEMETRY_SECONDS`. UI and telemetry are passive readers of cached
-sync state; they must not invoke the analyzer. Current app testing proves
-loopback wakeup, live mic buffers, and confident online sync states, but the
-next proof is stable canonical anchors through real mic streams. Camera mics are
-spatial/context witnesses; Focusrite devices are dialogue anchors. Fractional
-delay and the hot resampler belong in Faust/native DSP.
+`MimirRuntime` runs ordinary audio analysis online as a bounded rotating service
+and can print live telemetry with `MIMIR_SYNC_TELEMETRY_SECONDS`. UI and
+telemetry are passive readers of cached sync state; they must not invoke the
+analyzer. Complex-contour matched-filter analysis is excluded from render-thread
+and Well-loop cadence by default even when the contour capability is configured;
+`MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1` is a diagnostic override, not the live
+owner. Current app testing proves loopback wakeup, live mic buffers, and
+confident online sync states, but the next proof is stable canonical anchors
+through real mic streams. Camera mics are spatial/context witnesses; Focusrite
+devices are dialogue anchors. Fractional delay and the hot resampler belong in
+Faust/native DSP.
 
 The WASAPI cadence probe is now a format/state diagnostic: it can request
 shared or exclusive sample rates, bit depths, channel counts, and float/PCM
@@ -310,9 +313,12 @@ inside BufferSmoke artifact replay. When `enableComplexContourRuntime` is true,
 extracts Float32 windows from rolling audio buffers to publish
 `evidence=complex-contour` reports. The synthetic runtime-shaped proof
 `--complex-contour-runtime-self-test` at 192 kHz recovers a 693.5-sample delay
-with about 0.219 us error from rolling buffers. The next real-world proof is to
-run that lane through live Scarlett loopback and mics, not only stored ASIO
-artifacts.
+with about 0.219 us error from rolling buffers. In live app/Well operation this
+is a configured and publishable evidence capability, not inline cadence
+authority: expensive matched-filter execution belongs to a worker queue that can
+commit cached reports back to the hub or CultMesh. The next real-world proof is
+to run that worker lane through live Scarlett loopback and mics, not only stored
+ASIO artifacts.
 `MimirCalibratedAudioCompositeBuilder` is the first C# diagnostic owner for
 turning that acoustic evidence into a corrected composite stream. It consumes
 sample windows plus `MimirAudioSynchronizationState` delay/confidence and

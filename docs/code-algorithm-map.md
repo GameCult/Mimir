@@ -664,15 +664,16 @@ Owns:
 
 Blocks:
 
-- Fields: source list, analyzer, state tracker, latest reports dictionary,
+- Fields: source list, ordinary audio analyzer, optional complex-contour
+  analyzer, state tracker, latest ordinary/contour report dictionaries,
   optional chirp-bin calibration model, ingest count, round-robin candidate.
-- Constructor: creates buffer set, loads optional calibration model, pre-creates
-  configured stream buffers.
+- Constructor: creates buffer set, loads optional calibration and
+  complex-contour channel models, pre-creates configured stream buffers.
 - `Settings`, `Buffers`, `IngestedSamples`, `SourceCount`: read-only public
   state.
 - `AudioSynchronizationReports`, `AudioSynchronizationStates`,
-  `AudioSynchronizationDecodeTraces`, `ChirpBinEmissionPlan`: cached analyzer
-  and calibration outputs.
+  `ComplexContourSynchronizationReports`, `AudioSynchronizationDecodeTraces`,
+  `ChirpBinEmissionPlan`: cached analyzer and calibration outputs.
 - `Summary`: short buffer/source summary.
 - `AddSource`: registers source and ensures descriptor buffer if exposed.
 - `PollSources`: drains all currently available samples from all sources into
@@ -680,6 +681,10 @@ Blocks:
 - `AnalyzeAudioSynchronization`: full analyzer pass over audio buffers.
 - `AnalyzeAudioSynchronizationStep`: bounded rotating analyzer pass, so one
   candidate can be analyzed per tick instead of torching a frame.
+- `AnalyzeComplexContourSynchronizationStep`: heavy matched-filter contour pass
+  for selected Float32 candidates. Live app and Well cadence paths suppress this
+  inline by default; worker/job ownership or the diagnostic
+  `MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1` override must own execution.
 - `TryLoadCalibrationModel`: loads persisted chirp-bin response model.
 - `StoreAudioSynchronizationReports`: updates report cache and smoothed state,
   removing contradictory passive-negative-lag states.
@@ -687,8 +692,10 @@ Blocks:
 
 Invariant:
 
-- The hub owns cached runtime belief. The analyzer is a worker; the hub decides
-  what current belief the rest of the app can read.
+- The hub owns cached runtime belief. Ordinary analyzer steps may run as bounded
+  cadence work; complex-contour matched filtering is configured capability until
+  a worker/job path commits reports back. The hub decides what current belief
+  the rest of the app can read.
 
 ### `MimirAudioSynchronizationReport.cs`
 
@@ -904,9 +911,13 @@ Blocks:
 
 Invariant:
 
-- The live contour lane only runs when explicitly enabled. When enabled, the
-  runtime emitter and contour analyzer share the same contestant profile instead
-  of learning one song and playing another.
+- The live contour lane only executes heavy analysis when a worker/job owns the
+  pass or `MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1` is set for diagnostics.
+  `enableComplexContourRuntime` means the capability/profile/model/report lane is
+  configured; it does not give render threads or Well cadence authority to run
+  matched filtering. When executed, the runtime emitter and contour analyzer
+  share the same contestant profile instead of learning one song and playing
+  another.
 
 ### `MimirComplexContourChannelModelDocument.cs`
 

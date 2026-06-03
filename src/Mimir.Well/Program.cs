@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -67,6 +68,8 @@ var exposureController = new MimirCameraExposureController(new MimirCameraExposu
     options.VisualMinimumLuma,
     options.VisualSettingSeconds,
     options.VisualResweepSeconds));
+var inlineComplexContourRuntimeEnabled = MimirWellEnvironment.IsTruthy(Environment.GetEnvironmentVariable("MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE"));
+var inlineComplexContourRuntimeSuppressionLogged = false;
 Console.Error.WriteLine($"Mimir Well publishing to {options.PublishUrl}");
 Console.Error.WriteLine($"Mimir Well sources={runtimeConfig.SourceFactories.Count} buffers={hub.Buffers.Buffers.Count}");
 
@@ -85,10 +88,18 @@ while (!stopping.IsCancellationRequested)
                 runtimeConfig.Settings.Audio.ReferenceSourceId,
                 runtimeConfig.Settings.Audio.Mode,
                 options.SyncCandidatesPerStep);
-            hub.AnalyzeComplexContourSynchronizationStep(
-                runtimeConfig.Settings.Audio.ReferenceSourceId,
-                (now - startedAt).TotalSeconds,
-                options.SyncCandidatesPerStep);
+            if (hub.ComplexContourRuntimeEnabled && inlineComplexContourRuntimeEnabled)
+            {
+                hub.AnalyzeComplexContourSynchronizationStep(
+                    runtimeConfig.Settings.Audio.ReferenceSourceId,
+                    (now - startedAt).TotalSeconds,
+                    options.SyncCandidatesPerStep);
+            }
+            else if (hub.ComplexContourRuntimeEnabled && !inlineComplexContourRuntimeSuppressionLogged)
+            {
+                inlineComplexContourRuntimeSuppressionLogged = true;
+                Console.Error.WriteLine("mimir-well complex-contour inline=false reason=well-loop-budget set MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1 to run the heavy matched filter inline");
+            }
         }
 
         hub.UpdateBioacousticProbeSchedule(NowNs());
@@ -609,7 +620,15 @@ internal sealed record MimirWellPublishReceipt(
     int ByteLength,
     double SerializeMilliseconds,
     double SendMilliseconds,
-    double TotalMilliseconds);
+    double TotalMilliseconds,
+    bool Dropped = false,
+    int QueueDepth = 0);
+
+internal static class MimirWellEnvironment
+{
+    public static bool IsTruthy(string? value) =>
+        value is "1" or "true" or "TRUE" or "yes" or "YES" or "on" or "ON";
+}
 
 internal sealed class MimirWellStreamTelemetry
 {
@@ -620,8 +639,11 @@ internal sealed class MimirWellStreamTelemetry
     private double totalPollMilliseconds;
     private long publishedDocuments;
     private long publishedBytes;
+    private long droppedDocuments;
     private double maxPublishMilliseconds;
     private double totalPublishMilliseconds;
+    private int lastPublishQueueDepth;
+    private int maxPublishQueueDepth;
     private string lastPublishedDocument = "";
     private int lastPublishedBytes;
     private double lastPublishMilliseconds;
@@ -642,6 +664,14 @@ internal sealed class MimirWellStreamTelemetry
 
     public void ObservePublish(MimirWellPublishReceipt receipt)
     {
+        lastPublishQueueDepth = receipt.QueueDepth;
+        maxPublishQueueDepth = Math.Max(maxPublishQueueDepth, receipt.QueueDepth);
+        if (receipt.Dropped)
+        {
+            droppedDocuments++;
+            return;
+        }
+
         publishedDocuments++;
         publishedBytes += receipt.ByteLength;
         totalPublishMilliseconds += receipt.TotalMilliseconds;
@@ -671,6 +701,9 @@ internal sealed class MimirWellStreamTelemetry
             bytes = publishedBytes,
             averageMilliseconds = publishedDocuments == 0 ? 0.0 : totalPublishMilliseconds / publishedDocuments,
             maxMilliseconds = maxPublishMilliseconds,
+            lastQueueDepth = lastPublishQueueDepth,
+            maxQueueDepth = maxPublishQueueDepth,
+            droppedDocuments,
             lastDocument = lastPublishedDocument,
             lastBytes = lastPublishedBytes,
             lastMilliseconds = lastPublishMilliseconds,
@@ -797,13 +830,23 @@ internal sealed record MimirWellOptions(
 internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
 {
     private readonly ClientWebSocket socket = new();
+    private readonly ConcurrentQueue<QueuedPublish> controlQueue = new();
+    private readonly ConcurrentQueue<QueuedPublish> bodyQueue = new();
+    private readonly SemaphoreSlim signal = new(0);
+    private readonly CancellationTokenSource senderStopping = new();
+    private Task? senderTask;
+    private int queueDepth;
+
+    private const int MaxQueuedDocuments = 256;
+    private const int StreamFrameDropThreshold = 128;
 
     public async Task ConnectAsync(CancellationToken stopping)
     {
         await socket.ConnectAsync(url, stopping).ConfigureAwait(false);
+        senderTask = Task.Run(() => SendLoopAsync(senderStopping.Token));
     }
 
-    public async Task<MimirWellPublishReceipt> PublishAsync(
+    public Task<MimirWellPublishReceipt> PublishAsync(
         object document,
         string documentName,
         CancellationToken stopping)
@@ -812,19 +855,92 @@ internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
         var json = JsonSerializer.Serialize(document);
         var bytes = Encoding.UTF8.GetBytes(json);
         var serializeMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
-        stopwatch.Restart();
-        await socket.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, stopping).ConfigureAwait(false);
         stopwatch.Stop();
-        return new MimirWellPublishReceipt(
+        var depth = Volatile.Read(ref queueDepth);
+        if (depth >= MaxQueuedDocuments ||
+            (depth >= StreamFrameDropThreshold &&
+                string.Equals(documentName, "mimir.cultmesh_stream_frame.v1", StringComparison.Ordinal)))
+        {
+            return Task.FromResult(new MimirWellPublishReceipt(
+                documentName,
+                bytes.Length,
+                serializeMilliseconds,
+                0.0,
+                serializeMilliseconds,
+                Dropped: true,
+                QueueDepth: depth));
+        }
+
+        if (string.Equals(documentName, "mimir.cultmesh_stream_frame.v1", StringComparison.Ordinal))
+        {
+            bodyQueue.Enqueue(new QueuedPublish(documentName, bytes));
+        }
+        else
+        {
+            controlQueue.Enqueue(new QueuedPublish(documentName, bytes));
+        }
+
+        var queued = Interlocked.Increment(ref queueDepth);
+        signal.Release();
+        return Task.FromResult(new MimirWellPublishReceipt(
             documentName,
             bytes.Length,
             serializeMilliseconds,
-            stopwatch.Elapsed.TotalMilliseconds,
-            serializeMilliseconds + stopwatch.Elapsed.TotalMilliseconds);
+            0.0,
+            serializeMilliseconds,
+            QueueDepth: queued));
     }
+
+    private async Task SendLoopAsync(CancellationToken stopping)
+    {
+        while (!stopping.IsCancellationRequested)
+        {
+            try
+            {
+                await signal.WaitAsync(stopping).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            while (TryDequeueNext(out var item))
+            {
+                Interlocked.Decrement(ref queueDepth);
+                try
+                {
+                    await socket.SendAsync(item.Bytes, WebSocketMessageType.Text, endOfMessage: true, stopping).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (WebSocketException ex)
+                {
+                    Console.Error.WriteLine($"mimir-well publish-warning document={item.Document} {ex.Message}");
+                    return;
+                }
+            }
+        }
+    }
+
+    private bool TryDequeueNext(out QueuedPublish item) =>
+        controlQueue.TryDequeue(out item!) || bodyQueue.TryDequeue(out item!);
 
     public async ValueTask DisposeAsync()
     {
+        senderStopping.Cancel();
+        if (senderTask != null)
+        {
+            try
+            {
+                await senderTask.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
         if (socket.State == WebSocketState.Open)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
@@ -838,7 +954,11 @@ internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
         }
 
         socket.Dispose();
+        signal.Dispose();
+        senderStopping.Dispose();
     }
+
+    private sealed record QueuedPublish(string Document, byte[] Bytes);
 }
 
 internal static class MimirWellCapturePage
@@ -1077,7 +1197,8 @@ internal static class MimirWellCapturePage
         object slice)
     {
         var bodyId = $"{options.NodeId}:{captureSequence}:{sample.SourceId}:{sample.Sequence}";
-        var transport = PreferredBodyTransport(sample);
+        var inlineBody = options.StreamFrameInlineBodies && sample.Kind == MimirStreamKind.Audio;
+        var transport = PreferredBodyTransport(sample, inlineBody);
         return new
         {
             type = "cultmesh-observation",
@@ -1095,7 +1216,7 @@ internal static class MimirWellCapturePage
                 ownerPeerId = options.NodeId,
                 kind = sample.Kind.ToString(),
                 origin = sample.Origin.ToString(),
-                preferredTransports = StreamTransports(sample),
+                preferredTransports = StreamTransports(sample, inlineBody),
                 clockDomainId = sample.SourceId,
             },
             frame = new
@@ -1115,7 +1236,7 @@ internal static class MimirWellCapturePage
             },
             slice,
             sample = SampleMetadata(sample),
-            body = CaptureBody(options, sample, options.StreamFrameInlineBodies),
+            body = CaptureBody(options, sample, inlineBody),
         };
     }
 
@@ -1155,7 +1276,7 @@ internal static class MimirWellCapturePage
         },
     };
 
-    private static string PreferredBodyTransport(MimirStreamSample sample)
+    private static string PreferredBodyTransport(MimirStreamSample sample, bool inlineBody)
     {
         var kind = NativeHandleKind(sample);
         if (!string.IsNullOrWhiteSpace(kind))
@@ -1167,18 +1288,19 @@ internal static class MimirWellCapturePage
                     : "native-handle";
         }
 
-        return sample.Data.IsEmpty ? "metadata-only" : "inline-bytes";
+        return sample.Data.IsEmpty ? "metadata-only" : inlineBody ? "inline-bytes" : "mimir-recorder-page";
     }
 
-    private static string[] StreamTransports(MimirStreamSample sample)
+    private static string[] StreamTransports(MimirStreamSample sample, bool inlineBody)
     {
-        var transport = PreferredBodyTransport(sample);
+        var transport = PreferredBodyTransport(sample, inlineBody);
         return transport switch
         {
             "shared-d3d12-texture" => ["shared-d3d12-texture", "mimir-recorder-page", "cultcache-page"],
             "shared-d3d11-texture" => ["shared-d3d11-texture", "mimir-recorder-page", "cultcache-page"],
             "native-handle" => ["native-handle", "mimir-recorder-page", "cultcache-page"],
             "inline-bytes" => ["mimir-recorder-page", "inline-bytes", "cultcache-page"],
+            "mimir-recorder-page" => ["mimir-recorder-page", "cultcache-page"],
             _ => ["metadata-only"],
         };
     }
@@ -1428,6 +1550,7 @@ internal static class MimirWellSnapshot
             referenceSourceId = runtimeConfig.Settings.Audio.ReferenceSourceId,
             mode = runtimeConfig.Settings.Audio.Mode.ToString(),
             complexContour = hub.ComplexContourRuntimeEnabled,
+            complexContourInline = MimirWellEnvironment.IsTruthy(Environment.GetEnvironmentVariable("MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE")),
             states = hub.AudioSynchronizationStates.Select(state => new
             {
                 state.SourceId,

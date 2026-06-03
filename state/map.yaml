@@ -448,9 +448,14 @@ invariants:
     source payloads without bloating the observation ledger.
     `Mimir.Well` is the Starfire Well daemon: it loads the broad Well runtime
     profile, starts every configured source it can, polls `MimirSynchronizationHub`
-    with a bounded daemon budget, updates audio sync/probe state, and publishes
-    `mimir.well_snapshot.v1` records containing buffer health, composite
-    controls, publication/stem contract, and sync status. It also publishes
+    with a bounded daemon budget, updates ordinary audio sync/probe state, and
+    publishes `mimir.well_snapshot.v1` records containing buffer health,
+    composite controls, publication/stem contract, and sync status. Complex
+    contour may be configured and reported as a capability, but the Well loop
+    does not run the matched-filter contour analyzer unless
+    `MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1` is set as a diagnostic override;
+    the live owner for that heavy decoder is a worker/job lane that returns
+    cached reports without owning drink/publish cadence. It also publishes
     bounded `mimir.well_capture_page.v1` records for synchronized frame slices:
     each page carries timing metadata, configured composite state, and inline
     source sample bodies when a sample has CPU bytes and stays under the
@@ -870,8 +875,10 @@ accepted_design:
     192 kHz recovers a 693.5-sample delay with about 0.219 us error. A live
     dump on 2026-06-02 showed the heavy matched-filter analyzer running
     `MimirComplexContourMatchedFilterBank.ScoreAt` inline on the Fensalir render
-    thread at 192 kHz, hanging the app. Runtime complex-contour analysis is now
-    suppressed on the render thread by default; `MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1`
+    thread at 192 kHz, hanging the app; a later Well shakedown showed the same
+    heavy analyzer could stall the drink/publish loop after initial snapshots.
+    Runtime complex-contour analysis is now suppressed on both render-thread and
+    Well-loop inline paths by default; `MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1`
     is a diagnostic override, and the proper live owner is a bounded worker/job
     lane that returns reports to the runtime without owning frame cadence.
     `MimirCalibratedAudioCompositeBuilder` is the first diagnostic composite

@@ -625,9 +625,13 @@ a named invariant that the native runtime cannot protect yet.
   long-running Starfire ingest/publish daemon: it loads
   `config/mimir-runtime.well.local.json`, creates every configured source it
   can, polls the `MimirSynchronizationHub` with a bounded daemon cadence,
-  updates audio sync/probe state, and publishes `mimir.well_snapshot.v1`
-  records with source buffers, composite controls, publication/stem contract,
-  and synchronized-frame status. It also publishes bounded
+  updates ordinary audio sync/probe state, and publishes
+  `mimir.well_snapshot.v1` records with source buffers, composite controls,
+  publication/stem contract, and synchronized-frame status. Complex contour can
+  be configured and advertised, but expensive matched-filter contour analysis is
+  suppressed in the Well loop unless `MIMIR_COMPLEX_CONTOUR_RUNTIME_INLINE=1`
+  is set for diagnostics; the production path needs a worker-owned report lane.
+  It also publishes bounded
   `mimir.well_capture_page.v1` records with synchronized frame-slice timing,
   configured composite state, and inline source sample bodies when CPU payload
   bytes exist and fit the configured body limit. The online supervisor

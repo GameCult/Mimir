@@ -334,7 +334,7 @@ if (-not $SkipRuntime) {
             "--sync-ms", "250",
             "--presentation-delay-ms", "2500",
             "--max-samples-per-source", "32",
-            "--visual-calibration", "true",
+            "--visual-calibration", "false",
             "--visual-calibration-ms", "250",
             "--visual-expected-leds", "38",
             "--visual-minimum-luma", "0.55",
