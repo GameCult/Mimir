@@ -129,9 +129,10 @@ public sealed class MimirRuntimeConfiguration
     private static MimirStreamSourceFactory? TryCreateSourceFactory(MimirStreamConfig stream, string? configDirectory)
     {
         var descriptor = ToDescriptor(stream);
+        var diagnostics = ToDiagnostics(stream, configDirectory);
         if (string.Equals(stream.Adapter, "native", StringComparison.OrdinalIgnoreCase))
         {
-            return new MimirStreamSourceFactory(descriptor, () => new MimirNativeIngestStreamSource(descriptor));
+            return new MimirStreamSourceFactory(descriptor, () => new MimirNativeIngestStreamSource(descriptor), diagnostics);
         }
 
         if (string.Equals(stream.Adapter, "asio", StringComparison.OrdinalIgnoreCase))
@@ -148,7 +149,8 @@ public sealed class MimirRuntimeConfiguration
                     ResolveCommand(stream.Command, configDirectory),
                     stream.DriverClsid,
                     stream.SampleRate,
-                    stream.AcceptSourceIds)));
+                    stream.AcceptSourceIds)),
+                diagnostics);
 #pragma warning restore CA1416
         }
 
@@ -172,7 +174,8 @@ public sealed class MimirRuntimeConfiguration
                     stream.MinimumFramesPerSecond,
                     stream.QueueDepth,
                     ParsePixelFormat(stream.PixelFormat))),
-                UtcNowNs));
+                UtcNowNs),
+                diagnostics);
         }
 
         if (string.Equals(stream.Adapter, "ps3eye", StringComparison.OrdinalIgnoreCase)
@@ -192,7 +195,8 @@ public sealed class MimirRuntimeConfiguration
                     stream.Width,
                     stream.Height,
                     stream.FramesPerSecond)),
-                UtcNowNs));
+                UtcNowNs),
+                diagnostics);
         }
 
         if (string.Equals(stream.Adapter, "mf-gpu", StringComparison.OrdinalIgnoreCase)
@@ -214,7 +218,8 @@ public sealed class MimirRuntimeConfiguration
                     stream.InputFormat,
                     stream.OutputFormat,
                     stream.MinimumFramesPerSecond)),
-                UtcNowNs));
+                UtcNowNs),
+                diagnostics);
         }
 
         if (string.Equals(stream.Adapter, "frame-events", StringComparison.OrdinalIgnoreCase)
@@ -232,7 +237,8 @@ public sealed class MimirRuntimeConfiguration
                     stream.Arguments,
                     stream.AcceptSourceIds.Length > 0
                         ? new HashSet<string>(stream.AcceptSourceIds, StringComparer.Ordinal)
-                        : null)));
+                        : null)),
+                diagnostics);
         }
 
         if (string.Equals(stream.Adapter, "ffmpeg-rawvideo", StringComparison.OrdinalIgnoreCase)
@@ -252,7 +258,8 @@ public sealed class MimirRuntimeConfiguration
                     stream.Height,
                     ParsePixelFormat(stream.PixelFormat),
                     stream.FrameBytes,
-                    stream.StrideBytes)));
+                    stream.StrideBytes)),
+                diagnostics);
         }
 
         if (string.Equals(stream.Adapter, "ffmpeg-pcmaudio", StringComparison.OrdinalIgnoreCase)
@@ -271,7 +278,8 @@ public sealed class MimirRuntimeConfiguration
                     stream.SampleRate,
                     stream.Channels,
                     ParseAudioSampleFormat(stream.SampleFormat),
-                    stream.BlockFrames)));
+                    stream.BlockFrames)),
+                diagnostics);
         }
 
         if (!string.Equals(stream.Adapter, "process", StringComparison.OrdinalIgnoreCase))
@@ -289,8 +297,26 @@ public sealed class MimirRuntimeConfiguration
             new MimirProcessStreamSourceOptions(
                 ResolveCommand(stream.Command, configDirectory),
                 stream.Arguments,
-                Math.Max(1024, stream.ChunkBytes))));
+                Math.Max(1024, stream.ChunkBytes))),
+            diagnostics);
     }
+
+    private static MimirStreamSourceDiagnostics ToDiagnostics(MimirStreamConfig stream, string? configDirectory) =>
+        new(
+            stream.Adapter,
+            ResolveCommand(stream.Command, configDirectory),
+            stream.PathNeedle,
+            stream.Width,
+            stream.Height,
+            stream.InputFormat,
+            stream.OutputFormat,
+            stream.PixelFormat,
+            stream.MinimumFramesPerSecond,
+            stream.FramesPerSecond,
+            stream.SampleRate,
+            stream.Channels,
+            stream.QueueDepth,
+            stream.AcceptSourceIds);
 
     private static string ResolveCommand(string command, string? configDirectory)
     {
@@ -358,7 +384,24 @@ public sealed class MimirRuntimeConfiguration
 
 public sealed record MimirStreamSourceFactory(
     MimirStreamDescriptor Descriptor,
-    Func<IMimirStreamSource?> Create);
+    Func<IMimirStreamSource?> Create,
+    MimirStreamSourceDiagnostics? Diagnostics = null);
+
+public sealed record MimirStreamSourceDiagnostics(
+    string Adapter,
+    string Command,
+    string PathNeedle,
+    int Width,
+    int Height,
+    string InputFormat,
+    string OutputFormat,
+    string PixelFormat,
+    double MinimumFramesPerSecond,
+    int FramesPerSecond,
+    int SampleRate,
+    int Channels,
+    int QueueDepth,
+    IReadOnlyList<string> AcceptSourceIds);
 
 public sealed class MimirRuntimeConfigFile
 {

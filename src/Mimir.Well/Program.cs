@@ -1471,7 +1471,7 @@ internal static class MimirWellSnapshot
         liveSources = hub.SourceCount,
         sourceErrors,
         sourceHealth = runtimeConfig.SourceFactories
-            .Select(factory => SourceHealthSnapshot(factory.Descriptor, hub.Buffers.Buffers, sourceErrors, startedAt))
+            .Select(factory => SourceHealthSnapshot(factory, hub.Buffers.Buffers, sourceErrors, startedAt))
             .ToArray(),
         buffers = hub.Buffers.Buffers.Select(BufferSnapshot).ToArray(),
         synchronizedFrame = new
@@ -1653,11 +1653,13 @@ internal static class MimirWellSnapshot
     }
 
     private static object SourceHealthSnapshot(
-        MimirStreamDescriptor descriptor,
+        MimirStreamSourceFactory factory,
         IEnumerable<MimirRollingStreamBuffer> buffers,
         IReadOnlyList<object> sourceErrors,
         DateTimeOffset startedAt)
     {
+        var descriptor = factory.Descriptor;
+        var diagnostics = factory.Diagnostics;
         var matchingBuffers = buffers
             .Where(buffer => string.Equals(buffer.Descriptor.SourceId, descriptor.SourceId, StringComparison.Ordinal))
             .ToArray();
@@ -1700,12 +1702,33 @@ internal static class MimirWellSnapshot
             Kind = descriptor.Kind.ToString(),
             Origin = descriptor.Origin.ToString(),
             descriptor.Label,
+            configured = diagnostics is null
+                ? null
+                : new
+                {
+                    diagnostics.Adapter,
+                    diagnostics.Command,
+                    diagnostics.PathNeedle,
+                    diagnostics.Width,
+                    diagnostics.Height,
+                    diagnostics.InputFormat,
+                    diagnostics.OutputFormat,
+                    diagnostics.PixelFormat,
+                    diagnostics.MinimumFramesPerSecond,
+                    diagnostics.FramesPerSecond,
+                    diagnostics.SampleRate,
+                    diagnostics.Channels,
+                    diagnostics.QueueDepth,
+                    acceptSourceIds = diagnostics.AcceptSourceIds,
+                },
             status,
             reason = status switch
             {
                 "create-error" => "source creation failed; see sourceErrors",
                 "stalled" => "source emitted samples earlier but latest sample is stale",
                 "waiting-network" => "network source listener is configured but no producer samples have arrived",
+                "waiting-device-samples" when descriptor.Kind == MimirStreamKind.Video && IsKsCamera(diagnostics) =>
+                    KsCameraWaitingReason(diagnostics),
                 "waiting-device-samples" => "local device source is configured but has not emitted a sample",
                 _ => "samples arriving",
             },
@@ -1716,6 +1739,14 @@ internal static class MimirWellSnapshot
             latestByteLength = latest?.ByteLength ?? 0,
         };
     }
+
+    private static bool IsKsCamera(MimirStreamSourceDiagnostics? diagnostics) =>
+        string.Equals(diagnostics?.Adapter, "ks-camera", StringComparison.OrdinalIgnoreCase);
+
+    private static string KsCameraWaitingReason(MimirStreamSourceDiagnostics? diagnostics) =>
+        diagnostics is null
+            ? "KS camera opened but no frames have arrived; verify device ownership/driver"
+            : $"KS camera opened but no frames have arrived; verify device ownership/driver for {diagnostics.Width}x{diagnostics.Height} {diagnostics.InputFormat}";
 
     private static string? TryReadAnonymousString(object value, params string[] names)
     {
