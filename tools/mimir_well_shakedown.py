@@ -176,6 +176,7 @@ def summarize_well(path: Path, all_runs: bool = False) -> dict[str, Any]:
     pressure = last.get("streamPressure") if isinstance(last.get("streamPressure"), dict) else {}
     publish = pressure.get("publish") if isinstance(pressure.get("publish"), dict) else {}
     poll = pressure.get("poll") if isinstance(pressure.get("poll"), dict) else {}
+    sender = pressure.get("sender") if isinstance(pressure.get("sender"), dict) else {}
     visual = last.get("visualCalibration", {}).get("cameras", [])
 
     return {
@@ -223,6 +224,16 @@ def summarize_well(path: Path, all_runs: bool = False) -> dict[str, Any]:
             "publishedBytes": int(number(publish.get("bytes"))),
             "lastDocument": publish.get("lastDocument", ""),
             "lastBytes": int(number(publish.get("lastBytes"))),
+        },
+        "senderPressure": {
+            "sentDocuments": int(number(sender.get("sentDocuments"))),
+            "sentBytes": int(number(sender.get("sentBytes"))),
+            "averageMilliseconds": number(sender.get("averageMilliseconds")),
+            "maxMilliseconds": number(sender.get("maxMilliseconds")),
+            "lastDocument": sender.get("lastDocument", ""),
+            "lastBytes": int(number(sender.get("lastBytes"))),
+            "lastMilliseconds": number(sender.get("lastMilliseconds")),
+            "currentQueueDepth": int(number(sender.get("currentQueueDepth"))),
         },
         "captureBodies": {
             "medianSampleCount": statistics.median(capture_sample_counts) if capture_sample_counts else 0.0,
@@ -425,16 +436,24 @@ def hypotheses(summary: dict[str, Any]) -> list[str]:
     readiness = summary["readiness"]
     overlap = summary["overlapAfter120Ms"]
     pressure = summary["streamPressure"]
+    sender = summary.get("senderPressure", {})
     after300_full_frame_rate = readiness.get("after300FullFrameRate")
     if isinstance(after300_full_frame_rate, (int, float)) and after300_full_frame_rate >= 0.95:
         result.append(
             "After warm-up, frame readiness is high; fixed 2500 ms delay should be reduced by an adaptive controller until misses reappear."
         )
-    if overlap["p10MinOverlap"] <= 25.0:
+    if readiness.get("after120Samples", 0) > 0 and overlap["p10MinOverlap"] <= 25.0:
         result.append(
             "ASIO blocks expose a very thin per-domain overlap; audio should be aligned by Faust delay/resampling, not by asking the presentation planner for seconds of holdback."
         )
-    if pressure["publishMaxMs"] > 50.0 or pressure["lastBytes"] > 1_000_000:
+    sender_queue_depth = sender.get("currentQueueDepth") if isinstance(sender, dict) else None
+    sender_max_ms = sender.get("maxMilliseconds") if isinstance(sender, dict) else None
+    if (
+        pressure["publishMaxMs"] > 50.0
+        and (not isinstance(sender_queue_depth, (int, float)) or sender_queue_depth > 0)
+    ) or (
+        isinstance(sender_max_ms, (int, float)) and sender_max_ms > 50.0
+    ) or pressure["lastBytes"] > 1_000_000:
         result.append(
             "Capture-page publication creates burst pressure; body paging/stream frames need their own compact lane before latency experiments can trust publish timing."
         )
@@ -482,6 +501,9 @@ def main() -> int:
         print(f"  {key}: {value}")
     print("Stream pressure:")
     for key, value in summary["streamPressure"].items():
+        print(f"  {key}: {value}")
+    print("Sender pressure:")
+    for key, value in summary["senderPressure"].items():
         print(f"  {key}: {value}")
     if move:
         print(f"Move score: bpm={move['bpm']:.1f} c={move['bpmConfidence']:.2f} key={move['key']} chord={move['chord']} voices={move['activeVoiceCount']}/{move['voiceCount']}")

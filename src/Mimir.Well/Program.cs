@@ -141,7 +141,7 @@ while (!stopping.IsCancellationRequested)
             featureSignalFrame,
             exposureController.Statuses,
             sourceErrors,
-            streamTelemetry.Snapshot(now, subscribersAreExternal: true),
+            streamTelemetry.Snapshot(now, subscribersAreExternal: true, publisher.SenderPressureSnapshot()),
             ++sequence,
             startedAt);
         streamTelemetry.ObservePublish(
@@ -681,7 +681,7 @@ internal sealed class MimirWellStreamTelemetry
         lastPublishMilliseconds = receipt.TotalMilliseconds;
     }
 
-    public object Snapshot(DateTimeOffset now, bool subscribersAreExternal) => new
+    public object Snapshot(DateTimeOffset now, bool subscribersAreExternal, object senderPressure) => new
     {
         document = "mimir.well_stream_pressure.v1",
         status = "transitional-websocket-json",
@@ -709,6 +709,7 @@ internal sealed class MimirWellStreamTelemetry
             lastMilliseconds = lastPublishMilliseconds,
             subscribersAreExternal,
         },
+        sender = senderPressure,
         nextOrgan = new
         {
             controlLane = "CultMesh typed state and compact stream cursors",
@@ -834,8 +835,16 @@ internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
     private readonly ConcurrentQueue<QueuedPublish> bodyQueue = new();
     private readonly SemaphoreSlim signal = new(0);
     private readonly CancellationTokenSource senderStopping = new();
+    private readonly object sendTelemetryLock = new();
     private Task? senderTask;
     private int queueDepth;
+    private long sentDocuments;
+    private long sentBytes;
+    private double totalSendMilliseconds;
+    private double maxSendMilliseconds;
+    private string lastSentDocument = "";
+    private int lastSentBytes;
+    private double lastSendMilliseconds;
 
     private const int MaxQueuedDocuments = 256;
     private const int StreamFrameDropThreshold = 128;
@@ -909,7 +918,10 @@ internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
                 Interlocked.Decrement(ref queueDepth);
                 try
                 {
+                    var stopwatch = Stopwatch.StartNew();
                     await socket.SendAsync(item.Bytes, WebSocketMessageType.Text, endOfMessage: true, stopping).ConfigureAwait(false);
+                    stopwatch.Stop();
+                    ObserveSend(item, stopwatch.Elapsed);
                 }
                 catch (OperationCanceledException)
                 {
@@ -926,6 +938,41 @@ internal sealed class MimirWellPublisher(Uri url) : IAsyncDisposable
 
     private bool TryDequeueNext(out QueuedPublish item) =>
         controlQueue.TryDequeue(out item!) || bodyQueue.TryDequeue(out item!);
+
+    public object SenderPressureSnapshot()
+    {
+        lock (sendTelemetryLock)
+        {
+            return new
+            {
+                document = "mimir.well_sender_pressure.v1",
+                authority = "Mimir.Well websocket sender loop observes wire send pressure after enqueue.",
+                sentDocuments,
+                sentBytes,
+                averageMilliseconds = sentDocuments == 0 ? 0.0 : totalSendMilliseconds / sentDocuments,
+                maxMilliseconds = maxSendMilliseconds,
+                lastDocument = lastSentDocument,
+                lastBytes = lastSentBytes,
+                lastMilliseconds = lastSendMilliseconds,
+                currentQueueDepth = Volatile.Read(ref queueDepth),
+            };
+        }
+    }
+
+    private void ObserveSend(QueuedPublish item, TimeSpan elapsed)
+    {
+        var milliseconds = elapsed.TotalMilliseconds;
+        lock (sendTelemetryLock)
+        {
+            sentDocuments++;
+            sentBytes += item.Bytes.Length;
+            totalSendMilliseconds += milliseconds;
+            maxSendMilliseconds = Math.Max(maxSendMilliseconds, milliseconds);
+            lastSentDocument = item.Document;
+            lastSentBytes = item.Bytes.Length;
+            lastSendMilliseconds = milliseconds;
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {
