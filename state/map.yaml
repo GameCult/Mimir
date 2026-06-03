@@ -1245,6 +1245,96 @@ accepted_design:
   - `.voidbot` state is part of repo memory and must be committed separately
     whenever dirty.
 
+verse_service_contract:
+  status: documented
+  source: docs/verse-service-contract.md
+  objective: >
+    Make Mimir a discoverable Verse service whose durable state is typed
+    CultCache `.cc` or CultCache-compatible with `.cc` witness/export, whose
+    meaningful presentation flows through Eve/CultUI or
+    `gamecult.eve.surface.v1`, and whose surfaces are published through
+    CultMesh for Odin discovery.
+  owner_map:
+    mimir_service: >
+      Owns configuration, launch, calibration truth, sensor identity, stream
+      identity, synchronization state, Well publication, recorder receipts, and
+      the service contract.
+    runtime: >
+      Owns bounded rolling buffers, source descriptors, source polling, direct
+      native ingest, audio synchronization analysis, and cached read models.
+    native_workers: >
+      Own device reads, closest-to-device timestamps, native/GPU handles,
+      unavoidable copy counts, and narrow per-device actuators.
+    well: >
+      Owns typed live pages, configured composite state, timing pressure,
+      feature signals, capture-body publication, and the append-side
+      observation ledger.
+    verse_recorder: >
+      Owns session receipts, body indexing, replay witnesses, and CultCache
+      export for offline reconstruction.
+    fensalir_daemon: >
+      Owns reservoir job selection, queue pressure, GPU worker ownership,
+      program/reservoir surfaces, and daemon state.
+    eve_cultui: >
+      Owns operator display and command lowerings only; it submits commands to
+      the state owners and does not own synchronization, reservoir jobs,
+      calibration truth, or OBS composition.
+    odin: >
+      Discovers Mimir's CultMesh namespaces, schema catalog, service manifest,
+      nested Verse roots, and Eve surfaces.
+  cultcache_witnesses:
+    sensor_state: >
+      Source inventory, device identity, driver profile, clock domain, format,
+      actuator capability, native handle class, unavoidable copy count, and
+      health.
+    media_state: >
+      Capture page metadata, resource keys, body refs, fence refs, page timing,
+      configured composites, and program surface refs.
+    observation_state: >
+      Typed audio/video/IMU/feature/path observations with source id, time
+      range, confidence, calibration id, and payload/resource reference.
+    ledger_state: >
+      Recorder session receipts, body index, replay cursor, migration version,
+      schema witness, and rejected/drop reasons.
+    control_state: >
+      Operator commands, accepted command receipts, selected program layer
+      state, reservoir worker pressure, audio actuator commands, and
+      record/live status.
+  cultmesh_namespaces:
+    - verse.mimir.service.v1
+    - mimir.sensor.*
+    - mimir.media.*
+    - mimir.observation.*
+    - mimir.ledger.*
+    - mimir.control.*
+    - mimir.eve.*
+    - mimir.fensalir.*
+  eve_surfaces:
+    - mimir.sensor.field.surface
+    - mimir.operator.flow.surface
+    - mimir.observation.ledger.surface
+    - mimir.fensalir.reservoir.surface
+  nested_verses:
+    room: calibration truth, coordinate frame, sensor graph, and clock model.
+    sensor: device health, timing domain, media format, actuator surface, and observations.
+    stream: rolling-window cursor, capture pages, resource refs, body refs, and backpressure.
+    operator: command surface, selected layer/source state, command receipts, and degraded visibility.
+  migration_order:
+    - Publish `verse.mimir.service.v1` manifest with namespaces, schemas, run id, nested roots, and transport lanes.
+    - Give JSONL/session/body-index paths `.cc` witnesses or CultCache-compatible exports, starting with Well pages and VerseRecorder.
+    - Promote sensor, media, observation, ledger, and control state into explicit `mimir.*` CultMesh namespaces while preserving current document ids.
+    - Publish `gamecult.eve.surface.v1` sensor-field and operator-flow surfaces with typed field bindings.
+    - Make old dashboard broker and `/eve/dashboard` consume provider surfaces instead of assembling private truth.
+    - Let Odin discover the service manifest and surfaces; keep direct HTTP health/status probes diagnostic.
+    - Delete or neuter private JSON/dashboard/cache/callback paths that can still decide behavior after typed owners exist.
+  demotion_line: >
+    Bespoke UI, browser dashboards, retained dashboard node lists,
+    compatibility WebSockets, JSON status files, JSONL replay logs, screenshot
+    streams, and OBS bridge scripts are lowerings, diagnostics,
+    external-boundary exports, or replay witnesses. They may not own sensor
+    truth, calibration truth, command state, reservoir scheduling, program
+    presentation, or synchronization behavior.
+
 active_subgoals:
   - Make the live Mimir editor behave like an OBS-style 2D compositor for
     synced video layers and audio stems.

@@ -53,6 +53,9 @@ Start with:
 - [docs/fensalir-rendering-rebuild-migration.md](docs/fensalir-rendering-rebuild-migration.md)
   for the current teardown/rebuild migration plan between Mimir's physical
   evidence window and Fensalir's field-evidence renderer.
+- [docs/verse-service-contract.md](docs/verse-service-contract.md) for the
+  CultCache/CultMesh/Odin/Eve service contract and demotion line for old
+  dashboards, JSON witnesses, and compatibility transports.
 
 Naming note: **Fensalir** is the engine/windowing/rendering/D3D12 layer. Older
 research notes may still use the previous engine name.
