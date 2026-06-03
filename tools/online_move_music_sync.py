@@ -32,6 +32,7 @@ MINOR_KEY_PROFILE = np.asarray([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 
 
 
 REMOTE_MULTI_RECEIVER = r"""
+import errno
 import os
 import sys
 import time
@@ -1281,7 +1282,22 @@ class BioacousticRealtekTrigger:
                 "--song",
                 args.bioacoustic_song,
             ]
-            render = subprocess.run(render_cmd, cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
+            try:
+                render = subprocess.run(
+                    render_cmd,
+                    cwd=Path(__file__).resolve().parents[1],
+                    capture_output=True,
+                    text=True,
+                    timeout=max(1.0, float(args.bioacoustic_render_timeout_seconds)),
+                )
+            except subprocess.TimeoutExpired as ex:
+                trigger.close()
+                render_out.append(f"## {role} seconds={seconds:.6f}\n{ex.stdout or ''}")
+                render_err.append(f"## {role} seconds={seconds:.6f}\n{ex.stderr or ''}\nrender timed out")
+                (out_dir / "bioacoustic-render.out.log").write_text("\n".join(render_out), encoding="utf-8")
+                (out_dir / "bioacoustic-render.err.log").write_text("\n".join(render_err), encoding="utf-8")
+                print(f"bioacoustic Realtek trigger disabled: {role} render timed out", file=sys.stderr, flush=True)
+                return None
             render_out.append(f"## {role} seconds={seconds:.6f}\n{render.stdout}")
             render_err.append(f"## {role} seconds={seconds:.6f}\n{render.stderr}")
             if render.returncode != 0 or not path.exists():
@@ -1483,6 +1499,7 @@ def main() -> int:
     parser.add_argument("--bioacoustic-loop-seconds", type=float, default=0.42)
     parser.add_argument("--bioacoustic-min-interval-seconds", type=float, default=0.18)
     parser.add_argument("--bioacoustic-max-active-calls", type=int, default=3)
+    parser.add_argument("--bioacoustic-render-timeout-seconds", type=float, default=15.0)
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -1540,6 +1557,7 @@ def main() -> int:
     trace_path = out_dir / "online-sync.jsonl"
     start = time.monotonic()
     frames = 0
+    move_output_available = True
     try:
         with trace_path.open("w", encoding="utf-8") as trace:
             while time.monotonic() - start < args.duration:
@@ -1579,12 +1597,22 @@ def main() -> int:
                 for index, move in enumerate(moves):
                     rgb = move_rgb(move, index, len(moves), state, args)
                     rgbs[move.name] = rgb
-                    ssh.stdin.write(f"{move.name} {rgb[0]} {rgb[1]} {rgb[2]}\n".encode("ascii"))
+                    if move_output_available:
+                        try:
+                            ssh.stdin.write(f"{move.name} {rgb[0]} {rgb[1]} {rgb[2]}\n".encode("ascii"))
+                        except OSError as ex:
+                            move_output_available = False
+                            print(f"move-output disabled during write: {ex}", file=sys.stderr, flush=True)
                 for event in score_voice_events:
                     move_index = int(event["move_index"])
                     if 0 <= move_index < len(moves):
                         event["move_name"] = moves[move_index].name
-                ssh.stdin.flush()
+                if move_output_available:
+                    try:
+                        ssh.stdin.flush()
+                    except OSError as ex:
+                        move_output_available = False
+                        print(f"move-output disabled during flush: {ex}", file=sys.stderr, flush=True)
                 frames += 1
                 record = {
                     "kind": "mimir.online_move_music_sync_frame.v1",
@@ -1616,9 +1644,10 @@ def main() -> int:
                     )
     finally:
         try:
-            for move in moves:
-                ssh.stdin.write(f"{move.name} 0 0 0\n".encode("ascii"))
-            ssh.stdin.close()
+            if move_output_available:
+                for move in moves:
+                    ssh.stdin.write(f"{move.name} 0 0 0\n".encode("ascii"))
+                ssh.stdin.close()
         except Exception:
             pass
         for proc in (wasapi, ssh):

@@ -13,9 +13,7 @@ param(
     [int]$MoveFps = 120,
     [int]$MoveFftSize = 256,
     [string[]]$Move = @(
-        "move-00-07-04-a3-97-72-usb=/dev/hidraw1:#35ff6c",
-        "move-00-07-04-a6-be-5f=/dev/hidraw2:#ff2a00",
-        "move-00-06-f5-23-e2-d1=/dev/hidraw3:#00a8ff"
+        "move-00-07-04-a3-97-72-usb=/dev/hidraw1:#35ff6c"
     ),
     [switch]$SkipRuntime,
     [switch]$SkipFensalir,
@@ -308,6 +306,8 @@ if (-not $SkipMoves) {
     $moveArgs += "0.18"
     $moveArgs += "--bioacoustic-max-active-calls"
     $moveArgs += "3"
+    $moveArgs += "--bioacoustic-render-timeout-seconds"
+    $moveArgs += "15"
     foreach ($spec in $Move) {
         $moveArgs += "--move"
         $moveArgs += $spec

@@ -1286,13 +1286,13 @@ internal sealed class FensalirDaemonEveServer(FensalirDaemonOptions options, Fen
 
 internal static class FensalirDaemonObserver
 {
-    private static readonly (string Id, string Name, string[] PidFiles)[] LocalDaemons =
+    private static readonly (string Id, string Name, string[] PidFiles, string[] ProcessNames)[] LocalDaemons =
     [
-        ("verse-relay", "Verse relay", ["verse-relay-direct.pid", "verse-relay.pid"]),
-        ("verse-recorder", "Verse recorder", ["verse-recorder.pid"]),
-        ("mimir-well", "Mimir Well", ["mimir-well-rebased.pid", "mimir-well-fixed.pid", "mimir-well.pid"]),
-        ("move-sync", "Move sync", ["move-sync-lean.pid", "move-sync.pid"]),
-        ("fensalir", "Fensalir", ["fensalir-daemon.pid"]),
+        ("verse-relay", "Verse relay", ["verse-relay-direct.pid", "verse-relay.pid"], ["dotnet", "Mimir.EveSensorReceiver"]),
+        ("verse-recorder", "Verse recorder", ["verse-recorder.pid"], ["dotnet", "Mimir.VerseRecorder"]),
+        ("mimir-well", "Mimir Well", ["mimir-well-rebased.pid", "mimir-well-fixed.pid", "mimir-well.pid"], ["dotnet", "Mimir.Well"]),
+        ("move-sync", "Move sync", ["move-sync-lean.pid", "move-sync.pid"], ["python", "python3", "py"]),
+        ("fensalir", "Fensalir", ["fensalir-daemon.pid"], ["dotnet", "Mimir.FensalirDaemon"]),
     ];
 
     public static IReadOnlyList<ObservedDaemonStatus> Collect(FensalirDaemonOptions options)
@@ -1310,7 +1310,7 @@ internal static class FensalirDaemonObserver
 
         foreach (var daemon in LocalDaemons)
         {
-            statuses.Add(ObserveLocal(runDir, daemon.Id, daemon.Name, daemon.PidFiles));
+            statuses.Add(ObserveLocal(runDir, daemon.Id, daemon.Name, daemon.PidFiles, daemon.ProcessNames));
         }
 
         return statuses
@@ -1320,7 +1320,12 @@ internal static class FensalirDaemonObserver
             .ToArray();
     }
 
-    private static ObservedDaemonStatus ObserveLocal(string runDir, string id, string name, IReadOnlyList<string> pidFiles)
+    private static ObservedDaemonStatus ObserveLocal(
+        string runDir,
+        string id,
+        string name,
+        IReadOnlyList<string> pidFiles,
+        IReadOnlyList<string> expectedProcessNames)
     {
         foreach (var pidFile in pidFiles)
         {
@@ -1339,7 +1344,18 @@ internal static class FensalirDaemonObserver
             try
             {
                 using var process = Process.GetProcessById(pid);
-                return new ObservedDaemonStatus(id, name, pid, process.HasExited ? "stopped" : "online", pidFile);
+                if (process.HasExited)
+                {
+                    return new ObservedDaemonStatus(id, name, pid, "stopped", pidFile);
+                }
+
+                var processName = process.ProcessName;
+                if (!expectedProcessNames.Any(expected => processName.Equals(expected, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return new ObservedDaemonStatus(id, name, pid, "stale-pid", $"{pidFile} now belongs to {processName}");
+                }
+
+                return new ObservedDaemonStatus(id, name, pid, "online", $"{pidFile} {processName}");
             }
             catch (ArgumentException)
             {
