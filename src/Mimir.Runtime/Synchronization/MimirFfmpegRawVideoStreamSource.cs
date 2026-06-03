@@ -98,7 +98,7 @@ public sealed class MimirFfmpegRawVideoStreamSource : IMimirStreamSource
                 offset += read;
             }
 
-            var timestampNs = StopwatchTicksToNs(Stopwatch.GetTimestamp());
+            var timestampNs = UtcNowNs();
             var videoFrame = new MimirVideoFrameDescriptor(
                 Options.Width,
                 Options.Height,
@@ -152,10 +152,7 @@ public sealed class MimirFfmpegRawVideoStreamSource : IMimirStreamSource
         };
     }
 
-    private static long StopwatchTicksToNs(long ticks)
-    {
-        return checked((long)(ticks * (1_000_000_000.0 / Stopwatch.Frequency)));
-    }
+    private static long UtcNowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
 
     public void Dispose()
     {

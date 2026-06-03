@@ -74,8 +74,7 @@ public sealed class MimirProcessStreamSource : IMimirStreamSource
                 Array.Resize(ref buffer, read);
             }
 
-            var now = Stopwatch.GetTimestamp();
-            var timestampNs = StopwatchTicksToNs(now);
+            var timestampNs = UtcNowNs();
             samples.Enqueue(new MimirStreamSample(
                 Descriptor.SourceId,
                 Descriptor.Kind,
@@ -102,10 +101,7 @@ public sealed class MimirProcessStreamSource : IMimirStreamSource
         }
     }
 
-    private static long StopwatchTicksToNs(long ticks)
-    {
-        return checked((long)(ticks * (1_000_000_000.0 / Stopwatch.Frequency)));
-    }
+    private static long UtcNowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
 
     public void Dispose()
     {

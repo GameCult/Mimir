@@ -1558,11 +1558,18 @@ internal static class MimirWellSnapshot
             TryReadAnonymousString(error, "SourceId", "sourceId") is { } id &&
             string.Equals(id, descriptor.SourceId, StringComparison.Ordinal));
         var elapsedMs = Math.Max(0.0, (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+        var latestAgeMs = latest.HasValue
+            ? Math.Round(Math.Max(0.0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000.0 - latest.Value.TimestampNs) / 1_000_000.0), 1)
+            : Math.Round(elapsedMs, 1);
         var status = errored
             ? "create-error"
-            : samples > 0
-                ? "live"
-                : "created-no-samples";
+            : samples > 0 && latestAgeMs > 2_000.0
+                ? "stalled"
+                : samples > 0
+                    ? "live"
+                    : descriptor.Origin == MimirStreamOrigin.Network
+                        ? "waiting-network"
+                        : "waiting-device-samples";
 
         return new
         {
@@ -1574,15 +1581,15 @@ internal static class MimirWellSnapshot
             reason = status switch
             {
                 "create-error" => "source creation failed; see sourceErrors",
-                "created-no-samples" => "source was created but has not emitted a sample",
+                "stalled" => "source emitted samples earlier but latest sample is stale",
+                "waiting-network" => "network source listener is configured but no producer samples have arrived",
+                "waiting-device-samples" => "local device source is configured but has not emitted a sample",
                 _ => "samples arriving",
             },
             buffers = matchingBuffers.Length,
             samples,
             latestTimestampNs = latest?.TimestampNs ?? 0L,
-            latestAgeMs = latest.HasValue
-                ? Math.Round(Math.Max(0.0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000.0 - latest.Value.TimestampNs) / 1_000_000.0), 1)
-                : Math.Round(elapsedMs, 1),
+            latestAgeMs,
             latestByteLength = latest?.ByteLength ?? 0,
         };
     }

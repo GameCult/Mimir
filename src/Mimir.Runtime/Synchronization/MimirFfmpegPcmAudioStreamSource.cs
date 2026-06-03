@@ -96,7 +96,7 @@ public sealed class MimirFfmpegPcmAudioStreamSource : IMimirStreamSource
                 offset += read;
             }
 
-            var timestampNs = StopwatchTicksToNs(Stopwatch.GetTimestamp());
+            var timestampNs = UtcNowNs();
             samples.Enqueue(new MimirStreamSample(
                 Descriptor.SourceId,
                 Descriptor.Kind,
@@ -137,10 +137,7 @@ public sealed class MimirFfmpegPcmAudioStreamSource : IMimirStreamSource
             _ => 0,
         };
 
-    private static long StopwatchTicksToNs(long ticks)
-    {
-        return checked((long)(ticks * (1_000_000_000.0 / Stopwatch.Frequency)));
-    }
+    private static long UtcNowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
 
     public void Dispose()
     {

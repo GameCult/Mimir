@@ -118,8 +118,8 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
 
         var timestampNs = frameEvent.TimestampNs > 0
             ? frameEvent.TimestampNs
-            : StopwatchTicksToNs(Stopwatch.GetTimestamp());
-        var arrivalNs = StopwatchTicksToNs(Stopwatch.GetTimestamp());
+            : UtcNowNs();
+        var arrivalNs = UtcNowNs();
         var byteLength = Math.Max(0, frameEvent.ByteLength);
         var payloadHandle = frameEvent.NativeHandle;
         var sampleKind = frameEvent.IsAudioBlock ? MimirStreamKind.Audio : Descriptor.Kind;
@@ -271,10 +271,7 @@ public sealed class MimirFrameEventProcessStreamSource : IMimirStreamSource
         };
     }
 
-    private static long StopwatchTicksToNs(long ticks)
-    {
-        return checked((long)(ticks * (1_000_000_000.0 / Stopwatch.Frequency)));
-    }
+    private static long UtcNowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
 
     public void Dispose()
     {
