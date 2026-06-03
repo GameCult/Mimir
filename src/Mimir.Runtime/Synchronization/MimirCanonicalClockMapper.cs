@@ -3,6 +3,7 @@ namespace Mimir.Runtime.Synchronization;
 public sealed class MimirCanonicalClockMapper
 {
     private const long MaxArrivalDriftBeforeRebaseNs = 10_000_000_000L;
+    private const long LocalEpochTimestampNs = 60_000_000_000L;
     private readonly Dictionary<string, ClockMap> maps = new(StringComparer.Ordinal);
 
     public IReadOnlyList<MimirCanonicalClockMapSnapshot> Snapshots =>
@@ -30,13 +31,17 @@ public sealed class MimirCanonicalClockMapper
         var key = $"{sample.Kind}:{sample.Origin}:{sample.SourceId}";
         if (!maps.TryGetValue(key, out var map))
         {
-            map = new ClockMap(checked(arrivalNs - sourceTimestampNs), sourceTimestampNs, arrivalNs);
+            var initialOffsetNs = LooksLikeLocalEpoch(sourceTimestampNs, arrivalNs)
+                ? 0L
+                : checked(arrivalNs - sourceTimestampNs);
+            map = new ClockMap(initialOffsetNs, sourceTimestampNs, arrivalNs);
             maps.Add(key, map);
         }
         else
         {
             var projectedArrivalNs = checked(sourceTimestampNs + map.OffsetNs);
-            if (Math.Abs(projectedArrivalNs - arrivalNs) > MaxArrivalDriftBeforeRebaseNs)
+            if (!LooksLikeLocalEpoch(sourceTimestampNs, arrivalNs) &&
+                Math.Abs(projectedArrivalNs - arrivalNs) > MaxArrivalDriftBeforeRebaseNs)
             {
                 map.OffsetNs = checked(arrivalNs - sourceTimestampNs);
             }
@@ -54,6 +59,11 @@ public sealed class MimirCanonicalClockMapper
     }
 
     private static long NowNs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
+
+    private static bool LooksLikeLocalEpoch(long sourceTimestampNs, long arrivalNs) =>
+        sourceTimestampNs > 0 &&
+        arrivalNs > 0 &&
+        Math.Abs(sourceTimestampNs - arrivalNs) <= LocalEpochTimestampNs;
 
     private sealed class ClockMap(long offsetNs, long firstSourceTimestampNs, long firstArrivalNs)
     {

@@ -56,6 +56,9 @@ public sealed record MimirSynchronizedBufferFrame(
 
 public sealed class MimirSynchronizedBufferPlanner
 {
+    private const long MaxInferredAudioGapNs = 250_000_000L;
+    private const long ReadyToleranceNs = 40_000_000L;
+
     public static IReadOnlyList<MimirSourceTimingCorrection> CorrectionsFromAudioStates(
         IEnumerable<MimirAudioSynchronizationState> states,
         IEnumerable<MimirRollingStreamBuffer>? buffers = null)
@@ -165,6 +168,11 @@ public sealed class MimirSynchronizedBufferPlanner
             var latest = buffer.Latest!.Value;
             return SampleCanonicalEndNs(latest, CorrectionFor(corrections, buffer.Descriptor));
         });
+        if (windowEndNs < windowStartNs)
+        {
+            windowStartNs = windowEndNs;
+        }
+
         var delayNs = checked((long)Math.Round(Math.Max(0.0, presentationDelay.TotalSeconds) * 1_000_000_000.0));
         var presentationTimeNs = Math.Clamp(windowEndNs - delayNs, windowStartNs, windowEndNs);
 
@@ -236,8 +244,11 @@ public sealed class MimirSynchronizedBufferPlanner
         long presentationTimeNs,
         MimirSourceTimingCorrection correction)
     {
-        var samples = buffer.Snapshot();
-        if (samples.Count == 0)
+        var samples = buffer.Snapshot()
+            .OrderBy(static sample => sample.TimestampNs)
+            .ThenBy(static sample => sample.Sequence)
+            .ToArray();
+        if (samples.Length == 0)
         {
             return new MimirSynchronizedStreamSlice(
                 buffer.Descriptor.SourceId,
@@ -259,14 +270,14 @@ public sealed class MimirSynchronizedBufferPlanner
         var bestIndex = -1;
         MimirSynchronizedSliceStatus status = MimirSynchronizedSliceStatus.Missing;
         long bestDistance = long.MaxValue;
-        for (var index = 0; index < samples.Count; index++)
+        for (var index = 0; index < samples.Length; index++)
         {
             var sample = samples[index];
             var previous = index > 0 ? samples[index - 1] : (MimirStreamSample?)null;
-            var next = index < samples.Count - 1 ? samples[index + 1] : (MimirStreamSample?)null;
+            var next = index < samples.Length - 1 ? samples[index + 1] : (MimirStreamSample?)null;
             var startNs = correction.ToCanonicalNs(sample.TimestampNs);
             var endNs = SampleCanonicalEndNs(sample, correction, previous, next);
-            if (presentationTimeNs >= startNs && presentationTimeNs < endNs)
+            if (presentationTimeNs >= startNs && presentationTimeNs <= endNs)
             {
                 best = sample;
                 bestIndex = index;
@@ -289,10 +300,15 @@ public sealed class MimirSynchronizedBufferPlanner
             }
         }
 
+        if (status != MimirSynchronizedSliceStatus.Missing && bestDistance <= ReadyToleranceNs)
+        {
+            status = MimirSynchronizedSliceStatus.Ready;
+        }
+
         var selected = best!.Value;
         var selectedStartNs = correction.ToCanonicalNs(selected.TimestampNs);
         var selectedPrevious = bestIndex > 0 ? samples[bestIndex - 1] : (MimirStreamSample?)null;
-        var selectedNext = bestIndex >= 0 && bestIndex < samples.Count - 1
+        var selectedNext = bestIndex >= 0 && bestIndex < samples.Length - 1
             ? samples[bestIndex + 1]
             : (MimirStreamSample?)null;
         var selectedEndNs = SampleCanonicalEndNs(selected, correction, selectedPrevious, selectedNext);
@@ -330,7 +346,26 @@ public sealed class MimirSynchronizedBufferPlanner
     {
         if (sample.AudioBlock is { SampleRate: > 0, FrameCount: > 0 } block)
         {
-            return checked((long)Math.Ceiling(block.FrameCount * 1_000_000_000.0 / block.SampleRate));
+            var blockDurationNs = checked((long)Math.Ceiling(block.FrameCount * 1_000_000_000.0 / block.SampleRate));
+            if (nextSample.HasValue && nextSample.Value.TimestampNs > sample.TimestampNs)
+            {
+                var nextGapNs = nextSample.Value.TimestampNs - sample.TimestampNs;
+                if (nextGapNs <= MaxInferredAudioGapNs)
+                {
+                    return Math.Max(blockDurationNs, nextGapNs);
+                }
+            }
+
+            if (previousSample.HasValue && sample.TimestampNs > previousSample.Value.TimestampNs)
+            {
+                var previousGapNs = sample.TimestampNs - previousSample.Value.TimestampNs;
+                if (previousGapNs <= MaxInferredAudioGapNs)
+                {
+                    return Math.Max(blockDurationNs, previousGapNs);
+                }
+            }
+
+            return blockDurationNs;
         }
 
         if (sample.VideoFrame is not null)

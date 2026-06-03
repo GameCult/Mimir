@@ -277,6 +277,8 @@ internal sealed class MimirWellLatencyController
             ? 0.0
             : hub.AudioSynchronizationStates.Average(static state => Math.Clamp(state.Confidence, 0.0, 1.0));
         var previousReady = lastFrame?.Frame.Slices.Count(static slice => slice.Status == MimirSynchronizedSliceStatus.Ready) ?? 0;
+        var previousFuture = lastFrame?.Frame.Slices.Count(static slice => slice.Status == MimirSynchronizedSliceStatus.FutureSampleOnly) ?? 0;
+        var previousMissing = lastFrame?.Frame.Slices.Count(static slice => slice.Status == MimirSynchronizedSliceStatus.Missing) ?? 0;
         var previousTotal = lastFrame?.Frame.Slices.Count ?? 0;
         var readiness = previousTotal == 0 ? 0.0 : previousReady / (double)previousTotal;
 
@@ -304,6 +306,11 @@ internal sealed class MimirWellLatencyController
         {
             target += TimeSpan.FromMilliseconds(options.LatencyStepMs * Math.Max(1, degradedStreak));
             reason = "backoff-after-incomplete-frame";
+        }
+        else if (previousFuture > 0 && previousMissing == 0)
+        {
+            target -= TimeSpan.FromMilliseconds(options.LatencyStepMs * Math.Max(1, completeStreak / Math.Max(1, options.LatencyConvergenceFrames)));
+            reason = "chase-future-samples";
         }
         else if (completeStreak >= Math.Max(1, options.LatencyConvergenceFrames) && readiness >= options.LatencyReadinessTarget)
         {

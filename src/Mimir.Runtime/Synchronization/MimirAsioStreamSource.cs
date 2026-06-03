@@ -108,6 +108,8 @@ public sealed class MimirAsioStreamSource : IMimirMultiplexedStreamSource
 
             started.Set();
             var sampleBuffer = new float[Math.Max(1, maxFrames)];
+            long firstDeviceTimestampNs = 0;
+            long firstCanonicalEndNs = 0;
             while (!cancellation.IsCancellationRequested)
             {
                 if (!Native.Read(
@@ -131,12 +133,23 @@ public sealed class MimirAsioStreamSource : IMimirMultiplexedStreamSource
                 var sourceId = channel < sourceIds.Length ? sourceIds[channel] : $"asio-ch{channel}";
                 var bytes = new byte[frameCount * sizeof(float)];
                 var arrivalNs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
+                var durationNs = checked((long)Math.Ceiling(frameCount * 1_000_000_000.0 / Math.Max(1, sampleRate)));
+                if (timestampNs > 0 && firstDeviceTimestampNs == 0)
+                {
+                    firstDeviceTimestampNs = timestampNs;
+                    firstCanonicalEndNs = arrivalNs;
+                }
+
+                var endNs = timestampNs > 0 && firstDeviceTimestampNs > 0
+                    ? checked(firstCanonicalEndNs + (timestampNs - firstDeviceTimestampNs))
+                    : arrivalNs;
+                var startNs = Math.Max(0, endNs - durationNs);
                 MemoryMarshal.AsBytes(sampleBuffer.AsSpan(0, frameCount)).CopyTo(bytes);
                 samples.Enqueue(new MimirStreamSample(
                     sourceId,
                     MimirStreamKind.Audio,
                     Descriptor.Origin,
-                    arrivalNs,
+                    startNs,
                     arrivalNs,
                     sequence,
                     0,
