@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import datetime as dt
 import json
 import statistics
 import struct
@@ -66,19 +67,56 @@ def percentile(values: list[float], rank: float) -> float:
     return ordered[index]
 
 
-def summarize_well(path: Path) -> dict[str, Any]:
-    wells: list[dict[str, Any]] = []
+def maybe_mean(values: list[float]) -> float | None:
+    return statistics.mean(values) if values else None
+
+
+def full_frame_rate(values: list[float]) -> float | None:
+    return sum(1 for ratio in values if ratio == 1.0) / len(values) if values else None
+
+
+def parse_wall_clock(value: Any) -> dt.datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def latest_monotonic_well_run(wells: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    suffix: list[dict[str, Any]] = []
+    previous: float | None = None
+    for item in wells:
+        sequence = number(item.get("sequence"), -1.0)
+        if previous is not None and sequence < previous:
+            suffix = []
+        suffix.append(item)
+        previous = sequence
+    return suffix
+
+
+def summarize_well(path: Path, all_runs: bool = False) -> dict[str, Any]:
+    rows = list(load_jsonl(path))
+    all_wells = [item for item in rows if item.get("document") == "mimir.well_snapshot.v1"]
+    wells = all_wells if all_runs else latest_monotonic_well_run(all_wells)
+    run_start = parse_wall_clock(wells[0].get("wallClockUtc")) if wells else None
     capture_pages = 0
     stream_frames = 0
     body_statuses: collections.Counter[str] = collections.Counter()
     body_bytes: list[float] = []
     capture_sample_counts: list[float] = []
 
-    for item in load_jsonl(path):
+    for item in rows:
+        if run_start is not None:
+            item_wall = parse_wall_clock(item.get("wallClockUtc"))
+            if item_wall is None or item_wall < run_start:
+                continue
         document = item.get("document")
-        if document == "mimir.well_snapshot.v1":
-            wells.append(item)
-        elif document == "mimir.well_capture_page.v1":
+        if document == "mimir.well_capture_page.v1":
             capture_pages += 1
             samples = item.get("samples") if isinstance(item.get("samples"), list) else []
             capture_sample_counts.append(float(len(samples)))
@@ -98,7 +136,7 @@ def summarize_well(path: Path) -> dict[str, Any]:
     edge_skews_after_120: list[float] = []
     statuses_after_120: collections.Counter[str] = collections.Counter()
     per_source_after_120: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
-    delays: set[float] = set()
+    delays: list[float] = []
 
     for item in wells:
         elapsed = number(item.get("elapsedSeconds"))
@@ -106,7 +144,7 @@ def summarize_well(path: Path) -> dict[str, Any]:
         slices = frame.get("slices") if isinstance(frame.get("slices"), list) else []
         delay = number(field(frame, "PresentationDelayMs", "presentationDelayMs"))
         if delay:
-            delays.add(delay)
+            delays.append(delay)
         if slices:
             ready = sum(1 for slice_item in slices if field(slice_item, "Status", "status") == "Ready")
             ratio = ready / len(slices)
@@ -141,19 +179,31 @@ def summarize_well(path: Path) -> dict[str, Any]:
     visual = last.get("visualCalibration", {}).get("cameras", [])
 
     return {
+        "runMode": "all-runs" if all_runs else "latest-monotonic-run",
+        "allWellSnapshots": len(all_wells),
         "wellSnapshots": len(wells),
         "capturePages": capture_pages,
         "streamFrames": stream_frames,
         "lastSequence": last.get("sequence", 0),
         "lastElapsedSeconds": number(last.get("elapsedSeconds")),
         "ingestedSamples": number(last.get("ingestedSamples")),
-        "presentationDelaysMs": sorted(delays),
+        "presentationDelayMs": {
+            "samples": len(delays),
+            "last": delays[-1] if delays else 0.0,
+            "min": min(delays) if delays else 0.0,
+            "median": statistics.median(delays) if delays else 0.0,
+            "p95": percentile(delays, 0.95),
+            "max": max(delays) if delays else 0.0,
+            "recent": delays[-12:],
+        },
         "readiness": {
             "allMean": statistics.mean([ratio for _, ratio in readiness_all]) if readiness_all else 0.0,
-            "after120Mean": statistics.mean(readiness_after_120) if readiness_after_120 else 0.0,
-            "after300Mean": statistics.mean(readiness_after_300) if readiness_after_300 else 0.0,
-            "after120FullFrameRate": sum(1 for ratio in readiness_after_120 if ratio == 1.0) / len(readiness_after_120) if readiness_after_120 else 0.0,
-            "after300FullFrameRate": sum(1 for ratio in readiness_after_300 if ratio == 1.0) / len(readiness_after_300) if readiness_after_300 else 0.0,
+            "after120Samples": len(readiness_after_120),
+            "after120Mean": maybe_mean(readiness_after_120),
+            "after300Samples": len(readiness_after_300),
+            "after300Mean": maybe_mean(readiness_after_300),
+            "after120FullFrameRate": full_frame_rate(readiness_after_120),
+            "after300FullFrameRate": full_frame_rate(readiness_after_300),
             "statusesAfter120": dict(statuses_after_120),
             "perSourceAfter120": {key: dict(value) for key, value in sorted(per_source_after_120.items())},
         },
@@ -375,7 +425,8 @@ def hypotheses(summary: dict[str, Any]) -> list[str]:
     readiness = summary["readiness"]
     overlap = summary["overlapAfter120Ms"]
     pressure = summary["streamPressure"]
-    if readiness["after300FullFrameRate"] >= 0.95:
+    after300_full_frame_rate = readiness.get("after300FullFrameRate")
+    if isinstance(after300_full_frame_rate, (int, float)) and after300_full_frame_rate >= 0.95:
         result.append(
             "After warm-up, frame readiness is high; fixed 2500 ms delay should be reduced by an adaptive controller until misses reappear."
         )
@@ -403,10 +454,11 @@ def main() -> int:
     parser.add_argument("--paired-pulse-max-led-error-ms", type=float, default=5.0)
     parser.add_argument("--fail-on-paired-pulse-error", action="store_true")
     parser.add_argument("--move-tail-bytes", type=int, default=4 * 1024 * 1024)
+    parser.add_argument("--all-runs", action="store_true", help="Summarize the full ledger instead of the latest monotonic Well sequence.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    summary = summarize_well(args.well_log)
+    summary = summarize_well(args.well_log, all_runs=args.all_runs)
     move = summarize_move(args.move_log, args.move_tail_bytes)
     paired_pulses = summarize_paired_pulses(args.paired_pulse_log, args.paired_pulse_max_led_error_ms)
     output = {
@@ -421,7 +473,7 @@ def main() -> int:
 
     print(f"Well snapshots: {summary['wellSnapshots']} capturePages: {summary['capturePages']} streamFrames: {summary['streamFrames']}")
     print(f"Last seq: {summary['lastSequence']} elapsed: {summary['lastElapsedSeconds']:.1f}s ingested: {summary['ingestedSamples']:.0f}")
-    print(f"Presentation delays ms: {summary['presentationDelaysMs']}")
+    print(f"Presentation delay ms: {summary['presentationDelayMs']}")
     print("Readiness:")
     for key, value in summary["readiness"].items():
         print(f"  {key}: {value}")
