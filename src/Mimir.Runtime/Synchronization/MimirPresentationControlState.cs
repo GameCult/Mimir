@@ -87,6 +87,10 @@ public sealed class MimirVideoPresentationControl
 
     public bool Enabled { get; set; } = true;
 
+    public bool Available { get; private set; }
+
+    public long SampleCount { get; private set; }
+
     public bool Solo { get; set; }
 
     public float Opacity { get; set; } = 1.0f;
@@ -99,6 +103,12 @@ public sealed class MimirVideoPresentationControl
         {
             DisplayName = displayName;
         }
+    }
+
+    public void RefreshAvailability(bool available, long sampleCount)
+    {
+        Available = available;
+        SampleCount = Math.Max(0, sampleCount);
     }
 }
 
@@ -116,6 +126,10 @@ public sealed class MimirAudioPresentationControl
 
     public bool Muted { get; set; }
 
+    public bool Available { get; private set; }
+
+    public long SampleCount { get; private set; }
+
     public bool Solo { get; set; }
 
     public float Gain { get; set; } = 1.0f;
@@ -126,6 +140,12 @@ public sealed class MimirAudioPresentationControl
         {
             DisplayName = displayName;
         }
+    }
+
+    public void RefreshAvailability(bool available, long sampleCount)
+    {
+        Available = available;
+        SampleCount = Math.Max(0, sampleCount);
     }
 }
 
@@ -186,6 +206,7 @@ public sealed class MimirPresentationControlState
                 }
 
                 control.RefreshLabel(buffer.Descriptor.Label);
+                control.RefreshAvailability(buffer.Latest.HasValue, buffer.Count);
                 continue;
             }
 
@@ -198,6 +219,7 @@ public sealed class MimirPresentationControlState
                 }
 
                 control.RefreshLabel(buffer.Descriptor.Label);
+                control.RefreshAvailability(buffer.Latest.HasValue, buffer.Count);
             }
         }
 
@@ -213,7 +235,7 @@ public sealed class MimirPresentationControlState
         }
 
         var hasSolo = video.Values.Any(feed => feed.Solo);
-        return hasSolo ? control.Solo : control.Enabled;
+        return control.Available && (hasSolo ? control.Solo : control.Enabled);
     }
 
     public float VideoOpacity(string sourceId) =>

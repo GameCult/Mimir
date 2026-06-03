@@ -1220,7 +1220,10 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         var frame = placement is { } value
             ? $"{value.CenterX:0.00},{value.CenterY:0.00} {value.Width:0.00}x{value.Height:0.00}"
             : "unplaced";
-        return $"{(selected ? "* " : "  ")}{feed.Layer + 1}. {feed.DisplayName} {frame}";
+        var status = feed.Available
+            ? presentationControls.IncludesVideo(feed.SourceId) ? "live" : "hidden"
+            : "waiting";
+        return $"{(selected ? "* " : "  ")}{feed.Layer + 1}. {feed.DisplayName} {status} {frame}";
     }
 
     private void SetSelectedVideoVisible(bool visible)
@@ -1373,7 +1376,9 @@ public sealed class MimirRuntime : IAquariumRuntime, IAquariumRuntimeServicesRec
         var active = feeds
             .Where(feed => presentationControls.IncludesVideo(feed.SourceId))
             .Select(feed => $"{feed.Layer + 1}:{feed.SourceId}@{feed.Opacity:0.00}");
-        return string.Join(" | ", active.DefaultIfEmpty("black"));
+        var waiting = feeds.Count(feed => !feed.Available);
+        var summary = string.Join(" | ", active.DefaultIfEmpty("black"));
+        return waiting == 0 ? summary : $"{summary} / waiting {waiting}";
     }
 
     private string DescribeProgramAudio()
