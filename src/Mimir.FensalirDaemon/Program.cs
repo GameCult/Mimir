@@ -1355,7 +1355,22 @@ internal static class FensalirDaemonObserver
                     return new ObservedDaemonStatus(id, name, pid, "stale-pid", $"{pidFile} now belongs to {processName}");
                 }
 
-                return new ObservedDaemonStatus(id, name, pid, "online", $"{pidFile} {processName}");
+                var detail = $"{pidFile} {processName}";
+                if (id == "move-sync")
+                {
+                    var trace = MoveTraceDetail(runDir);
+                    if (!string.IsNullOrWhiteSpace(trace.Detail))
+                    {
+                        detail = $"{detail}; {trace.Detail}";
+                    }
+
+                    if (trace.WaitingForFrames)
+                    {
+                        return new ObservedDaemonStatus(id, name, pid, "waiting", detail);
+                    }
+                }
+
+                return new ObservedDaemonStatus(id, name, pid, "online", detail);
             }
             catch (ArgumentException)
             {
@@ -1368,6 +1383,24 @@ internal static class FensalirDaemonObserver
         }
 
         return new ObservedDaemonStatus(id, name, 0, "missing", "no pid file");
+    }
+
+    private static (bool WaitingForFrames, string Detail) MoveTraceDetail(string runDir)
+    {
+        var path = Path.Combine(runDir, "move-sync", "online-sync.jsonl");
+        if (!File.Exists(path))
+        {
+            return (true, "trace missing");
+        }
+
+        var info = new FileInfo(path);
+        if (info.Length <= 0)
+        {
+            return (true, "trace empty");
+        }
+
+        var age = DateTimeOffset.Now - info.LastWriteTime;
+        return (false, $"trace bytes={info.Length} age={age.TotalSeconds:0}s");
     }
 }
 
