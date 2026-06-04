@@ -73,11 +73,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-fensalir-daemon.ps1
 ```
 
 The launcher writes a supervisor manifest under
-`artifacts/runtime/fensalir-daemon-*` with provider specs:
+`artifacts/runtime/fensalir-daemon-*` with a semantic provider spec and bridge
+routes:
 
 ```text
-mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:8799/eve/deck
-mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:8799/eve/deck/cultmesh
+mimir-fensalir-daemon|Mimir Fensalir Daemon|asgard.starfire.mimir-fensalir/eve/tui
+bridge: ws://127.0.0.1:8799/eve/deck
+bridge: ws://127.0.0.1:8799/eve/deck/cultmesh
 ```
 
 The current worker mode is `surface-owner-installed`: kernel scheduling,

@@ -10,6 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
+$rootVerse = "asgard"
+$locatedService = "$rootVerse.starfire.mimir"
+$cultMeshAddress = "$locatedService/periwinkle/eve/tui"
 $logDir = Join-Path $repo "artifacts\runtime\mvp-leap-eyes-kiyo"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -94,5 +97,7 @@ if ($Headless) {
 }
 
 Write-Host "MIMIR_RUNTIME_CONFIG=$ConfigPath"
+Write-Host "CultMesh address: $cultMeshAddress"
+Write-Host "Bridge route: $WitnessUrl"
 Write-Host "Starting MVP: Starfire Leap + Kiyo Pro, Nightwing Eye/Move witness claims"
 dotnet @args

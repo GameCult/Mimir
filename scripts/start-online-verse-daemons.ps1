@@ -24,6 +24,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
+$rootVerse = "asgard"
+$locatedMimir = "$rootVerse.starfire.mimir"
+$locatedFensalir = "$rootVerse.starfire.mimir-fensalir"
+$periwinkleTui = "$locatedMimir/periwinkle/eve/tui"
+$periwinkleGui = "$locatedMimir/periwinkle/eve/gui"
 $runId = Get-Date -Format "yyyyMMdd-HHmmss"
 $runDir = Join-Path $repo "artifacts\runtime\online-verse-daemons-$runId"
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
@@ -99,6 +104,16 @@ $manifest = [ordered]@{
     kind = "mimir.online_verse_daemon_supervisor.v1"
     runId = $runId
     runDir = $runDir
+    rootVerse = $rootVerse
+    canonicalService = "$rootVerse.mimir"
+    locatedService = $locatedMimir
+    cultMeshAddress = $periwinkleTui
+    endpoints = @($periwinkleTui, $periwinkleGui)
+    routes = @(
+        [ordered]@{ kind = "websocket-bridge"; address = $WitnessUrl; carries = $periwinkleTui; note = "Nightwing witness bridge route; not service identity." },
+        [ordered]@{ kind = "websocket-bridge"; address = $SubscribeUrl; carries = $periwinkleTui; note = "Recorder subscription bridge route; not service identity." },
+        [ordered]@{ kind = "websocket-bridge"; address = $WellPublishUrl; carries = $periwinkleTui; note = "Well publication bridge route; not service identity." }
+    )
     witnessUrl = $WitnessUrl
     subscribeUrl = $SubscribeUrl
     wellPublishUrl = $WellPublishUrl
@@ -186,7 +201,9 @@ if (-not $SkipFensalir) {
         $manifest.processes["fensalirDaemonPid"] = $fensalir.Id
         $manifest.processes["fensalirWellLog"] = $fensalirWellLog
         $manifest.processes["fensalirCultCache"] = $fensalirCache
-        $manifest.processes["fensalirProviderSpec"] = "mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:$FensalirPort/eve/deck"
+        $manifest.processes["fensalirProviderSpec"] = "mimir-fensalir-daemon|Mimir Fensalir Daemon|$locatedFensalir/eve/tui"
+        $manifest.processes["fensalirGui"] = "$locatedFensalir/eve/gui"
+        $manifest.processes["fensalirBridgeRoute"] = "ws://127.0.0.1:$FensalirPort/eve/deck"
         Wait-HttpHealth -Url "http://127.0.0.1:$FensalirPort/health"
     }
 }

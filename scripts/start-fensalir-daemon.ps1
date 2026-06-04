@@ -46,6 +46,11 @@ $stdout = Join-Path $runDir "fensalir-daemon.out.log"
 $stderr = Join-Path $runDir "fensalir-daemon.err.log"
 $manifest = Join-Path $runDir "supervisor.json"
 $dll = Join-Path $repo "src\Mimir.FensalirDaemon\bin\Debug\net10.0\Mimir.FensalirDaemon.dll"
+$rootVerse = "asgard"
+$locatedService = "$rootVerse.starfire.mimir-fensalir"
+$tuiAddress = "$locatedService/eve/tui"
+$guiAddress = "$locatedService/eve/gui"
+$bridgeRoute = "ws://127.0.0.1:$Port/eve/deck"
 
 $arguments = @(
     $dll,
@@ -76,8 +81,16 @@ $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -WorkingDir
     maxReservoirQueue = $MaxReservoirQueue
     wellLog = $WellLog
     cultCache = $CultCache
-    providerSpec = "mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:$Port/eve/deck"
-    cultMeshProviderSpec = "mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:$Port/eve/deck/cultmesh"
+    rootVerse = $rootVerse
+    canonicalService = "$rootVerse.mimir-fensalir"
+    locatedService = $locatedService
+    cultMeshAddress = $tuiAddress
+    providerSpec = "mimir-fensalir-daemon|Mimir Fensalir Daemon|$tuiAddress"
+    endpoints = @($tuiAddress, $guiAddress)
+    routes = @(
+        [ordered]@{ kind = "websocket-bridge"; address = $bridgeRoute; carries = $tuiAddress; note = "Fensalir Eve deck bridge route; not service identity." },
+        [ordered]@{ kind = "websocket-bridge"; address = "$bridgeRoute/cultmesh"; carries = $tuiAddress; note = "Legacy CultMesh bridge route; not service identity." }
+    )
     stdout = $stdout
     stderr = $stderr
     started = (Get-Date).ToString("o")
@@ -85,5 +98,6 @@ $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -WorkingDir
 
 Write-Host "Started Mimir.FensalirDaemon PID $($process.Id)"
 Write-Host "Health: http://127.0.0.1:$Port/health"
-Write-Host "Eve provider: mimir-fensalir-daemon|Mimir Fensalir Daemon|ws://127.0.0.1:$Port/eve/deck"
+Write-Host "Eve provider: mimir-fensalir-daemon|Mimir Fensalir Daemon|$tuiAddress"
+Write-Host "Bridge route: $bridgeRoute"
 Write-Host "Manifest: $manifest"

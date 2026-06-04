@@ -31,9 +31,9 @@ own final composition or run remote UI code.
   require Starfire to render every camera feed for the iPad.
 - CultMesh line: dashboard manifests and states now have typed
   `mimir.eve_dashboard_manifest.v1` and `mimir.eve_dashboard_state.v1`
-  document shapes. The live iPad lane remains WebSocket/TCP because it is the
-  proven transport and works over SSH tunnels; CultMesh should mirror compact
-  state where the local mesh substrate is available.
+  document shapes. Semantic provider identities use
+  `asgard.starfire.mimir/...`; the live iPad lane remains a WebSocket bridge
+  until the dashboard broker subscribes over CultNet reliable UDP directly.
 
 ## Runtime
 
@@ -43,13 +43,20 @@ Start the dashboard server:
 dotnet run --project .\src\Mimir.EveDashboard\Mimir.EveDashboard.csproj -- --port 8795
 ```
 
-EveCanvas connects to:
+Canonical surface addresses:
+
+```text
+asgard.starfire.mimir/eve/tui
+asgard.starfire.mimir/eve/gui
+```
+
+EveCanvas currently connects through this bridge route:
 
 ```text
 ws://192.168.1.66:8795/eve/deck
 ```
 
-Periwinkle's Android Eve client uses the binary CultMesh lane:
+Periwinkle's Android Eve client currently uses this bridge route:
 
 ```text
 ws://192.168.1.66:8795/eve/deck/cultmesh
@@ -76,8 +83,11 @@ Extra providers can be registered at launch:
 dotnet run --project .\src\Mimir.EveDashboard\Mimir.EveDashboard.csproj -- `
   --port 8795 `
   --voidbot-swarm-state "E:\Projects\VoidBot\.voidbot\status\swarm-state.json" `
-  --provider "app.id|App Title|ws://127.0.0.1:14000/eve/deck"
+  --provider "app.id|App Title|asgard.starfire.app/eve/tui"
 ```
+
+If a provider still needs a WebSocket bridge, list it in the provider
+advertisement or supervisor manifest as a route, not as the provider address.
 
 ## Current State
 
