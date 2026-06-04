@@ -32,8 +32,9 @@ own final composition or run remote UI code.
 - CultMesh line: dashboard manifests and states now have typed
   `mimir.eve_dashboard_manifest.v1` and `mimir.eve_dashboard_state.v1`
   document shapes. Semantic provider identities use
-  `asgard.starfire.mimir/...`; the live iPad lane remains a WebSocket bridge
-  until the dashboard broker subscribes over CultNet reliable UDP directly.
+  `asgard.starfire.mimir/...`; the broker publishes dashboard state through
+  CultNet reliable UDP for native subscribers. WebSocket endpoints remain
+  renderer compatibility bridges.
 
 ## Runtime
 
@@ -48,6 +49,14 @@ Canonical surface addresses:
 ```text
 asgard.starfire.mimir/eve/tui
 asgard.starfire.mimir/eve/gui
+```
+
+Native CultNet route for typed dashboard state:
+
+```text
+cultnet://192.168.1.66:3075
+schema: mimir.eve_dashboard_state.v1
+record: eve.dashboard.broker
 ```
 
 EveCanvas currently connects through this bridge route:

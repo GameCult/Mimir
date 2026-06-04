@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\CultLib\src\GameCult.Caching.MessagePack\GameCult.Caching.MessagePack.csproj" />
+    <ProjectReference Include="..\..\..\CultLib\src\GameCult.Mesh\GameCult.Mesh.csproj" />
     <ProjectReference Include="..\Mimir.Runtime\Mimir.Runtime.csproj" />
   </ItemGroup>
 

@@ -6,15 +6,21 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GameCult.Caching;
+using GameCult.Mesh;
+using GameCult.Networking;
 using MessagePack;
 using Mimir.Runtime.Synchronization;
 
 var port = ParseInt(args, "--port", 8795);
+var cultNetPort = ParseInt(args, "--cultnet-port", 3075);
+var cultNetCachePath = ParseString(args, "--cultnet-cache", @"E:\Projects\Mimir\state\eve-dashboard-cultnet.ccmp");
 var voidBotSwarmStatePath = ParseString(args, "--voidbot-swarm-state", @"E:\Projects\VoidBot\.voidbot\status\swarm-state.json");
 var mimirTelemetryLogPath = ParseString(args, "--mimir-telemetry-log", "");
 var mimirObservationLogPath = ParseString(args, "--mimir-observation-log", @"E:\Projects\Mimir\artifacts\runtime\periwinkle-cultmesh-sensors.out.log");
 var providers = EveDashboardProviderCatalog.Create(ParseProviderSpecs(args), voidBotSwarmStatePath, mimirTelemetryLogPath, mimirObservationLogPath);
-using var server = new EveDashboardServer(port, providers);
+using var cultNetPublisher = await EveDashboardCultNetPublisher.StartAsync(cultNetCachePath, cultNetPort).ConfigureAwait(false);
+using var server = new EveDashboardServer(port, providers, cultNetPublisher);
 await server.RunAsync();
 
 static int ParseInt(IReadOnlyList<string> args, string name, int fallback)
@@ -59,7 +65,7 @@ static string ParseString(IReadOnlyList<string> args, string name, string fallba
     return fallback;
 }
 
-internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog providers) : IDisposable
+internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog providers, EveDashboardCultNetPublisher cultNetPublisher) : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -76,6 +82,7 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
     {
         listener.Start();
         Console.WriteLine($"Mimir Eve dashboard broker listening on ws://0.0.0.0:{port}/eve/deck");
+        Console.WriteLine($"Mimir Eve dashboard CultNet publisher listening on cultnet://0.0.0.0:{cultNetPublisher.Port}");
         Console.WriteLine($"Compatibility endpoint remains ws://0.0.0.0:{port}/eve/dashboard");
         _ = Task.Run(BroadcastHeartbeatAsync);
         while (!stopping.IsCancellationRequested)
@@ -90,6 +97,7 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
         while (!stopping.IsCancellationRequested && await timer.WaitForNextTickAsync(stopping.Token).ConfigureAwait(false))
         {
+            await PublishCultNetStateAsync().ConfigureAwait(false);
             if (clients.IsEmpty)
             {
                 continue;
@@ -307,36 +315,44 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         var state = providers.Get(activeProviderId).State;
         if (socket.CultMeshBinary)
         {
-            var document = new MimirEveDashboardStateDocument(
-                state.ProviderId,
-                state.Title,
-                state.Version,
-                state.UpdatedAt.ToString("O"),
-                state.SelectedNodeId,
-                state.LutPreset,
-                state.Nodes.Select(static node => new MimirEveDashboardNodeSnapshot(
-                    node.Id,
-                    node.Label,
-                    node.Kind,
-                    node.Visible,
-                    node.X,
-                    node.Y,
-                    node.Z,
-                    node.Rotation,
-                    node.Scale,
-                    node.Width,
-                    node.Height,
-                    node.Health,
-                    node.ProviderId,
-                    node.Command,
-                    node.Endpoint)).ToArray(),
-                ToCultMeshSurface(state.Surface));
-            await SendBinaryFrameAsync(socket.Stream, MessagePackSerializer.Serialize(document)).ConfigureAwait(false);
+            await SendBinaryFrameAsync(socket.Stream, MessagePackSerializer.Serialize(ToCultMeshState(state))).ConfigureAwait(false);
             return;
         }
 
         await SendTextFrameAsync(socket.Stream, JsonSerializer.Serialize(state, JsonOptions)).ConfigureAwait(false);
     }
+
+    private Task PublishCultNetStateAsync()
+    {
+        var state = providers.Get(activeProviderId).State;
+        return cultNetPublisher.PublishAsync(ToCultMeshState(state), stopping.Token);
+    }
+
+    private static MimirEveDashboardStateDocument ToCultMeshState(DashboardState state) =>
+        new(
+            state.ProviderId,
+            state.Title,
+            state.Version,
+            state.UpdatedAt.ToString("O"),
+            state.SelectedNodeId,
+            state.LutPreset,
+            state.Nodes.Select(static node => new MimirEveDashboardNodeSnapshot(
+                node.Id,
+                node.Label,
+                node.Kind,
+                node.Visible,
+                node.X,
+                node.Y,
+                node.Z,
+                node.Rotation,
+                node.Scale,
+                node.Width,
+                node.Height,
+                node.Health,
+                node.ProviderId,
+                node.Command,
+                node.Endpoint)).ToArray(),
+            ToCultMeshSurface(state.Surface));
 
     private static MimirEveDashboardSurfaceSnapshot? ToCultMeshSurface(DashboardSurface? surface)
     {
@@ -609,6 +625,56 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         listener.Stop();
         stopping.Dispose();
     }
+}
+
+internal sealed class EveDashboardCultNetPublisher : IDisposable
+{
+    private static readonly CultRecordKey StateRecordKey = new("eve.dashboard.broker");
+    private readonly CultMeshNode node;
+
+    private EveDashboardCultNetPublisher(CultMeshNode node, int port)
+    {
+        this.node = node;
+        Port = port;
+    }
+
+    public int Port { get; }
+
+    public static async Task<EveDashboardCultNetPublisher> StartAsync(string cachePath, int port)
+    {
+        if (port != 3075)
+        {
+            throw new ArgumentOutOfRangeException(nameof(port), port, "CultNet Server currently listens on the runtime default port 3075.");
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(cachePath)) ?? ".");
+        var documents = new CultNetDocumentRegistry()
+            .Register(CultNetDocumentBinding.ForDocument<MimirEveDashboardStateDocument>());
+        var node = await CultMesh.CreateNodeAsync(cachePath, new CultMeshNodeOptions
+        {
+            StartServer = true,
+            DatabaseOptions = new CultNetDatabaseOptions
+            {
+                RuntimeId = "mimir.eve-dashboard",
+                DocumentRegistry = documents,
+            },
+        }).ConfigureAwait(false);
+
+        return new EveDashboardCultNetPublisher(node, port);
+    }
+
+    public async Task PublishAsync(MimirEveDashboardStateDocument document, CancellationToken stopping)
+    {
+        await node.Database.PutAsync(new CultRecordKey(document.ProviderId), document).ConfigureAwait(false);
+        if (!string.Equals(document.ProviderId, StateRecordKey.Value, StringComparison.Ordinal))
+        {
+            await node.Database.PutAsync(StateRecordKey, document).ConfigureAwait(false);
+        }
+
+        await node.FlushAsync(soft: true).ConfigureAwait(false);
+    }
+
+    public void Dispose() => node.Dispose();
 }
 
 internal sealed class EveDashboardProviderCatalog
