@@ -647,7 +647,6 @@ internal sealed class EveDashboardProviderCatalog
         var remoteProviders = remoteSpecs.Select(RemoteDashboardProvider.FromSpec).OfType<RemoteDashboardProvider>().ToArray();
         providers.Add(new DashboardBrokerProvider(remoteProviders));
         providers.Add(new MimirLiveStatsProvider(mimirTelemetryLogPath, mimirObservationLogPath));
-        providers.Add(new MimirStreamLayoutProvider());
         providers.Add(new VoidBotSwarmProvider(voidBotSwarmStatePath));
         providers.Add(new YggdrasilStreamPixelsProvider());
         providers.AddRange(remoteProviders);
@@ -892,41 +891,38 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
     private static DashboardSurface BuildSurface(MimirLiveStatsSnapshot snapshot, double confidence, double rms, int liveObservationCount)
     {
         var pulse = Pulse();
+        var well = snapshot.Well;
+        var liveRatio = snapshot.ObservationStreams.Count == 0 ? 0.0 : liveObservationCount / (double)snapshot.ObservationStreams.Count;
+        var staleStreams = snapshot.ObservationStreams.Count(static stream => stream.State != "active");
+        var sourceDropouts = well == null ? 0 : Math.Max(0, well.ConfiguredSources - well.LiveSources) + well.SourceErrorCount + well.SourceHealth.Count(static source => source.Status != "live");
+        var throughputScore = well == null
+            ? Math.Clamp(snapshot.Telemetry?.Ingested / 120.0 ?? 0.0, 0.0, 1.0)
+            : Math.Clamp((well.PublishedBytes / 262_144.0) / Math.Max(1.0, well.PublishAverageMs + well.PollAverageMs), 0.0, 1.0);
+        var latencyScore = well == null ? 0.0 : Math.Clamp(1.0 - (well.LatencyCurrentMs / Math.Max(1.0, well.LatencyCeilingMs)), 0.0, 1.0);
+        var dropoutScore = Math.Clamp(1.0 - ((sourceDropouts + staleStreams) / Math.Max(1.0, (well?.ConfiguredSources ?? 0) + snapshot.ObservationStreams.Count)), 0.0, 1.0);
         var children = new List<DashboardUiElement>
         {
-            UiElement.Container(
-                "mimir-live-row-overview",
-                "row",
-                new DashboardUiLayout { Direction = "horizontal", Gap = 8 },
-                [
-                    UiElement.Pane("mimir-live-overview", "Mimir Live Stats", [
+            UiElement.Pane("mimir-sync-signal", "Sync", [
                 UiElement.Text("mimir-live-summary", $"{pulse} {snapshot.Summary}", "strong"),
-                UiElement.Text("mimir-live-sources", $"telemetry: {snapshot.TelemetrySource}\nobservations: {snapshot.ObservationSource}", "caption"),
-                StatBar("tracking-confidence", "tracking confidence", confidence, "cool"),
-                StatBar("audio-rms", "max channel RMS", NormalizeRms(rms), "warm", $"{rms:0.000000}"),
-                StatBar("observation-liveness", "device stream liveness", snapshot.ObservationStreams.Count == 0 ? 0.0 : liveObservationCount / (double)snapshot.ObservationStreams.Count, "cool"),
-                    ]),
-                    BuildWellPane(snapshot.Well),
-                    BuildMoveMusicPane(snapshot.MoveMusic),
-                ]),
-            UiElement.Container(
-                "mimir-live-row-runtime",
-                "row",
-                new DashboardUiLayout { Direction = "horizontal", Gap = 8 },
-                [
-                    BuildAudioPane(snapshot.Spectra, snapshot.Well),
-                    BuildSyncPane(snapshot),
-                    BuildVideoPane(snapshot),
-                ]),
-            UiElement.Container(
-                "mimir-live-row-witness",
-                "row",
-                new DashboardUiLayout { Direction = "horizontal", Gap = 8 },
-                [
-                    BuildObservationPane(snapshot.ObservationStreams),
-                    BuildActuatorPane(snapshot.ActuatorCommands),
-                    BuildCalibrationPane(snapshot),
-                ]),
+                StatBar("tracking-confidence", "confidence", confidence, ToneFor(confidence), $"{confidence:0.000}"),
+                UiElement.Text("mimir-sync-counts", $"states {snapshot.SyncStates.Count} reports {snapshot.SyncReports.Count} decodes {snapshot.SyncDecodeAttempts.Count}", "caption"),
+                UiElement.Text("mimir-sync-worst", WorstSyncLine(snapshot), "caption"),
+            ]),
+            UiElement.Pane("mimir-latency-signal", "Latency", [
+                StatBar("mimir-latency-score", "headroom", latencyScore, ToneFor(latencyScore), well == null ? "none" : $"{well.LatencyCurrentMs:0}ms"),
+                UiElement.Text("mimir-latency-line", well == null ? "no Well snapshot" : $"floor {well.LatencyFloorMs:0}ms ceiling {well.LatencyCeilingMs:0}ms skew {well.LatencyEdgeSkewMs:0.0}ms", "mono"),
+                UiElement.Text("mimir-presentation-delay", well == null ? "" : $"presentation delay {well.PresentationDelayMs:0}ms overlap {well.LatencyRetainedOverlapMs:0}ms", "caption"),
+            ]),
+            UiElement.Pane("mimir-throughput-signal", "Throughput", [
+                StatBar("mimir-throughput-score", "publish/poll", throughputScore, ToneFor(throughputScore)),
+                UiElement.Text("mimir-throughput-line", well == null ? $"ingested {snapshot.Telemetry?.Ingested ?? 0:0}" : $"poll {well.PollAverageMs:0.000}/{well.PollMaxMs:0.000}ms publish {well.PublishAverageMs:0.000}/{well.PublishMaxMs:0.000}ms", "mono"),
+                UiElement.Text("mimir-throughput-bytes", well == null ? $"analyze {snapshot.Telemetry?.AnalyzeMs ?? 0:0.0}ms" : $"bytes {well.PublishedBytes:0} buffers {well.Buffers.Count} audio {well.AudioBuffers} video {well.VideoBuffers}", "caption"),
+            ]),
+            UiElement.Pane("mimir-dropout-signal", "Dropout", [
+                StatBar("mimir-dropout-score", "liveness", dropoutScore, ToneFor(dropoutScore), $"{liveObservationCount}/{snapshot.ObservationStreams.Count} streams"),
+                UiElement.Text("mimir-dropout-line", well == null ? $"stale streams {staleStreams}" : $"sources {well.LiveSources}/{well.ConfiguredSources} errors {well.SourceErrorCount} stale streams {staleStreams}", "mono"),
+                UiElement.Text("mimir-dropout-worst", WorstObservationLine(snapshot.ObservationStreams), "caption"),
+            ]),
         };
 
         return new DashboardSurface
@@ -954,6 +950,38 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
                 },
                 children),
         };
+    }
+
+    private static string WorstSyncLine(MimirLiveStatsSnapshot snapshot)
+    {
+        var worstState = snapshot.SyncStates
+            .OrderBy(static state => state.Confidence)
+            .FirstOrDefault();
+        if (worstState != null)
+        {
+            return $"worst {worstState.ReferenceSourceId}->{worstState.SourceId} c={worstState.Confidence:0.000} delay {worstState.DelayMs:0.000}ms";
+        }
+
+        var worstReport = snapshot.SyncReports
+            .OrderBy(static report => report.Confidence)
+            .FirstOrDefault();
+        return worstReport == null
+            ? "no sync state yet"
+            : $"report {worstReport.ReferenceSourceId}->{worstReport.SourceId} c={worstReport.Confidence:0.000} events {worstReport.Events}";
+    }
+
+    private static string WorstObservationLine(IReadOnlyList<MimirObservationStreamStat> streams)
+    {
+        if (streams.Count == 0)
+        {
+            return "no observation streams";
+        }
+
+        var worst = streams
+            .OrderByDescending(static stream => stream.State == "active" ? 0 : 1)
+            .ThenByDescending(static stream => stream.AgeSeconds)
+            .First();
+        return $"{worst.DeviceId}/{worst.StreamId} {worst.Kind} {worst.State} age {worst.AgeSeconds:0}s";
     }
 
     private static DashboardUiElement BuildAudioPane(IReadOnlyList<MimirSpectrumStat> spectra, MimirWellStat? well)
@@ -1214,7 +1242,6 @@ internal sealed class MimirLiveStatsProvider : IDashboardProvider
             children:
             [
                 UiElement.Text($"{id}-label", $"{label}: {displayValue ?? value.ToString("0.000", CultureInfo.InvariantCulture)}", "caption"),
-                UiElement.Text($"{id}-bar", Bar(value, 28), "mono"),
                 UiElement.Metric($"{id}-metric", label, value, tone),
             ]);
 
@@ -2389,11 +2416,6 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
         IReadOnlyList<JsonElement> participants,
         JsonElement selectedAgent)
     {
-        var generatedAt = StringValue(summary, "generatedAt") ?? state.UpdatedAt.ToString("O");
-        var cadence = NumberValue(controls, "cadenceMultiplier") ?? NumberValue(summary, "cadenceMultiplier") ?? 1;
-        var leaves = FlattenLeaves(ArrayItems(TryGet(TryGet(selectedAgent, "faceState"), "tree")).ToArray()).Take(5).ToArray();
-        var selectedLeaf = leaves.FirstOrDefault(leaf => string.Equals(leaf.Path, selectedStatePath, StringComparison.Ordinal)) ?? leaves.FirstOrDefault();
-
         return new DashboardSurface
         {
             Schema = "cultmesh.eve_surface.v0",
@@ -2419,65 +2441,41 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
                 },
                 [
                     BuildTurnRail(upcoming),
-                    UiElement.Container(
-                        "voidbot-ops-row",
-                        "ops-row",
-                        new DashboardUiLayout { Direction = "horizontal", Gap = 8, Grow = 1 },
-                        [
-                            BuildUpcomingFacesPane(upcoming),
-                            BuildWatchdogPane(orchestrator),
-                        ]),
-                    UiElement.Container(
-                        "voidbot-workspace",
-                        "workspace",
-                        new DashboardUiLayout { Direction = "horizontal", Gap = 8, Grow = 2 },
-                        [
-                            BuildSelectedFacePane(summary, cultMesh, selectedAgent, cadence, generatedAt),
-                            BuildStateGraphPane(leaves),
-                            BuildStateDetailPane(state, selectedLeaf),
-                        ]),
                 ]),
-            Assets = participants
-                .Select(participant => new DashboardSurfaceAsset(
-                    $"avatar:{StringValue(participant, "identityId") ?? ""}",
-                    "image",
-                    StringValue(participant, "avatarUrl") ?? ""))
-                .Where(asset => !string.IsNullOrWhiteSpace(asset.Uri))
-                .GroupBy(asset => asset.Id)
-                .Select(group => group.First())
-                .ToArray(),
+            Assets = [],
         };
     }
 
     private DashboardUiElement BuildTurnRail(IReadOnlyList<JsonElement> upcoming)
     {
         var count = Math.Min(14, upcoming.Count);
-        var cards = new List<DashboardUiElement>();
+        var rows = new List<DashboardUiElement>();
         for (var index = 0; index < count; index++)
         {
             var turn = upcoming[index];
             var identityId = StringValue(turn, "identityId") ?? "";
             var active = !string.IsNullOrWhiteSpace(StringValue(turn, "activeJobId"));
             var mentionCount = NumberValue(turn, "pendingMentionCount") ?? 0;
-            cards.Add(UiElement.Card(
-                $"ctb-card-{index}-{identityId}",
-                "turn-card",
-                bindNodeId: $"ctb-{index}-{identityId}",
-                commandId: $"select-identity:{identityId}",
-                style: new DashboardUiStyle { Variant = active ? "active-turn" : mentionCount > 0 ? "mention-turn" : "default" },
-                children:
-                [
-                    UiElement.Avatar($"ctb-avatar-{identityId}", StringValue(turn, "avatarUrl"), StringValue(turn, "displayName") ?? identityId),
-                    UiElement.Text($"ctb-label-{identityId}", $"{index + 1}. {StringValue(turn, "displayName") ?? identityId}\n{StringValue(turn, "repoName") ?? "repo"}", "strong"),
-                    UiElement.Text($"ctb-health-{identityId}", active ? "active" : mentionCount > 0 ? "mention" : Minutes(NumberValue(turn, "nextTurnInMinutes")), "caption"),
-                ]));
+            var rest = TryGet(turn, "restState");
+            var napping = BoolValue(rest, "isNapping") == true;
+            var state = active ? "active" : mentionCount > 0 ? "mention" : napping ? "nap" : Minutes(NumberValue(turn, "nextTurnInMinutes"));
+            var speed = NumberValue(turn, "effectiveSpeed") ?? 0;
+            var heat = NumberValue(turn, "heat") ?? 0;
+            rows.Add(UiElement.Text(
+                $"ctb-row-{index}-{identityId}",
+                $"{index + 1,2}. {(StringValue(turn, "displayName") ?? identityId),-10} {state,-7} s{speed:0.###} h{heat:0.##}",
+                "mono"));
         }
 
-        return UiElement.Container(
+        var rail = UiElement.Container(
             "ctb-rail",
-            "ctb-rail",
-            new DashboardUiLayout { Direction = "horizontal", Gap = 8, Height = 112, Overflow = "scroll-x" },
-            cards);
+            "rail",
+            new DashboardUiLayout { Direction = "vertical", Gap = 4, Padding = 8, Overflow = "scroll", Grow = 1, MinWidth = 40, MinHeight = 20 },
+            rows.Count > 0
+                ? rows
+                : [UiElement.Text("ctb-empty", "no CTB turns", "caption")]);
+        rail.Text = "CTB order";
+        return rail;
     }
 
     private DashboardUiElement BuildUpcomingFacesPane(IReadOnlyList<JsonElement> upcoming)
