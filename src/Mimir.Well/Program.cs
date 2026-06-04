@@ -56,11 +56,13 @@ var nextPublish = DateTimeOffset.MinValue;
 var nextCapture = DateTimeOffset.MinValue;
 var nextSync = DateTimeOffset.MinValue;
 var nextVisualCalibration = DateTimeOffset.MinValue;
+var nextHeartbeat = DateTimeOffset.MinValue;
 var frameDegradedCount = 0L;
 var nextFrameDegradedLog = DateTimeOffset.MinValue;
 var streamTelemetry = new MimirWellStreamTelemetry();
 var latencyController = new MimirWellLatencyController(options);
 var featureSignals = new MimirWellFeatureSignalBank(options);
+var sourceHeartbeat = new MimirWellSourceHeartbeat(options, runtimeConfig.SourceFactories, sourceErrors);
 var presentation = new MimirPresentationControlState();
 var exposureController = new MimirCameraExposureController(new MimirCameraExposureControlOptions(
     options.VisualCalibrationEnabled,
@@ -75,10 +77,23 @@ Console.Error.WriteLine($"Mimir Well sources={runtimeConfig.SourceFactories.Coun
 
 while (!stopping.IsCancellationRequested)
 {
+    var ingestedSamplesThisPoll = new List<MimirStreamSample>();
     var pollStopwatch = Stopwatch.StartNew();
-    var consumedSamples = hub.PollSources(options.MaxSamplesPerSource);
+    var consumedSamples = hub.PollSources(
+        options.MaxSamplesPerSource,
+        sample => ingestedSamplesThisPoll.Add(sample));
     pollStopwatch.Stop();
     streamTelemetry.ObservePoll(consumedSamples, pollStopwatch.Elapsed);
+    if (options.StreamFramesEnabled)
+    {
+        foreach (var streamFrame in ingestedSamplesThisPoll.Select(sample =>
+                     MimirWellCapturePage.BuildIngestedStreamFrame(options, sample, startedAt)))
+        {
+            streamTelemetry.ObservePublish(
+                await publisher.PublishAsync(streamFrame, "mimir.cultmesh_stream_frame.v1", stopping.Token).ConfigureAwait(false));
+        }
+    }
+
     var now = DateTimeOffset.UtcNow;
     if (now >= nextSync)
     {
@@ -110,6 +125,14 @@ while (!stopping.IsCancellationRequested)
     {
         exposureController.Update(now, hub.Buffers.Buffers, hub.CameraExposureGainActuators);
         nextVisualCalibration = now + TimeSpan.FromMilliseconds(options.VisualCalibrationIntervalMs);
+    }
+
+    if (now >= nextHeartbeat)
+    {
+        var heartbeat = sourceHeartbeat.Update(now, hub);
+        streamTelemetry.ObservePublish(
+            await publisher.PublishAsync(heartbeat, "mimir.well_heartbeat.v1", stopping.Token).ConfigureAwait(false));
+        nextHeartbeat = now + TimeSpan.FromMilliseconds(options.HeartbeatIntervalMs);
     }
 
     if (now >= nextPublish)
@@ -624,6 +647,280 @@ internal sealed record MimirWellPublishReceipt(
     bool Dropped = false,
     int QueueDepth = 0);
 
+internal sealed class MimirWellSourceHeartbeat
+{
+    private readonly MimirWellOptions options;
+    private readonly IReadOnlyList<MimirStreamSourceFactory> factories;
+    private readonly List<object> sourceErrors;
+    private readonly Dictionary<string, SourceState> states = new(StringComparer.Ordinal);
+    private long sequence;
+
+    public MimirWellSourceHeartbeat(
+        MimirWellOptions options,
+        IReadOnlyList<MimirStreamSourceFactory> factories,
+        List<object> sourceErrors)
+    {
+        this.options = options;
+        this.factories = factories;
+        this.sourceErrors = sourceErrors;
+    }
+
+    public object Update(DateTimeOffset now, MimirSynchronizationHub hub)
+    {
+        var checks = factories.Select(factory => CheckSource(now, hub, factory)).ToArray();
+        var interventions = checks
+            .Where(check => check.InterventionRequired)
+            .Select(check => new
+            {
+                check.SourceId,
+                check.Status,
+                check.Reason,
+                latestAgeMs = SafeAge(check.LatestAgeMs),
+                check.ReacquireAttempts,
+                operatorCommand = new
+                {
+                    providerId = options.OperatorDmProviderId,
+                    command = options.OperatorDmCommand,
+                    transport = "cultmesh-provider-command",
+                    payload = new
+                    {
+                        document = "gamecult.operator_dm_request.v1",
+                        severity = check.Status == "reacquire-exhausted" ? "error" : "warning",
+                        service = "Mimir.Well",
+                        sourceId = check.SourceId,
+                        status = check.Status,
+                        reason = check.Reason,
+                        latestAgeMs = SafeAge(check.LatestAgeMs),
+                    },
+                },
+            })
+            .ToArray();
+
+        return new
+        {
+            type = "cultmesh-observation",
+            document = "mimir.well_heartbeat.v1",
+            sourceId = "mimir-well",
+            nodeId = options.NodeId,
+            sequence = ++sequence,
+            wallClockUtc = now.ToString("O"),
+            authority = "Mimir.Well owns stream liveness, bounded local reacquire, and operator-alert publication. VoidBot owns owner-DM delivery through its CultMesh command provider.",
+            sourceCount = checks.Length,
+            healthyCount = checks.Count(static check => check.Status == "live"),
+            interventionRequired = interventions.Length > 0,
+            operatorAlertContract = new
+            {
+                providerId = options.OperatorDmProviderId,
+                command = options.OperatorDmCommand,
+                document = "gamecult.operator_dm_request.v1",
+                deliveryOwner = "VoidBot",
+                routingOwner = "CultMesh/Odin",
+            },
+            sources = checks.Select(check => new
+            {
+                check.SourceId,
+                check.Kind,
+                check.Origin,
+                check.Status,
+                check.Reason,
+                check.Samples,
+                latestAgeMs = SafeAge(check.LatestAgeMs),
+                check.ReacquireAttempts,
+                lastReacquireUtc = check.LastReacquireUtc?.ToString("O"),
+                nextReacquireUtc = check.NextReacquireUtc?.ToString("O"),
+            }).ToArray(),
+            interventions,
+        };
+    }
+
+    private SourceCheck CheckSource(DateTimeOffset now, MimirSynchronizationHub hub, MimirStreamSourceFactory factory)
+    {
+        var descriptor = factory.Descriptor;
+        var state = GetState(descriptor.SourceId);
+        var active = hub.ActiveSourceIds.Contains(descriptor.SourceId, StringComparer.Ordinal);
+        var matchingBuffers = MatchingBuffers(hub.Buffers.Buffers, factory).ToArray();
+        var samples = matchingBuffers.Sum(static buffer => buffer.Count);
+        var latest = matchingBuffers
+            .Select(static buffer => buffer.Latest)
+            .Where(static sample => sample.HasValue)
+            .OrderByDescending(static sample => sample!.Value.TimestampNs)
+            .FirstOrDefault();
+        var latestAgeMs = latest.HasValue
+            ? Math.Max(0.0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000.0 - latest.Value.TimestampNs) / 1_000_000.0)
+            : double.PositiveInfinity;
+        if (samples > state.LastSampleCount)
+        {
+            state.FirstUnhealthyUtc = null;
+            state.LastSampleCount = samples;
+        }
+
+        var stale = !latest.HasValue || latestAgeMs >= options.SourceStaleMs;
+        var status = active && !stale
+            ? "live"
+            : descriptor.Origin == MimirStreamOrigin.Network
+                ? "waiting-network"
+                : active && samples > 0
+                    ? "stalled"
+                    : "waiting-device-samples";
+        var reason = status switch
+        {
+            "live" => "samples arriving",
+            "waiting-network" => "network producer has not supplied fresh samples; Well cannot reacquire a remote owner",
+            "stalled" => "local source emitted samples earlier but latest sample is stale",
+            _ => "local source has not emitted samples",
+        };
+
+        if (status == "live")
+        {
+            return Check(descriptor, status, reason, samples, latestAgeMs, state, false);
+        }
+
+        if (state.FirstUnhealthyUtc is null)
+        {
+            state.FirstUnhealthyUtc = now;
+        }
+
+        if (descriptor.Origin != MimirStreamOrigin.Network &&
+            state.ReacquireAttempts < options.SourceMaxReacquireAttempts &&
+            (state.NextReacquireUtc is null || now >= state.NextReacquireUtc))
+        {
+            status = TryReacquire(now, hub, factory, active, state, out var reacquireReason)
+                ? "reacquire-started"
+                : "reacquire-failed";
+            reason = reacquireReason;
+        }
+        else if (descriptor.Origin != MimirStreamOrigin.Network &&
+            state.ReacquireAttempts >= options.SourceMaxReacquireAttempts)
+        {
+            status = "reacquire-exhausted";
+            reason = "bounded local reacquire attempts failed; operator intervention required";
+        }
+
+        return Check(descriptor, status, reason, samples, latestAgeMs, state, InterventionRequired(now, state, status));
+    }
+
+    private bool TryReacquire(
+        DateTimeOffset now,
+        MimirSynchronizationHub hub,
+        MimirStreamSourceFactory factory,
+        bool active,
+        SourceState state,
+        out string reason)
+    {
+        state.ReacquireAttempts++;
+        state.LastReacquireUtc = now;
+        state.NextReacquireUtc = now + TimeSpan.FromMilliseconds(options.SourceReacquireBackoffMs);
+        try
+        {
+            if (active)
+            {
+                hub.RemoveSource(factory.Descriptor.SourceId);
+            }
+
+            var source = factory.Create();
+            if (source is null)
+            {
+                reason = "source factory returned no source during reacquire";
+                sourceErrors.Add(new { factory.Descriptor.SourceId, status = "reacquire-not-created", wallClockUtc = now.ToString("O") });
+                return false;
+            }
+
+            hub.AddSource(source);
+            reason = "local source reacquire started";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            reason = $"reacquire failed: {ex.GetType().Name}: {ex.Message}";
+            sourceErrors.Add(new { factory.Descriptor.SourceId, status = "reacquire-error", errorType = ex.GetType().Name, ex.Message, wallClockUtc = now.ToString("O") });
+            return false;
+        }
+    }
+
+    private bool InterventionRequired(DateTimeOffset now, SourceState state, string status) =>
+        status == "reacquire-exhausted" ||
+        (status != "live" &&
+            state.FirstUnhealthyUtc.HasValue &&
+            now - state.FirstUnhealthyUtc.Value >= TimeSpan.FromMilliseconds(options.SourceInterventionMs));
+
+    private SourceState GetState(string sourceId)
+    {
+        if (!states.TryGetValue(sourceId, out var state))
+        {
+            state = new SourceState();
+            states.Add(sourceId, state);
+        }
+
+        return state;
+    }
+
+    private static IEnumerable<MimirRollingStreamBuffer> MatchingBuffers(
+        IEnumerable<MimirRollingStreamBuffer> buffers,
+        MimirStreamSourceFactory factory)
+    {
+        var descriptor = factory.Descriptor;
+        var matching = buffers
+            .Where(buffer => string.Equals(buffer.Descriptor.SourceId, descriptor.SourceId, StringComparison.Ordinal))
+            .ToArray();
+        if (matching.Length > 0 ||
+            !descriptor.SourceId.Contains("asio", StringComparison.OrdinalIgnoreCase))
+        {
+            return matching;
+        }
+
+        return buffers.Where(buffer =>
+            buffer.Descriptor.Kind == descriptor.Kind &&
+            buffer.Descriptor.Origin == descriptor.Origin &&
+            buffer.Descriptor.SourceId.StartsWith("asio-ch", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static SourceCheck Check(
+        MimirStreamDescriptor descriptor,
+        string status,
+        string reason,
+        int samples,
+        double latestAgeMs,
+        SourceState state,
+        bool interventionRequired) =>
+        new(
+            descriptor.SourceId,
+            descriptor.Kind.ToString(),
+            descriptor.Origin.ToString(),
+            status,
+            reason,
+            samples,
+            latestAgeMs,
+            state.ReacquireAttempts,
+            state.LastReacquireUtc,
+            state.NextReacquireUtc,
+            interventionRequired);
+
+    private static double? SafeAge(double ageMs) =>
+        double.IsFinite(ageMs) ? Math.Round(ageMs, 1) : null;
+
+    private sealed class SourceState
+    {
+        public int ReacquireAttempts { get; set; }
+        public int LastSampleCount { get; set; }
+        public DateTimeOffset? FirstUnhealthyUtc { get; set; }
+        public DateTimeOffset? LastReacquireUtc { get; set; }
+        public DateTimeOffset? NextReacquireUtc { get; set; }
+    }
+
+    private sealed record SourceCheck(
+        string SourceId,
+        string Kind,
+        string Origin,
+        string Status,
+        string Reason,
+        int Samples,
+        double LatestAgeMs,
+        int ReacquireAttempts,
+        DateTimeOffset? LastReacquireUtc,
+        DateTimeOffset? NextReacquireUtc,
+        bool InterventionRequired);
+}
+
 internal static class MimirWellEnvironment
 {
     public static bool IsTruthy(string? value) =>
@@ -751,6 +1048,13 @@ internal sealed record MimirWellOptions(
     bool CaptureInlineBodies,
     bool StreamFramesEnabled,
     bool StreamFrameInlineBodies,
+    int HeartbeatIntervalMs,
+    int SourceStaleMs,
+    int SourceInterventionMs,
+    int SourceReacquireBackoffMs,
+    int SourceMaxReacquireAttempts,
+    string OperatorDmProviderId,
+    string OperatorDmCommand,
     int MeterEvery)
 {
     public static MimirWellOptions Parse(string[] args) => new(
@@ -785,6 +1089,13 @@ internal sealed record MimirWellOptions(
         ParseBool(args, "--capture-inline-bodies", true),
         ParseBool(args, "--stream-frames", true),
         ParseBool(args, "--stream-frame-inline-bodies", true),
+        ParseInt(args, "--heartbeat-ms", 1000),
+        ParseInt(args, "--source-stale-ms", 2000),
+        ParseInt(args, "--source-intervention-ms", 10000),
+        ParseInt(args, "--source-reacquire-backoff-ms", 3000),
+        ParseInt(args, "--source-max-reacquire-attempts", 3),
+        ParseString(args, "--operator-dm-provider", "voidbot.operator-dm"),
+        ParseString(args, "--operator-dm-command", "owner.dm.send"),
         ParseInt(args, "--meter-every", 20));
 
     private static string ParseString(IReadOnlyList<string> args, string name, string fallback)
@@ -1101,6 +1412,32 @@ internal static class MimirWellCapturePage
             .ToArray();
     }
 
+    public static object BuildIngestedStreamFrame(
+        MimirWellOptions options,
+        MimirStreamSample sample,
+        DateTimeOffset startedAt) =>
+        CaptureStreamFrame(
+            options,
+            captureSequence: 0,
+            startedAt,
+            sample,
+            new
+            {
+                sample.SourceId,
+                Kind = sample.Kind.ToString(),
+                Origin = sample.Origin.ToString(),
+                Status = "IngestedCanonicalSample",
+                SourceTimestampNs = sample.TimestampNs,
+                CanonicalStartNs = sample.TimestampNs,
+                CanonicalEndNs = sample.TimestampNs + SampleDurationNs(sample),
+                PresentationTimeNs = 0L,
+                TimingOffsetNs = 0L,
+                DistanceFromPresentationNs = 0L,
+                TimingConfidence = 0.0,
+                TimingEvidenceKind = "canonical-ingest",
+            },
+            bodyId: $"{options.NodeId}:ingest:{sample.SourceId}:{sample.Sequence}");
+
     private static IEnumerable<object> CaptureSamples(
         MimirWellOptions options,
         long captureSequence,
@@ -1246,8 +1583,20 @@ internal static class MimirWellCapturePage
         MimirStreamSample sample,
         object slice)
     {
-        var bodyId = $"{options.NodeId}:{captureSequence}:{sample.SourceId}:{sample.Sequence}";
-        var inlineBody = options.StreamFrameInlineBodies && sample.Kind == MimirStreamKind.Audio;
+        var bodyId = $"{options.NodeId}:capture:{captureSequence}:{sample.SourceId}:{sample.Sequence}";
+        return CaptureStreamFrame(options, captureSequence, startedAt, sample, slice, bodyId);
+    }
+
+    private static object CaptureStreamFrame(
+        MimirWellOptions options,
+        long captureSequence,
+        DateTimeOffset startedAt,
+        MimirStreamSample sample,
+        object slice,
+        string bodyId)
+    {
+        var inlineBody = options.StreamFrameInlineBodies &&
+            (sample.Kind == MimirStreamKind.Audio || sample.VideoFrame?.NativeHandle is null or 0UL);
         var transport = PreferredBodyTransport(sample, inlineBody);
         return new
         {
@@ -1288,6 +1637,16 @@ internal static class MimirWellCapturePage
             sample = SampleMetadata(sample),
             body = CaptureBody(options, sample, inlineBody),
         };
+    }
+
+    private static long SampleDurationNs(MimirStreamSample sample)
+    {
+        if (sample.AudioBlock is { SampleRate: > 0 } audio)
+        {
+            return checked((long)Math.Round(audio.FrameCount * 1_000_000_000.0 / audio.SampleRate));
+        }
+
+        return 0L;
     }
 
     private static object SampleMetadata(MimirStreamSample sample) => new

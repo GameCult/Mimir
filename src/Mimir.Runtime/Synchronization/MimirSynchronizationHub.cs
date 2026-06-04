@@ -39,6 +39,9 @@ public sealed class MimirSynchronizationHub : IDisposable
 
     public int SourceCount => sources.Count;
 
+    public IReadOnlyList<string> ActiveSourceIds =>
+        sources.Select(source => source.Descriptor.SourceId).ToArray();
+
     public IReadOnlyList<IMimirCameraExposureGainActuator> CameraExposureGainActuators =>
         sources.OfType<IMimirCameraExposureGainActuator>().ToArray();
 
@@ -91,6 +94,22 @@ public sealed class MimirSynchronizationHub : IDisposable
         }
     }
 
+    public bool RemoveSource(string sourceId)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var index = sources.FindIndex(source =>
+            string.Equals(source.Descriptor.SourceId, sourceId, StringComparison.Ordinal));
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var source = sources[index];
+        sources.RemoveAt(index);
+        source.Dispose();
+        return true;
+    }
+
     public void AttachTextureLeaseClient(MimirFensalirTextureLeaseClient? client)
     {
         textureLeaseClient = client;
@@ -103,7 +122,12 @@ public sealed class MimirSynchronizationHub : IDisposable
         }
     }
 
-    public int PollSources(int maxSamplesPerSource = 8192)
+    public int PollSources(int maxSamplesPerSource = 8192) =>
+        PollSources(maxSamplesPerSource, onIngestedSample: null);
+
+    public int PollSources(
+        int maxSamplesPerSource,
+        Action<MimirStreamSample>? onIngestedSample)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         var consumed = 0;
@@ -115,7 +139,9 @@ public sealed class MimirSynchronizationHub : IDisposable
             var sourceBudget = checked(Math.Max(1, maxSamplesPerSource) * logicalStreamCount);
             for (var index = 0; index < sourceBudget && source.TryRead(out var sample); index++)
             {
-                Buffers.Append(clockMapper.ToCanonical(sample));
+                var canonicalSample = clockMapper.ToCanonical(sample);
+                Buffers.Append(canonicalSample);
+                onIngestedSample?.Invoke(canonicalSample);
                 consumed++;
                 ingestedSamples++;
             }
