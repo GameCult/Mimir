@@ -2520,9 +2520,16 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
         {
             var turn = upcoming[index];
             var identityId = StringValue(turn, "identityId") ?? "";
+            var active = !string.IsNullOrWhiteSpace(StringValue(turn, "activeJobId"));
+            var mentionCount = NumberValue(turn, "pendingMentionCount") ?? 0;
+            var rest = TryGet(turn, "restState");
+            var napping = BoolValue(rest, "isNapping") == true;
+            var state = active ? "active" : mentionCount > 0 ? "mention" : napping ? "nap" : Minutes(NumberValue(turn, "nextTurnInMinutes"));
+            var speed = NumberValue(turn, "effectiveSpeed") ?? 0;
+            var heat = NumberValue(turn, "heat") ?? 0;
             rows.Add(UiElement.Text(
                 $"ctb-row-{index}-{identityId}",
-                FormatCtbRow(turn, index),
+                $"{index + 1,2}. {(StringValue(turn, "displayName") ?? identityId),-10} {state,-7} s{speed:0.###} h{heat:0.##}",
                 "mono"));
         }
 
@@ -2544,11 +2551,16 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
             .Select((turn, index) =>
             {
                 var identityId = StringValue(turn, "identityId") ?? $"turn-{index}";
+                var active = !string.IsNullOrWhiteSpace(StringValue(turn, "activeJobId"));
+                var mentionCount = NumberValue(turn, "pendingMentionCount") ?? 0;
+                var rest = TryGet(turn, "restState");
+                var napping = BoolValue(rest, "isNapping") == true;
+                var state = active ? "active" : mentionCount > 0 ? "mention" : napping ? "nap" : Minutes(NumberValue(turn, "nextTurnInMinutes"));
                 var heat = NumberValue(turn, "heat") ?? 0;
                 var speed = NumberValue(turn, "effectiveSpeed") ?? 0;
                 return UiElement.Text(
                     $"upcoming-face-{index}-{identityId}",
-                    $"{index + 1,2}. {(StringValue(turn, "displayName") ?? identityId),-10} {TurnStatus(turn),-7} {Minutes(NumberValue(turn, "nextTurnInMinutes")),6} {MentionText(turn),-5} {StringValue(turn, "repoName") ?? "repo"}  spd {speed:0.###} heat {heat:0.##}",
+                    $"{index + 1,2}. {(StringValue(turn, "displayName") ?? identityId),-10} {state,-8} {StringValue(turn, "repoName") ?? "repo"}  spd {speed:0.###} heat {heat:0.##}",
                     "mono");
             })
             .ToArray();
@@ -2886,49 +2898,7 @@ internal sealed class VoidBotSwarmProvider : IDashboardProvider
             return "unknown";
         }
 
-        return value <= 0 ? "ready" : value < 10 ? $"{value:0.0}m" : $"{value:0}m";
-    }
-
-    private static string FormatCtbRow(JsonElement turn, int index)
-    {
-        var identityId = StringValue(turn, "identityId") ?? "";
-        var displayName = StringValue(turn, "displayName") ?? identityId;
-        var speed = NumberValue(turn, "effectiveSpeed") ?? 0;
-        var heat = NumberValue(turn, "heat") ?? 0;
-        return $"{index + 1,2}. {displayName,-10} {TurnStatus(turn),-7} {Minutes(NumberValue(turn, "nextTurnInMinutes")),6} {MentionText(turn),-5} s{speed:0.###} h{heat:0.##}";
-    }
-
-    private static string TurnStatus(JsonElement turn)
-    {
-        if (!string.IsNullOrWhiteSpace(StringValue(turn, "activeJobId")))
-        {
-            return "active";
-        }
-
-        if ((NumberValue(turn, "pendingMentionCount") ?? 0) > 0)
-        {
-            return "mention";
-        }
-
-        return BoolValue(TryGet(turn, "restState"), "isNapping") == true ? "nap" : "idle";
-    }
-
-    private static string MentionText(JsonElement turn)
-    {
-        var count = (int)Math.Max(0, NumberValue(turn, "pendingMentionCount") ?? 0);
-        if (count <= 0)
-        {
-            return "-";
-        }
-
-        var unanchored = (int)Math.Max(0, NumberValue(turn, "unanchoredMentionCount") ?? 0);
-        var anchored = (int)Math.Max(0, NumberValue(turn, "anchoredMentionCount") ?? count - unanchored);
-        if (unanchored > 0 && anchored <= 0)
-        {
-            return $"m?{count}";
-        }
-
-        return unanchored > 0 ? $"m{anchored}?{unanchored}" : $"m{count}";
+        return value <= 0 ? "ready" : $"{value:0.#}m";
     }
 
     private static string Truncate(string value, int max) =>
