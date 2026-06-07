@@ -23,7 +23,7 @@ Console.CancelKeyPress += (_, eventArgs) =>
 };
 
 var command = RavenMuxCommand.Build(options);
-await using var state = await RavenCaptureMuxState.OpenAsync(options, command.CommandLine).ConfigureAwait(false);
+await using var state = await RavenCaptureMuxState.OpenAsync(options, command).ConfigureAwait(false);
 using var server = new RavenDaemonEveServer(options, state);
 
 if (options.DryRun)
@@ -46,7 +46,7 @@ if (options.DryRun)
 
 Console.Error.WriteLine($"Mimir Raven daemon state cache {options.CultMeshCachePath}");
 Console.Error.WriteLine($"Mimir Raven daemon speaking Eve/CultMesh on ws://0.0.0.0:{options.EvePort}/eve/deck");
-Console.Error.WriteLine($"Mimir Raven mux target {command.Endpoint}");
+Console.Error.WriteLine($"Mimir Raven mux targets {string.Join(", ", command.Targets.Select(static target => target.Name + "=" + target.Endpoint))}");
 
 var serverTask = server.RunAsync(stopping.Token);
 var supervisorTask = RavenMuxSupervisor.RunAsync(options, command, state, stopping.Token);
@@ -57,6 +57,9 @@ internal sealed record RavenDaemonOptions(
     string HostId,
     string TargetHost,
     int Port,
+    string ObsTargetHost,
+    int ObsPort,
+    bool EnableObsTarget,
     int EvePort,
     string CultMeshCachePath,
     string LogRoot,
@@ -81,11 +84,15 @@ internal sealed record RavenDaemonOptions(
 {
     public static RavenDaemonOptions Parse(string[] args)
     {
+        var targetHost = Text(args, "--target-host", "10.77.0.2");
         return new RavenDaemonOptions(
             DaemonId: Text(args, "--daemon-id", "mimir.raven.capture-mux"),
             HostId: Text(args, "--host-id", "raven"),
-            TargetHost: Text(args, "--target-host", "10.77.0.2"),
+            TargetHost: targetHost,
             Port: Int(args, "--port", 5200),
+            ObsTargetHost: Text(args, "--obs-target-host", targetHost),
+            ObsPort: Int(args, "--obs-port", 5204),
+            EnableObsTarget: !Flag(args, "--no-obs-target"),
             EvePort: Int(args, "--eve-port", 8801),
             CultMeshCachePath: Text(args, "--cultmesh-cache", @"C:\Meta\Mimir\state\raven-capture-mux.ccmp"),
             LogRoot: Text(args, "--log-root", @"C:\Meta\Mimir\logs"),
@@ -132,16 +139,16 @@ internal sealed record RavenDaemonOptions(
     }
 }
 
-internal sealed record RavenMuxCommand(string CommandLine, string Endpoint, string StdoutLog, string StderrLog)
+internal sealed record RavenMuxTarget(string Name, string Endpoint);
+
+internal sealed record RavenMuxCommand(string CommandLine, IReadOnlyList<RavenMuxTarget> Targets, string StdoutLog, string StderrLog)
 {
     public static RavenMuxCommand Build(RavenDaemonOptions options)
     {
         var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
         var stdoutLog = Path.Combine(options.LogRoot, $"raven-av-srt-{timestamp}.out.log");
         var stderrLog = Path.Combine(options.LogRoot, $"raven-av-srt-{timestamp}.err.log");
-        var endpoint = options.Transport == "tcp-listener"
-            ? $"tcp://{options.TargetHost}:{options.Port}?listen=1"
-            : $"srt://{options.TargetHost}:{options.Port}?mode={options.SrtMode}&latency=120000&timeout=30000000";
+        var targets = BuildTargets(options);
         var repoRoot = FindRepoRoot();
         var loopback = ResolveLoopbackCommand(options, repoRoot);
         var ffmpeg = new List<string>
@@ -223,13 +230,42 @@ internal sealed record RavenMuxCommand(string CommandLine, string Endpoint, stri
             options.AudioSampleRate.ToString(),
             "-ac",
             options.AudioChannels.ToString(),
-            "-f",
-            "mpegts",
-            endpoint,
         ]);
+        AddOutput(ffmpeg, targets);
 
         var command = loopback + " | " + Quote(options.FfmpegPath) + " " + string.Join(" ", ffmpeg.Select(Quote));
-        return new RavenMuxCommand(command, endpoint, stdoutLog, stderrLog);
+        return new RavenMuxCommand(command, targets, stdoutLog, stderrLog);
+    }
+
+    private static IReadOnlyList<RavenMuxTarget> BuildTargets(RavenDaemonOptions options)
+    {
+        var targets = new List<RavenMuxTarget>
+        {
+            new("mimir", Endpoint(options.Transport, options.TargetHost, options.Port, options.SrtMode)),
+        };
+        if (options.EnableObsTarget && options.Transport == "srt")
+        {
+            targets.Add(new("obs", Endpoint(options.Transport, options.ObsTargetHost, options.ObsPort, options.SrtMode)));
+        }
+
+        return targets;
+    }
+
+    private static string Endpoint(string transport, string host, int port, string srtMode) =>
+        transport == "tcp-listener"
+            ? $"tcp://{host}:{port}?listen=1"
+            : $"srt://{host}:{port}?mode={srtMode}&latency=120000&timeout=30000000";
+
+    private static void AddOutput(List<string> ffmpeg, IReadOnlyList<RavenMuxTarget> targets)
+    {
+        if (targets.Count == 1)
+        {
+            ffmpeg.AddRange(["-f", "mpegts", targets[0].Endpoint]);
+            return;
+        }
+
+        var teeTargets = string.Join("|", targets.Select(static target => "[f=mpegts]" + target.Endpoint));
+        ffmpeg.AddRange(["-f", "tee", teeTargets]);
     }
 
     private static string ResolveLoopbackCommand(RavenDaemonOptions options, string repoRoot)
@@ -317,7 +353,7 @@ internal sealed class RavenCaptureMuxState : IAsyncDisposable
 
     public MimirRavenCaptureMuxStateDocument Document { get; private set; }
 
-    public static async Task<RavenCaptureMuxState> OpenAsync(RavenDaemonOptions options, string commandLine)
+    public static async Task<RavenCaptureMuxState> OpenAsync(RavenDaemonOptions options, RavenMuxCommand command)
     {
         var registry = new CultNetDocumentRegistry()
             .Register(CultNetDocumentBinding.ForDocument<MimirRavenCaptureMuxStateDocument>())
@@ -332,7 +368,7 @@ internal sealed class RavenCaptureMuxState : IAsyncDisposable
             },
         }).ConfigureAwait(false);
         var key = new CultRecordKey(options.DaemonId);
-        var document = InitialDocument(options, commandLine);
+        var document = InitialDocument(options, command);
         var state = new RavenCaptureMuxState(node, key, document);
         await state.PublishAsync(document, CancellationToken.None).ConfigureAwait(false);
         return state;
@@ -363,13 +399,13 @@ internal sealed class RavenCaptureMuxState : IAsyncDisposable
         node.Dispose();
     }
 
-    private static MimirRavenCaptureMuxStateDocument InitialDocument(RavenDaemonOptions options, string commandLine) =>
+    private static MimirRavenCaptureMuxStateDocument InitialDocument(RavenDaemonOptions options, RavenMuxCommand command) =>
         new(
             options.DaemonId,
             DateTimeOffset.UtcNow.ToString("O"),
             options.HostId,
             "starting",
-            $"{options.Transport}://{options.TargetHost}:{options.Port}",
+            command.Targets[0].Endpoint,
             options.Transport,
             "raven-display",
             "raven-realtk-loopback",
@@ -385,18 +421,36 @@ internal sealed class RavenCaptureMuxState : IAsyncDisposable
             null,
             "",
             "",
-            commandLine,
-            [
-                "display-capture",
-                "wasapi-render-loopback",
-                "ffmpeg-mux",
-                "srt-mpegts",
-                "cultmesh-eve-status",
-            ],
+            command.CommandLine,
+            CapabilitiesFor(command),
             [
                 "Raven daemon supervises the capture process and publishes typed state.",
                 "FFmpeg owns media capture, mux, encode, and transport.",
-            ]);
+            ],
+            command.Targets.Select(static target => target.Name + "=" + target.Endpoint).ToArray());
+
+    private static string[] CapabilitiesFor(RavenMuxCommand command)
+    {
+        var capabilities = new List<string>
+        {
+            "display-capture",
+            "wasapi-render-loopback",
+            "ffmpeg-mux",
+            "srt-mpegts",
+            "cultmesh-eve-status",
+        };
+        if (command.Targets.Any(static target => target.Name == "mimir"))
+        {
+            capabilities.Add("mimir-srt-sink");
+        }
+
+        if (command.Targets.Any(static target => target.Name == "obs"))
+        {
+            capabilities.Add("obs-srt-sink");
+        }
+
+        return capabilities.ToArray();
+    }
 }
 
 internal static class RavenMuxSupervisor
@@ -550,6 +604,7 @@ internal sealed class RavenDaemonEveServer(RavenDaemonOptions options, RavenCapt
                 host = document.HostId,
                 status = document.Status,
                 target = document.TargetEndpoint,
+                targets = document.TargetEndpoints,
                 video = document.VideoSourceId,
                 audio = document.AudioSourceId,
                 ffmpegPid = document.FfmpegPid,
@@ -610,7 +665,7 @@ internal sealed class RavenDaemonEveServer(RavenDaemonOptions options, RavenCapt
                 new("raven-daemon", $"Raven Daemon\n{doc.Status}", "daemon", true, 0.0, -0.36, 0.0, 0.0, 1.0, 0.54, 0.18, statusTone, doc.DaemonId, null, "/health"),
                 new("raven-display", $"Display\n{doc.Width}x{doc.Height}@{doc.Framerate}", "video", true, -0.34, 0.02, 0.0, 0.0, 1.0, 0.42, 0.18, doc.VideoCapture, doc.DaemonId, null, null),
                 new("raven-loopback", $"Realtek Loopback\n{doc.AudioChannels}ch {doc.AudioSampleRate}Hz", "audio", true, 0.34, 0.02, 0.0, 0.0, 1.0, 0.42, 0.18, "wasapi-loopback", doc.DaemonId, null, null),
-                new("raven-target", $"Mux Target\n{doc.TargetEndpoint}", "transport", true, 0.0, 0.38, 0.0, 0.0, 1.0, 0.72, 0.18, doc.Transport, doc.DaemonId, null, null),
+                new("raven-target", $"Mux Targets\n{doc.TargetEndpoints.Length}", "transport", true, 0.0, 0.38, 0.0, 0.0, 1.0, 0.72, 0.18, doc.Transport, doc.DaemonId, null, null),
             ],
             new MimirEveDashboardSurfaceSnapshot(
                 "mimir.eve_surface.v1",
@@ -620,7 +675,7 @@ internal sealed class RavenDaemonEveServer(RavenDaemonOptions options, RavenCapt
                 [
                     Text("raven-status", $"status {doc.Status}\nffmpeg pid {doc.FfmpegPid?.ToString() ?? "none"}\nrestarts {doc.RestartCount}"),
                     Text("raven-media", $"video {doc.VideoSourceId} {doc.VideoCapture} {doc.Width}x{doc.Height}@{doc.Framerate}\naudio {doc.AudioSourceId} {doc.AudioChannels}ch {doc.AudioSampleRate}Hz"),
-                    Text("raven-target-text", $"target {doc.TargetEndpoint}\nstdout {doc.StdoutLog}\nstderr {doc.StderrLog}"),
+                    Text("raven-target-text", $"targets {string.Join("\n", doc.TargetEndpoints)}\nstdout {doc.StdoutLog}\nstderr {doc.StderrLog}"),
                 ]),
                 []));
     }

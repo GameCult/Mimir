@@ -18,10 +18,16 @@ Inputs become outputs like this:
 6. Each process sends MPEG-TS over SRT to a stable receiver URL.
 7. OBS adds each URL as a Media Source.
 
+`Mimir.RavenDaemon` is the current Raven-local supervisor for the combined
+display plus Realtek loopback mux. It emits named SRT sinks rather than one
+anonymous stream: Mimir receives the canonical ingest copy on `5200`, and OBS
+receives an ordinary media-source copy on `5204`.
+
 ## Invariants
 
 - Video encoding happens on the sender.
 - OBS receives ordinary media-source URLs; it does not need a plugin for v1.
+- Mimir and OBS do not contend for the same SRT listener.
 - Audio remains separately mixable in OBS.
 - Ports are stable and derived from one base port plus explicit offsets.
 - Secrets, if used, stay in local config and are not committed.

@@ -1,6 +1,8 @@
 param(
     [string]$TargetHost = "10.77.0.2",
     [int]$Port = 5200,
+    [string]$ObsTargetHost = "",
+    [int]$ObsPort = 5204,
     [int]$EvePort = 8801,
     [int]$Width = 1920,
     [int]$Height = 1080,
@@ -15,6 +17,7 @@ param(
     [string]$WasapiLoopbackPath = "",
     [string]$CultMeshCachePath = "C:\Meta\Mimir\state\raven-capture-mux.ccmp",
     [string]$LogRoot = "C:\Meta\Mimir\logs",
+    [switch]$NoObsTarget,
     [switch]$NoCultNetServer,
     [switch]$DryRun
 )
@@ -22,6 +25,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repo = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($ObsTargetHost)) {
+    $ObsTargetHost = $TargetHost
+}
 $project = Join-Path $repo "src\Mimir.RavenDaemon\Mimir.RavenDaemon.csproj"
 $runtimeArgs = @(
     "run",
@@ -29,6 +35,8 @@ $runtimeArgs = @(
     "--",
     "--target-host", $TargetHost,
     "--port", $Port,
+    "--obs-target-host", $ObsTargetHost,
+    "--obs-port", $ObsPort,
     "--eve-port", $EvePort,
     "--width", $Width,
     "--height", $Height,
@@ -42,6 +50,10 @@ $runtimeArgs = @(
     "--cultmesh-cache", $CultMeshCachePath,
     "--log-root", $LogRoot
 )
+
+if ($NoObsTarget) {
+    $runtimeArgs += "--no-obs-target"
+}
 
 if (-not [string]::IsNullOrWhiteSpace($WasapiLoopbackPath)) {
     $runtimeArgs += @("--wasapi-loopback", $WasapiLoopbackPath)
@@ -74,7 +86,10 @@ $process = Start-Process `
 Write-Host "Started Mimir.RavenDaemon pid=$($process.Id)"
 Write-Host "  Eve/CultMesh: ws://0.0.0.0:${EvePort}/eve/deck"
 Write-Host "  Health: http://127.0.0.1:${EvePort}/health"
-Write-Host "  Target: srt://${TargetHost}:${Port}"
+Write-Host "  Mimir target: srt://${TargetHost}:${Port}"
+if (-not $NoObsTarget) {
+    Write-Host "  OBS target: srt://${ObsTargetHost}:${ObsPort}"
+}
 Write-Host "  CultMesh cache: $CultMeshCachePath"
 Write-Host "  stdout: $stdoutLog"
 Write-Host "  stderr: $stderrLog"

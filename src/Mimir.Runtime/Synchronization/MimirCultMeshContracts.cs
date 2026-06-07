@@ -216,7 +216,8 @@ public sealed record MimirRavenCaptureMuxStateDocument(
     [property: Key(19)] string StderrLog,
     [property: Key(20)] string CommandLine,
     [property: Key(21)] string[] Capabilities,
-    [property: Key(22)] string[] Notes);
+    [property: Key(22)] string[] Notes,
+    [property: Key(23)] string[] TargetEndpoints);
 
 [CultDocument("mimir.eve_dashboard_manifest", "mimir.eve_dashboard_manifest.v1")]
 [MessagePackObject]
