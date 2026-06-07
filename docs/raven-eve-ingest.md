@@ -9,18 +9,22 @@ beside Scarlett audio and local camera sources.
 ## Authority Map
 
 - Owner: `Mimir.Runtime` owns decoded samples and rolling-buffer placement.
-- Inputs: Raven sends H.264/MPEG-TS over SRT to Starfire port `5200`; Eve sends
-  camera frame-events over WebSocket port `8793`; Eve sends microphone
-  frame-events over WebSocket port `8794`; Scarlett/ASIO carries audio and sync
-  evidence.
+- Inputs: Raven currently sends H.264/MPEG-TS over the SRT bridge to Starfire
+  port `5200`; Eve currently sends camera frame-events over WebSocket port
+  `8793`; Eve currently sends microphone frame-events over WebSocket port
+  `8794`; Scarlett/ASIO carries audio and sync evidence. The target Verse shape
+  is CultMesh reliable UDP: typed stream-frame envelopes plus bounded body
+  shards for media, with compact state/cursors/backpressure beside them.
 - Outputs: `raven-display`, `eve-camera`, and `eve-mic` emit
   `MimirStreamSample` records with video or audio descriptors.
 - Derived state: network arrival timestamps are capture metadata only. Raven
   audio-in-Scarlett remains the timing witness for global alignment.
-- Forbidden writers: OBS, FFmpeg sender clocks, WebSocket receive time, and SRT
-  arrival time do not own final sync truth.
+- Forbidden writers: OBS, FFmpeg sender clocks, WebSocket receive time, SRT
+  arrival time, and CultMesh packet arrival time do not own final sync truth.
 - Cut line: EveCanvas owns Eve's sensors directly. External iOS streaming apps
-  are fallback tools, not the current architecture.
+  are fallback tools, not the current architecture. SRT/WebSocket bridge
+  transports are diagnostics and compatibility edges once the reliable-UDP
+  Verse media lane exists.
 
 ## Starfire Receiver
 
@@ -79,8 +83,9 @@ EveCanvas now starts native AVFoundation capture after permission grants:
 
 This is an inspectable first transport, not the final high-throughput shape.
 When cadence or bandwidth becomes the bottleneck, replace the JSON/base64 event
-transport with binary packet framing or VideoToolbox H.264 while preserving the
-same source ownership and Mimir runtime sample contract.
+transport with CultMesh reliable-UDP media frames and body shards, optionally
+carrying VideoToolbox H.264 or another explicit media payload. Preserve the same
+source ownership and Mimir runtime sample contract.
 
 Deploy EveCanvas after staging:
 

@@ -5579,6 +5579,15 @@ static int RunPerfectMachineProfileSmoke()
             ["mimir.bioacoustic_codebook_state", "mimir.bioacoustic_decoder_state", "mimir.acoustic_path_state"],
             StringComparer.Ordinal),
         new HashSet<string>(StringComparer.Ordinal)));
+    var mediaTransport = new MimirNetworkTransportSelector().Select(new MimirNetworkTransportRequest(
+        MimirNetworkPayloadKind.MediaStreamFrame,
+        RequiresClockInfluence: false,
+        AllowsRawMedia: true,
+        MaximumLatencyMilliseconds: 50.0,
+        new HashSet<string>(
+            ["mimir.cultmesh_stream_frame.v1"],
+            StringComparer.Ordinal),
+        new HashSet<string>(StringComparer.Ordinal)));
 
     Console.WriteLine(
         $"perfect-machine-profile-smoke profiles={profiles.Count} calibrationPlans={calibrationPlans.Count} audioFields={audioFields.Count} visualFields={visualFields.Count} stereoDepth={stereoDepthProfiles.Count} computePlans={computePlans.Count} assemblyPlans={assemblyPlans.Count} captureProfiles={captureProfiles.Count} publications={publications.Count} languageProfiles={languageProfiles.Count} pathLearning={pathLearningProfiles.Count} localization={localizationProfiles.Count} benchmarkPanels={benchmarkPanels.Count} actuatorStrategies={actuatorStrategies.Count} cameraIngest={cameraIngestStrategies.Count} reservoirs={reservoirStrategies.Count} distributedWitnesses={distributedWitnesses.Count} networkTransports={networkTransports.Count} authorityPolicies={authorityPolicies.Count} modules={moduleCatalog.Count}");
@@ -5600,6 +5609,8 @@ static int RunPerfectMachineProfileSmoke()
         $"perfect-machine-authority appliesTo=raven-scarlett-witness decision={authority.Decision} rule={authority.RuleId}");
     Console.WriteLine(
         $"perfect-machine-transport payload=TypedTimingState status={transport.Status} selected={transport.Transport?.Id ?? "none"}");
+    Console.WriteLine(
+        $"perfect-machine-transport payload=MediaStreamFrame status={mediaTransport.Status} selected={mediaTransport.Transport?.Id ?? "none"}");
 
     return profiles.Count >= 6 &&
         calibrationPlans.Count >= 3 &&
@@ -5618,7 +5629,7 @@ static int RunPerfectMachineProfileSmoke()
         cameraIngestStrategies.Count >= 4 &&
         reservoirStrategies.Count >= 3 &&
         distributedWitnesses.Count >= 4 &&
-        networkTransports.Count >= 4 &&
+        networkTransports.Count >= 6 &&
         authorityPolicies.Count >= 1 &&
         moduleCatalog.Count >= 17 &&
         codebook.Motifs.Length == MimirBioacousticTimeline.SymbolCount &&
@@ -5656,6 +5667,7 @@ static int RunPerfectMachineProfileSmoke()
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&
+        mediaTransport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshStreamFrameMedia.Id &&
         clock is { AnchorCount: >= 4, Confidence: > 0.70 }
             ? 0
             : 1;

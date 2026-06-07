@@ -7,12 +7,16 @@ public enum MimirNetworkPayloadKind
     CompressedAudioProgramFeed,
     CompressedVideoProgramFeed,
     RawVideoDiagnosticWindow,
-    NativeDashboardState
+    NativeDashboardState,
+    MediaStreamFrame,
+    MediaBodyShard
 }
 
 public enum MimirNetworkTransportKind
 {
     CultMeshTypedState,
+    CultMeshReliableUdpMedia,
+    CultMeshReliableUdpBody,
     LanUdpDatagrams,
     SrtDiagnosticMedia,
     WebRtcExperimental,
@@ -57,17 +61,41 @@ public static class MimirNetworkTransportConfigurations
         RejectionConditions: ["not-requested", "outside-debug-session", "oversized-window"],
         "Raw audio can explain failures; it should not become the normal timing authority.");
 
+    public static MimirNetworkTransportConfiguration CultMeshStreamFrameMedia { get; } = new(
+        "cultmesh-reliable-udp-stream-frame",
+        "Primary Verse media lane: typed per-frame envelopes over CultMesh reliable UDP with capture time, source identity, resource/body refs, and backpressure.",
+        MimirNetworkTransportKind.CultMeshReliableUdpMedia,
+        MimirNetworkPayloadKind.MediaStreamFrame,
+        MayAffectClock: false,
+        CarriesRawMedia: true,
+        TargetLatencyMilliseconds: 35.0,
+        RequiredDocuments: ["mimir.cultmesh_stream_frame.v1"],
+        RejectionConditions: ["used-as-clock-authority", "missing-source-identity", "missing-backpressure", "schema-version-mismatch"],
+        "Media is welcome in the Verse, but timing authority still comes from decoded evidence and clock-domain state.");
+
+    public static MimirNetworkTransportConfiguration CultMeshBodyShardLane { get; } = new(
+        "cultmesh-reliable-udp-body-shard",
+        "Primary Verse body lane: bounded CultCache media/page shards over CultMesh reliable UDP with hashes, cursors, and receiver backpressure.",
+        MimirNetworkTransportKind.CultMeshReliableUdpBody,
+        MimirNetworkPayloadKind.MediaBodyShard,
+        MayAffectClock: false,
+        CarriesRawMedia: true,
+        TargetLatencyMilliseconds: 60.0,
+        RequiredDocuments: ["mimir.media_body_shard.v1", "mimir.recorder_body_ref.v1"],
+        RejectionConditions: ["missing-hash", "missing-cursor", "missing-backpressure", "unbounded-body"],
+        "Large bodies move through shards and refs, not inline base64 and not private transport sidecars.");
+
     public static MimirNetworkTransportConfiguration SrtProgramBridge { get; } = new(
         "srt-program-bridge",
-        "Existing LAN media bridge for OBS diagnostics and remote program feeds.",
+        "Existing LAN media bridge for OBS diagnostics and legacy remote program feeds.",
         MimirNetworkTransportKind.SrtDiagnosticMedia,
         MimirNetworkPayloadKind.CompressedVideoProgramFeed,
         MayAffectClock: false,
         CarriesRawMedia: true,
         TargetLatencyMilliseconds: 1500.0,
         RequiredDocuments: [],
-        RejectionConditions: ["used-as-clock-authority", "used-for-local-hot-path"],
-        "Useful bridge. Not the Perfect Machine's synchronization core.");
+        RejectionConditions: ["used-as-clock-authority", "used-for-local-hot-path", "used-as-verse-media"],
+        "Useful OBS bridge. Not the Verse media transport and not the Perfect Machine's synchronization core.");
 
     public static MimirNetworkTransportConfiguration WebRtcExperiment { get; } = CultMeshTimingState with
     {
@@ -96,6 +124,8 @@ public static class MimirNetworkTransportConfigurations
     public static IReadOnlyList<MimirNetworkTransportConfiguration> BuiltIn { get; } =
     [
         CultMeshTimingState,
+        CultMeshStreamFrameMedia,
+        CultMeshBodyShardLane,
         RawAudioDebugWindow,
         SrtProgramBridge,
         WebRtcExperiment,

@@ -77,6 +77,30 @@ Existing document names such as `mimir.well_snapshot.v1`,
 and `mimir.fensalir_reservoir_pressure.v1` should be kept as concrete records
 inside those namespaces until a schema catalog renames them deliberately.
 
+## Transport Lanes
+
+CultMesh reliable UDP is the default Verse transport for live Mimir network
+state and media. TCP/WebSocket, SRT, browser streams, and local pipes are
+diagnostic lowerings or external-boundary bridges unless a specific deployment
+constraint temporarily promotes them.
+
+The live lane split is:
+
+- Typed control/state lane: compact documents such as timing state, command
+  receipts, health, stream cursors, and backpressure.
+- Media stream-frame lane: typed per-frame envelopes such as
+  `mimir.cultmesh_stream_frame.v1` carrying source identity, capture time,
+  resource/body refs, payload format, and confidence.
+- Media body-shard lane: bounded CultCache media/page shards with hashes,
+  cursors, receiver acknowledgements, and backpressure. Large bodies do not
+  travel as inline base64.
+- Latest-state dashboard lane: lossy/current Eve surfaces for operators. It
+  may drop obsolete frames; it does not own durable media bodies.
+
+Media streams are first-class Verse payloads. They still do not become timing
+authority by arrival timestamp. Clock influence comes from decoded anchors,
+source-local evidence, calibrated loopback, and explicit clock-domain state.
+
 ## Eve Surfaces
 
 Mimir publishes operator presentation as Eve/CultUI DSL, preferably
@@ -137,8 +161,9 @@ state.
 ## Demotion Line
 
 Bespoke UI, browser dashboards, retained dashboard node lists, compatibility
-WebSockets, JSON status files, JSONL replay logs, screenshot streams, and OBS
-bridge scripts are demoted to lowerings, diagnostics, external-boundary export,
-or replay witnesses. They may display, transport, inspect, or reconstruct typed
-Mimir state. They may not own sensor truth, calibration truth, command state,
-reservoir scheduling, program presentation, or synchronization behavior.
+WebSockets, SRT/FFmpeg media bridges, JSON status files, JSONL replay logs,
+screenshot streams, and OBS bridge scripts are demoted to lowerings,
+diagnostics, external-boundary export, or replay witnesses. They may display,
+transport, inspect, or reconstruct typed Mimir state. They may not own sensor
+truth, calibration truth, command state, reservoir scheduling, program
+presentation, media-over-Verse policy, or synchronization behavior.

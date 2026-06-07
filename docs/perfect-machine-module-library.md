@@ -22,7 +22,7 @@ job-interview answer for why it belongs in the body of the machine.
 | Stereo depth profiles | `Mimir.Runtime` + Fensalir | SGM-shaped stereo disparity/depth profiles with libSGM as provenance for the first D3D12 lane, not a CUDA dependency. | `src/Mimir.Runtime/Synchronization/MimirStereoDepthConfiguration.cs` |
 | Reservoir strategies | `Mimir.Runtime` + native reservoir + Fensalir | Managed rolling buffers, native shared-edge rings, and derived GPU temporal field storage. | `src/Mimir.Runtime/Synchronization/MimirReservoirConfiguration.cs` |
 | Distributed witnesses | `Mimir.Runtime` + CultMesh | Raven, phone, microcontroller, Nightwing Eyes/Moves, and remote camera rig configurations for compact timing/path/visual state. | `src/Mimir.Runtime/Synchronization/MimirDistributedWitnessConfiguration.cs` |
-| Network transports | `Mimir.Runtime` + CultMesh | Typed timing state, debug windows, SRT bridge media, and experimental browser transport policy plus constraint-based selection. | `src/Mimir.Runtime/Synchronization/MimirNetworkTransportConfiguration.cs`, `src/Mimir.Runtime/Synchronization/MimirNetworkTransportSelector.cs` |
+| Network transports | `Mimir.Runtime` + CultMesh | Typed timing state, reliable-UDP Verse media/body lanes, debug windows, SRT bridge media, and experimental browser transport policy plus constraint-based selection. | `src/Mimir.Runtime/Synchronization/MimirNetworkTransportConfiguration.cs`, `src/Mimir.Runtime/Synchronization/MimirNetworkTransportSelector.cs` |
 | Authority policy | `Mimir.Runtime` | Trust decisions for Starfire loopback, Raven evidence, phone candidates, diagnostic media, and unknown nodes. | `src/Mimir.Runtime/Synchronization/MimirAuthorityPolicyConfiguration.cs`, `src/Mimir.Runtime/Synchronization/MimirAuthorityPolicyEvaluator.cs` |
 | Audio field configurations | `Mimir.Runtime` | Six-mic, source-based, ambisonic, and hybrid evidence field shapes. | `src/Mimir.Runtime/Synchronization/MimirAudioFieldConfiguration.cs` |
 | Visual fusion configurations | `Mimir.Runtime` + Fensalir | Sensor roles and fusion modes from cadence proof through full hybrid evidence. | `src/Mimir.Runtime/Synchronization/MimirVisualFusionConfiguration.cs` |
@@ -41,8 +41,9 @@ job-interview answer for why it belongs in the body of the machine.
   program video publication.
 - Faust owns hot sample movement, alignment, spatialization, separation, and
   stem generation.
-- CultMesh carries typed state surfaces; remote nodes may observe and decode,
-  but they do not become independent clock authorities.
+- CultMesh carries typed state surfaces and reliable-UDP media/body lanes;
+  remote nodes may observe, decode, and stream media through the Verse, but
+  they do not become independent clock authorities.
 - OBS receives final program surfaces and stems. It does not own calibration.
 
 ## Verification Surface

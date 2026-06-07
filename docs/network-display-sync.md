@@ -13,7 +13,8 @@ Authority map:
 - Derived state: Raven display timing is derived from the Raven audio sync
   signal. The display feed is not a timing authority by itself.
 - Forbidden writers: OBS, SRT bridge endpoints, frame-event probes, and network
-  receive timestamps must not decide cross-stream alignment.
+  receive timestamps must not decide cross-stream alignment. CultMesh reliable
+  UDP packet arrival is transport evidence only, not clock authority.
 - Shared path: local cameras, network display frames, mic channels, loopback
   channels, and Raven audio sync channels all enter `MimirRollingStreamBuffer`
   first, then the synchronized planner chooses slices.
@@ -31,8 +32,8 @@ Practical shape:
    applies that clock-domain correction to the `raven-display` video buffer.
 5. Fensalir receives aligned buffer slices and still owns composition.
 
-`config/mimir-runtime.raven-eve.example.json` is the active setup shape for the
-network producer pass:
+`config/mimir-runtime.raven-eve.example.json` is the active bridge setup shape
+for the network producer pass:
 
 - `raven-display` listens for Raven screen capture on SRT port `5200`, decodes
   through FFmpeg, and emits BGRA video samples into the runtime buffer path.
@@ -40,6 +41,13 @@ network producer pass:
   `8793`.
 - `eve-mic` listens for EveCanvas microphone frame-events on WebSocket port
   `8794`.
+
+The target Verse shape replaces those SRT/WebSocket bridge edges with CultMesh
+reliable-UDP lanes: typed `mimir.cultmesh_stream_frame.v1` envelopes for
+per-frame media metadata and refs, plus bounded media body shards for payloads
+too large to inline. Raven display frames remain media observations entering
+the same rolling buffer; Raven sync still comes from audio evidence and
+clock-domain correction, not packet arrival.
 
 The older disabled `frame-events` example in
 `config/mimir-runtime.asio.example.json` remains diagnostic only. It can witness

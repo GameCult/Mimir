@@ -652,10 +652,12 @@ a named invariant that the native runtime cannot protect yet.
   retention boundary when choosing a synchronized window. This makes the live
   metric honest: a five-second buffer target is no longer allowed to masquerade
   as five seconds of resident samples when body serialization/backpressure
-  starves a source. The next coherent cut is a CultMesh streaming organ with a
-  compact typed control lane, a CultCache page/shard append body lane, explicit
+  starves a source. The next coherent cut is a CultMesh streaming organ over
+  reliable UDP with a compact typed control lane, typed stream-frame media
+  envelopes, a CultCache page/shard append body lane, explicit
   cursors/backpressure, and a lossy latest-state dashboard lane; do not keep
-  expanding inline base64 capture pages as if they were the final transport.
+  expanding inline base64 capture pages or SRT/WebSocket bridge edges as if
+  they were the final transport.
   Eve now follows the same rule for its own device body:
   `MimirDistributedWitnessConfigurations.EveLocalSensors` and the
   `eve-local-sensors` Perfect Machine profile make Eve responsible for local
