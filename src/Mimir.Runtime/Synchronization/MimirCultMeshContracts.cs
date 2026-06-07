@@ -189,6 +189,35 @@ public sealed record MimirFensalirReservoirPressureDocument(
     [property: Key(13)] long DroppedBecauseTimingDegraded,
     [property: Key(14)] string PressureReason);
 
+[CultDocument("mimir.raven_capture_mux_state", "mimir.raven_capture_mux_state.v1")]
+[MessagePackObject]
+public sealed record MimirRavenCaptureMuxStateDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string DaemonId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string HostId,
+    [property: Key(3)] string Status,
+    [property: Key(4)] string TargetEndpoint,
+    [property: Key(5)] string Transport,
+    [property: Key(6)] string VideoSourceId,
+    [property: Key(7)] string AudioSourceId,
+    [property: Key(8)] string VideoCapture,
+    [property: Key(9)] int Width,
+    [property: Key(10)] int Height,
+    [property: Key(11)] int Framerate,
+    [property: Key(12)] int AudioSampleRate,
+    [property: Key(13)] int AudioChannels,
+    [property: Key(14)] int? FfmpegPid,
+    [property: Key(15)] string? StartedAtUtc,
+    [property: Key(16)] long RestartCount,
+    [property: Key(17)] int? LastExitCode,
+    [property: Key(18)] string StdoutLog,
+    [property: Key(19)] string StderrLog,
+    [property: Key(20)] string CommandLine,
+    [property: Key(21)] string[] Capabilities,
+    [property: Key(22)] string[] Notes);
+
 [CultDocument("mimir.eve_dashboard_manifest", "mimir.eve_dashboard_manifest.v1")]
 [MessagePackObject]
 public sealed record MimirEveDashboardManifestDocument(

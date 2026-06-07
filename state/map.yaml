@@ -396,7 +396,14 @@ invariants:
     alone. Raven's local `ddagrab + Mimir.WasapiLoopback + AAC + h264_nvenc`
     proof recorded 568 frames in ten seconds at 1080p60; sparse-frame direct
     TCP/SSH proof captures are therefore transport/proof-path evidence, not
-    Raven GPU/capture evidence. `scripts/start-raven-av-demux.ps1`
+    Raven GPU/capture evidence. `src/Mimir.RavenDaemon` is now the Raven-local
+    long-running owner for that mux path: it supervises the same
+    `ddagrab/gdigrab + Mimir.WasapiLoopback + FFmpeg` command, publishes
+    `mimir.raven_capture_mux_state.v1` through CultMesh/CultCache, and exposes
+    Eve dashboard state on port 8801. `scripts/start-raven-av-sender.ps1`
+    remains a direct diagnostic launch path; it does not own canonical Raven
+    capture status. `scripts/start-raven-daemon.ps1` defaults to Starfire over
+    WireGuard at `10.77.0.2:5200`. `scripts/start-raven-av-demux.ps1`
     is the Starfire local demux edge, copying video to local SRT port 5210 and
     decoding audio to f32 PCM on local SRT port 5212 for Mimir's current raw
     ingest adapters. `MimirFfmpegPcmAudioStreamSource` owns the post-demux PCM
@@ -765,7 +772,7 @@ accepted_design:
     `open-provider`. `voidbot.swarm` reads VoidBot's existing
     `.voidbot/status/swarm-state.json` projection, publishes avatar URLs on
     identity nodes, and Eve renders a native VoidBot-style cockpit: CTB rail,
-    selected Face/status pane, state tree, and detail panel.
+    selected Persona/status pane, state tree, and detail panel.
     Dashboard manifests and states now have typed CultMesh-compatible document
     shapes `mimir.eve_dashboard_manifest.v1` and
     `mimir.eve_dashboard_state.v1`, while the live iPad lane stays

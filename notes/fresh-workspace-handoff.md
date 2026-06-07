@@ -17,8 +17,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Current Shape
 
-- Public brand/Face is Mimir.
-- Mimir's Face doctrine lives in [[docs/mimir-face|Mimir Face]].
+- Public brand/Persona is Mimir.
+- Mimir's Persona doctrine lives in [[docs/mimir-face|Mimir Persona]].
 - VoidBot persona/state live under `.voidbot/voice/` and `.voidbot/state/`.
   Commit `.voidbot` dirt in a separate state commit whenever it appears.
 - V1 still has FFmpeg/SRT/OBS bridge utilities for LAN ingest.
@@ -164,6 +164,13 @@ Get-Content .\state\evidence.jsonl -Tail 8
   Raven desktop capture with `gdigrab` plus NVENC. EveCanvas owns Eve camera/mic
   capture directly through AVFoundation/AVAudioEngine; no external iOS camera
   app owns that path.
+- `src/Mimir.RavenDaemon` is the Raven-local capture mux owner for the
+  stream-proof path. It supervises display capture plus Realtek render loopback
+  through the existing FFmpeg/WASAPI pipeline, publishes
+  `mimir.raven_capture_mux_state.v1` through CultMesh/CultCache, and exposes
+  Eve dashboard state on port `8801`. `scripts/start-raven-daemon.ps1` defaults
+  to Starfire over WireGuard at `10.77.0.2:5200`. The older Raven sender scripts
+  remain diagnostics, not canonical long-running status owners.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
 - The current listenable dual-mic receipt is the Faust-chain bridge, not the
