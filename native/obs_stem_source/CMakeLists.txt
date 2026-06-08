@@ -5,6 +5,7 @@ project(mimir_obs_stem_source LANGUAGES CXX)
 find_package(libobs REQUIRED CONFIG)
 
 add_library(mimir_obs_stem_source MODULE
+    mimir_obs_muninn_source.cpp
     mimir_obs_program_texture_source.cpp
     mimir_obs_stem_source.cpp)
 

@@ -16,6 +16,7 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("mimir-obs-stem-source", "en-US")
 
 void mimir_register_program_texture_source();
+void mimir_register_muninn_source();
 
 struct MimirStemSource {
     obs_source_t *source = nullptr;
@@ -209,6 +210,7 @@ bool obs_module_load(void)
 {
     obs_register_source(&mimir_stem_source_info);
     mimir_register_program_texture_source();
+    mimir_register_muninn_source();
     blog(LOG_INFO, "Mimir OBS sources loaded");
     return true;
 }
