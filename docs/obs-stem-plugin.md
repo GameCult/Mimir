@@ -121,24 +121,23 @@ Muninn Stream
 
 ### Muninn Streams
 
-The `Muninn Stream` source is a thin OBS wrapper over Muninn's stream catalog.
-It reads:
+The `Muninn Stream` source is a thin OBS wrapper over Muninn's typed
+CultCache/CultMesh stream catalog. It reads Muninn's local `.cc` store:
 
 ```text
-C:\Meta\Odin\state\muninn-obs-streams.tsv
+C:\Meta\Odin\state\muninn.telemetry.cc
 ```
 
-Each catalog line is:
+The source looks for record key `obs` with type:
 
 ```text
-stream_id<TAB>label<TAB>url<TAB>state
+muninn.obs_stream_catalog
 ```
 
-Muninn owns that catalog as a compatibility lowering of its typed
-CultMesh/CultCache state. OBS owns only the selected scene source and media
-rendering. The source does not probe devices and does not activate streams by
-itself; use Muninn's explicit activation command before selecting a stream that
-requires capture resources.
+Muninn owns that catalog as typed CultCache state. OBS owns only the selected
+scene source and media rendering. The source does not probe devices and does
+not activate streams by itself; use Muninn's explicit activation command before
+selecting a stream that requires capture resources.
 
 ## Install
 
