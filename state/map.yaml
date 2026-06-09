@@ -294,6 +294,11 @@ accepted_design:
   - `src/Mimir.Runtime/Synchronization` now includes typed program contracts:
     `mimir.program_scene.v1`, `mimir.program_output.v1`, and
     `mimir.eve_operator_surface.v1`.
+  - `state/mimir-program-composition.cc` is the current imported Mimir program
+    state, generated from OBS scene JSON by `Mimir.BufferSmoke
+    --import-obs-program-scene`. It preserves the current Starfire monitor,
+    Discord crop/chroma key, Raven monitor, camera, browser, and Mimir texture
+    layers as Mimir-owned typed state.
   - `src/Mimir.CultMeshMedia` owns the first explicit CultMesh media/body
     bridge. Raven publishes muxed H.264/AAC MPEG-TS chunks as rolling
     `mimir.cultmesh_media_frame` documents over CultNet reliable UDP,

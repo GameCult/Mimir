@@ -107,6 +107,8 @@ The first typed program contracts live in `src/Mimir.Runtime/Synchronization`:
 
 OBS scene JSON is import/mirror evidence for the initial crop/key/transform
 layout. It is not the editor of record after Mimir owns the scene graph.
+The current imported local scene state lives at
+`state/mimir-program-composition.cc`.
 
 ## OBS Bridge Utility
 

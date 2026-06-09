@@ -49,6 +49,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `mimir.program_scene.v1`, `mimir.program_output.v1`, and
   `mimir.eve_operator_surface.v1`; `Mimir.BufferSmoke
   --perfect-machine-contract-smoke` writes them into CultCache.
+- `Mimir.BufferSmoke --import-obs-program-scene --output
+  state/mimir-program-composition.cc` imports the current OBS scene JSON into
+  Mimir-owned typed state. The latest imported scene has eight layers, six
+  visible, two cropped, one chroma-keyed, and Raven mapped as
+  `muninn:raven:monitor:primary`.
 - Local six-camera ingest should use direct driver adapters. Process-backed
   sources are bridge/network edges only.
 - Leap stereo IR is the first timing-camera candidate for direct ingest.

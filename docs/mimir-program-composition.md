@@ -109,3 +109,11 @@ The proof path is:
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-contract-smoke
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-profile-smoke
 ```
+
+Import the current OBS scene as Mimir-owned typed state:
+
+```powershell
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --import-obs-program-scene --output state\mimir-program-composition.cc
+```
+
+The live imported state file is `state/mimir-program-composition.cc`.

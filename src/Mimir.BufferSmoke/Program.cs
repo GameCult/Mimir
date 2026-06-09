@@ -91,6 +91,15 @@ if (args.Any(arg => string.Equals(arg, "--perfect-machine-contract-smoke", Strin
         .ConfigureAwait(false);
 }
 
+if (args.Any(arg => string.Equals(arg, "--import-obs-program-scene", StringComparison.OrdinalIgnoreCase)))
+{
+    return await ImportObsProgramSceneAsync(
+        ParseStringOption(args, "--input", DefaultObsScenePath()),
+        ParseStringOption(args, "--scene", ""),
+        ParseStringOption(args, "--output", "state/mimir-program-composition.cc"))
+        .ConfigureAwait(false);
+}
+
 if (args.Any(arg => string.Equals(arg, "--perfect-machine-manifest", StringComparison.OrdinalIgnoreCase)))
 {
     return await WritePerfectMachineManifestAsync(
@@ -1594,6 +1603,72 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length} sceneLayers={scene.Layers.Length} programOutput={output.OutputId} eveCommands={eveSurface.CommandTopics.Length}");
     return 0;
 }
+
+static async Task<int> ImportObsProgramSceneAsync(string inputPath, string sceneName, string outputPath)
+{
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"OBS scene file not found: {inputPath}");
+        return 1;
+    }
+
+    var importedAt = DateTimeOffset.UtcNow;
+    var scene = MimirObsSceneImporter.ImportFile(
+        inputPath,
+        string.IsNullOrWhiteSpace(sceneName) ? null : sceneName,
+        importedAt);
+    var output = MimirCultMeshContractFactory.CreateProgramOutput(
+        "mimir-imported-program",
+        scene.SceneId,
+        MimirProgramPublicationConfigurations.YggdrasilSiteProgram,
+        importedAt);
+    var eveSurface = MimirCultMeshContractFactory.CreateOperatorSurface(
+        "mimir-eve-gui-compositor",
+        scene.SceneId,
+        MimirProgramPublicationConfigurations.OperatorSurfaces[0],
+        importedAt);
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
+    using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
+    {
+        PullOnOpen = File.Exists(outputPath)
+    }).ConfigureAwait(false);
+    await cache.UpsertAsync(
+        scene,
+        new CultRecordHandle<MimirProgramSceneDocument>(new CultRecordKey($"mimir-program-scene:{scene.SceneId}")))
+        .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        output,
+        new CultRecordHandle<MimirProgramOutputDocument>(new CultRecordKey($"mimir-program-output:{output.OutputId}")))
+        .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        eveSurface,
+        new CultRecordHandle<MimirEveOperatorSurfaceDocument>(new CultRecordKey($"mimir-eve-surface:{eveSurface.SurfaceId}")))
+        .ConfigureAwait(false);
+    await cache.FlushAsync().ConfigureAwait(false);
+
+    var visible = scene.Layers.Count(layer => layer.Visible);
+    var keyed = scene.Layers.Count(layer => layer.ChromaKey is not null);
+    var cropped = scene.Layers.Count(layer =>
+        layer.Crop.Left != 0.0 || layer.Crop.Top != 0.0 || layer.Crop.Right != 0.0 || layer.Crop.Bottom != 0.0);
+    Console.WriteLine(
+        $"obs-program-scene-import input={inputPath} output={outputPath} scene={scene.SceneId} canvas={scene.CanvasWidth}x{scene.CanvasHeight} layers={scene.Layers.Length} visible={visible} cropped={cropped} keyed={keyed} route={output.PublisherRoute}");
+    foreach (var layer in scene.Layers.OrderBy(layer => layer.ZIndex))
+    {
+        Console.WriteLine(
+            $"layer {layer.ZIndex}:{layer.LayerId} visible={layer.Visible} source={layer.SourceRef} kind={layer.SourceKind} pos={layer.X:0.###},{layer.Y:0.###} size={layer.Width:0.###}x{layer.Height:0.###} crop={layer.Crop.Left:0.###},{layer.Crop.Top:0.###},{layer.Crop.Right:0.###},{layer.Crop.Bottom:0.###} key={(layer.ChromaKey is null ? "none" : layer.ChromaKey.KeyColorRgba.ToString("x8"))}");
+    }
+
+    return 0;
+}
+
+static string DefaultObsScenePath() =>
+    Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "obs-studio",
+        "basic",
+        "scenes",
+        "Untitled.json");
 
 static async Task<int> WritePerfectMachineManifestAsync(string outputPath)
 {
