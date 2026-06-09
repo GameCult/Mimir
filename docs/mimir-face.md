@@ -48,9 +48,10 @@ Mimir exists to turn cameras, microphones, speakers, timing signals, and
 distributed capture surfaces into one realtime coherent volumetric field. The
 field is the product. The bridge scripts are scaffolding and probes.
 
-The live target is one native five-second rolling reservoir feeding Fensalir GPU
-fusion and Faust/native DSP, then OBS. Retention has one owner. Typed views are
-indexes, not private histories.
+The live target is one native five-second rolling reservoir feeding Mimir-owned
+program composition, Fensalir GPU fusion, Faust/native DSP, Eve operator
+surfaces, and a Yggdrasil site publisher. OBS is compatibility only. Retention
+has one owner. Typed views are indexes, not private histories.
 
 ## Operating Doctrine
 
@@ -63,11 +64,15 @@ the synchronized program path is being rebuilt around `LocalcastRuntime`,
 
 Invariants:
 
-- OBS owns final broadcast composition.
-- Fensalir owns dense visual fusion, material/brush/splat rendering, and Spout2
-  publication.
+- Mimir owns final program composition, source subscription, preview/control
+  state, stats, and publication intent.
+- Fensalir owns dense visual fusion, material/brush/splat rendering, and local
+  program texture output.
 - Faust/native DSP owns hot audio alignment, room suppression, voice separation,
   stems, and spatial bed generation.
+- Eve lowerers render operator controls and preview without owning scene truth.
+- The Yggdrasil publisher daemon ships the Mimir program to the site without
+  owning composition.
 - FFmpeg owns simple capture, encode, and transport in V1 bridge mode.
 - Mimir/this repo owns configuration, calibration, launch/status, typed
   contracts, memory, and operational repeatability.

@@ -25,10 +25,13 @@ flowchart TD
     R --> N["native reservoir handles"]
     N --> E["Fensalir GPU fusion + UI"]
     N --> F["Faust/native DSP"]
-    E --> G["Spout2/program video"]
+    E --> G["Mimir program video"]
     F --> H["program stems + spatial bed"]
-    G --> I["OBS"]
-    H --> I
+    E --> I["Eve GUI/TUI operator surfaces"]
+    G --> J["Yggdrasil site publisher"]
+    H --> J
+    G -. "compatibility" .-> K["OBS adapter"]
+    H -. "compatibility" .-> K
 ```
 
 Ownership:
@@ -41,11 +44,18 @@ Ownership:
   becoming independent clock authorities.
 - `Mimir.Runtime` owns app-level stream buffers and synchronization.
 - Native capture workers own device reads.
+- Mimir owns program composition, source subscription policy, preview/control
+  state, stats, and publication intent.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
-  D3D12 interop, runtime UI, and Spout2 publication.
+  D3D12 interop, runtime UI lowering, and local program texture output.
 - Faust/native DSP owns hot audio alignment, suppression, separation,
   spatialization, and stem generation.
-- OBS owns broadcast controls.
+- Eve GUI/TUI lowerers render Mimir's operator surfaces on any device without
+  owning scene truth.
+- The Yggdrasil-facing publisher daemon consumes Mimir program output and
+  publishes it to the site without owning composition.
+- OBS is a temporary compatibility sink, not a composition or broadcast
+  authority.
 
 Invariant: the live window is bounded, in memory, and has one timing authority.
 No private history outlives the rolling buffer.
@@ -54,7 +64,7 @@ No private history outlives the rolling buffer.
 
 [[docs/viable-stream-app|Viable Stream App]] defines the near-term app target.
 Fensalir hosts the running Mimir app, keeps the default five-second runtime in
-memory, exposes debug/settings/output controls, and emits synchronized OBS
+memory, exposes debug/settings/output controls, and emits synchronized Mimir
 program video plus separately controllable audio stems.
 
 `Mimir.Runtime` currently provides:
@@ -79,6 +89,25 @@ the rolling buffers while the direct ABI driver is being cut. It does not carry
 pixels and does not own the final six-camera hot path. Multi-camera probes are
 one process with declared accepted source ids, not one process per camera.
 
+## Program Composition
+
+[[docs/mimir-program-composition|Mimir Program Composition]] is the live
+authority map for stream-program output. Muninn runs on Starfire, Nightwing, and
+Raven-class capture hosts to publish local stream capabilities and selected
+media bodies. Mimir consumes only the streams it needs for calibration and
+composition, commits one typed scene graph, emits Eve GUI/TUI operator surfaces,
+and publishes program output locally plus through a Yggdrasil-facing site
+publisher.
+
+The first typed program contracts live in `src/Mimir.Runtime/Synchronization`:
+
+- `mimir.program_scene.v1`
+- `mimir.program_output.v1`
+- `mimir.eve_operator_surface.v1`
+
+OBS scene JSON is import/mirror evidence for the initial crop/key/transform
+layout. It is not the editor of record after Mimir owns the scene graph.
+
 ## OBS Bridge Utility
 
 ```mermaid
@@ -96,6 +125,42 @@ flowchart TD
 
 The bridge is useful because it is inspectable and already speaks OBS. It does
 not become the synchronized program authority.
+
+## CultMesh Media Bridge
+
+```mermaid
+flowchart TD
+    A["Raven FFmpeg desktop + WASAPI loopback mux"] --> B["Mimir.CultMeshMedia send"]
+    B --> C["CultNet reliable UDP media-frame documents"]
+    C --> D["Yggdrasil CultMesh relay on 10.77.0.1:3075"]
+    D --> E["Starfire Mimir.CultMeshMedia recv"]
+    E --> F["local MPEG-TS UDP udp://127.0.0.1:5200"]
+    F --> G["OBS Raven Monitor + Realtek"]
+```
+
+Owner: `src/Mimir.CultMeshMedia` owns the live Raven-to-Starfire media body
+bridge over CultMesh/CultNet. FFmpeg still owns Raven capture and encoding.
+Mimir owns composition. OBS may consume the Starfire-local MPEG-TS endpoint as a
+compatibility sink while Mimir/Fensalir program output and site publication
+mature.
+
+Invariant: Raven media body state is live and bounded. Sender writes rolling
+`mimir.cultmesh_media_frame` slot documents rather than an unbounded durable
+video archive. Yggdrasil relays CultNet reliable UDP over the WireGuard mesh.
+Starfire lowers the subscribed stream to local UDP for compatibility sinks
+because OBS is not a CultMesh runtime.
+
+Current deployment: Yggdrasil runs the relay from
+`/opt/gamecult/mimir-cultmesh-media/Mimir.CultMeshMedia` with cache
+`/var/lib/gamecult/mimir/cultmesh-media.cc` and log
+`/var/log/gamecult/mimir-cultmesh-media.log`. Starfire runs the receiver from
+`artifacts/mimir-cultmesh-media-win-x64-selfcontained/Mimir.CultMeshMedia.exe`
+and writes `raven-primary-av` to `udp://127.0.0.1:5200`. OBS source
+`Raven Monitor + Realtek` points at that local UDP endpoint.
+
+Raven SSH over WireGuard timed out during the initial deployment pass, so the
+Raven sender still needs to be launched on Raven directly with
+`scripts/start-raven-cultmesh-av-sender.ps1`.
 
 ## Audio Field
 

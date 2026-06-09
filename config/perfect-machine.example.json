@@ -31,15 +31,25 @@
     "outputs": {
       "video": "synchronized-program-video",
       "audio": "separately-controllable-synchronized-stems"
+    },
+    "programComposition": {
+      "owner": "Mimir",
+      "sceneDocument": "mimir.program_scene.v1",
+      "operatorSurface": "mimir.eve_operator_surface.v1",
+      "outputDocument": "mimir.program_output.v1",
+      "sitePublisher": "Yggdrasil",
+      "obsRole": "compatibility-sink-only"
     }
   },
   "authorities": {
     "configurationCalibrationLaunchStatus": "Mimir",
+    "programComposition": "Mimir",
+    "operatorSurfaces": "Eve",
+    "sitePublication": "Yggdrasil publisher daemon",
     "denseVisualFusion": "Fensalir",
     "gpuMaterialAndBrushReconciliation": "Fensalir",
-    "spoutPublication": "Fensalir",
-    "hotAudioDsp": "Faust",
-    "obsBroadcastControls": "OBS"
+    "programTextureOutput": "Fensalir",
+    "hotAudioDsp": "Faust"
   },
   "visualSensors": [
     { "id": "kiyo-primary", "role": "rgb-main", "required": true },
@@ -70,9 +80,9 @@
   ],
   "outputs": {
     "video": {
-      "target": "Spout2",
-      "senderName": "Mimir Point Cloud",
-      "owner": "Fensalir"
+      "target": "MimirProgramTexture",
+      "senderName": "Mimir Program Texture",
+      "owner": "Mimir/Fensalir"
     },
     "audio": {
       "owner": "Faust",
@@ -85,6 +95,22 @@
         "co_streamer_loopback",
         "spatial_bed"
       ]
+    },
+    "operator": {
+      "owner": "Mimir/Eve",
+      "surfaces": [
+        "eve-gui-compositor",
+        "eve-tui-operator",
+        "cultmesh-command-surface"
+      ]
+    },
+    "site": {
+      "owner": "Yggdrasil publisher daemon",
+      "input": "mimir.program_output.v1",
+      "route": "cultmesh://yggdrasil/gamecult.site/mimir/program"
+    },
+    "compatibility": {
+      "obs": "optional-derived-sink"
     }
   },
   "runtimePolicy": {
@@ -93,7 +119,9 @@
       "native-driver-workers",
       "native-reservoir",
       "Fensalir",
-      "Faust"
+      "Faust",
+      "Eve",
+      "Yggdrasil publisher daemon"
     ],
     "neverInCompatibilityEdges": [
       "dense-feature-extraction",

@@ -27,7 +27,7 @@ job-interview answer for why it belongs in the body of the machine.
 | Visual fusion configurations | `Mimir.Runtime` + Fensalir | Sensor roles and fusion modes from cadence proof through full hybrid evidence. | `src/Mimir.Runtime/Synchronization/MimirVisualFusionConfiguration.cs` |
 | Compute offload configurations | `Mimir.Runtime` + CultMesh | Local-heavy, distributed witness, and calibration sweep workload placement. | `src/Mimir.Runtime/Synchronization/MimirComputeOffloadConfiguration.cs` |
 | Assembly plans | `Mimir.Runtime` | Named combinations of modules that prove synthetic, Scarlett, meatspace, and distributed cuts. | `src/Mimir.Runtime/Synchronization/MimirMachineAssemblyPlan.cs` |
-| OBS publication profiles | Fensalir + Faust + OBS | Spout/shared-texture video and separately mixable Faust stem publication. | `src/Mimir.Runtime/Synchronization/MimirObsPublicationConfiguration.cs` |
+| Program publication profiles | Mimir + Fensalir + Faust + Eve + Yggdrasil | Mimir-owned scene publication, Eve operator surfaces, Yggdrasil site feed, and temporary OBS compatibility adapters. | `src/Mimir.Runtime/Synchronization/MimirProgramPublicationConfiguration.cs` |
 | Fensalir lowering | `Mimir.Runtime` -> Fensalir | Pure mapping from Mimir rolling/video/audio state into Fensalir GPU sensor and acoustic field frames. | `src/Mimir.Runtime/Synchronization/MimirFensalirFieldLowering.cs` |
 | Module catalog | `Mimir.Runtime` | Indexes the live module set and verification commands. | `src/Mimir.Runtime/Synchronization/MimirModuleLibrary.cs` |
 | Manifest factory | `Mimir.Runtime` | Produces an exportable JSON manifest for tools, docs, UI, and remote witnesses. | `src/Mimir.Runtime/Synchronization/MimirPerfectMachineManifest.cs` |
@@ -42,7 +42,8 @@ job-interview answer for why it belongs in the body of the machine.
   stem generation.
 - CultMesh carries typed state surfaces; remote nodes may observe and decode,
   but they do not become independent clock authorities.
-- OBS receives final program surfaces and stems. It does not own calibration.
+- OBS may receive compatibility program surfaces and stems. It does not own
+  calibration, composition, preview/control, or publication.
 
 ## Verification Surface
 

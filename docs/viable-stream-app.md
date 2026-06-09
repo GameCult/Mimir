@@ -4,12 +4,13 @@
 
 Build the smallest live Mimir application that can ingest multiple local or
 networked video and audio feeds, hold a short synchronized window in memory,
-and emit coherent OBS-facing program outputs while Fensalir provides the
-operator UI.
+and emit coherent Mimir program outputs while Eve provides operator surfaces
+and Yggdrasil publishes the site feed.
 
 The default reservoir horizon is five seconds. That delay is not decoration. It
 is the budget that lets late network packets, independent capture clocks,
-audio/video alignment, and debug controls converge before OBS sees the result.
+audio/video alignment, and debug controls converge before Mimir emits the
+program result.
 Mimir is explicitly trading latency and memory for throughput and extraction
 quality: the app may spend that buffered window lining streams up and crunching
 audio/video data to recover as much of the volumetric audio field and
@@ -21,16 +22,16 @@ alignment and field-reconstruction budget.
 
 Today the repo has two partial machines:
 
-- FFmpeg/SRT bridge scripts can capture sender video/audio and expose stable OBS
-  Media Source endpoints.
+- FFmpeg/SRT bridge scripts can capture sender video/audio and expose stable
+  compatibility endpoints.
 - The native `LocalcastRuntime` reservoir ABI can hold typed live sample handles,
   and Fensalir can consume native render packets for GPU fusion.
 
 Those parts are useful, but they are not yet the viable app. The viable app is
 the join: ingest workers append live sample handles into one Fensalir-hosted
 runtime window, Fensalir renders video from that window, Faust/native audio
-builds synchronized stems from the same window, and OBS receives only the
-program outputs.
+builds synchronized stems from the same window, Mimir commits the scene graph,
+Eve lowers the operator surface, and Yggdrasil publishes the program output.
 
 ```mermaid
 flowchart TD
@@ -39,10 +40,15 @@ flowchart TD
     C["local mic/loopback workers"] --> R
     D["network audio ingest workers"] --> R
     R --> U["Fensalir debug/settings/output UI"]
-    R --> V["Fensalir GPU video composition"]
+    R --> S["Mimir program scene graph"]
+    S --> U
+    S --> V["Fensalir GPU video composition"]
     R --> F["Faust/native audio alignment + stems"]
-    V --> O["OBS video output"]
-    F --> P["OBS audio stem outputs"]
+    S --> E["Eve GUI/TUI operator surfaces"]
+    V --> Y["Yggdrasil site publisher"]
+    F --> Y
+    V -. "compatibility" .-> O["OBS adapter"]
+    F -. "compatibility" .-> O
 ```
 
 ## Invariants
@@ -51,12 +57,17 @@ flowchart TD
 - The five-second rolling window is a deliberate compute budget, not accidental
   latency. It exists so capture, sync, GPU fusion, and audio field extraction
   can choose coherence over immediacy.
-- Fensalir owns the running app, UI, debug state, settings changes, output
-  management, GPU fusion/rendering, and Spout/video publication.
+- Mimir owns the program scene graph, source subscription policy, preview/control
+  state, stats, and publication intent.
+- Fensalir owns the running app host, UI lowering, debug state, GPU
+  fusion/rendering, and local program texture output.
 - Faust/native DSP owns audio alignment, voice separation, suppression,
   volumetric sound-field extraction, stems, and spatial bed generation.
-- OBS receives synchronized program surfaces. Raw unsynchronized feeds may be
-  diagnostic inputs, not broadcast truth.
+- Eve lowerers render controls and previews without owning scene truth.
+- The Yggdrasil publisher consumes synchronized program surfaces without owning
+  a second composition.
+- OBS compatibility adapters may receive synchronized program surfaces. Raw
+  unsynchronized feeds may be diagnostic inputs, not broadcast truth.
 - Networked feeds are producers into the same reservoir. They do not own clocks,
   private buffers, or a parallel synchronization model.
 - Missing feeds become explicit absence or silent/blank placeholders inside the
@@ -78,9 +89,14 @@ The first cut should be deliberately boring:
    loopback ingest.
 7. Expose Fensalir UI readouts for reservoir edge, window start, per-kind
    counts, feed health, delay estimate, output status, and current settings.
-8. Render one synchronized program video output from the reservoir.
-9. Emit separately controllable OBS audio stems from the same reservoir window.
-10. Keep the existing FFmpeg/SRT scripts as edge utilities for network capture
+8. Render one synchronized Mimir program video output from the reservoir.
+9. Emit separately controllable program audio stems from the same reservoir
+   window.
+10. Publish Eve GUI/TUI operator surfaces for preview, source selection, scene
+    edits, stats, and output state.
+11. Add the Yggdrasil-facing publisher daemon that consumes Mimir program
+    output without owning composition.
+12. Keep the existing FFmpeg/SRT scripts as edge utilities for network capture
     and OBS compatibility, not as the stream authority.
 
 ## Repo Shape

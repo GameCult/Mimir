@@ -5,17 +5,24 @@ hosted stream machine.
 
 ## Objective
 
-Make the room available in OBS as synchronized program video plus separately
+Make the room available as a Mimir-owned synchronized program with separately
 controllable audio while preserving ownership:
 
 - Mimir owns configuration, calibration truth, runtime contracts, launch,
   status, and persistence.
 - Mimir.Runtime owns in-memory stream buffers and runtime synchronization.
 - Native capture workers own device reads and append typed sample handles.
-- Fensalir owns GPU fusion, rendering, D3D12 interop, UI, and Spout2 output.
+- Mimir owns stream subscription, scene composition, preview/control state,
+  stats, and program publication intent.
+- Fensalir owns GPU fusion, rendering, D3D12 interop, UI lowering, and local
+  program texture output.
 - Faust/native DSP owns hot audio alignment, suppression, separation, stems, and
   spatial bed generation.
-- OBS owns broadcast controls.
+- Eve GUI/TUI lowerers expose operator controls and preview without owning
+  scene truth.
+- The Yggdrasil-facing publisher daemon consumes Mimir program output and
+  publishes it to the site without owning composition.
+- OBS is a temporary compatibility sink.
 
 ## Runtime State Model
 
@@ -26,10 +33,13 @@ flowchart TD
     N["network feed producers"] --> R
     R --> Q["Fensalir UI + GPU fusion"]
     R --> F["Faust/native DSP"]
-    Q --> S["Spout2/program video"]
+    Q --> S["Mimir program video"]
     F --> P["program stems + spatial bed"]
-    S --> O["OBS"]
-    P --> O
+    Q --> E["Eve operator surfaces"]
+    S --> Y["Yggdrasil site publisher"]
+    P --> Y
+    S -. "compatibility" .-> O["OBS adapter"]
+    P -. "compatibility" .-> O
 ```
 
 The app-level runtime initializes one rolling buffer per configured audio or
@@ -48,7 +58,8 @@ camera driver buffers, GPU textures, or DSP audio memory.
 - Fensalir consumes current visual/audio timing state and publishes the program
   video surface.
 - Faust/native DSP consumes audio/phase/event handles and publishes stems.
-- OBS receives final program surfaces. It does not own synchronization.
+- OBS compatibility adapters may receive final program surfaces. They do not
+  own synchronization, composition, preview/control, or publication.
 
 ## Impossible By Construction
 

@@ -11,7 +11,8 @@ public enum MimirWorkloadKind
     CameraCapture,
     VisualFeatureExtraction,
     VisualFusion,
-    ObsPublication
+    ProgramComposition,
+    ProgramPublication
 }
 
 public sealed record MimirWorkloadPlacement(
@@ -42,7 +43,8 @@ public static class MimirComputeOffloadConfigurations
             new(MimirWorkloadKind.CameraCapture, MimirComputeBackend.NativeSimd, "native capture workers", CanRunRemote: true, RequiresRealtime: true, "Drivers own device reads and timestamps."),
             new(MimirWorkloadKind.VisualFeatureExtraction, MimirComputeBackend.D3D12Compute, "Fensalir", CanRunRemote: false, RequiresRealtime: true, "GPU owns dense feature work."),
             new(MimirWorkloadKind.VisualFusion, MimirComputeBackend.D3D12Compute, "Fensalir", CanRunRemote: false, RequiresRealtime: true, "Fensalir owns temporal evidence field."),
-            new(MimirWorkloadKind.ObsPublication, MimirComputeBackend.D3D12Compute, "OBS/Fensalir output", CanRunRemote: false, RequiresRealtime: true, "OBS receives program surfaces, not sync authority.")
+            new(MimirWorkloadKind.ProgramComposition, MimirComputeBackend.D3D12Compute, "Mimir + Fensalir", CanRunRemote: false, RequiresRealtime: true, "Mimir owns the scene graph; Fensalir lowers it into program pixels."),
+            new(MimirWorkloadKind.ProgramPublication, MimirComputeBackend.D3D12Compute, "Mimir + Yggdrasil publisher", CanRunRemote: false, RequiresRealtime: true, "The site publisher consumes the Mimir program output; OBS is only an optional compatibility sink.")
         ]);
 
     public static MimirComputeOffloadConfiguration DistributedWitnesses { get; } = new(

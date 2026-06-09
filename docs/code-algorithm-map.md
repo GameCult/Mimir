@@ -15,8 +15,9 @@ Timestamp for this pass: 2026-05-23, starting at 23:24 Europe/London.
 
 Mimir collects local and network audio/video samples into bounded rolling
 runtime buffers, uses active/passive timing evidence to place audio streams on a
-canonical timeline, and leaves Fensalir/Faust/OBS with clear ownership over
-rendering, DSP, and broadcast composition.
+canonical timeline, and lets Mimir own program composition while Fensalir lowers
+pixels, Faust/native DSP moves audio, Eve exposes operator surfaces, and
+Yggdrasil publishes the public feed.
 
 ## Current Mechanism
 
@@ -54,11 +55,17 @@ reflection taps.
 - UI and telemetry read cached sync state; they do not run analysis.
 - Native capture owns hardware calls. Runtime owns sample identity and buffer
   placement.
-- Fensalir owns windowing, rendering, D3D12, UI, visual fusion, and program
-  video output.
+- Mimir owns the program scene graph, subscription policy, preview/control
+  state, stats, and publication intent.
+- Fensalir owns windowing, rendering, D3D12, UI lowering, visual fusion, and
+  program video output.
 - Faust/native DSP will own hot resampling, fractional delay, separation,
   spatialization, and stems.
-- OBS owns broadcast composition.
+- Eve GUI/TUI lowerers render Mimir operator surfaces without owning scene
+  truth.
+- The Yggdrasil-facing publisher daemon consumes Mimir program output without
+  owning composition.
+- OBS is a compatibility sink only.
 
 ## Diagram
 
@@ -83,6 +90,10 @@ flowchart TD
     AsioSource --> Sources
     Probes["native/probes/*"] --> FrameEvents["MimirFrameEventProcessStreamSource"]
     FrameEvents --> Sources
+    Runtime --> Scene["Mimir program scene graph"]
+    Scene --> Eve["Eve operator surfaces"]
+    Scene --> Publisher["Yggdrasil site publisher"]
+    Scene -. "compatibility" .-> Obs["OBS adapter"]
     Reservoir["native/reservoir"] -. "future lower ABI" .-> Hub
 ```
 
@@ -96,6 +107,9 @@ flowchart TD
 - `native/reservoir` is the lower native rolling-buffer ABI.
 - `native/probes/*` are measurement and diagnostic tools.
 - `scripts/*` are bridge utilities, not the final synchronized program path.
+- `docs/mimir-program-composition.md` is the authority map for Muninn capture
+  hosts, Mimir composition, Eve operation, Yggdrasil publication, and OBS
+  compatibility.
 
 ## Stage 0: Solution And App Host
 

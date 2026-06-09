@@ -111,10 +111,10 @@ public static class MimirModuleLibrary
             MimirMachineAssemblyPlans.BuiltIn.Select(plan => plan.Id).ToArray(),
             ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --perfect-machine-profile-smoke"]),
         new(
-            "obs-publication",
-            "Fensalir + Faust + OBS",
-            "OBS-facing program surface and separately mixable audio stem configurations.",
-            MimirObsPublicationConfigurations.BuiltIn.Select(profile => profile.Id).ToArray(),
+            "program-publication",
+            "Mimir + Fensalir + Faust + Eve + Yggdrasil",
+            "Mimir-owned program composition, Eve operator surfaces, Yggdrasil site publication, and temporary OBS compatibility adapters.",
+            MimirProgramPublicationConfigurations.BuiltIn.Select(profile => profile.Id).ToArray(),
             ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --perfect-machine-profile-smoke"])
     ];
 }

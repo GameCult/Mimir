@@ -21,7 +21,11 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Mimir's Face doctrine lives in [[docs/mimir-face|Mimir Face]].
 - VoidBot persona/state live under `.voidbot/voice/` and `.voidbot/state/`.
   Commit `.voidbot` dirt in a separate state commit whenever it appears.
-- V1 still has FFmpeg/SRT/OBS bridge utilities for LAN ingest.
+- V1 still has FFmpeg/SRT/OBS bridge utilities for LAN compatibility ingest.
+- V1 now also has an explicit CultMesh media bridge for Raven program feeds:
+  `src/Mimir.CultMeshMedia` sends rolling `mimir.cultmesh_media_frame`
+  documents over CultNet reliable UDP through Yggdrasil and lowers them on
+  Starfire to local MPEG-TS UDP for OBS.
 - The live stream app is C# plus Fensalir: `Mimir.slnx` contains
   `src/Mimir.App` and `src/Mimir.Runtime`.
 - `src/Mimir.App` hosts Fensalir as the windowing/rendering/D3D12 bridge.
@@ -37,6 +41,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
   dictionary, low-level implementation notes, and sample code sketches for the
   next decoder/DSP/native-ring/Fensalir implementation passes. Start with
   [[research/perfect-machine-study-2026-05-23/reading-guide|Reading Guide]].
+- `docs/mimir-program-composition.md` is the current program-output authority
+  map: Muninn observes on Starfire/Nightwing/Raven-class hosts, Mimir consumes
+  selected streams and owns composition, Eve lowers controls/previews/stats,
+  Yggdrasil publishes to the site, and OBS is compatibility-only.
+- `src/Mimir.Runtime/Synchronization` now has typed program contracts for
+  `mimir.program_scene.v1`, `mimir.program_output.v1`, and
+  `mimir.eve_operator_surface.v1`; `Mimir.BufferSmoke
+  --perfect-machine-contract-smoke` writes them into CultCache.
 - Local six-camera ingest should use direct driver adapters. Process-backed
   sources are bridge/network edges only.
 - Leap stereo IR is the first timing-camera candidate for direct ingest.
@@ -45,7 +57,8 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - Fensalir owns production GPU fusion, UI, and Spout2 publication.
 - Faust/native DSP owns hot audio alignment, separation, spatialization, and
   synchronized stems.
-- OBS receives final program surfaces; it does not own synchronization.
+- OBS compatibility adapters may receive final program surfaces; they do not
+  own synchronization, composition, preview/control, or publication.
 
 ## Current Pressure
 
@@ -57,8 +70,16 @@ Get-Content .\state\evidence.jsonl -Tail 8
   variable-rate resampling.
 - Bind Fensalir UI to stream health, buffer depth, timestamps, settings, and
   output management.
-- Keep PowerShell/FFmpeg/SRT as bridge utilities until native program output
-  replaces them.
+- Keep PowerShell/FFmpeg/SRT as bridge utilities until native Mimir program
+  output, Eve operation, and Yggdrasil site publication replace them.
+- Yggdrasil currently runs the CultMesh media relay on UDP `3075` from
+  `/opt/gamecult/mimir-cultmesh-media/Mimir.CultMeshMedia`; Starfire currently
+  runs the receiver PID from
+  `artifacts/mimir-cultmesh-media-win-x64-selfcontained/Mimir.CultMeshMedia.exe`
+  and writes `raven-primary-av` to `udp://127.0.0.1:5200`. OBS source
+  `Raven Monitor + Realtek` has been repointed from old SRT to that local UDP
+  endpoint. Raven SSH timed out, so launch
+  `scripts/start-raven-cultmesh-av-sender.ps1` on Raven directly.
 - Kiyo Pro has two UVC extension units. Moving it to a motherboard USB3 port
   changed the descriptor path to `root_hub30` / `bcdUSB=0x0320` and exposed
   720p/1080p YUY2/MJPG/H264/NV12 at 60 fps, but Windows still reports

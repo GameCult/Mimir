@@ -33,7 +33,7 @@ public static class MimirReservoirConfigurations
         new("phase_claim", "audio phase/group-delay evidence", "Mimir.Runtime", RetainsHistory: false, "Calibration/normalization input."),
         new("event_claim", "timeline anchor", "Mimir.Runtime", RetainsHistory: false, "Bioacoustic/passive/calibration events."),
         new("surface_claim", "spatial surface observation", "Fensalir", RetainsHistory: false, "Fusion candidate."),
-        new("render_packet", "OBS-facing packet", "Fensalir/Faust", RetainsHistory: false, "Output-ready view.")
+        new("render_packet", "Mimir program packet", "Mimir/Fensalir/Faust", RetainsHistory: false, "Output-ready program view.")
     ];
 
     public static MimirReservoirConfiguration ManagedRuntime { get; } = new(

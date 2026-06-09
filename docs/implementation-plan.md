@@ -13,12 +13,12 @@ For the source-level ownership map, read [[code-algorithm-map|Code Algorithm Map
   ingest, one rolling buffer per configured audio/video stream, and the
   synchronization hub Fensalir can inspect.
 - The default five-second window is an intentional latency/memory trade: use it
-  to line up streams and extract the volumetric audio/video field before OBS
-  sees program output.
+  to line up streams and extract the volumetric audio/video field before Mimir
+  emits program output.
 - `native/reservoir` owns the lower native rolling-buffer invariant for
   Fensalir/Faust integration.
-- PowerShell/FFmpeg/SRT remains a bridge utility for LAN OBS feeds. It is not
-  the synchronized program authority.
+- PowerShell/FFmpeg/SRT remains a bridge utility for LAN compatibility feeds.
+  It is not the synchronized program or publication authority.
 
 The old script stack is gone. Do not add a compatibility edge unless it protects
 a named invariant that the native runtime cannot protect yet.
@@ -184,7 +184,7 @@ a named invariant that the native runtime cannot protect yet.
   profiles, language/emission profiles, path-learning sessions, benchmark
   panels, audio actuator strategies, native capture profiles, camera ingest
   strategies, reservoir strategies, audio/visual field profiles, compute
-  offload profiles, OBS publication profiles, CultMesh contracts, Fensalir
+  offload profiles, program publication profiles, CultMesh contracts, Fensalir
   lowering, and assembly plans. Use
   `Mimir.BufferSmoke --perfect-machine-profile-smoke` to prove the catalog
   assembles, `--perfect-machine-contract-smoke` to write a CultCache contract
@@ -202,14 +202,40 @@ a named invariant that the native runtime cannot protect yet.
   source-id hashing, producer helpers, and typed audio/render payload
   descriptors.
 - Windows bridge scripts for sender discovery/start/stop and simple OBS Media
-  Source ingest.
+  Source compatibility ingest.
+- `src/Mimir.Runtime/Synchronization` now contains the first typed program
+  composition contracts: `mimir.program_scene.v1`, `mimir.program_output.v1`,
+  and `mimir.eve_operator_surface.v1`. These make Mimir's scene graph,
+  Yggdrasil/site publication route, and Eve operator control/preview surface
+  manifestable through CultMesh.
+- `docs/mimir-program-composition.md` is the current authority map for the new
+  stream-program architecture: Muninn observes on Starfire/Nightwing/Raven-class
+  hosts, Mimir consumes selected streams and composes the program, Eve lowers
+  controls/previews/stats, Yggdrasil publishes to the site, and OBS is
+  compatibility-only.
+- `src/Mimir.CultMeshMedia` is the first explicit CultMesh media/body bridge:
+  `relay` hosts the document relay on CultNet UDP `3075`, `send` reads an
+  MPEG-TS byte stream from stdin and publishes rolling
+  `mimir.cultmesh_media_frame` documents, and `recv` subscribes to those
+  documents and writes ordered MPEG-TS bytes to a Starfire-local UDP endpoint
+  for compatibility sinks.
+- `scripts/start-raven-cultmesh-av-sender.ps1`,
+  `scripts/start-yggdrasil-cultmesh-media-relay.ps1`, and
+  `scripts/start-starfire-cultmesh-av-receiver.ps1` are the CultMesh bridge
+  operators. Raven capture defaults to FFmpeg desktop frames plus Mimir's
+  WASAPI loopback capture muxed as H.264/AAC MPEG-TS; DirectShow audio remains
+  an explicit fallback.
 - Documentation for OBS receiver setup, native rebuild boundaries, the viable
   stream app, and the Mimir Face.
 
 ## Temporary
 
 - Audio and video may still traverse separate OBS/SRT endpoints during bridge
-  testing so OBS can preserve independent controls.
+  testing, but Mimir/Eve owns independent controls.
+- The CultMesh media bridge still lowers to local UDP for compatibility sinks
+  because OBS is not a CultMesh consumer. Network transit between Raven,
+  Yggdrasil, and Starfire is the CultMesh/CultNet path; OBS-local UDP is an
+  egress adapter only.
 - Process-backed stream sources are only acceptable for network bridge feeds or
   diagnostics. Six-camera local ingest belongs behind direct capture drivers.
 - Frame-event process sources are diagnostic only. They prove source cadence and
@@ -239,14 +265,20 @@ a named invariant that the native runtime cannot protect yet.
    with probe durations long enough to keep loopback and mic windows live.
 6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-7. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:
+7. Implement the Mimir program scene graph as the shared commit primitive for
+   source subscription, transforms, crop, chroma key, visibility, layer order,
+   preview, and output publication. Import the current OBS scene only as an
+   initial mirror, then make Eve GUI/TUI the operator surface.
+8. Add the Yggdrasil-facing site publisher daemon that consumes the Mimir
+   program output and publishes it without owning a second composition.
+9. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:
    sample buffer-domain paths stochastically by visual contribution, emit SDF
    splat probes, write them into the spatiotemporal splat reservoir, and sample
    that reservoir in the temporally antialiased scene pass. The direct spline
    preview must stay a witness until this path owns rendering.
-8. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+10. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
-9. Move mic alignment, room suppression, voice separation, spatialization, and
+11. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-10. Keep the OBS bridge witness ledger as evidence before expanding receiver
+12. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

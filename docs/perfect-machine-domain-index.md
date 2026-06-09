@@ -38,19 +38,23 @@ Read this with:
 
 Mimir is a bounded-latency realtime field computer: it ingests many clocks,
 places their evidence inside one rolling temporal window, extracts audio/video
-geometry from that window, and emits an OBS-usable program surface without
-letting OBS become the synchronization authority.
+geometry from that window, owns the stream program scene, exposes Eve operator
+surfaces, and emits a publicable program feed without letting compatibility
+sinks become authority.
 
 ## Authority Index
 
 | Authority | Owns | Must Not Own |
 | --- | --- | --- |
-| `Mimir.Runtime` | stream identity, buffers, sync reports, calibration model loading, source polling, telemetry state | hot DSP actuator, dense visual fusion, broadcast composition |
-| Native capture | direct driver callbacks, device timestamps, payload handles, low-jitter capture loops | runtime policy, UI state, OBS composition |
+| Mimir program composition | source subscription, scene graph, crop/key/transform state, preview/control state, stats, publication intent | local device reads, GPU shader internals, audio-rate DSP, site transport policy |
+| `Mimir.Runtime` | stream identity, buffers, sync reports, calibration model loading, source polling, telemetry state | hot DSP actuator, dense visual fusion, direct device capture |
+| Native capture / Muninn hosts | direct driver callbacks, device timestamps, payload handles, local stream capabilities/media | runtime policy, scene composition, publication |
 | `native/reservoir` | shared-edge retention and typed views | payload memory interpretation, rendering, DSP |
-| Fensalir | window, UI, D3D12 bridge, GPU fusion, program video publication | clock authority, audio actuator |
+| Fensalir | window, UI lowering, D3D12 bridge, GPU fusion, program video output | clock authority, audio actuator, scene ownership |
 | Faust/native DSP | fractional delay, resampling, separation, spatialization, stems | stream discovery, UI |
-| OBS | final broadcast composition | synchronization, capture timing |
+| Eve lowerers | operator GUI/TUI rendering, controls, previews, stats lowering | scene truth, stream truth, publication truth |
+| Yggdrasil site publisher | public transport, encoder/session state, reconnect policy, site edge health | scene composition |
+| OBS | compatibility preview/output sink | synchronization, capture timing, composition, publication |
 | Raven/phones | local decode of codebook/schedule observations | canonical clock authority |
 
 ## Evidence Taxonomy
@@ -241,7 +245,9 @@ Six optical sensors with high-rate Eyes and Leap IR mean:
 - Cut JSON/stdout local camera hot path when concrete direct drivers land.
 - Cut legacy chirplet path once chirp-bin decoder has equivalent docs/tests and
   physical path proof.
-- Cut bridge scripts only after OBS-facing direct output is real.
+- Cut bridge scripts only after Mimir program output, Eve operation, and
+  Yggdrasil publication are real enough that OBS compatibility no longer earns
+  its keep.
 - Cut ad hoc response weighting if a formal path model replaces it.
 
 ## Future Work Index

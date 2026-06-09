@@ -20,7 +20,7 @@ public sealed record MimirPerfectMachineManifest(
     IReadOnlyList<MimirAudioFieldConfiguration> AudioFields,
     IReadOnlyList<MimirVisualFusionConfiguration> VisualFields,
     IReadOnlyList<MimirComputeOffloadConfiguration> ComputePlans,
-    IReadOnlyList<MimirObsPublicationConfiguration> Publications,
+    IReadOnlyList<MimirProgramPublicationConfiguration> Publications,
     IReadOnlyList<MimirMachineAssemblyPlan> AssemblyPlans);
 
 public static class MimirPerfectMachineManifestFactory
@@ -48,6 +48,6 @@ public static class MimirPerfectMachineManifestFactory
             MimirAudioFieldConfigurations.BuiltIn,
             MimirVisualFusionConfigurations.BuiltIn,
             MimirComputeOffloadConfigurations.BuiltIn,
-            MimirObsPublicationConfigurations.BuiltIn,
+            MimirProgramPublicationConfigurations.BuiltIn,
             MimirMachineAssemblyPlans.BuiltIn);
 }

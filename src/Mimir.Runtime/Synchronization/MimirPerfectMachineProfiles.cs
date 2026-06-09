@@ -4,10 +4,11 @@ public enum MimirPerfectMachineNodeRole
 {
     StarfireAuthority,
     RavenRemote,
+    MuninnHost,
     PhoneWitness,
     MicrocontrollerWitness,
     CalibrationBench,
-    ObsProgramHost
+    MimirProgramPublisher
 }
 
 public enum MimirAudioFieldModel
@@ -38,7 +39,7 @@ public sealed record MimirPerfectMachineProfile(
     IReadOnlyList<MimirComputeBackend> ComputeBackends,
     bool EmitsWitness,
     bool OwnsCanonicalClock,
-    bool PublishesObsProgram,
+    bool PublishesProgram,
     TimeSpan RollingWindow,
     string[] RequiredCultMeshDocuments);
 
@@ -46,7 +47,7 @@ public static class MimirPerfectMachineProfiles
 {
     public static MimirPerfectMachineProfile StarfireAuthority { get; } = new(
         "starfire-authority",
-        "Heavy local workstation: ASIO loopback authority, runtime buffers, calibration truth, Fensalir/Faust lowering, OBS-facing program output.",
+        "Heavy local workstation: ASIO loopback authority, runtime buffers, calibration truth, Mimir composition, Fensalir/Faust lowering, Eve operator surfaces, and program publication.",
         MimirPerfectMachineNodeRole.StarfireAuthority,
         MimirBioacousticDecoderConfiguration.BaselineMfccIndex,
         MimirAlignmentActuatorProfile.SixSourceFaust,
@@ -54,7 +55,7 @@ public static class MimirPerfectMachineProfiles
         [MimirComputeBackend.ManagedScalar, MimirComputeBackend.NativeSimd, MimirComputeBackend.D3D12Compute, MimirComputeBackend.FaustNativeDsp],
         EmitsWitness: true,
         OwnsCanonicalClock: true,
-        PublishesObsProgram: true,
+        PublishesProgram: true,
         RollingWindow: TimeSpan.FromSeconds(5),
         RequiredCultMeshDocuments:
         [
@@ -74,7 +75,7 @@ public static class MimirPerfectMachineProfiles
         [MimirComputeBackend.ManagedScalar, MimirComputeBackend.RemoteCultMeshWorker],
         EmitsWitness: false,
         OwnsCanonicalClock: false,
-        PublishesObsProgram: false,
+        PublishesProgram: false,
         RollingWindow: TimeSpan.FromSeconds(5),
         RequiredCultMeshDocuments:
         [
@@ -93,7 +94,7 @@ public static class MimirPerfectMachineProfiles
         [MimirComputeBackend.ManagedScalar, MimirComputeBackend.RemoteCultMeshWorker],
         EmitsWitness: false,
         OwnsCanonicalClock: false,
-        PublishesObsProgram: false,
+        PublishesProgram: false,
         RollingWindow: TimeSpan.FromSeconds(3),
         RequiredCultMeshDocuments:
         [
@@ -111,7 +112,7 @@ public static class MimirPerfectMachineProfiles
         [MimirComputeBackend.RemoteCultMeshWorker],
         EmitsWitness: false,
         OwnsCanonicalClock: false,
-        PublishesObsProgram: false,
+        PublishesProgram: false,
         RollingWindow: TimeSpan.FromSeconds(2),
         RequiredCultMeshDocuments:
         [
@@ -129,7 +130,7 @@ public static class MimirPerfectMachineProfiles
         [MimirComputeBackend.ManagedScalar, MimirComputeBackend.NativeSimd, MimirComputeBackend.D3D12Compute],
         EmitsWitness: true,
         OwnsCanonicalClock: false,
-        PublishesObsProgram: false,
+        PublishesProgram: false,
         RollingWindow: TimeSpan.FromSeconds(8),
         RequiredCultMeshDocuments:
         [
@@ -138,22 +139,44 @@ public static class MimirPerfectMachineProfiles
             "mimir.acoustic_path_state.v1"
         ]);
 
-    public static MimirPerfectMachineProfile ObsProgramHost { get; } = new(
-        "obs-program-host",
-        "Program-output profile: consumes aligned stems/spatial bed and publishes OBS-facing surfaces without becoming sync authority.",
-        MimirPerfectMachineNodeRole.ObsProgramHost,
+    public static MimirPerfectMachineProfile MuninnHost { get; } = new(
+        "muninn-host",
+        "Capture host profile: Muninn observes local screens, windows, loopbacks, cameras, and device health, publishes typed stream capabilities/media, and does not compose the final program.",
+        MimirPerfectMachineNodeRole.MuninnHost,
+        MimirBioacousticDecoderConfiguration.CompactFastIndex,
+        MimirAlignmentActuatorProfile.SixSourceFaust,
+        MimirAudioFieldModel.AlignedStems,
+        [MimirComputeBackend.ManagedScalar, MimirComputeBackend.RemoteCultMeshWorker],
+        EmitsWitness: false,
+        OwnsCanonicalClock: false,
+        PublishesProgram: false,
+        RollingWindow: TimeSpan.FromSeconds(5),
+        RequiredCultMeshDocuments:
+        [
+            "muninn.telemetry_surface.v1",
+            "muninn.capture_stream.v1",
+            "mimir.cultmesh_media_frame.v1"
+        ]);
+
+    public static MimirPerfectMachineProfile MimirProgramPublisher { get; } = new(
+        "mimir-program-publisher",
+        "Program-output profile: consumes selected Muninn/Mimir streams, owns scene composition and Eve controls, and publishes the program locally and through Yggdrasil without OBS authority.",
+        MimirPerfectMachineNodeRole.MimirProgramPublisher,
         MimirBioacousticDecoderConfiguration.BaselineMfccIndex,
         MimirAlignmentActuatorProfile.SixSourceFaust,
         MimirAudioFieldModel.SourceBasedSpatialBus,
         [MimirComputeBackend.FaustNativeDsp, MimirComputeBackend.D3D12Compute],
         EmitsWitness: false,
         OwnsCanonicalClock: false,
-        PublishesObsProgram: true,
+        PublishesProgram: true,
         RollingWindow: TimeSpan.FromSeconds(5),
         RequiredCultMeshDocuments:
         [
             "mimir.acoustic_path_state.v1",
-            "mimir.actuator_state.v1"
+            "mimir.actuator_state.v1",
+            "mimir.program_scene.v1",
+            "mimir.program_output.v1",
+            "mimir.eve_operator_surface.v1"
         ]);
 
     public static IReadOnlyList<MimirPerfectMachineProfile> All { get; } =
@@ -163,6 +186,7 @@ public static class MimirPerfectMachineProfiles
         PhoneWitness,
         MicrocontrollerWitness,
         CalibrationBench,
-        ObsProgramHost
+        MuninnHost,
+        MimirProgramPublisher
     ];
 }

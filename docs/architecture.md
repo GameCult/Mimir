@@ -2,11 +2,16 @@
 
 ## Objective
 
-Make one local Windows computer available as OBS sources on another computer, with sender-side NVENC video encoding and independently mixable audio sources.
+Make one local Windows computer available as compatibility media sources on
+another computer, with sender-side NVENC video encoding and independently
+mixable audio sources. The current program target is Mimir-owned composition;
+this bridge is not the stream authority.
 
 ## Current Mechanism
 
-The repo owns configuration and scripts. FFmpeg owns capture, encoding, and SRT transport. OBS owns scene composition.
+The repo owns configuration and scripts. FFmpeg owns capture, encoding, and SRT
+transport. Mimir owns scene composition; OBS may consume this bridge as a
+temporary compatibility sink.
 
 Inputs become outputs like this:
 
@@ -21,8 +26,10 @@ Inputs become outputs like this:
 ## Invariants
 
 - Video encoding happens on the sender.
-- OBS receives ordinary media-source URLs; it does not need a plugin for v1.
-- Audio remains separately mixable in OBS.
+- OBS can receive ordinary media-source URLs for compatibility; it does not need
+  a plugin for this bridge path.
+- Audio remains separately mixable at the compatibility edge, but the durable
+  control surface belongs to Mimir/Eve.
 - Ports are stable and derived from one base port plus explicit offsets.
 - Secrets, if used, stay in local config and are not committed.
 

@@ -104,6 +104,73 @@ public sealed record MimirFaustControlSnapshot(
     [property: Key(0)] string Path,
     [property: Key(1)] float Value);
 
+[CultDocument("mimir.program_scene", "mimir.program_scene.v1")]
+[MessagePackObject]
+public sealed record MimirProgramSceneDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string SceneId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] int CanvasWidth,
+    [property: Key(3)] int CanvasHeight,
+    [property: Key(4)] string Owner,
+    [property: Key(5)] MimirProgramSceneLayer[] Layers);
+
+[MessagePackObject]
+public sealed record MimirProgramSceneLayer(
+    [property: Key(0)] string LayerId,
+    [property: Key(1)] string SourceRef,
+    [property: Key(2)] string SourceKind,
+    [property: Key(3)] bool Visible,
+    [property: Key(4)] double X,
+    [property: Key(5)] double Y,
+    [property: Key(6)] double Width,
+    [property: Key(7)] double Height,
+    [property: Key(8)] int ZIndex,
+    [property: Key(9)] MimirProgramCrop Crop,
+    [property: Key(10)] MimirProgramChromaKey? ChromaKey);
+
+[MessagePackObject]
+public sealed record MimirProgramCrop(
+    [property: Key(0)] double Left,
+    [property: Key(1)] double Top,
+    [property: Key(2)] double Right,
+    [property: Key(3)] double Bottom);
+
+[MessagePackObject]
+public sealed record MimirProgramChromaKey(
+    [property: Key(0)] uint KeyColorRgba,
+    [property: Key(1)] double Similarity,
+    [property: Key(2)] double Smoothness,
+    [property: Key(3)] double Spill);
+
+[CultDocument("mimir.program_output", "mimir.program_output.v1")]
+[MessagePackObject]
+public sealed record MimirProgramOutputDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string OutputId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string SceneId,
+    [property: Key(3)] string VideoSurface,
+    [property: Key(4)] string AudioBus,
+    [property: Key(5)] string PublisherRoute,
+    [property: Key(6)] bool DiagnosticOnly);
+
+[CultDocument("mimir.eve_operator_surface", "mimir.eve_operator_surface.v1")]
+[MessagePackObject]
+public sealed record MimirEveOperatorSurfaceDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string SurfaceId,
+    [property: Key(1)] string UpdatedAtUtc,
+    [property: Key(2)] string SceneId,
+    [property: Key(3)] bool CanPreviewProgram,
+    [property: Key(4)] bool CanEditComposition,
+    [property: Key(5)] bool CanSelectSources,
+    [property: Key(6)] bool CanShowStats,
+    [property: Key(7)] string[] CommandTopics);
+
 public static class MimirCultMeshContractFactory
 {
     public static MimirBioacousticCodebookState CreateCodebookState(
@@ -174,6 +241,92 @@ public static class MimirCultMeshContractFactory
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => new MimirFaustControlSnapshot(pair.Key, pair.Value))
                 .ToArray());
+
+    public static MimirProgramSceneDocument CreateObsSceneMirror(
+        string sceneId,
+        DateTimeOffset? updatedAt = null) =>
+        new(
+            sceneId,
+            (updatedAt ?? DateTimeOffset.UtcNow).ToString("O"),
+            CanvasWidth: 1920,
+            CanvasHeight: 1080,
+            Owner: "Mimir",
+            Layers:
+            [
+                new(
+                    "starfire-monitor",
+                    "muninn:starfire:monitor:primary",
+                    "monitor",
+                    Visible: true,
+                    X: 0,
+                    Y: 0,
+                    Width: 1920,
+                    Height: 1080,
+                    ZIndex: 0,
+                    new MimirProgramCrop(Left: 0, Top: 0, Right: 0, Bottom: 48),
+                    ChromaKey: null),
+                new(
+                    "discord-chat",
+                    "muninn:starfire:window:discord",
+                    "window",
+                    Visible: true,
+                    X: 1225.5,
+                    Y: 0.5,
+                    Width: 1012.2,
+                    Height: 569.4,
+                    ZIndex: 10,
+                    new MimirProgramCrop(Left: 350, Top: 38, Right: 271, Bottom: 87),
+                    new MimirProgramChromaKey(0xff2b7c5a, Similarity: 1, Smoothness: 2, Spill: 1)),
+                new(
+                    "raven-monitor",
+                    "muninn:raven:monitor:primary",
+                    "network-monitor",
+                    Visible: true,
+                    X: 0,
+                    Y: 0,
+                    Width: 2560,
+                    Height: 1440,
+                    ZIndex: 20,
+                    new MimirProgramCrop(Left: 0, Top: 0, Right: 0, Bottom: 0),
+                    ChromaKey: null)
+            ]);
+
+    public static MimirProgramOutputDocument CreateProgramOutput(
+        string outputId,
+        string sceneId,
+        MimirProgramPublicationConfiguration publication,
+        DateTimeOffset? updatedAt = null) =>
+        new(
+            outputId,
+            (updatedAt ?? DateTimeOffset.UtcNow).ToString("O"),
+            sceneId,
+            publication.VideoSurfaceName,
+            publication.AudioKind.ToString(),
+            publication.SitePublisherRoute,
+            publication.DiagnosticOnly);
+
+    public static MimirEveOperatorSurfaceDocument CreateOperatorSurface(
+        string surfaceId,
+        string sceneId,
+        MimirProgramControlSurface surface,
+        DateTimeOffset? updatedAt = null) =>
+        new(
+            surfaceId,
+            (updatedAt ?? DateTimeOffset.UtcNow).ToString("O"),
+            sceneId,
+            surface.CanPreviewProgram,
+            surface.CanEditComposition,
+            surface.CanSelectSources,
+            surface.CanShowStats,
+            CommandTopics:
+            [
+                "mimir.program.scene.select",
+                "mimir.program.layer.transform",
+                "mimir.program.layer.crop",
+                "mimir.program.layer.chroma_key",
+                "mimir.program.source.subscribe",
+                "mimir.program.output.publish"
+            ]);
 
     private static MimirBioacousticDecoderConfigurationSnapshot Snapshot(MimirBioacousticDecoderConfiguration configuration) =>
         new(

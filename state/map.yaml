@@ -5,7 +5,7 @@ workspace:
   implementation_name: Mimir public surface / native runtime contracts
   premise: >
     Mimir is the local realtime field machine: cameras, microphones, speakers,
-    network feeds, and timing signals become one coherent OBS-facing volumetric
+    network feeds, and timing signals become one coherent Mimir-owned volumetric
     program surface. The live path is a C# Fensalir-hosted app with in-memory
     rolling buffers and native capture/runtime boundaries.
 
@@ -13,7 +13,7 @@ objective:
   primary: >
     Build one synchronized spatial stream machine from six cameras, six
     microphones, two speakers, Leap timing, Fensalir GPU rendering, Faust DSP,
-    and OBS output.
+    Eve operator surfaces, and Yggdrasil site publication.
   current: >
     Promote the active bioacoustic packet-song receiver into runtime state:
     self-identifying song contours should pin multiple time/frequency anchors
@@ -22,9 +22,9 @@ objective:
 
 constraints:
   - Sender is Windows.
-  - Receiver uses OBS.
+  - OBS is a temporary compatibility sink, not a composition or broadcast authority.
   - Video encode must use NVENC when the bridge path is active.
-  - Audio sources must remain separately controllable in OBS.
+  - Audio sources must remain separately controllable through Mimir/Eve and publishable as stems.
   - V1 bridge is LAN-only.
   - Persistent state must clarify rehydrate, not become transcript tax.
   - Live ingest belongs to Mimir.Runtime, native drivers, Fensalir, and
@@ -33,22 +33,31 @@ constraints:
     memory.
   - Networked feeds are producers into the live runtime, not independent clock
     authorities.
+  - CultMesh/CultNet is the default Raven-to-Starfire media transit. OBS may
+    consume a Starfire-local UDP MPEG-TS egress as a compatibility sink, but
+    Mimir owns program selection, composition, preview/control, and publication.
   - Mimir explicitly trades latency and memory for throughput and field quality:
     the default five-second buffer is compute budget for stream alignment,
     GPU/audio analysis, and volumetric sound-field extraction.
 
 invariants:
-  - OBS composition authority stays in OBS.
+  - Mimir owns composition, preview/control state, source subscription policy,
+    and program publication intent.
   - FFmpeg owns capture, encoding, and transport only for bridge utilities.
   - One stable bridge port equals one OBS source endpoint.
   - One rolling live window owns the timing edge and expiry.
   - The rolling window is not accidental latency. It must preserve enough time
-    to line up feeds and crunch data before OBS-facing output is emitted.
+    to line up feeds and crunch data before Mimir program output is emitted.
   - Typed views may index the rolling buffer, but no per-kind ring owns
     retention.
-  - Fensalir owns production UI, GPU fusion, D3D12 interop, and Spout2 output.
+  - Fensalir owns GPU lowering for the Mimir program scene graph, D3D12 interop,
+    and local program texture output.
   - Faust/native DSP owns hot audio alignment, separation, spatialization, and
     stems.
+  - Eve GUI/TUI surfaces lower Mimir's operator controls, previews, and stats on
+    any device without owning scene truth.
+  - A Yggdrasil-facing publisher daemon consumes Mimir program output and
+    publishes it to the site without owning composition.
   - Local secrets remain untracked.
   - Mimir is a CultMesh app. Codebooks, schedules, calibration receipts, path
     response, and compute-offload work need typed mesh-syncable state surfaces
@@ -271,7 +280,7 @@ accepted_design:
     library distilled from the research notes: node profiles, decoder/language
     profiles, path learning, benchmark panels, actuator strategies, capture and
     ingest strategies, reservoir strategies, field profiles, compute offload,
-    OBS publication, CultMesh contracts, Fensalir lowering, and exportable
+    program publication, CultMesh contracts, Fensalir lowering, and exportable
     manifest generation.
   - `docs/perfect-machine-module-library.md` indexes those reusable runtime
     modules and their smoke commands.
@@ -279,6 +288,18 @@ accepted_design:
     for the current repo code surface.
   - `docs/perfect-machine-domain-index.md` indexes Mimir's full problem domain,
     current evidence taxonomy, hot paths, and implementation cuts.
+  - `docs/mimir-program-composition.md` owns the current program-composition
+    authority map: Muninn observes, Mimir composes/controls, Eve lowers operator
+    surfaces, Yggdrasil publishes, and OBS is compatibility-only.
+  - `src/Mimir.Runtime/Synchronization` now includes typed program contracts:
+    `mimir.program_scene.v1`, `mimir.program_output.v1`, and
+    `mimir.eve_operator_surface.v1`.
+  - `src/Mimir.CultMeshMedia` owns the first explicit CultMesh media/body
+    bridge. Raven publishes muxed H.264/AAC MPEG-TS chunks as rolling
+    `mimir.cultmesh_media_frame` documents over CultNet reliable UDP,
+    Yggdrasil relays them on `10.77.0.1:3075`, and Starfire lowers the
+    subscribed stream to `udp://127.0.0.1:5200` for the OBS source
+    `Raven Monitor + Realtek`.
   - `research/perfect-machine-study-2026-05-23/` preserves the architecture
     rumination, optimization ledger, research references, source/hotspot audits,
     Fensalir/native boundary maps, benchmark plan, calibration-session spec,
@@ -305,6 +326,8 @@ active_subgoals:
     settings, and output management.
   - Keep PowerShell/FFmpeg/SRT as bridge utilities until direct program output
     replaces them.
+  - Launch Raven's CultMesh sender directly on Raven because SSH to Raven over
+    WireGuard timed out during the initial relay deployment pass.
 
 current_status:
   summary: >
