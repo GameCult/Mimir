@@ -131,6 +131,11 @@ USB Move sphere lit with PS Move report `0x06`, emits
 Eyes. Those Eye/Move observations are the live optical witness feeding the later
 pose/fusion owner; they are not themselves the final 6DoF pose authority.
 
+Starfire-local Move illumination uses `scripts/start-starfire-move-light.ps1`.
+That launcher runs `Mimir.PsMoveProbe` against the local Windows HID col01
+output collection and refreshes the PS Move LED report so the USB-attached Move
+stays visible as a tracking/calibration marker.
+
 ## Program Composition
 
 [[docs/mimir-program-composition|Mimir Program Composition]] is the live

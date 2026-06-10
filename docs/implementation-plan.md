@@ -46,6 +46,10 @@ a named invariant that the native runtime cannot protect yet.
   `mimir.move_controller_observation_state.v1` blob observations from both PS3
   Eyes. The blob stream is optical witness evidence for later pose fusion, not
   the final 6DoF pose owner.
+- `scripts/start-starfire-move-light.ps1` is the Starfire-local USB Move light
+  owner. It launches `Mimir.PsMoveProbe` in steady hold mode so the locally
+  attached `VID_054C/PID_03D5` Move sphere stays lit for calibration/tracking
+  receipts.
 - `MimirProcessStreamSource` for bridge/network command edges.
 - `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
   from native probes into the same rolling buffers Fensalir inspects. One probe
