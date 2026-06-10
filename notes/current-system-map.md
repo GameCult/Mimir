@@ -136,13 +136,13 @@ That launcher runs `Mimir.PsMoveProbe` against the local Windows HID col01
 output collection and refreshes the PS Move LED report so the USB-attached Move
 stays visible as a tracking/calibration marker.
 
-`native/move_tracker` owns the first native/GPU-shaped Move optical extraction
-stage. Rust owns dispatch planning, FFI, configuration validation, and a
-deterministic CPU mirror; `MoveSphereCandidate.comp.hlsl` owns the parallel
-16px-tile luma reduction that emits ranked sphere candidates. This stage owns
-per-frame marker candidates only. Stereo triangulation, camera calibration,
-controller association, IMU fusion, prediction, and final 6DoF pose remain
-separate later owners.
+Odin's Muninn organ owns the Move optical extraction stage for sensor stream
+exposure. Its Rust crate lives in `E:\Projects\Odin\crates\muninn-move-tracker`
+and publishes/feeds `muninn.move_marker_candidate.v1` records. Mimir consumes
+those Muninn candidate streams into tracking buffers; it does not own raw
+optical extraction. Stereo triangulation, camera calibration, controller
+association, IMU fusion, prediction, and final 6DoF pose remain separate later
+owners.
 
 ## Program Composition
 
