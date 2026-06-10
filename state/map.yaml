@@ -91,6 +91,13 @@ accepted_design:
     blob extraction, and the stream currently emits `mimir.psmove_light_state.v1`
     plus `mimir.move_controller_observation_state.v1` optical witness records
     before later fusion into full tracking poses.
+  - `native/move_tracker` owns the first Rust/native Move optical candidate
+    stage: Rust validates config, plans dispatch, exposes FFI, and mirrors the
+    compute path on CPU; `MoveSphereCandidate.comp.hlsl` reduces one 16px luma
+    tile per thread group into weighted sphere candidates. This stage emits
+    marker candidates only. Calibration, multi-camera association,
+    triangulation, IMU fusion, prediction, and final 6DoF pose are still
+    separate owners.
   - `MimirFrameEventProcessStreamSource` is a temporary diagnostic adapter for
     JSON-line video frame and audio block metadata from native probes into
     runtime rolling buffers; it does not carry pixels/audio payloads or own the

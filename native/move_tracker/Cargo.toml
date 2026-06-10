@@ -1,0 +1,10 @@
+[package]
+name = "mimir-move-tracker"
+version = "0.1.0"
+edition = "2024"
+description = "Rust orchestration and CPU mirror for PS Move sphere tracking compute"
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]

@@ -50,6 +50,12 @@ a named invariant that the native runtime cannot protect yet.
   owner. It launches `Mimir.PsMoveProbe` in steady hold mode so the locally
   attached `VID_054C/PID_03D5` Move sphere stays lit for calibration/tracking
   receipts.
+- `native/move_tracker` is the first native/Rust Move optical candidate
+  extractor. Rust owns dispatch planning, FFI, validation, and a deterministic
+  CPU mirror; `shaders/MoveSphereCandidate.comp.hlsl` owns one 16px tile per
+  thread group and emits weighted bright-sphere candidates. This is marker
+  extraction only, not final pose, stereo triangulation, calibration,
+  association, IMU fusion, or prediction.
 - `MimirProcessStreamSource` for bridge/network command edges.
 - `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
   from native probes into the same rolling buffers Fensalir inspects. One probe
