@@ -155,6 +155,7 @@ public static class MimirPerfectMachineProfiles
         [
             "muninn.telemetry_surface.v1",
             "muninn.capture_stream.v1",
+            "mimir.move_tracking_observation.v1",
             "mimir.cultmesh_media_frame.v1"
         ]);
 

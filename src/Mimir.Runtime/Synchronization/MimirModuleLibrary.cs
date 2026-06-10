@@ -47,8 +47,8 @@ public static class MimirModuleLibrary
         new(
             "cultmesh-contracts",
             "Mimir.Runtime",
-            "Typed state documents for codebooks, decoder state, acoustic path state, and actuator state.",
-            ["mimir.bioacoustic_codebook_state", "mimir.bioacoustic_decoder_state", "mimir.acoustic_path_state", "mimir.actuator_state"],
+            "Typed state documents for codebooks, decoder state, acoustic path state, actuator state, program state, and Move tracking observations.",
+            ["mimir.bioacoustic_codebook_state", "mimir.bioacoustic_decoder_state", "mimir.acoustic_path_state", "mimir.actuator_state", "mimir.move_tracking_observation"],
             ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --perfect-machine-contract-smoke"]),
         new(
             "path-learning",

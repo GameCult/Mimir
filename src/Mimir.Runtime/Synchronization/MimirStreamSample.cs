@@ -11,4 +11,5 @@ public readonly record struct MimirStreamSample(
     int ByteLength = 0,
     ReadOnlyMemory<byte> Data = default,
     MimirVideoFrameDescriptor? VideoFrame = null,
-    MimirAudioBlockDescriptor? AudioBlock = null);
+    MimirAudioBlockDescriptor? AudioBlock = null,
+    MimirTrackingObservation? TrackingObservation = null);

@@ -862,6 +862,11 @@ direct
             return $"{buffer.Descriptor.Label} [{buffer.Descriptor.SourceId}]: {buffer.Count} {block.Channels}ch {block.SampleRate}Hz {block.SampleFormat} frames {block.FrameCount} bytes {latest.Value.ByteLength} edge {buffer.EdgeNs}";
         }
 
+        if (latest?.TrackingObservation is { } tracking)
+        {
+            return $"{buffer.Descriptor.Label} [{buffer.Descriptor.SourceId}]: {buffer.Count} {tracking.Kind} device={tracking.DeviceId} producer={tracking.ProducerId} host={tracking.HostId} confidence={tracking.Confidence:0.00} edge {buffer.EdgeNs}";
+        }
+
         return $"{buffer.Descriptor.Label} [{buffer.Descriptor.SourceId}]: {buffer.Count} edge {buffer.EdgeNs}";
     }
 

@@ -4,6 +4,7 @@ public enum MimirStreamKind
 {
     Audio,
     Video,
+    Tracking,
 }
 
 public enum MimirStreamOrigin

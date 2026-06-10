@@ -51,6 +51,15 @@ public sealed class MimirSynchronizationHub : IDisposable
     public IReadOnlyList<MimirChirpBinCalibrationProfile> AudioChirpBinCalibrationProfiles =>
         audioSynchronization.LastCalibrationProfiles;
 
+    public IReadOnlyList<MimirTrackingObservation> TrackingObservations =>
+        Buffers.Buffers
+            .Where(buffer => buffer.Descriptor.Kind == MimirStreamKind.Tracking)
+            .Select(buffer => buffer.Latest?.TrackingObservation)
+            .Where(observation => observation != null)
+            .Cast<MimirTrackingObservation>()
+            .OrderBy(observation => observation.StreamId, StringComparer.Ordinal)
+            .ToArray();
+
     public MimirChirpBinCodebookPlan? ChirpBinEmissionPlan =>
         chirpBinCalibrationModel?.EmissionPlan;
 
@@ -87,7 +96,8 @@ public sealed class MimirSynchronizationHub : IDisposable
     {
         var audio = Buffers.Buffers.Count(buffer => buffer.Descriptor.Kind == MimirStreamKind.Audio);
         var video = Buffers.Buffers.Count(buffer => buffer.Descriptor.Kind == MimirStreamKind.Video);
-        return $"{video} video / {audio} audio buffers";
+        var tracking = Buffers.Buffers.Count(buffer => buffer.Descriptor.Kind == MimirStreamKind.Tracking);
+        return $"{video} video / {audio} audio / {tracking} tracking buffers";
     }
 
     public IReadOnlyList<MimirAudioSynchronizationReport> AnalyzeAudioSynchronization(

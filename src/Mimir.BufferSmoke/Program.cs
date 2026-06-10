@@ -91,6 +91,11 @@ if (args.Any(arg => string.Equals(arg, "--perfect-machine-contract-smoke", Strin
         .ConfigureAwait(false);
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-tracking-contract-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveTrackingContractSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--import-obs-program-scene", StringComparison.OrdinalIgnoreCase)))
 {
     return await ImportObsProgramSceneAsync(
@@ -1353,6 +1358,8 @@ static int RunPerfectMachineProfileSmoke()
             ["mimir.bioacoustic_codebook_state", "mimir.bioacoustic_decoder_state", "mimir.acoustic_path_state"],
             StringComparer.Ordinal),
         new HashSet<string>(StringComparer.Ordinal)));
+    var trackingSmoke = BuildMoveTrackingSmokeHub();
+    var trackingObservations = trackingSmoke.Hub.TrackingObservations;
 
     Console.WriteLine(
         $"perfect-machine-profile-smoke profiles={profiles.Count} calibrationPlans={calibrationPlans.Count} audioFields={audioFields.Count} visualFields={visualFields.Count} computePlans={computePlans.Count} assemblyPlans={assemblyPlans.Count} captureProfiles={captureProfiles.Count} publications={publications.Count} languageProfiles={languageProfiles.Count} pathLearning={pathLearningProfiles.Count} localization={localizationProfiles.Count} benchmarkPanels={benchmarkPanels.Count} actuatorStrategies={actuatorStrategies.Count} cameraIngest={cameraIngestStrategies.Count} reservoirs={reservoirStrategies.Count} distributedWitnesses={distributedWitnesses.Count} networkTransports={networkTransports.Count} authorityPolicies={authorityPolicies.Count} modules={moduleCatalog.Count}");
@@ -1372,6 +1379,8 @@ static int RunPerfectMachineProfileSmoke()
         $"perfect-machine-authority appliesTo=raven-scarlett-witness decision={authority.Decision} rule={authority.RuleId}");
     Console.WriteLine(
         $"perfect-machine-transport payload=TypedTimingState status={transport.Status} selected={transport.Transport?.Id ?? "none"}");
+    Console.WriteLine(
+        $"perfect-machine-move-tracking consumed={trackingSmoke.Consumed} observations={trackingObservations.Count} hosts={string.Join(",", trackingObservations.Select(observation => observation.HostId).Order(StringComparer.Ordinal))}");
 
     return profiles.Count >= 6 &&
         calibrationPlans.Count >= 3 &&
@@ -1400,9 +1409,104 @@ static int RunPerfectMachineProfileSmoke()
         localization is { Score: > 0.90 } &&
         authority.Decision == MimirAuthorityDecision.TrustedEvidence &&
         transport.Transport?.Id == MimirNetworkTransportConfigurations.CultMeshTimingState.Id &&
+        trackingSmoke.Consumed == 2 &&
+        trackingObservations.Count == 2 &&
+        trackingObservations.Any(observation => observation.HostId == "starfire" && observation.ProducerId == "muninn:starfire:move") &&
+        trackingObservations.Any(observation => observation.HostId == "nightwing" && observation.ProducerId == "muninn:nightwing:move") &&
         clock is { AnchorCount: >= 4, Confidence: > 0.70 }
             ? 0
             : 1;
+}
+
+static int RunMoveTrackingContractSmoke()
+{
+    using var trackingSmoke = BuildMoveTrackingSmokeHub();
+    var observations = trackingSmoke.Hub.TrackingObservations;
+    foreach (var observation in observations)
+    {
+        Console.WriteLine(
+            $"move-tracking-observation stream={observation.StreamId} device={observation.DeviceId} host={observation.HostId} producer={observation.ProducerId} discovery={observation.DiscoveryProviderId} confidence={observation.Confidence:0.000} pos=({observation.PositionMeters.X:0.000},{observation.PositionMeters.Y:0.000},{observation.PositionMeters.Z:0.000})");
+    }
+
+    Console.WriteLine(
+        $"move-tracking-contract-smoke consumed={trackingSmoke.Consumed} observations={observations.Count} summary=\"{trackingSmoke.Hub.Summary()}\"");
+    return trackingSmoke.Consumed == 2 &&
+        observations.Count == 2 &&
+        observations.All(observation => observation.Kind == MimirTrackingObservationKind.PsMoveController) &&
+        observations.Any(observation => observation.HostId == "starfire" && observation.DiscoveryProviderId == "odin") &&
+        observations.Any(observation => observation.HostId == "nightwing" && observation.DiscoveryProviderId == "odin")
+            ? 0
+            : 1;
+}
+
+static MoveTrackingSmokeContext BuildMoveTrackingSmokeHub()
+{
+    var starfireDescriptor = new MimirStreamDescriptor(
+        "starfire:move:primary",
+        MimirStreamKind.Tracking,
+        MimirStreamOrigin.LocalDevice,
+        DisplayName: "Starfire PS Move primary");
+    var nightwingDescriptor = new MimirStreamDescriptor(
+        "nightwing:move:primary",
+        MimirStreamKind.Tracking,
+        MimirStreamOrigin.Network,
+        DisplayName: "Nightwing PS Move primary");
+    var settings = new MimirSynchronizationSettings
+    {
+        Streams = [starfireDescriptor, nightwingDescriptor],
+    };
+    var hub = new MimirSynchronizationHub(settings);
+    var starfire = new MimirNativeIngestStreamSource(starfireDescriptor);
+    var nightwing = new MimirNativeIngestStreamSource(nightwingDescriptor);
+    hub.AddSource(starfire);
+    hub.AddSource(nightwing);
+    starfire.PushTrackingObservation(MimirTrackingObservation.PsMove(
+        starfireDescriptor.SourceId,
+        "psmove:starfire:00",
+        sequence: 1,
+        sourceTimestampNs: 1_000_000_000L,
+        arrivalTimestampNs: 1_000_000_120L,
+        positionMeters: new MimirVector3Snapshot(0.21, 1.12, 0.84),
+        orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+        linearVelocityMetersPerSecond: new MimirVector3Snapshot(0.04, 0.0, -0.02),
+        angularVelocityRadiansPerSecond: new MimirVector3Snapshot(0.0, 0.1, 0.0),
+        confidence: 0.93,
+        calibrationId: "starfire-move-usb-calibration-v1",
+        trackingSpaceId: "starfire-move-space",
+        producerId: "muninn:starfire:move",
+        hostId: "starfire",
+        latencyMilliseconds: 1.2,
+        battery01: 0.8,
+        buttons:
+        [
+            new MimirTrackingButtonSnapshot("move", Pressed: false, Value: 0.0),
+            new MimirTrackingButtonSnapshot("trigger", Pressed: true, Value: 0.72)
+        ]));
+    nightwing.PushTrackingObservation(MimirTrackingObservation.PsMove(
+        nightwingDescriptor.SourceId,
+        "psmove:nightwing:00",
+        sequence: 7,
+        sourceTimestampNs: 1_000_008_333L,
+        arrivalTimestampNs: 1_000_012_900L,
+        positionMeters: new MimirVector3Snapshot(-0.34, 1.05, 1.42),
+        orientation: new MimirQuaternionSnapshot(0.0, 0.18, 0.0, 0.984),
+        linearVelocityMetersPerSecond: new MimirVector3Snapshot(-0.02, 0.01, 0.03),
+        angularVelocityRadiansPerSecond: new MimirVector3Snapshot(0.2, 0.0, 0.0),
+        confidence: 0.89,
+        calibrationId: "nightwing-move-usb-calibration-v1",
+        trackingSpaceId: "nightwing-move-space",
+        producerId: "muninn:nightwing:move",
+        hostId: "nightwing",
+        latencyMilliseconds: 4.6,
+        battery01: 0.67,
+        buttons:
+        [
+            new MimirTrackingButtonSnapshot("move", Pressed: true, Value: 1.0),
+            new MimirTrackingButtonSnapshot("trigger", Pressed: false, Value: 0.0)
+        ]));
+
+    var consumed = hub.PollSources();
+    return new MoveTrackingSmokeContext(hub, consumed);
 }
 
 static MimirAudioSynchronizationReport? EstimateBioacousticDelay(float[] reference, float[] candidate, int sampleRate)
@@ -1563,6 +1667,40 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         scene.SceneId,
         MimirProgramPublicationConfigurations.OperatorSurfaces[0],
         createdAt);
+    var starfireMove = MimirTrackingObservation.PsMove(
+        "starfire:move:primary",
+        "psmove:starfire:00",
+        sequence: 1,
+        sourceTimestampNs: 1_000_000_000L,
+        arrivalTimestampNs: 1_000_000_120L,
+        positionMeters: new MimirVector3Snapshot(0.21, 1.12, 0.84),
+        orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+        linearVelocityMetersPerSecond: new MimirVector3Snapshot(0.04, 0.0, -0.02),
+        angularVelocityRadiansPerSecond: new MimirVector3Snapshot(0.0, 0.1, 0.0),
+        confidence: 0.93,
+        calibrationId: "starfire-move-usb-calibration-v1",
+        trackingSpaceId: "starfire-move-space",
+        producerId: "muninn:starfire:move",
+        hostId: "starfire",
+        latencyMilliseconds: 1.2,
+        battery01: 0.8);
+    var nightwingMove = MimirTrackingObservation.PsMove(
+        "nightwing:move:primary",
+        "psmove:nightwing:00",
+        sequence: 7,
+        sourceTimestampNs: 1_000_008_333L,
+        arrivalTimestampNs: 1_000_012_900L,
+        positionMeters: new MimirVector3Snapshot(-0.34, 1.05, 1.42),
+        orientation: new MimirQuaternionSnapshot(0.0, 0.18, 0.0, 0.984),
+        linearVelocityMetersPerSecond: new MimirVector3Snapshot(-0.02, 0.01, 0.03),
+        angularVelocityRadiansPerSecond: new MimirVector3Snapshot(0.2, 0.0, 0.0),
+        confidence: 0.89,
+        calibrationId: "nightwing-move-usb-calibration-v1",
+        trackingSpaceId: "nightwing-move-space",
+        producerId: "muninn:nightwing:move",
+        hostId: "nightwing",
+        latencyMilliseconds: 4.6,
+        battery01: 0.67);
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
     using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
@@ -1597,10 +1735,18 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         eveSurface,
         new CultRecordHandle<MimirEveOperatorSurfaceDocument>(new CultRecordKey($"mimir-eve-surface:{eveSurface.SurfaceId}")))
         .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        starfireMove,
+        new CultRecordHandle<MimirTrackingObservation>(new CultRecordKey($"mimir-move-tracking:{starfireMove.ObservationId}")))
+        .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        nightwingMove,
+        new CultRecordHandle<MimirTrackingObservation>(new CultRecordKey($"mimir-move-tracking:{nightwingMove.ObservationId}")))
+        .ConfigureAwait(false);
     await cache.FlushAsync().ConfigureAwait(false);
 
     Console.WriteLine(
-        $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length} sceneLayers={scene.Layers.Length} programOutput={output.OutputId} eveCommands={eveSurface.CommandTopics.Length}");
+        $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length} sceneLayers={scene.Layers.Length} programOutput={output.OutputId} eveCommands={eveSurface.CommandTopics.Length} moveTracking=2 hosts={starfireMove.HostId},{nightwingMove.HostId}");
     return 0;
 }
 
@@ -5601,6 +5747,11 @@ public sealed record ComplexContourBandCorrection(
     double DelayStdDevSamples,
     double Reliability,
     bool Usable);
+
+sealed record MoveTrackingSmokeContext(MimirSynchronizationHub Hub, int Consumed) : IDisposable
+{
+    public void Dispose() => Hub.Dispose();
+}
 
 public sealed record ComplexContourReflectionCorrection(
     double RelativeDelaySamples,

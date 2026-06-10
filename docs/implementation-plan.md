@@ -10,7 +10,7 @@ For the source-level ownership map, read [[code-algorithm-map|Code Algorithm Map
 - `src/Mimir.App` hosts Fensalir for windowing, rendering, and the D3D12
   bridge.
 - `src/Mimir.Runtime` owns stream descriptors, source polling, direct push
-  ingest, one rolling buffer per configured audio/video stream, and the
+  ingest, one rolling buffer per configured audio/video/tracking stream, and the
   synchronization hub Fensalir can inspect.
 - The default five-second window is an intentional latency/memory trade: use it
   to line up streams and extract the volumetric audio/video field before Mimir
@@ -31,8 +31,14 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirSynchronizationHub`, `MimirRollingStreamBuffer`, stream descriptors, and
   `IMimirStreamSource`.
 - Configurable five-second default rolling buffers for local and network audio
-  and video streams.
+  and video/tracking streams.
 - `MimirNativeIngestStreamSource` for direct push ingest into runtime buffers.
+- `MimirStreamKind.Tracking` plus `MimirTrackingObservation` carry PS Move
+  pose/button/battery/confidence samples as typed
+  `mimir.move_tracking_observation.v1` documents. Starfire and Nightwing both
+  have USB-attached Moves; Starfire can feed local tracking streams, while
+  Muninn on Nightwing publishes remote tracking streams. Odin owns discovery and
+  schema projection, not pose capture or Mimir fusion.
 - `MimirProcessStreamSource` for bridge/network command edges.
 - `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
   from native probes into the same rolling buffers Fensalir inspects. One probe
@@ -192,7 +198,10 @@ a named invariant that the native runtime cannot protect yet.
   tooling/UI/remote witness use, and `--perfect-machine-lowering-benchmark` to
   measure the Mimir-to-Fensalir lowering path. The current six-camera/two-audio
   synthetic lowering benchmark runs at roughly 2.5 us per iteration with about
-  2.3 KB allocated per iteration.
+  2.3 KB allocated per iteration. `--move-tracking-contract-smoke` proves
+  Starfire-local and Nightwing-remote Move tracking observations enter
+  Mimir's rolling buffers with Muninn producer identity and Odin discovery
+  provenance.
 - `MimirVideoFrameDescriptor` for dimensions, pixel format, stride, device
   timestamp, and native/GPU handle metadata.
 - `IMimirVideoCaptureDriver` and `MimirVideoCaptureDriverSource` as the live

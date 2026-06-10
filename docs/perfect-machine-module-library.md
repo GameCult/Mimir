@@ -13,11 +13,11 @@ job-interview answer for why it belongs in the body of the machine.
 | Bioacoustic clock solver | `Mimir.Runtime` | Fits canonical source time from decoded word anchors for local, Raven, phone, and microcontroller witnesses. | `src/Mimir.Runtime/Synchronization/MimirBioacousticClockHypothesis.cs` |
 | Alignment actuator | `Mimir.Runtime` + Faust | Converts sync state into bounded fractional-delay, gain, and sample-rate-offset controls; Faust moves samples. | `src/Mimir.Runtime/Synchronization/MimirAudioAlignmentActuator.cs` |
 | Audio actuator strategies | `Mimir.Runtime` + Faust | Integer baseline, Farrow fractional delay, variable ASRC, and hybrid delay/ASRC strategy profiles. | `src/Mimir.Runtime/Synchronization/MimirAudioActuatorConfiguration.cs` |
-| CultMesh contracts | `Mimir.Runtime` | Typed codebook, decoder, acoustic path, and actuator state documents for distributed Mimir nodes. | `src/Mimir.Runtime/Synchronization/MimirCultMeshContracts.cs` |
+| CultMesh contracts | `Mimir.Runtime` | Typed codebook, decoder, acoustic path, actuator, program, and Move tracking observation documents for distributed Mimir nodes. | `src/Mimir.Runtime/Synchronization/MimirCultMeshContracts.cs`, `src/Mimir.Runtime/Synchronization/MimirTrackingObservation.cs` |
 | Acoustic path learning | `Mimir.Runtime` | Calibration stages for usable bands, confusion, global delay, group delay, and codebook adaptation. | `src/Mimir.Runtime/Synchronization/MimirAcousticPathLearningConfiguration.cs` |
 | Acoustic localization | `Mimir.Runtime` + Fensalir | Pairwise TDOA, SRP-PHAT grid, sparse source, and visual-constrained localization profiles plus a small SRP/TDOA scorer. | `src/Mimir.Runtime/Synchronization/MimirAcousticLocalizationConfiguration.cs`, `src/Mimir.Runtime/Synchronization/MimirAcousticLocalizationSolver.cs` |
 | Benchmark panels | `Mimir.Runtime` | Decoder golf and meatspace acceptance degradation panels with receipt roots and thresholds. | `src/Mimir.Runtime/Synchronization/MimirBenchmarkPanelConfiguration.cs` |
-| Capture profiles | `Mimir.Runtime` + native workers | Hardware intent for Leap, Kiyos, PS Eyes, Starfire Scarlett, and Raven Scarlett. | `src/Mimir.Runtime/Synchronization/MimirNativeCaptureConfiguration.cs` |
+| Capture profiles | `Mimir.Runtime` + native workers | Hardware intent for Leap, Kiyos, PS Eyes, Starfire Scarlett, Raven Scarlett, and USB-attached Moves on Starfire/Nightwing. | `src/Mimir.Runtime/Synchronization/MimirNativeCaptureConfiguration.cs` |
 | Camera ingest strategies | `Mimir.Runtime` + native workers | Diagnostic metadata, managed native wrapper, native SPSC ring, and shared-GPU-texture ingest shapes. | `src/Mimir.Runtime/Synchronization/MimirCameraIngestConfiguration.cs` |
 | Reservoir strategies | `Mimir.Runtime` + native reservoir + Fensalir | Managed rolling buffers, native shared-edge rings, and derived GPU temporal field storage. | `src/Mimir.Runtime/Synchronization/MimirReservoirConfiguration.cs` |
 | Distributed witnesses | `Mimir.Runtime` + CultMesh | Raven, phone, microcontroller, and remote camera rig configurations for compact timing/path state. | `src/Mimir.Runtime/Synchronization/MimirDistributedWitnessConfiguration.cs` |
@@ -42,6 +42,9 @@ job-interview answer for why it belongs in the body of the machine.
   stem generation.
 - CultMesh carries typed state surfaces; remote nodes may observe and decode,
   but they do not become independent clock authorities.
+- USB-attached Moves on Starfire and Nightwing publish
+  `mimir.move_tracking_observation.v1` as tracking streams. Muninn emits the
+  witness, Odin discovers/projects it, and Mimir owns buffering plus fusion.
 - OBS may receive compatibility program surfaces and stems. It does not own
   calibration, composition, preview/control, or publication.
 
@@ -54,6 +57,7 @@ dotnet build .\Mimir.slnx
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-profile-smoke
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-lowering-benchmark
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-contract-smoke
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --move-tracking-contract-smoke
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-manifest
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-actuator-self-test
 ```

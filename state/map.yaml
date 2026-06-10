@@ -33,6 +33,9 @@ constraints:
     memory.
   - Networked feeds are producers into the live runtime, not independent clock
     authorities.
+  - USB-attached Moves on Starfire and Nightwing are tracking witnesses. Odin
+    may discover/project their stream schemas, but it does not own pose capture
+    or Mimir fusion.
   - CultMesh/CultNet is the default Raven-to-Starfire media transit. OBS may
     consume a Starfire-local UDP MPEG-TS egress as a compatibility sink, but
     Mimir owns program selection, composition, preview/control, and publication.
@@ -63,6 +66,9 @@ invariants:
     response, and compute-offload work need typed mesh-syncable state surfaces
     so phones, microcontrollers, Raven, and Starfire can cooperate without
     becoming independent timing authorities.
+  - Move tracking observations are stream samples, not program controls or
+    dashboard truth. Starfire-local and Nightwing-remote Move samples must enter
+    Mimir.Runtime as typed tracking buffers before Fensalir or Eve acts on them.
 
 accepted_design:
   - `Mimir.slnx` owns the app surface.
@@ -74,6 +80,11 @@ accepted_design:
     device timestamp, and optional native/GPU handle.
   - `MimirAudioBlockDescriptor` carries sample rate, channels, sample format,
     frame count, timestamp, and optional native handle.
+  - `MimirTrackingObservation` carries typed PS Move pose/button/battery/
+    confidence samples as `mimir.move_tracking_observation.v1`; Starfire Moves
+    are local tracking streams, Nightwing Moves are emitted by Muninn on
+    Nightwing, Odin owns discovery/schema projection, and Mimir owns buffering
+    and fusion.
   - `MimirFrameEventProcessStreamSource` is a temporary diagnostic adapter for
     JSON-line video frame and audio block metadata from native probes into
     runtime rolling buffers; it does not carry pixels/audio payloads or own the

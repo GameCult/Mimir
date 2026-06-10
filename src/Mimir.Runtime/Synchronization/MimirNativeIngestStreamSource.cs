@@ -20,7 +20,8 @@ public sealed class MimirNativeIngestStreamSource : IMimirStreamSource
         ulong payloadHandle,
         int byteLength = 0,
         ReadOnlyMemory<byte> data = default,
-        MimirVideoFrameDescriptor? videoFrame = null)
+        MimirVideoFrameDescriptor? videoFrame = null,
+        MimirTrackingObservation? trackingObservation = null)
     {
         samples.Enqueue(new MimirStreamSample(
             Descriptor.SourceId,
@@ -32,7 +33,8 @@ public sealed class MimirNativeIngestStreamSource : IMimirStreamSource
             payloadHandle,
             byteLength,
             data,
-            videoFrame));
+            videoFrame,
+            TrackingObservation: trackingObservation));
     }
 
     public void PushVideoFrame(
@@ -52,6 +54,25 @@ public sealed class MimirNativeIngestStreamSource : IMimirStreamSource
             data.Length,
             data,
             frame);
+    }
+
+    public void PushTrackingObservation(MimirTrackingObservation observation)
+    {
+        if (Descriptor.Kind != MimirStreamKind.Tracking)
+        {
+            throw new InvalidOperationException("Tracking observations can only be pushed into a tracking stream source.");
+        }
+
+        if (!string.Equals(observation.StreamId, Descriptor.SourceId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Tracking observation stream id does not match this stream source.", nameof(observation));
+        }
+
+        Push(
+            observation.SourceTimestampNs,
+            observation.ArrivalTimestampNs,
+            payloadHandle: 0,
+            trackingObservation: observation);
     }
 
     public bool TryRead(out MimirStreamSample sample)

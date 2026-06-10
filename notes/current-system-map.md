@@ -22,6 +22,7 @@ flowchart TD
     B["mic/loopback drivers"] --> R
     C["Leap timing/IR driver"] --> R
     D["network feed producers"] --> R
+    M["Starfire/Nightwing Move tracking"] --> R
     R --> N["native reservoir handles"]
     N --> E["Fensalir GPU fusion + UI"]
     N --> F["Faust/native DSP"]
@@ -44,6 +45,11 @@ Ownership:
   becoming independent clock authorities.
 - `Mimir.Runtime` owns app-level stream buffers and synchronization.
 - Native capture workers own device reads.
+- Move tracking observations are stream samples, not program controls. USB
+  Moves plugged into Starfire produce local tracking streams; USB Moves plugged
+  into Nightwing are published by Muninn on Nightwing as remote tracking
+  streams. Odin owns discovery/schema projection for those streams and does not
+  own pose capture or Mimir fusion.
 - Mimir owns program composition, source subscription policy, preview/control
   state, stats, and publication intent.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
@@ -77,6 +83,7 @@ program video plus separately controllable audio stems.
 - `MimirProcessStreamSource`;
 - `MimirFrameEventProcessStreamSource`;
 - `MimirVideoFrameDescriptor`;
+- `MimirTrackingObservation`;
 - `MimirAudioSynchronizationAnalyzer`;
 - `IMimirVideoCaptureDriver`;
 - `MimirVideoCaptureDriverSource`.
@@ -88,6 +95,30 @@ probes can emit per-frame JSON metadata so Fensalir sees real sensor cadence in
 the rolling buffers while the direct ABI driver is being cut. It does not carry
 pixels and does not own the final six-camera hot path. Multi-camera probes are
 one process with declared accepted source ids, not one process per camera.
+
+## Move Tracking
+
+Starfire and Nightwing both have PS Move controllers directly attached over
+USB. Mimir represents those controller poses as `MimirStreamKind.Tracking`
+buffers carrying typed `mimir.move_tracking_observation.v1` samples. Each
+sample names the stream, device, producer, host, Odin discovery provider,
+tracking space, calibration id, source timestamp, pose, velocity, buttons,
+battery, latency, and confidence.
+
+Authority:
+
+- Starfire-local Move tracking is a local Mimir/Muninn tracking stream.
+- Nightwing Move tracking is emitted by Muninn on Nightwing over the typed
+  observation path.
+- Odin discovers and projects the stream/schema surface for operator and agent
+  access.
+- Mimir owns subscription, rolling retention, clock alignment, and later fusion
+  with cameras/audio/Leap/Fensalir. OBS and dashboard summaries do not own this
+  state.
+
+Smoke proof: `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj
+-- --move-tracking-contract-smoke` consumes one Starfire Move and one Nightwing
+Move observation into two tracking buffers.
 
 ## Program Composition
 

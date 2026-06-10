@@ -132,6 +132,48 @@ public static class MimirNativeCaptureConfigurations
         Notes = "Remote co-streamer audio witness. It decodes locally and ships typed timing/path state back over CultMesh."
     };
 
+    public static MimirNativeCaptureDeviceProfile StarfirePsMoves { get; } = new(
+        "starfire-ps-moves",
+        "Starfire PS Move tracking witnesses",
+        MimirStreamKind.Tracking,
+        MimirNativeCaptureTransport.VendorSdk,
+        MimirCaptureClockDomain.DeviceHardware,
+        ChannelCount: 2,
+        PreferredWidth: 0,
+        PreferredHeight: 0,
+        PreferredSampleRate: 0,
+        PreferredFramesPerSecond: 120.0,
+        DefaultRollingBufferSeconds,
+        Required: false,
+        OwnedOutputs: ["local-controller-pose-observations", "performance-motion-cues"],
+        "USB-attached local Moves. Mimir buffers the observations; tracking code owns hardware pose estimation.");
+
+    public static MimirNativeCaptureDeviceProfile NightwingPsMoves { get; } = StarfirePsMoves with
+    {
+        Id = "nightwing-ps-moves",
+        DisplayName = "Nightwing PS Move tracking witnesses",
+        Transport = MimirNativeCaptureTransport.NetworkCultMesh,
+        ClockDomain = MimirCaptureClockDomain.NetworkSender,
+        OwnedOutputs = ["remote-controller-pose-observations", "performance-motion-cues"],
+        Notes = "USB-attached Nightwing Moves. Muninn on Nightwing publishes typed pose/button observations; Odin owns discovery/schema projection; Mimir owns buffering and fusion."
+    };
+
+    public static MimirNativeCaptureDeviceProfile OdinMoveTrackingCatalog { get; } = new(
+        "odin-move-tracking-catalog",
+        "Odin Move tracking discovery catalog",
+        MimirStreamKind.Tracking,
+        MimirNativeCaptureTransport.NetworkCultMesh,
+        MimirCaptureClockDomain.CanonicalFitted,
+        ChannelCount: 4,
+        PreferredWidth: 0,
+        PreferredHeight: 0,
+        PreferredSampleRate: 0,
+        PreferredFramesPerSecond: 120.0,
+        DefaultRollingBufferSeconds,
+        Required: false,
+        OwnedOutputs: ["move-stream-discovery", "tracking-schema-rendezvous"],
+        "Discovery/projection surface only. Odin names Starfire and Nightwing Move streams; it does not own pose capture or Mimir fusion.");
+
     public static IReadOnlyList<MimirNativeCaptureDeviceProfile> LocalSixCameraProfiles { get; } =
     [
         LeapLeftIr,
@@ -146,6 +188,9 @@ public static class MimirNativeCaptureConfigurations
     [
         .. LocalSixCameraProfiles,
         ScarlettStarfire,
-        ScarlettRaven
+        ScarlettRaven,
+        StarfirePsMoves,
+        NightwingPsMoves,
+        OdinMoveTrackingCatalog
     ];
 }

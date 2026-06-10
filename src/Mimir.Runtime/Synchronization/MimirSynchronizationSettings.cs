@@ -14,8 +14,10 @@ public sealed class MimirSynchronizationSettings
         var streams = new List<MimirStreamDescriptor>();
         AddStreams(streams, Environment.GetEnvironmentVariable("MIMIR_LOCAL_VIDEO_STREAMS"), MimirStreamKind.Video, MimirStreamOrigin.LocalDevice);
         AddStreams(streams, Environment.GetEnvironmentVariable("MIMIR_LOCAL_AUDIO_STREAMS"), MimirStreamKind.Audio, MimirStreamOrigin.LocalDevice);
+        AddStreams(streams, Environment.GetEnvironmentVariable("MIMIR_LOCAL_TRACKING_STREAMS"), MimirStreamKind.Tracking, MimirStreamOrigin.LocalDevice);
         AddStreams(streams, Environment.GetEnvironmentVariable("MIMIR_NETWORK_VIDEO_STREAMS"), MimirStreamKind.Video, MimirStreamOrigin.Network);
         AddStreams(streams, Environment.GetEnvironmentVariable("MIMIR_NETWORK_AUDIO_STREAMS"), MimirStreamKind.Audio, MimirStreamOrigin.Network);
+        AddStreams(streams, Environment.GetEnvironmentVariable("MIMIR_NETWORK_TRACKING_STREAMS"), MimirStreamKind.Tracking, MimirStreamOrigin.Network);
 
         return new MimirSynchronizationSettings
         {
