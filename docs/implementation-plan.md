@@ -39,6 +39,13 @@ a named invariant that the native runtime cannot protect yet.
   have USB-attached Moves; Starfire can feed local tracking streams, while
   Muninn on Nightwing publishes remote tracking streams. Odin owns discovery and
   schema projection, not pose capture or Mimir fusion.
+- `scripts/start-nightwing-move-tracking.ps1` is the narrow live Nightwing
+  bring-up path: it starts the `/eve/periwinkle` receiver/recorder on Starfire,
+  stages the Nightwing Eye/Move Python worker, lights configured USB Moves via
+  HID report `0x06`, and publishes `mimir.psmove_light_state.v1` plus
+  `mimir.move_controller_observation_state.v1` blob observations from both PS3
+  Eyes. The blob stream is optical witness evidence for later pose fusion, not
+  the final 6DoF pose owner.
 - `MimirProcessStreamSource` for bridge/network command edges.
 - `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
   from native probes into the same rolling buffers Fensalir inspects. One probe

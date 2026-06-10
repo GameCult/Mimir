@@ -120,6 +120,17 @@ Smoke proof: `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csp
 -- --move-tracking-contract-smoke` consumes one Starfire Move and one Nightwing
 Move observation into two tracking buffers.
 
+Live Nightwing bring-up uses `scripts/start-nightwing-move-tracking.ps1`.
+Starfire starts `Mimir.EveSensorReceiver` on `/eve/periwinkle`, stages
+`nw_eye_cap.py`, `nw_move_hint.py`, and `nightwing_typed_witness_publisher.py`
+onto Nightwing, and launches the publisher with `--track-eyes` plus explicit
+`--move-light name=/dev/hidrawN:#rrggbb` HID ownership. The worker keeps the
+USB Move sphere lit with PS Move report `0x06`, emits
+`mimir.psmove_light_state.v1`, and publishes compact
+`mimir.move_controller_observation_state.v1` blob observations from both PS3
+Eyes. Those Eye/Move observations are the live optical witness feeding the later
+pose/fusion owner; they are not themselves the final 6DoF pose authority.
+
 ## Program Composition
 
 [[docs/mimir-program-composition|Mimir Program Composition]] is the live

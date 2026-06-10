@@ -3,5 +3,7 @@
     <Project Path="src/Mimir.App/Mimir.App.csproj" />
     <Project Path="src/Mimir.Runtime/Mimir.Runtime.csproj" />
     <Project Path="src/Mimir.BufferSmoke/Mimir.BufferSmoke.csproj" />
+    <Project Path="src/Mimir.EveSensorReceiver/Mimir.EveSensorReceiver.csproj" />
+    <Project Path="src/Mimir.VerseRecorder/Mimir.VerseRecorder.csproj" />
   </Folder>
 </Solution>
