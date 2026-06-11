@@ -13,7 +13,8 @@ job-interview answer for why it belongs in the body of the machine.
 | Bioacoustic clock solver | `Mimir.Runtime` | Fits canonical source time from decoded word anchors for local, Raven, phone, and microcontroller witnesses. | `src/Mimir.Runtime/Synchronization/MimirBioacousticClockHypothesis.cs` |
 | Alignment actuator | `Mimir.Runtime` + Faust | Converts sync state into bounded fractional-delay, gain, and sample-rate-offset controls; Faust moves samples. | `src/Mimir.Runtime/Synchronization/MimirAudioAlignmentActuator.cs` |
 | Audio actuator strategies | `Mimir.Runtime` + Faust | Integer baseline, Farrow fractional delay, variable ASRC, and hybrid delay/ASRC strategy profiles. | `src/Mimir.Runtime/Synchronization/MimirAudioActuatorConfiguration.cs` |
-| CultMesh contracts | `Mimir.Runtime` | Typed codebook, decoder, acoustic path, actuator, program, and Move tracking observation documents for distributed Mimir nodes. | `src/Mimir.Runtime/Synchronization/MimirCultMeshContracts.cs`, `src/Mimir.Runtime/Synchronization/MimirTrackingObservation.cs` |
+| CultMesh contracts | `Mimir.Runtime` | Typed codebook, decoder, acoustic path, actuator, program, Move evidence, and Mimir-fused Move controller pose documents for distributed Mimir nodes. | `src/Mimir.Runtime/Synchronization/MimirCultMeshContracts.cs`, `src/Mimir.Runtime/Synchronization/MimirTrackingObservation.cs` |
+| Move controller fusion | `Mimir.Runtime` + Fensalir | Mimir fuses Muninn marker candidates plus controller/IMU/button feeds into `mimir.move_controller_pose.v1`; Fensalir consumes the resolved pose stream for interactive environments. | `src/Mimir.Runtime/Synchronization/MimirTrackingObservation.cs` |
 | Acoustic path learning | `Mimir.Runtime` | Calibration stages for usable bands, confusion, global delay, group delay, and codebook adaptation. | `src/Mimir.Runtime/Synchronization/MimirAcousticPathLearningConfiguration.cs` |
 | Acoustic localization | `Mimir.Runtime` + Fensalir | Pairwise TDOA, SRP-PHAT grid, sparse source, and visual-constrained localization profiles plus a small SRP/TDOA scorer. | `src/Mimir.Runtime/Synchronization/MimirAcousticLocalizationConfiguration.cs`, `src/Mimir.Runtime/Synchronization/MimirAcousticLocalizationSolver.cs` |
 | Benchmark panels | `Mimir.Runtime` | Decoder golf and meatspace acceptance degradation panels with receipt roots and thresholds. | `src/Mimir.Runtime/Synchronization/MimirBenchmarkPanelConfiguration.cs` |
@@ -42,9 +43,12 @@ job-interview answer for why it belongs in the body of the machine.
   stem generation.
 - CultMesh carries typed state surfaces; remote nodes may observe and decode,
   but they do not become independent clock authorities.
-- USB-attached Moves on Starfire and Nightwing publish
-  `mimir.move_tracking_observation.v1` as tracking streams. Muninn emits the
-  witness, Odin discovers/projects it, and Mimir owns buffering plus fusion.
+- USB-attached Moves on Starfire and Nightwing publish source-local Muninn
+  evidence streams: glowing-orb marker candidates and controller/IMU/button
+  state. Odin discovers/projects those streams. Mimir owns buffering,
+  calibration, association, triangulation, IMU fusion, prediction, and
+  `mimir.move_controller_pose.v1` publication. Fensalir consumes that resolved
+  pose stream for interactive environments.
 - OBS may receive compatibility program surfaces and stems. It does not own
   calibration, composition, preview/control, or publication.
 

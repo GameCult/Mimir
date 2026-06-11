@@ -33,9 +33,10 @@ constraints:
     memory.
   - Networked feeds are producers into the live runtime, not independent clock
     authorities.
-  - USB-attached Moves on Starfire and Nightwing are tracking witnesses. Odin
-    may discover/project their stream schemas, but it does not own pose capture
-    or Mimir fusion.
+  - USB-attached Moves on Starfire and Nightwing are tracking witnesses. Muninn
+    publishes source-local marker candidates plus controller/IMU/button state.
+    Odin may discover/project their stream schemas, but it does not own pose
+    capture or Mimir fusion.
   - CultMesh/CultNet is the default Raven-to-Starfire media transit. OBS may
     consume a Starfire-local UDP MPEG-TS egress as a compatibility sink, but
     Mimir owns program selection, composition, preview/control, and publication.
@@ -84,11 +85,13 @@ accepted_design:
     device timestamp, and optional native/GPU handle.
   - `MimirAudioBlockDescriptor` carries sample rate, channels, sample format,
     frame count, timestamp, and optional native handle.
-  - `MimirTrackingObservation` carries typed PS Move pose/button/battery/
-    confidence samples as `mimir.move_tracking_observation.v1`; Starfire Moves
-    are local tracking streams, Nightwing Moves are emitted by Muninn on
-    Nightwing, Odin owns discovery/schema projection, and Mimir owns buffering
-    and fusion.
+  - `MimirTrackingObservation` carries typed PS Move evidence samples as
+    `mimir.move_tracking_observation.v1`; Starfire Moves are local tracking
+    streams, Nightwing Moves are emitted by Muninn on Nightwing, Odin owns
+    discovery/schema projection, and Mimir owns buffering and fusion.
+  - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract for
+    Fensalir-facing interaction. Mimir owns calibration, association,
+    triangulation, IMU fusion, prediction, confidence, and latency accounting.
   - `scripts/start-nightwing-move-tracking.ps1` restores the live Nightwing
     Eye/Move witness path: Starfire owns the `/eve/periwinkle` receiver and
     recorder, Nightwing owns PS Move HID report `0x06` LED writes and PS3 Eye
@@ -98,9 +101,9 @@ accepted_design:
   - Odin's Muninn organ owns Move optical candidate extraction in
     `E:\Projects\Odin\crates\muninn-move-tracker` and publishes/feeds
     `muninn.move_marker_candidate.v1` records. Mimir consumes those candidate
-    streams; it does not own raw optical extraction. Calibration, multi-camera
-    association, triangulation, IMU fusion, prediction, and final 6DoF pose are
-    still separate owners.
+    streams; it does not own raw optical extraction. Mimir explicitly owns
+    calibration, multi-camera association, triangulation, IMU fusion,
+    prediction, and final 6DoF wand pose.
   - `MimirFrameEventProcessStreamSource` is a temporary diagnostic adapter for
     JSON-line video frame and audio block metadata from native probes into
     runtime rolling buffers; it does not carry pixels/audio payloads or own the

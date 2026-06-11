@@ -45,11 +45,12 @@ Ownership:
   becoming independent clock authorities.
 - `Mimir.Runtime` owns app-level stream buffers and synchronization.
 - Native capture workers own device reads.
-- Move tracking observations are stream samples, not program controls. USB
-  Moves plugged into Starfire produce local tracking streams; USB Moves plugged
-  into Nightwing are published by Muninn on Nightwing as remote tracking
-  streams. Odin owns discovery/schema projection for those streams and does not
-  own pose capture or Mimir fusion.
+- Move tracking observations are stream samples, not program controls. Muninn
+  daemons on Starfire and Nightwing publish source-local optical marker
+  candidates plus controller/IMU/button state for USB-attached Moves. Odin owns
+  discovery/schema projection for those streams. Mimir owns calibration,
+  association, triangulation, IMU fusion, prediction, and the resolved
+  Fensalir-facing wand pose stream.
 - Mimir owns program composition, source subscription policy, preview/control
   state, stats, and publication intent.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
@@ -99,16 +100,18 @@ one process with declared accepted source ids, not one process per camera.
 ## Move Tracking
 
 Starfire and Nightwing both have PS Move controllers directly attached over
-USB. Mimir represents those controller poses as `MimirStreamKind.Tracking`
-buffers carrying typed `mimir.move_tracking_observation.v1` samples. Each
-sample names the stream, device, producer, host, Odin discovery provider,
-tracking space, calibration id, source timestamp, pose, velocity, buttons,
-battery, latency, and confidence.
+USB. Muninn represents what each local body can honestly observe:
+`muninn.move_marker_candidate.v1` for glowing orb candidates from cameras and
+`muninn.move_controller_state.v1` for controller/IMU/button/battery state from
+USB-attached Moves. Mimir drinks those feeds into `MimirStreamKind.Tracking`
+buffers and publishes resolved `mimir.move_controller_pose.v1` documents for
+Fensalir interaction once calibration and fusion have earned a pose.
 
 Authority:
 
-- Starfire-local Move tracking is a local Mimir/Muninn tracking stream.
-- Nightwing Move tracking is emitted by Muninn on Nightwing over the typed
+- Starfire-local Move evidence is published by Muninn/Mimir local producers as
+  typed observation streams.
+- Nightwing Move evidence is emitted by Muninn on Nightwing over the typed
   observation path.
 - Structured PS Move light pulses are Muninn output commands. Mimir requests
   them by sending `muninn.move_light_command.v1` over CultNet/CultMesh to the
@@ -117,9 +120,12 @@ Authority:
   hardware behavior before Muninn is available on that host.
 - Odin discovers and projects the stream/schema surface for operator and agent
   access.
-- Mimir owns subscription, rolling retention, clock alignment, and later fusion
-  with cameras/audio/Leap/Fensalir. OBS and dashboard summaries do not own this
-  state.
+- Mimir owns subscription, rolling retention, clock alignment, calibration,
+  controller association, triangulation, IMU fusion, prediction, and resolved
+  wand pose publication. OBS and dashboard summaries do not own this state.
+- Fensalir consumes Mimir's resolved Move controller poses as interactive input
+  for environments; it does not synthesize controller truth from raw Muninn
+  evidence.
 
 Smoke proof: `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj
 -- --move-tracking-contract-smoke` consumes one Starfire Move and one Nightwing
@@ -146,9 +152,9 @@ Odin's Muninn organ owns the Move optical extraction stage for sensor stream
 exposure. Its Rust crate lives in `E:\Projects\Odin\crates\muninn-move-tracker`
 and publishes/feeds `muninn.move_marker_candidate.v1` records. Mimir consumes
 those Muninn candidate streams into tracking buffers; it does not own raw
-optical extraction. Stereo triangulation, camera calibration, controller
-association, IMU fusion, prediction, and final 6DoF pose remain separate later
-owners.
+optical extraction. Mimir is now the explicit owner for stereo triangulation,
+camera calibration, controller association, IMU fusion, prediction, and final
+6DoF wand pose.
 
 ## Program Composition
 

@@ -857,7 +857,7 @@ static async Task<int> RunBioacousticContestantsAsync(
 
         foreach (var decoder in decoders)
         {
-        var index = BuildCepstralContestantWordIndex(sampleRate, decoder.Decoder, renderer);
+            var index = BuildCepstralContestantWordIndex(sampleRate, decoder.Decoder, renderer);
             foreach (var degradation in degradations)
             {
                 var degraded = RoundTripThroughDegradedCepstrum(source, sampleRate, degradation, out var analysis);
@@ -1701,6 +1701,17 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         hostId: "nightwing",
         latencyMilliseconds: 4.6,
         battery01: 0.67);
+    var fusedMovePose = MimirMoveControllerPoseDocument.FromObservation(
+        nightwingMove,
+        "move:right",
+        [
+            "muninn:nightwing:ps3-eye-0:move-marker-candidates",
+            "muninn:nightwing:ps3-eye-1:move-marker-candidates",
+            "muninn:nightwing:move-usb:controller-state",
+            "muninn:starfire:move-usb:controller-state"
+        ],
+        ["optical-marker-candidate", "optical-marker-candidate", "imu-controller-state", "imu-controller-state"],
+        "mimir-move-stage-calibration-v1");
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
     using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
@@ -1743,10 +1754,14 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         nightwingMove,
         new CultRecordHandle<MimirTrackingObservation>(new CultRecordKey($"mimir-move-tracking:{nightwingMove.ObservationId}")))
         .ConfigureAwait(false);
+    await cache.UpsertAsync(
+        fusedMovePose,
+        new CultRecordHandle<MimirMoveControllerPoseDocument>(new CultRecordKey($"mimir-move-controller-pose:{fusedMovePose.PoseId}")))
+        .ConfigureAwait(false);
     await cache.FlushAsync().ConfigureAwait(false);
 
     Console.WriteLine(
-        $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length} sceneLayers={scene.Layers.Length} programOutput={output.OutputId} eveCommands={eveSurface.CommandTopics.Length} moveTracking=2 hosts={starfireMove.HostId},{nightwingMove.HostId}");
+        $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length} sceneLayers={scene.Layers.Length} programOutput={output.OutputId} eveCommands={eveSurface.CommandTopics.Length} moveTracking=2 fusedMovePose={fusedMovePose.PoseId} authority={fusedMovePose.FusionAuthorityId} consumer={fusedMovePose.ConsumerContract} hosts={starfireMove.HostId},{nightwingMove.HostId}");
     return 0;
 }
 

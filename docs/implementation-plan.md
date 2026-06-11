@@ -34,11 +34,14 @@ a named invariant that the native runtime cannot protect yet.
   and video/tracking streams.
 - `MimirNativeIngestStreamSource` for direct push ingest into runtime buffers.
 - `MimirStreamKind.Tracking` plus `MimirTrackingObservation` carry PS Move
-  pose/button/battery/confidence samples as typed
-  `mimir.move_tracking_observation.v1` documents. Starfire and Nightwing both
-  have USB-attached Moves; Starfire can feed local tracking streams, while
-  Muninn on Nightwing publishes remote tracking streams. Odin owns discovery and
-  schema projection, not pose capture or Mimir fusion.
+  evidence samples as typed `mimir.move_tracking_observation.v1` documents.
+  Starfire and Nightwing both have USB-attached Moves. Muninn daemons publish
+  source-local glowing-orb marker candidates and controller/IMU/button state;
+  Odin owns discovery and schema projection, not pose fusion.
+- `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract.
+  Mimir owns calibration, association, triangulation, IMU fusion, prediction,
+  confidence, and latency accounting for those poses before Fensalir consumes
+  them as interactive controller input.
 - `scripts/start-nightwing-move-tracking.ps1` is the narrow live Nightwing
   bring-up path: it starts the `/eve/periwinkle` receiver/recorder on Starfire,
   stages the Nightwing Eye/Move Python worker, keeps a heartbeat for field
@@ -57,8 +60,8 @@ a named invariant that the native runtime cannot protect yet.
   `E:\Projects\Odin\crates\muninn-move-tracker` and publishes/feeds
   `muninn.move_marker_candidate.v1` records. Mimir consumes those candidate
   streams; it does not own raw optical extraction. Final pose, stereo
-  triangulation, calibration, association, IMU fusion, and prediction remain
-  separate later owners.
+  triangulation, calibration, association, IMU fusion, and prediction belong to
+  Mimir.
 - `MimirProcessStreamSource` for bridge/network command edges.
 - `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
   from native probes into the same rolling buffers Fensalir inspects. One probe
