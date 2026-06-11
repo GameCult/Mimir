@@ -1,17 +1,7 @@
 {
-    "durationSeconds":  143.87,
-    "stateUpdated":  true,
-    "exitCode":  0,
-    "finishedAt":  "2026-05-20T13:30:04.9837661Z",
-    "stateFile":  "E:\\Projects\\LocalCastBridge\\.voidbot\\state\\mimir.cc",
-    "skipModel":  false,
-    "startedAt":  "2026-05-20T13:27:41.1114814Z",
-    "lastMessagePath":  "E:\\Projects\\LocalCastBridge\\.voidbot\\status\\void-memory-maintenance-last-message.txt",
-    "appliedOperationCount":  1,
-    "status":  "ok",
-    "contextPath":  "E:\\Projects\\LocalCastBridge\\.voidbot\\status\\void-memory-maintenance-context.json",
-    "mode":  "typed_memory_maintenance",
-    "proposedOperationCount":  1,
-    "forceDistillation":  true,
-    "operationOutputPath":  "E:\\Projects\\LocalCastBridge\\.voidbot\\status\\void-memory-maintenance-operations.json"
+  "status": "starting",
+  "startedAt": "2026-06-11T17:40:32.020Z",
+  "stateFile": "E:\\Projects\\Mimir\\.voidbot\\state\\mimir.cc",
+  "launcher": "repo_face_heartbeat",
+  "reason": "repo_face_stale_short_term_memory"
 }
