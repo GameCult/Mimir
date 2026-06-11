@@ -4,9 +4,7 @@ param(
     [string]$StarfireHost = "192.168.1.66",
     [string]$Path = "/eve/periwinkle",
     [string]$EyeDevices = "/dev/video2,/dev/video3",
-    [string[]]$MoveLight = @(
-        "move-usb=/dev/hidraw1:#35ff6c"
-    ),
+    [string[]]$MoveLight = @(),
     [string]$RecorderRoot = "C:\Users\Meta\Videos\Mimir\VerseCaptures",
     [switch]$SkipRecorder,
     [switch]$DryRun
@@ -18,6 +16,9 @@ $runId = Get-Date -Format "yyyyMMdd-HHmmss"
 $runDir = Join-Path $repo "artifacts\runtime\nightwing-move-tracking-$runId"
 $witnessUrl = "ws://$StarfireHost`:$Port$Path"
 $subscribeUrl = "ws://127.0.0.1:$Port$Path/subscribe"
+$remoteLog = "~/.local/state/gamecult/mimir-nightwing-move-tracking-$runId.log"
+$remotePid = "~/.local/state/gamecult/nightwing-typed-witness.pid"
+$remoteHeartbeat = "~/.local/state/gamecult/nightwing-typed-witness.heartbeat"
 
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 New-Item -ItemType Directory -Force -Path $RecorderRoot | Out-Null
@@ -126,13 +127,11 @@ if ($DryRun) {
     scp (Join-Path $repo "tools\nw_move_hint.py") "${NightwingHost}:/tmp/nw_move_hint.py" | Out-Null
     scp (Join-Path $repo "tools\nightwing_typed_witness_publisher.py") "${NightwingHost}:/tmp/nightwing_typed_witness_publisher.py" | Out-Null
 
-    $remoteLog = "~/.local/state/gamecult/mimir-nightwing-move-tracking-$runId.log"
-    $remotePid = "~/.local/state/gamecult/mimir-nightwing-move-tracking-$runId.pid"
     $moveArgs = ($MoveLight | ForEach-Object { "--move-light '$($_ -replace "'", "'\''")'" }) -join " "
     $remoteScript = @"
 mkdir -p ~/.local/state/gamecult
 pkill -f '/tmp/nightwing_typed_witness_publisher.py.*--track-eyes' || true
-nohup python3 /tmp/nightwing_typed_witness_publisher.py --url '$witnessUrl' --track-eyes --track-builtin-camera --track-builtin-mic --interval 0.10 --eye-devices '$EyeDevices' --eye-window-seconds 0.08 --tracking-stride 6 $moveArgs > $remoteLog 2>&1 < /dev/null &
+nohup python3 /tmp/nightwing_typed_witness_publisher.py --url '$witnessUrl' --track-eyes --track-builtin-camera --track-builtin-mic --interval 0.10 --heartbeat-path '$remoteHeartbeat' --eye-devices '$EyeDevices' --eye-window-seconds 0.08 --tracking-stride 6 $moveArgs > $remoteLog 2>&1 < /dev/null &
 sleep 0.5
 pgrep -n -f '/tmp/nightwing_typed_witness_publisher.py.*--track-eyes' > $remotePid
 cat $remotePid
@@ -150,8 +149,9 @@ $manifest = [ordered]@{
     runDir = $runDir
     witnessUrl = $witnessUrl
     subscribeUrl = $subscribeUrl
+    heartbeatPath = $remoteHeartbeat
     eyeDevices = $EyeDevices
-    moveLights = $MoveLight
+    directHidSmokeMoveLights = $MoveLight
     startedAt = (Get-Date).ToString("o")
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $runDir "supervisor.json")

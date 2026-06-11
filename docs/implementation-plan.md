@@ -41,15 +41,18 @@ a named invariant that the native runtime cannot protect yet.
   schema projection, not pose capture or Mimir fusion.
 - `scripts/start-nightwing-move-tracking.ps1` is the narrow live Nightwing
   bring-up path: it starts the `/eve/periwinkle` receiver/recorder on Starfire,
-  stages the Nightwing Eye/Move Python worker, lights configured USB Moves via
-  HID report `0x06`, and publishes `mimir.psmove_light_state.v1` plus
+  stages the Nightwing Eye/Move Python worker, keeps a heartbeat for field
+  liveness, and publishes `mimir.psmove_light_state.v1` plus
   `mimir.move_controller_observation_state.v1` blob observations from both PS3
   Eyes. The blob stream is optical witness evidence for later pose fusion, not
   the final 6DoF pose owner.
-- `scripts/start-starfire-move-light.ps1` is the Starfire-local USB Move light
-  owner. It launches `Mimir.PsMoveProbe` in steady hold mode so the locally
-  attached `VID_054C/PID_03D5` Move sphere stays lit for calibration/tracking
-  receipts.
+- Structured PS Move light pulses are Muninn output commands. Mimir publishes
+  `muninn.move_light_command.v1` over CultNet/CultMesh to the Muninn daemon on
+  the host that owns the USB-attached Move. Muninn writes PS Move HID report
+  `0x06` locally and updates command state/receipt.
+  `scripts/start-starfire-move-light.ps1` and Nightwing direct HID writes are
+  now smoke/bootstrap paths for hardware proof when Muninn is not yet running
+  on that host.
 - Odin's Muninn organ owns Move optical candidate extraction in
   `E:\Projects\Odin\crates\muninn-move-tracker` and publishes/feeds
   `muninn.move_marker_candidate.v1` records. Mimir consumes those candidate

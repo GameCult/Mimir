@@ -110,6 +110,11 @@ Authority:
 - Starfire-local Move tracking is a local Mimir/Muninn tracking stream.
 - Nightwing Move tracking is emitted by Muninn on Nightwing over the typed
   observation path.
+- Structured PS Move light pulses are Muninn output commands. Mimir requests
+  them by sending `muninn.move_light_command.v1` over CultNet/CultMesh to the
+  Muninn daemon on the host with the USB-attached Move; Mimir does not write
+  remote HID directly except through temporary smoke scripts used to prove
+  hardware behavior before Muninn is available on that host.
 - Odin discovers and projects the stream/schema surface for operator and agent
   access.
 - Mimir owns subscription, rolling retention, clock alignment, and later fusion
@@ -123,18 +128,19 @@ Move observation into two tracking buffers.
 Live Nightwing bring-up uses `scripts/start-nightwing-move-tracking.ps1`.
 Starfire starts `Mimir.EveSensorReceiver` on `/eve/periwinkle`, stages
 `nw_eye_cap.py`, `nw_move_hint.py`, and `nightwing_typed_witness_publisher.py`
-onto Nightwing, and launches the publisher with `--track-eyes` plus explicit
-`--move-light name=/dev/hidrawN:#rrggbb` HID ownership. The worker keeps the
-USB Move sphere lit with PS Move report `0x06`, emits
-`mimir.psmove_light_state.v1`, and publishes compact
+onto Nightwing, and launches the publisher with `--track-eyes` plus a heartbeat
+freshness file. The publisher can still accept
+`--move-light name=/dev/hidrawN:#rrggbb` as an explicit smoke/bootstrap edge,
+but runtime structured light commands belong to Muninn. The worker publishes
+compact
 `mimir.move_controller_observation_state.v1` blob observations from both PS3
 Eyes. Those Eye/Move observations are the live optical witness feeding the later
 pose/fusion owner; they are not themselves the final 6DoF pose authority.
 
-Starfire-local Move illumination uses `scripts/start-starfire-move-light.ps1`.
+Starfire-local Move illumination smoke uses `scripts/start-starfire-move-light.ps1`.
 That launcher runs `Mimir.PsMoveProbe` against the local Windows HID col01
-output collection and refreshes the PS Move LED report so the USB-attached Move
-stays visible as a tracking/calibration marker.
+output collection and refreshes the PS Move LED report for hardware proof when
+Muninn is not available on Starfire yet.
 
 Odin's Muninn organ owns the Move optical extraction stage for sensor stream
 exposure. Its Rust crate lives in `E:\Projects\Odin\crates\muninn-move-tracker`

@@ -69,6 +69,10 @@ invariants:
   - Move tracking observations are stream samples, not program controls or
     dashboard truth. Starfire-local and Nightwing-remote Move samples must enter
     Mimir.Runtime as typed tracking buffers before Fensalir or Eve acts on them.
+  - Structured PS Move light pulses are Muninn output commands. Mimir requests
+    `muninn.move_light_command.v1` over CultNet/CultMesh from the Muninn daemon
+    on the host with the USB-attached Move; direct HID writes in Mimir scripts
+    are temporary smoke/bootstrap edges only.
 
 accepted_design:
   - `Mimir.slnx` owns the app surface.

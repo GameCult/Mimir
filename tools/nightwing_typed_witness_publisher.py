@@ -447,6 +447,9 @@ def run(args: argparse.Namespace) -> None:
                 if args.track_eyes:
                     for payload in eye_tracking_observations(args, sequence):
                         ws.send_binary(payload)
+                if args.heartbeat_path:
+                    with open(args.heartbeat_path, "w", encoding="utf-8") as handle:
+                        handle.write(f"{int(time.time())} {sequence}\n")
                 sequence += 1
                 if args.once:
                     return
@@ -464,6 +467,7 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=0.25)
     parser.add_argument("--reconnect-seconds", type=float, default=2.0)
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--heartbeat-path", default="", help="Write a small freshness witness after successful sends.")
     parser.add_argument("--track-eyes", action="store_true", help="Publish compact Nightwing-local PS3 Eye Move-sphere observations.")
     parser.add_argument("--track-builtin-camera", action="store_true", help="Publish compact status for Nightwing-local non-Eye camera devices.")
     parser.add_argument("--track-builtin-mic", action="store_true", help="Publish compact ALSA microphone level observations.")
