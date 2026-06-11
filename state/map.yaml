@@ -92,6 +92,8 @@ accepted_design:
   - `native/reservoir` now exposes a `move_evidence` typed view and
     `LocalcastMoveEvidenceBufferDescriptor` for compute-upload buffers carrying
     Muninn optical marker and controller-state witnesses before Mimir fusion.
+  - `MimirNativeReservoirRuntime` loads the native reservoir DLL and pins Move
+    evidence sample/descriptor batches so admitted native handles remain valid.
   - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract for
     Fensalir-facing interaction. Mimir owns calibration, association,
     triangulation, IMU fusion, prediction, confidence, and latency accounting.

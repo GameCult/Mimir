@@ -42,6 +42,9 @@ a named invariant that the native runtime cannot protect yet.
   `LocalcastMoveEvidenceBufferDescriptor` so Muninn Move witnesses can be
   admitted as compute-upload buffers before Mimir's fusion pass and Fensalir's
   GPU consumers touch them.
+- `MimirNativeReservoirRuntime` is the managed owner for that native runtime
+  boundary. It pins Move evidence sample/descriptor batches so native reservoir
+  handles remain valid while Mimir prepares fusion input.
 - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract.
   Mimir owns calibration, association, triangulation, IMU fusion, prediction,
   confidence, and latency accounting for those poses before Fensalir consumes

@@ -96,6 +96,12 @@ if (args.Any(arg => string.Equals(arg, "--move-tracking-contract-smoke", StringC
     return RunMoveTrackingContractSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-native-reservoir-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveNativeReservoirSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+}
+
 if (args.Any(arg => string.Equals(arg, "--import-obs-program-scene", StringComparison.OrdinalIgnoreCase)))
 {
     return await ImportObsProgramSceneAsync(
@@ -1439,6 +1445,87 @@ static int RunMoveTrackingContractSmoke()
             : 1;
 }
 
+static int RunMoveNativeReservoirSmoke(string nativeReservoirPath)
+{
+    if (!File.Exists(nativeReservoirPath))
+    {
+        Console.Error.WriteLine($"move-native-reservoir-smoke missing-native path={nativeReservoirPath}");
+        return 1;
+    }
+
+    using var runtime = new MimirNativeReservoirRuntime(nativeReservoirPath);
+    var samples = new[]
+    {
+        new MimirNativeMoveEvidenceSample(
+            WitnessIdHash: 0x57A2_F12E_0001,
+            ControllerIdHash: 0xC011_7A01,
+            SourceTimestampNs: 1_000_000_000,
+            ArrivalNs: 1_000_000_700,
+            Sequence: 41,
+            EvidenceKind: (uint)MimirNativeMoveEvidenceKind.OpticalMarker,
+            Flags: 0,
+            ImageX: 318.25f,
+            ImageY: 119.5f,
+            RadiusPx: 13.75f,
+            Confidence: 0.91f,
+            AccelX: 0.0f,
+            AccelY: 0.0f,
+            AccelZ: 0.0f,
+            GyroX: 0.0f,
+            GyroY: 0.0f,
+            GyroZ: 0.0f,
+            Trigger: 0.0f,
+            ButtonsMask: 0,
+            Reserved: 0,
+            Battery01: float.NaN,
+            Reserved1: 0,
+            Reserved2: 0),
+        new MimirNativeMoveEvidenceSample(
+            WitnessIdHash: 0x516E_7716_0001,
+            ControllerIdHash: 0xC011_7A01,
+            SourceTimestampNs: 1_000_000_500,
+            ArrivalNs: 1_000_001_000,
+            Sequence: 42,
+            EvidenceKind: (uint)MimirNativeMoveEvidenceKind.ControllerState,
+            Flags: 0,
+            ImageX: float.NaN,
+            ImageY: float.NaN,
+            RadiusPx: float.NaN,
+            Confidence: 0.84f,
+            AccelX: -0.02f,
+            AccelY: 0.11f,
+            AccelZ: 0.98f,
+            GyroX: 0.01f,
+            GyroY: -0.02f,
+            GyroZ: 0.03f,
+            Trigger: 0.42f,
+            ButtonsMask: 0b101,
+            Reserved: 0,
+            Battery01: 0.77f,
+            Reserved1: 0,
+            Reserved2: 0)
+    };
+
+    var handle = runtime.AdmitMoveEvidence(
+        "mimir:move-native-reservoir-smoke",
+        samples,
+        "synthetic-move-calibration",
+        "mimir-stage-space");
+    var status = runtime.Status;
+
+    Console.WriteLine(
+        $"move-native-reservoir-smoke native={nativeReservoirPath} stride={MimirNativeReservoirRuntime.MoveEvidenceSampleStrideBytes} samples={samples.Length} payload=0x{handle.PayloadHandle:X} total={status.TotalSampleCount} moveEvidence={status.MoveEvidenceCount} edgeNs={status.EdgeNs}");
+
+    return MimirNativeReservoirRuntime.MoveEvidenceSampleStrideBytes == 112 &&
+        samples.Length == 2 &&
+        handle.PayloadHandle != 0 &&
+        status.TotalSampleCount.ToUInt64() == 1 &&
+        status.MoveEvidenceCount.ToUInt64() == 1 &&
+        status.EdgeNs == 1_000_000_500
+            ? 0
+            : 1;
+}
+
 static MoveTrackingSmokeContext BuildMoveTrackingSmokeHub()
 {
     var starfireDescriptor = new MimirStreamDescriptor(
@@ -1830,6 +1917,27 @@ static string DefaultObsScenePath() =>
         "basic",
         "scenes",
         "Untitled.json");
+
+static string DefaultNativeReservoirPath()
+{
+    var fromBase = Path.Combine(AppContext.BaseDirectory, "localcast_reservoir.dll");
+    if (File.Exists(fromBase))
+    {
+        return fromBase;
+    }
+
+    return Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory,
+        "..",
+        "..",
+        "..",
+        "..",
+        "native",
+        "reservoir",
+        "target",
+        "debug",
+        "localcast_reservoir.dll"));
+}
 
 static async Task<int> WritePerfectMachineManifestAsync(string outputPath)
 {
