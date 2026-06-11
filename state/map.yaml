@@ -94,6 +94,10 @@ accepted_design:
     Muninn optical marker and controller-state witnesses before Mimir fusion.
   - `MimirNativeReservoirRuntime` loads the native reservoir DLL and pins Move
     evidence sample/descriptor batches so admitted native handles remain valid.
+  - `MimirMuninnMoveEvidenceAdapter` mirrors Muninn's
+    `muninn.move_marker_candidate.v1` and `muninn.move_controller_state.v1`
+    document shapes and maps them into native Move evidence samples without
+    claiming association or pose authority.
   - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract for
     Fensalir-facing interaction. Mimir owns calibration, association,
     triangulation, IMU fusion, prediction, confidence, and latency accounting.

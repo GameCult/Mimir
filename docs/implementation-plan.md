@@ -45,6 +45,10 @@ a named invariant that the native runtime cannot protect yet.
 - `MimirNativeReservoirRuntime` is the managed owner for that native runtime
   boundary. It pins Move evidence sample/descriptor batches so native reservoir
   handles remain valid while Mimir prepares fusion input.
+- `MimirMuninnMoveEvidenceAdapter` mirrors Muninn's marker-candidate and
+  controller-state document schemas and normalizes them into native Move
+  evidence samples. It does not associate markers to controllers or synthesize
+  pose.
 - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract.
   Mimir owns calibration, association, triangulation, IMU fusion, prediction,
   confidence, and latency accounting for those poses before Fensalir consumes

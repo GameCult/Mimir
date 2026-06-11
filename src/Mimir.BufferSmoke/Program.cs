@@ -102,6 +102,12 @@ if (args.Any(arg => string.Equals(arg, "--move-native-reservoir-smoke", StringCo
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
+if (args.Any(arg => string.Equals(arg, "--muninn-move-evidence-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMuninnMoveEvidenceSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+}
+
 if (args.Any(arg => string.Equals(arg, "--import-obs-program-scene", StringComparison.OrdinalIgnoreCase)))
 {
     return await ImportObsProgramSceneAsync(
@@ -1522,6 +1528,92 @@ static int RunMoveNativeReservoirSmoke(string nativeReservoirPath)
         status.TotalSampleCount.ToUInt64() == 1 &&
         status.MoveEvidenceCount.ToUInt64() == 1 &&
         status.EdgeNs == 1_000_000_500
+            ? 0
+            : 1;
+}
+
+static int RunMuninnMoveEvidenceSmoke(string nativeReservoirPath)
+{
+    if (!File.Exists(nativeReservoirPath))
+    {
+        Console.Error.WriteLine($"muninn-move-evidence-smoke missing-native path={nativeReservoirPath}");
+        return 1;
+    }
+
+    var markers = new[]
+    {
+        new MuninnMoveMarkerCandidateDocument(
+            StreamId: "nightwing:ps3-eye-0:move-marker-candidates",
+            HostId: "nightwing",
+            CameraId: "ps3-eye-0",
+            FrameSequence: 9001,
+            SourceIdHash: 0xA11CE,
+            TileX: 19,
+            TileY: 7,
+            CenterXPx: 313.25f,
+            CenterYPx: 118.75f,
+            RadiusPx: 12.5f,
+            AreaPx: 491,
+            MeanLuma: 0.62f,
+            PeakLuma: 252,
+            Score: 0.88f,
+            ObservedAt: "2026-06-11T18:30:00.0010000Z"),
+        new MuninnMoveMarkerCandidateDocument(
+            StreamId: "starfire:ps3-eye-1:move-marker-candidates",
+            HostId: "starfire",
+            CameraId: "ps3-eye-1",
+            FrameSequence: 9002,
+            SourceIdHash: 0xB0B,
+            TileX: 11,
+            TileY: 10,
+            CenterXPx: 201.5f,
+            CenterYPx: 160.25f,
+            RadiusPx: 10.75f,
+            AreaPx: 363,
+            MeanLuma: 0.58f,
+            PeakLuma: 246,
+            Score: 0.79f,
+            ObservedAt: "2026-06-11T18:30:00.0020000Z")
+    };
+    var controllers = new[]
+    {
+        new MuninnMoveControllerStateDocument(
+            StreamId: "nightwing:move-usb:move-controller-state",
+            HostId: "nightwing",
+            MoveId: "move-usb",
+            Sequence: 77,
+            SourceTimestampNs: 1_781_194_200_003_000_000,
+            AccelerometerXyz: [-0.02f, 0.11f, 0.98f],
+            GyroscopeXyz: [0.01f, -0.02f, 0.03f],
+            MagnetometerXyz: [0.0f, 0.0f, 0.0f],
+            TriggerValue: 0.42f,
+            Buttons: ["move", "trigger"],
+            Battery01: float.NaN,
+            ObservedAt: "2026-06-11T18:30:00.0030000Z")
+    };
+
+    var samples = MimirMuninnMoveEvidenceAdapter.BuildNativeSamples(markers, controllers);
+    using var runtime = new MimirNativeReservoirRuntime(nativeReservoirPath);
+    var handle = runtime.AdmitMoveEvidence(
+        "mimir:muninn-move-evidence-smoke",
+        samples,
+        "mimir-move-stage-calibration-v1",
+        "mimir-stage-space");
+    var status = runtime.Status;
+    var optical = samples.Count(sample => sample.EvidenceKind == (uint)MimirNativeMoveEvidenceKind.OpticalMarker);
+    var controller = samples.Count(sample => sample.EvidenceKind == (uint)MimirNativeMoveEvidenceKind.ControllerState);
+    var buttonMask = samples.Single(sample => sample.EvidenceKind == (uint)MimirNativeMoveEvidenceKind.ControllerState).ButtonsMask;
+
+    Console.WriteLine(
+        $"muninn-move-evidence-smoke native={nativeReservoirPath} samples={samples.Count} optical={optical} controller={controller} buttonMask=0x{buttonMask:X} payload=0x{handle.PayloadHandle:X} total={status.TotalSampleCount} moveEvidence={status.MoveEvidenceCount} edgeNs={status.EdgeNs}");
+
+    return samples.Count == 3 &&
+        optical == 2 &&
+        controller == 1 &&
+        buttonMask == ((1u << 17) | (1u << 18)) &&
+        handle.PayloadHandle != 0 &&
+        status.TotalSampleCount.ToUInt64() == 1 &&
+        status.MoveEvidenceCount.ToUInt64() == 1
             ? 0
             : 1;
 }
