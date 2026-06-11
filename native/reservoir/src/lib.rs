@@ -17,6 +17,7 @@ pub enum SampleKind {
     PhaseClaim,
     EventClaim,
     RenderPacket,
+    MoveEvidence,
 }
 
 impl SampleKind {
@@ -31,6 +32,7 @@ impl SampleKind {
             6 => Some(Self::PhaseClaim),
             7 => Some(Self::EventClaim),
             8 => Some(Self::RenderPacket),
+            9 => Some(Self::MoveEvidence),
             _ => None,
         }
     }
@@ -46,6 +48,7 @@ impl SampleKind {
             Self::PhaseClaim => 6,
             Self::EventClaim => 7,
             Self::RenderPacket => 8,
+            Self::MoveEvidence => 9,
         }
     }
 }
@@ -229,6 +232,53 @@ pub struct LocalcastRenderPoint {
     pub confidence: f32,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalcastMoveEvidenceKind {
+    OpticalMarker = 1,
+    ControllerState = 2,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalcastMoveEvidenceSample {
+    pub witness_id_hash: u64,
+    pub controller_id_hash: u64,
+    pub source_timestamp_ns: u64,
+    pub arrival_ns: u64,
+    pub sequence: u64,
+    pub evidence_kind: u32,
+    pub flags: u32,
+    pub image_x: f32,
+    pub image_y: f32,
+    pub radius_px: f32,
+    pub confidence: f32,
+    pub accel_x: f32,
+    pub accel_y: f32,
+    pub accel_z: f32,
+    pub gyro_x: f32,
+    pub gyro_y: f32,
+    pub gyro_z: f32,
+    pub trigger: f32,
+    pub buttons_mask: u32,
+    pub reserved: u32,
+    pub battery01: f32,
+    pub reserved1: u32,
+    pub reserved2: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalcastMoveEvidenceBufferDescriptor {
+    pub sample_buffer_handle: u64,
+    pub sample_count: u32,
+    pub sample_stride_bytes: u32,
+    pub source_time_min_ns: u64,
+    pub source_time_max_ns: u64,
+    pub calibration_hash: u64,
+    pub tracking_space_hash: u64,
+}
+
 pub struct LocalcastReservoir {
     inner: RollingReservoir<LocalcastSampleHandle>,
 }
@@ -258,6 +308,7 @@ pub struct LocalcastRuntimeStatus {
     pub phase_claim_count: usize,
     pub event_claim_count: usize,
     pub render_packet_count: usize,
+    pub move_evidence_count: usize,
 }
 
 impl Default for LocalcastRuntimeStatus {
@@ -275,6 +326,7 @@ impl Default for LocalcastRuntimeStatus {
             phase_claim_count: 0,
             event_claim_count: 0,
             render_packet_count: 0,
+            move_evidence_count: 0,
         }
     }
 }
@@ -308,6 +360,7 @@ impl LocalcastRuntime {
             phase_claim_count: self.view_len(SampleKind::PhaseClaim),
             event_claim_count: self.view_len(SampleKind::EventClaim),
             render_packet_count: self.view_len(SampleKind::RenderPacket),
+            move_evidence_count: self.view_len(SampleKind::MoveEvidence),
         }
     }
 }
@@ -624,6 +677,14 @@ pub extern "C" fn localcast_runtime_push_render_packet(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn localcast_runtime_push_move_evidence(
+    ptr: *mut LocalcastRuntime,
+    sample: LocalcastSampleHandle,
+) -> bool {
+    localcast_runtime_push_typed(ptr, SampleKind::MoveEvidence, sample)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn localcast_runtime_status(
     ptr: *const LocalcastRuntime,
     out_status: *mut LocalcastRuntimeStatus,
@@ -860,6 +921,46 @@ pub extern "C" fn localcast_producer_push_render_packet(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn localcast_producer_push_move_evidence_buffer(
+    producer_ptr: *mut LocalcastProducer,
+    runtime_ptr: *mut LocalcastRuntime,
+    timestamp_ns: u64,
+    arrival_ns: u64,
+    descriptor: *const LocalcastMoveEvidenceBufferDescriptor,
+    out_sample: *mut LocalcastSampleHandle,
+) -> bool {
+    let Some(producer) = (unsafe { producer_ptr.as_mut() }) else {
+        return false;
+    };
+    if producer.kind != SampleKind::MoveEvidence {
+        return false;
+    }
+    let Some(descriptor_ref) = (unsafe { descriptor.as_ref() }) else {
+        return false;
+    };
+    if descriptor_ref.sample_buffer_handle == 0 {
+        return false;
+    }
+    if descriptor_ref.sample_count == 0 {
+        return false;
+    }
+    if descriptor_ref.sample_stride_bytes as usize
+        != std::mem::size_of::<LocalcastMoveEvidenceSample>()
+    {
+        return false;
+    }
+    let payload_handle = descriptor as u64;
+    localcast_producer_push(
+        producer_ptr,
+        runtime_ptr,
+        timestamp_ns,
+        arrival_ns,
+        payload_handle,
+        out_sample,
+    )
+}
+
 fn localcast_runtime_push_typed(
     ptr: *mut LocalcastRuntime,
     kind: SampleKind,
@@ -940,6 +1041,51 @@ mod tests {
             present_time_ns: 2_350,
             audio_alignment_time_ns: 2_300,
             metadata_handle: 88,
+        }
+    }
+
+    fn move_evidence_descriptor(
+        sample_buffer_handle: u64,
+    ) -> LocalcastMoveEvidenceBufferDescriptor {
+        LocalcastMoveEvidenceBufferDescriptor {
+            sample_buffer_handle,
+            sample_count: 2,
+            sample_stride_bytes: std::mem::size_of::<LocalcastMoveEvidenceSample>() as u32,
+            source_time_min_ns: 1_000,
+            source_time_max_ns: 1_120,
+            calibration_hash: 0xCA11_BA7E,
+            tracking_space_hash: 0x57A6E,
+        }
+    }
+
+    fn move_marker_sample(
+        witness_id_hash: u64,
+        controller_id_hash: u64,
+    ) -> LocalcastMoveEvidenceSample {
+        LocalcastMoveEvidenceSample {
+            witness_id_hash,
+            controller_id_hash,
+            source_timestamp_ns: 1_000,
+            arrival_ns: 1_010,
+            sequence: 7,
+            evidence_kind: LocalcastMoveEvidenceKind::OpticalMarker as u32,
+            flags: 0,
+            image_x: 123.5,
+            image_y: 87.25,
+            radius_px: 14.0,
+            confidence: 0.92,
+            accel_x: 0.0,
+            accel_y: 0.0,
+            accel_z: 0.0,
+            gyro_x: 0.0,
+            gyro_y: 0.0,
+            gyro_z: 0.0,
+            trigger: 0.0,
+            buttons_mask: 0,
+            reserved: 0,
+            battery01: f32::NAN,
+            reserved1: 0,
+            reserved2: 0,
         }
     }
 
@@ -1582,6 +1728,125 @@ mod tests {
 
         localcast_producer_destroy(audio_producer);
         localcast_producer_destroy(render_producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn move_evidence_layout_is_fixed_for_compute_upload() {
+        let sample = move_marker_sample(11, 22);
+
+        assert_eq!(std::mem::size_of::<LocalcastMoveEvidenceSample>(), 112);
+        assert_eq!(
+            std::mem::size_of::<LocalcastMoveEvidenceBufferDescriptor>(),
+            48
+        );
+        assert_eq!(11, sample.witness_id_hash);
+        assert_eq!(22, sample.controller_id_hash);
+        assert_eq!(
+            LocalcastMoveEvidenceKind::OpticalMarker as u32,
+            sample.evidence_kind
+        );
+        assert_eq!(123.5, sample.image_x);
+        assert_eq!(14.0, sample.radius_px);
+    }
+
+    #[test]
+    fn move_evidence_descriptor_enters_native_runtime_window() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let producer = localcast_producer_create(SampleKind::MoveEvidence.id(), 101, 3);
+        let descriptor = move_evidence_descriptor(9_000);
+        let mut sample = handle(0, 0, 0, 0, 0);
+
+        assert!(localcast_producer_push_move_evidence_buffer(
+            producer,
+            runtime,
+            1_200,
+            1_220,
+            &descriptor,
+            &mut sample,
+        ));
+
+        let mut status = LocalcastRuntimeStatus::default();
+        assert!(localcast_runtime_status(runtime, &mut status));
+        assert_eq!(1, status.total_sample_count);
+        assert_eq!(1, status.move_evidence_count);
+        assert_eq!(0, status.camera_feature_count);
+        assert_eq!(
+            (&descriptor as *const LocalcastMoveEvidenceBufferDescriptor) as u64,
+            sample.payload_handle
+        );
+        assert_eq!(
+            1,
+            localcast_runtime_view_len(runtime, SampleKind::MoveEvidence.id())
+        );
+
+        localcast_producer_destroy(producer);
+        localcast_runtime_destroy(runtime);
+    }
+
+    #[test]
+    fn move_evidence_descriptor_push_rejects_wrong_kind_and_bad_buffers() {
+        let runtime = localcast_runtime_create(DEFAULT_RESERVOIR_NS);
+        let render_producer = localcast_producer_create(SampleKind::RenderPacket.id(), 88, 12);
+        let move_producer = localcast_producer_create(SampleKind::MoveEvidence.id(), 89, 0);
+        let good = move_evidence_descriptor(9_000);
+        let zero_handle = move_evidence_descriptor(0);
+        let zero_count = LocalcastMoveEvidenceBufferDescriptor {
+            sample_count: 0,
+            ..good
+        };
+        let bad_stride = LocalcastMoveEvidenceBufferDescriptor {
+            sample_stride_bytes: 4,
+            ..good
+        };
+
+        assert!(!localcast_producer_push_move_evidence_buffer(
+            render_producer,
+            runtime,
+            2_000,
+            2_010,
+            &good,
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_producer_push_move_evidence_buffer(
+            move_producer,
+            runtime,
+            2_000,
+            2_010,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_producer_push_move_evidence_buffer(
+            move_producer,
+            runtime,
+            2_000,
+            2_010,
+            &zero_handle,
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_producer_push_move_evidence_buffer(
+            move_producer,
+            runtime,
+            2_000,
+            2_010,
+            &zero_count,
+            std::ptr::null_mut(),
+        ));
+        assert!(!localcast_producer_push_move_evidence_buffer(
+            move_producer,
+            runtime,
+            2_000,
+            2_010,
+            &bad_stride,
+            std::ptr::null_mut(),
+        ));
+        assert_eq!(
+            0,
+            localcast_runtime_view_len(runtime, SampleKind::MoveEvidence.id())
+        );
+
+        localcast_producer_destroy(render_producer);
+        localcast_producer_destroy(move_producer);
         localcast_runtime_destroy(runtime);
     }
 

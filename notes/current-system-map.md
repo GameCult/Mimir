@@ -104,8 +104,10 @@ USB. Muninn represents what each local body can honestly observe:
 `muninn.move_marker_candidate.v1` for glowing orb candidates from cameras and
 `muninn.move_controller_state.v1` for controller/IMU/button/battery state from
 USB-attached Moves. Mimir drinks those feeds into `MimirStreamKind.Tracking`
-buffers and publishes resolved `mimir.move_controller_pose.v1` documents for
-Fensalir interaction once calibration and fusion have earned a pose.
+buffers, admits them into the native `move_evidence` reservoir view as
+compute-upload buffers, and publishes resolved `mimir.move_controller_pose.v1`
+documents for Fensalir interaction once calibration and fusion have earned a
+pose.
 
 Authority:
 
@@ -120,9 +122,10 @@ Authority:
   hardware behavior before Muninn is available on that host.
 - Odin discovers and projects the stream/schema surface for operator and agent
   access.
-- Mimir owns subscription, rolling retention, clock alignment, calibration,
-  controller association, triangulation, IMU fusion, prediction, and resolved
-  wand pose publication. OBS and dashboard summaries do not own this state.
+- Mimir owns subscription, rolling retention, native Move evidence buffer
+  layout, clock alignment, calibration, controller association, triangulation,
+  IMU fusion, prediction, and resolved wand pose publication. OBS and
+  dashboard summaries do not own this state.
 - Fensalir consumes Mimir's resolved Move controller poses as interactive input
   for environments; it does not synthesize controller truth from raw Muninn
   evidence.

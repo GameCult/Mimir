@@ -17,7 +17,8 @@ enum LocalcastSampleKind {
     LOCALCAST_SAMPLE_AUDIO_BLOCK = 5,
     LOCALCAST_SAMPLE_PHASE_CLAIM = 6,
     LOCALCAST_SAMPLE_EVENT_CLAIM = 7,
-    LOCALCAST_SAMPLE_RENDER_PACKET = 8
+    LOCALCAST_SAMPLE_RENDER_PACKET = 8,
+    LOCALCAST_SAMPLE_MOVE_EVIDENCE = 9
 };
 
 typedef struct LocalcastReservoir LocalcastReservoir;
@@ -79,6 +80,47 @@ typedef struct LocalcastRenderPoint {
     float confidence;
 } LocalcastRenderPoint;
 
+enum LocalcastMoveEvidenceKind {
+    LOCALCAST_MOVE_EVIDENCE_OPTICAL_MARKER = 1,
+    LOCALCAST_MOVE_EVIDENCE_CONTROLLER_STATE = 2
+};
+
+typedef struct LocalcastMoveEvidenceSample {
+    uint64_t witness_id_hash;
+    uint64_t controller_id_hash;
+    uint64_t source_timestamp_ns;
+    uint64_t arrival_ns;
+    uint64_t sequence;
+    uint32_t evidence_kind;
+    uint32_t flags;
+    float image_x;
+    float image_y;
+    float radius_px;
+    float confidence;
+    float accel_x;
+    float accel_y;
+    float accel_z;
+    float gyro_x;
+    float gyro_y;
+    float gyro_z;
+    float trigger;
+    uint32_t buttons_mask;
+    uint32_t reserved;
+    float battery01;
+    uint32_t reserved1;
+    uint32_t reserved2;
+} LocalcastMoveEvidenceSample;
+
+typedef struct LocalcastMoveEvidenceBufferDescriptor {
+    uint64_t sample_buffer_handle;
+    uint32_t sample_count;
+    uint32_t sample_stride_bytes;
+    uint64_t source_time_min_ns;
+    uint64_t source_time_max_ns;
+    uint64_t calibration_hash;
+    uint64_t tracking_space_hash;
+} LocalcastMoveEvidenceBufferDescriptor;
+
 typedef struct LocalcastRuntimeStatus {
     uint64_t edge_ns;
     uint64_t window_start_ns;
@@ -92,6 +134,7 @@ typedef struct LocalcastRuntimeStatus {
     size_t phase_claim_count;
     size_t event_claim_count;
     size_t render_packet_count;
+    size_t move_evidence_count;
 } LocalcastRuntimeStatus;
 
 uint64_t localcast_hash_source_id(const uint8_t *bytes, size_t byte_len);
@@ -144,6 +187,7 @@ bool localcast_runtime_push_audio_block(LocalcastRuntime *runtime, LocalcastSamp
 bool localcast_runtime_push_phase_claim(LocalcastRuntime *runtime, LocalcastSampleHandle sample);
 bool localcast_runtime_push_event_claim(LocalcastRuntime *runtime, LocalcastSampleHandle sample);
 bool localcast_runtime_push_render_packet(LocalcastRuntime *runtime, LocalcastSampleHandle sample);
+bool localcast_runtime_push_move_evidence(LocalcastRuntime *runtime, LocalcastSampleHandle sample);
 bool localcast_runtime_status(const LocalcastRuntime *runtime, LocalcastRuntimeStatus *out_status);
 size_t localcast_runtime_len(const LocalcastRuntime *runtime);
 size_t localcast_runtime_view_len(const LocalcastRuntime *runtime, uint32_t sample_kind);
@@ -207,6 +251,15 @@ bool localcast_producer_push_render_packet(
     uint64_t timestamp_ns,
     uint64_t arrival_ns,
     const LocalcastRenderPacketDescriptor *descriptor,
+    LocalcastSampleHandle *out_sample
+);
+
+bool localcast_producer_push_move_evidence_buffer(
+    LocalcastProducer *producer,
+    LocalcastRuntime *runtime,
+    uint64_t timestamp_ns,
+    uint64_t arrival_ns,
+    const LocalcastMoveEvidenceBufferDescriptor *descriptor,
     LocalcastSampleHandle *out_sample
 );
 

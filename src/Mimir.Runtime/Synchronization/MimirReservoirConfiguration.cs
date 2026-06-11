@@ -32,6 +32,7 @@ public static class MimirReservoirConfigurations
         new("audio_block", "PCM/native audio block", "Mimir.Runtime/native audio", RetainsHistory: false, "Timing and field evidence."),
         new("phase_claim", "audio phase/group-delay evidence", "Mimir.Runtime", RetainsHistory: false, "Calibration/normalization input."),
         new("event_claim", "timeline anchor", "Mimir.Runtime", RetainsHistory: false, "Bioacoustic/passive/calibration events."),
+        new("move_evidence", "PS Move marker/controller evidence buffer", "Mimir native reservoir", RetainsHistory: false, "Compute-upload buffer of Muninn optical and controller witnesses before Mimir pose fusion."),
         new("surface_claim", "spatial surface observation", "Fensalir", RetainsHistory: false, "Fusion candidate."),
         new("render_packet", "Mimir program packet", "Mimir/Fensalir/Faust", RetainsHistory: false, "Output-ready program view.")
     ];

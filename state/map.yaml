@@ -89,6 +89,9 @@ accepted_design:
     `mimir.move_tracking_observation.v1`; Starfire Moves are local tracking
     streams, Nightwing Moves are emitted by Muninn on Nightwing, Odin owns
     discovery/schema projection, and Mimir owns buffering and fusion.
+  - `native/reservoir` now exposes a `move_evidence` typed view and
+    `LocalcastMoveEvidenceBufferDescriptor` for compute-upload buffers carrying
+    Muninn optical marker and controller-state witnesses before Mimir fusion.
   - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract for
     Fensalir-facing interaction. Mimir owns calibration, association,
     triangulation, IMU fusion, prediction, confidence, and latency accounting.

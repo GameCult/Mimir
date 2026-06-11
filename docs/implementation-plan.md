@@ -38,6 +38,10 @@ a named invariant that the native runtime cannot protect yet.
   Starfire and Nightwing both have USB-attached Moves. Muninn daemons publish
   source-local glowing-orb marker candidates and controller/IMU/button state;
   Odin owns discovery and schema projection, not pose fusion.
+- `native/reservoir` exposes a `move_evidence` typed view and
+  `LocalcastMoveEvidenceBufferDescriptor` so Muninn Move witnesses can be
+  admitted as compute-upload buffers before Mimir's fusion pass and Fensalir's
+  GPU consumers touch them.
 - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract.
   Mimir owns calibration, association, triangulation, IMU fusion, prediction,
   confidence, and latency accounting for those poses before Fensalir consumes
