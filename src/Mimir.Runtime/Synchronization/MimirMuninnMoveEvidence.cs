@@ -1,4 +1,5 @@
 using GameCult.Caching;
+using GameCult.Mesh;
 using MessagePack;
 
 namespace Mimir.Runtime.Synchronization;
@@ -38,8 +39,76 @@ public sealed record MuninnMoveControllerStateDocument(
     [property: Key(10)] float Battery01,
     [property: Key(11)] string ObservedAt);
 
+[MessagePackObject]
+public sealed record MimirMuninnMoveEvidenceStreamFrame(
+    [property: Key(0)] string FrameId,
+    [property: Key(1)] string ProducerPeerId,
+    [property: Key(2)] long PublishedAtNs,
+    [property: Key(3)] MuninnMoveMarkerCandidateDocument[] MarkerCandidates,
+    [property: Key(4)] MuninnMoveControllerStateDocument[] ControllerStates);
+
 public static class MimirMuninnMoveEvidenceAdapter
 {
+    public const string StreamMetadataSchemaId = "mimir.muninn_move_evidence_stream_frame.v1";
+
+    public static CultMeshStreamDescriptor CreateStreamDescriptor(
+        string streamId,
+        string verseId,
+        string ownerPeerId,
+        string clockDomainId) =>
+        new(
+            streamId,
+            verseId,
+            ownerPeerId,
+            CultMeshStreamKind.Bytes,
+            new CultMeshStreamClock(clockDomainId, sourceId: streamId, confidence: 1.0, evidenceKind: "muninn-move-evidence"),
+            [CultMeshStreamBodyTransport.SharedMemory, CultMeshStreamBodyTransport.CultCachePage],
+            label: "Muninn Move evidence",
+            requiredAccess: CultMeshStreamAccess.Read,
+            maxInFlightFrames: 4,
+            metadataSchemaId: StreamMetadataSchemaId);
+
+    public static byte[] SerializeStreamFrame(
+        MimirMuninnMoveEvidenceStreamFrame frame) =>
+        MessagePackSerializer.Serialize(frame);
+
+    public static MimirMuninnMoveEvidenceStreamFrame DeserializeStreamFrame(
+        ReadOnlyMemory<byte> bytes) =>
+        MessagePackSerializer.Deserialize<MimirMuninnMoveEvidenceStreamFrame>(bytes);
+
+    public static bool TryAdmitLatestCultMeshFrame(
+        CultMeshSharedMemoryFrameRing ring,
+        MimirNativeReservoirRuntime runtime,
+        string producerSourceId,
+        string calibrationId,
+        string trackingSpaceId,
+        out MimirNativeSampleHandle handle,
+        out int sampleCount)
+    {
+        ArgumentNullException.ThrowIfNull(ring);
+        ArgumentNullException.ThrowIfNull(runtime);
+        handle = default;
+        sampleCount = 0;
+        if (!ring.TryAcquireLatestRead(out var lease))
+        {
+            return false;
+        }
+
+        using (lease)
+        {
+            var frame = DeserializeStreamFrame(lease.Memory[..lease.Handle.ByteLength]);
+            var samples = BuildNativeSamples(frame.MarkerCandidates, frame.ControllerStates);
+            sampleCount = samples.Count;
+            if (sampleCount == 0)
+            {
+                return false;
+            }
+
+            handle = runtime.AdmitMoveEvidence(producerSourceId, samples, calibrationId, trackingSpaceId);
+            return true;
+        }
+    }
+
     public static IReadOnlyList<MimirNativeMoveEvidenceSample> BuildNativeSamples(
         IEnumerable<MuninnMoveMarkerCandidateDocument> markerCandidates,
         IEnumerable<MuninnMoveControllerStateDocument> controllerStates)

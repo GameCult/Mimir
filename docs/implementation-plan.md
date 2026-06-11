@@ -49,6 +49,9 @@ a named invariant that the native runtime cannot protect yet.
   controller-state document schemas and normalizes them into native Move
   evidence samples. It does not associate markers to controllers or synthesize
   pose.
+- The realtime Move witness path uses CultMesh streaming, not CultCache polling:
+  Muninn publishes shared-memory stream frames, Mimir consumes the latest read
+  lease, normalizes the frame, and admits it to native `move_evidence`.
 - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract.
   Mimir owns calibration, association, triangulation, IMU fusion, prediction,
   confidence, and latency accounting for those poses before Fensalir consumes

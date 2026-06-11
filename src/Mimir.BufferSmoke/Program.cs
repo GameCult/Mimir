@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
+using GameCult.Mesh;
 using MessagePack;
 using Mimir.Runtime.Synchronization;
 
@@ -105,6 +106,12 @@ if (args.Any(arg => string.Equals(arg, "--move-native-reservoir-smoke", StringCo
 if (args.Any(arg => string.Equals(arg, "--muninn-move-evidence-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMuninnMoveEvidenceSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+}
+
+if (args.Any(arg => string.Equals(arg, "--muninn-move-cultmesh-stream-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMuninnMoveCultMeshStreamSmoke(
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
@@ -1611,6 +1618,93 @@ static int RunMuninnMoveEvidenceSmoke(string nativeReservoirPath)
         optical == 2 &&
         controller == 1 &&
         buttonMask == ((1u << 17) | (1u << 18)) &&
+        handle.PayloadHandle != 0 &&
+        status.TotalSampleCount.ToUInt64() == 1 &&
+        status.MoveEvidenceCount.ToUInt64() == 1
+            ? 0
+            : 1;
+}
+
+static int RunMuninnMoveCultMeshStreamSmoke(string nativeReservoirPath)
+{
+    if (!File.Exists(nativeReservoirPath))
+    {
+        Console.Error.WriteLine($"muninn-move-cultmesh-stream-smoke missing-native path={nativeReservoirPath}");
+        return 1;
+    }
+
+    var streamId = "muninn:nightwing:move-evidence";
+    var catalog = CultMesh.CreateStreamCatalog();
+    catalog.Declare(MimirMuninnMoveEvidenceAdapter.CreateStreamDescriptor(
+        streamId,
+        "mimir-live",
+        "muninn:nightwing",
+        "muninn:nightwing:clock"));
+    using var ring = catalog.CreateSharedMemoryRing(streamId, slotCount: 4, slotByteLength: 8192);
+    var frame = new MimirMuninnMoveEvidenceStreamFrame(
+        "nightwing-move-frame:78",
+        "muninn:nightwing",
+        1_781_202_600_004_000_000,
+        [
+            new MuninnMoveMarkerCandidateDocument(
+                StreamId: "nightwing:ps3-eye-0:move-marker-candidates",
+                HostId: "nightwing",
+                CameraId: "ps3-eye-0",
+                FrameSequence: 9003,
+                SourceIdHash: 0xA11CE,
+                TileX: 19,
+                TileY: 7,
+                CenterXPx: 314.0f,
+                CenterYPx: 119.0f,
+                RadiusPx: 12.25f,
+                AreaPx: 470,
+                MeanLuma: 0.61f,
+                PeakLuma: 253,
+                Score: 0.87f,
+                ObservedAt: "2026-06-11T18:30:00.0040000Z")
+        ],
+        [
+            new MuninnMoveControllerStateDocument(
+                StreamId: "nightwing:move-usb:move-controller-state",
+                HostId: "nightwing",
+                MoveId: "move-usb",
+                Sequence: 78,
+                SourceTimestampNs: 1_781_202_600_004_000_000,
+                AccelerometerXyz: [-0.01f, 0.10f, 0.99f],
+                GyroscopeXyz: [0.02f, -0.01f, 0.04f],
+                MagnetometerXyz: [0.0f, 0.0f, 0.0f],
+                TriggerValue: 0.5f,
+                Buttons: ["move"],
+                Battery01: float.NaN,
+                ObservedAt: "2026-06-11T18:30:00.0040000Z")
+        ]);
+    var payload = MimirMuninnMoveEvidenceAdapter.SerializeStreamFrame(frame);
+    if (!ring.TryPublishCopy(payload, frame.PublishedAtNs, durationNs: 0, out var published))
+    {
+        Console.Error.WriteLine("muninn-move-cultmesh-stream-smoke publish-failed");
+        return 1;
+    }
+
+    catalog.PublishFrame(published);
+    using var runtime = new MimirNativeReservoirRuntime(nativeReservoirPath);
+    var admitted = MimirMuninnMoveEvidenceAdapter.TryAdmitLatestCultMeshFrame(
+        ring,
+        runtime,
+        "mimir:muninn-move-cultmesh-stream-smoke",
+        "mimir-move-stage-calibration-v1",
+        "mimir-stage-space",
+        out var handle,
+        out var sampleCount);
+    var status = runtime.Status;
+    var latest = catalog.LatestFrame(streamId);
+
+    Console.WriteLine(
+        $"muninn-move-cultmesh-stream-smoke stream={streamId} bytes={payload.Length} publishedSeq={published.Sequence} latestSeq={latest?.Sequence.ToString() ?? "none"} samples={sampleCount} payload=0x{handle.PayloadHandle:X} total={status.TotalSampleCount} moveEvidence={status.MoveEvidenceCount} edgeNs={status.EdgeNs}");
+
+    return admitted &&
+        payload.Length > 0 &&
+        sampleCount == 2 &&
+        latest?.Sequence == published.Sequence &&
         handle.PayloadHandle != 0 &&
         status.TotalSampleCount.ToUInt64() == 1 &&
         status.MoveEvidenceCount.ToUInt64() == 1

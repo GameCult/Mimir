@@ -64,6 +64,7 @@ dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --move-tracking-contract-smoke
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --move-native-reservoir-smoke --native-reservoir .\native\reservoir\target\debug\localcast_reservoir.dll
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --muninn-move-evidence-smoke --native-reservoir .\native\reservoir\target\debug\localcast_reservoir.dll
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --muninn-move-cultmesh-stream-smoke --native-reservoir .\native\reservoir\target\debug\localcast_reservoir.dll
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-manifest
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-actuator-self-test
 ```
