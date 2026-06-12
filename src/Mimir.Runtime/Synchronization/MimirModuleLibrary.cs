@@ -47,15 +47,21 @@ public static class MimirModuleLibrary
         new(
             "cultmesh-contracts",
             "Mimir.Runtime",
-            "Typed state documents for codebooks, decoder state, acoustic path state, actuator state, program state, Move evidence, and Mimir-fused Move controller poses.",
-            ["mimir.bioacoustic_codebook_state", "mimir.bioacoustic_decoder_state", "mimir.acoustic_path_state", "mimir.actuator_state", "mimir.move_tracking_observation", "mimir.move_controller_pose"],
-            ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --perfect-machine-contract-smoke"]),
+            "Typed state documents and stream frames for codebooks, decoder state, acoustic path state, actuator state, program state, Move evidence, and Mimir-fused Move controller poses.",
+            ["mimir.bioacoustic_codebook_state", "mimir.bioacoustic_decoder_state", "mimir.acoustic_path_state", "mimir.actuator_state", "mimir.move_tracking_observation", "mimir.move_controller_pose", "mimir.move_controller_pose_stream_frame"],
+            [
+                "dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --perfect-machine-contract-smoke",
+                "dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --move-fusion-smoke"
+            ]),
         new(
             "move-controller-fusion",
             "Mimir.Runtime + Fensalir",
-            "Mimir fuses Muninn marker candidates, controller IMU/button state, calibration, and timing into resolved wand poses; Fensalir consumes those poses for interaction.",
-            ["mimir.move_controller_pose.v1", "muninn.move_marker_candidate.v1", "muninn.move_controller_state.v1"],
-            ["dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --move-tracking-contract-smoke"]),
+            "Mimir fuses Muninn marker candidates, controller IMU/button state, calibration, and timing into resolved wand poses, then publishes them as a realtime CultMesh pose stream for interaction consumers.",
+            ["mimir.move_controller_pose.v1", "mimir.move_controller_pose_stream_frame.v1", "muninn.move_marker_candidate.v1", "muninn.move_controller_state.v1"],
+            [
+                "dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --move-tracking-contract-smoke",
+                "dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --move-fusion-smoke"
+            ]),
         new(
             "path-learning",
             "Mimir.Runtime",
