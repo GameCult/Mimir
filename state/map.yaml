@@ -113,6 +113,18 @@ accepted_design:
     `mimir.move_controller_pose_stream_frame.v1` CultMesh shared-memory byte
     frames for Fensalir and other realtime consumers; it carries poses and does
     not own calibration or fusion decisions.
+  - `MimirMoveCalibrationProtocol` defines the runnable Starfire/Nightwing Move
+    calibration preflight as typed state: required Muninn Move evidence streams,
+    optional Periwinkle motion/camera witnesses, stillness/sweep/validation
+    phases, and the calibration outputs Mimir must derive before orientation
+    can stop being `orientation:imu-unresolved`.
+  - Starfire should have Muninn for source-local Move HID control and local
+    sensor publication, but some Starfire audio/video paths still enter Mimir
+    through local Mimir producers or diagnostic process bridges while native
+    drivers mature. Same-host Move evidence and pose frames are CultMesh
+    shared-memory byte rings. Current remote media body transport is not
+    same-machine zero-copy into Fensalir; Raven media uses CultNet/CultMesh
+    documents over the mesh and lowers to local UDP only for OBS compatibility.
   - `scripts/start-nightwing-move-tracking.ps1` restores the live Nightwing
     Eye/Move witness path: Starfire owns the `/eve/periwinkle` receiver and
     recorder, Nightwing owns PS Move HID report `0x06` LED writes and PS3 Eye

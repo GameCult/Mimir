@@ -134,6 +134,18 @@ Smoke proof: `dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csp
 -- --move-tracking-contract-smoke` consumes one Starfire Move and one Nightwing
 Move observation into two tracking buffers.
 
+Calibration preflight proof: `dotnet run --project
+.\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj --
+--move-calibration-protocol-smoke --output
+artifacts\move-calibration\protocol.cc` writes
+`mimir.move_calibration_protocol.v1` for
+`mimir-move-calibration-starfire-nightwing-v1`. The protocol requires
+`muninn:starfire:move-evidence`, `muninn:nightwing:move-evidence`, and
+`mimir:starfire:move-controller-poses`; optionally drinks Periwinkle motion and
+camera witnesses; and requires Mimir to derive rig calibration, IMU calibration,
+controller identity mapping, and a calibration receipt before orientation can
+stop being `orientation:imu-unresolved`.
+
 Live Nightwing bring-up uses `scripts/start-nightwing-move-tracking.ps1`.
 Starfire starts `Mimir.EveSensorReceiver` on `/eve/periwinkle`, stages
 `nw_eye_cap.py`, `nw_move_hint.py`, and `nightwing_typed_witness_publisher.py`
@@ -150,6 +162,14 @@ Starfire-local Move illumination smoke uses `scripts/start-starfire-move-light.p
 That launcher runs `Mimir.PsMoveProbe` against the local Windows HID col01
 output collection and refreshes the PS Move LED report for hardware proof when
 Muninn is not available on Starfire yet.
+
+Starfire should have Muninn for source-local Move HID control and local sensor
+publication. Some older Starfire audio/video paths still enter Mimir through
+local Mimir producers or diagnostic process bridges while direct native drivers
+mature. Same-host Move evidence and pose frames are CultMesh shared-memory byte
+rings. Remote media is different: the current Raven media body bridge uses
+CultNet/CultMesh documents over the mesh and lowers to local UDP for OBS
+compatibility, so it is not same-machine zero-copy into Mimir/Fensalir yet.
 
 Odin's Muninn organ owns the Move optical extraction stage for sensor stream
 exposure. Its Rust crate lives in `E:\Projects\Odin\crates\muninn-move-tracker`

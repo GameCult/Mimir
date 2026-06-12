@@ -57,9 +57,10 @@ public static class MimirModuleLibrary
             "move-controller-fusion",
             "Mimir.Runtime + Fensalir",
             "Mimir fuses Muninn marker candidates, controller IMU/button state, calibration, and timing into resolved wand poses, then publishes them as a realtime CultMesh pose stream for interaction consumers.",
-            ["mimir.move_controller_pose.v1", "mimir.move_controller_pose_stream_frame.v1", "muninn.move_marker_candidate.v1", "muninn.move_controller_state.v1"],
+            ["mimir.move_calibration_protocol.v1", "mimir.move_controller_pose.v1", "mimir.move_controller_pose_stream_frame.v1", "muninn.move_marker_candidate.v1", "muninn.move_controller_state.v1"],
             [
                 "dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --move-tracking-contract-smoke",
+                "dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --move-calibration-protocol-smoke",
                 "dotnet run --project .\\src\\Mimir.BufferSmoke\\Mimir.BufferSmoke.csproj -- --move-fusion-smoke"
             ]),
         new(

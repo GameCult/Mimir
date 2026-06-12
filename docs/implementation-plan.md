@@ -67,6 +67,11 @@ a named invariant that the native runtime cannot protect yet.
   `mimir.move_controller_pose_stream_frame.v1` over CultMesh shared-memory
   bytes streams so Fensalir and other consumers have a realtime stream contract
   for Mimir-fused controller input.
+- `MimirMoveCalibrationProtocol` publishes the typed calibration preflight for
+  Starfire/Nightwing Moves: required Muninn evidence streams, optional
+  Periwinkle motion/camera witnesses, stillness/sweep/validation phases, and
+  the four derived calibration outputs Mimir must produce before IMU
+  orientation can become authority.
 - `scripts/start-nightwing-move-tracking.ps1` is the narrow live Nightwing
   bring-up path: it starts the `/eve/periwinkle` receiver/recorder on Starfire,
   stages the Nightwing Eye/Move Python worker, keeps a heartbeat for field

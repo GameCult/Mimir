@@ -120,6 +120,13 @@ if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.O
     return RunMoveFusionSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-calibration-protocol-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return await RunMoveCalibrationProtocolSmokeAsync(
+        ParseStringOption(args, "--output", "artifacts/move-calibration/protocol.cc"))
+        .ConfigureAwait(false);
+}
+
 if (args.Any(arg => string.Equals(arg, "--import-obs-program-scene", StringComparison.OrdinalIgnoreCase)))
 {
     return await ImportObsProgramSceneAsync(
@@ -1864,6 +1871,42 @@ static int RunMoveFusionSmoke()
         positionOk &&
         evidenceOk &&
         streamOk
+            ? 0
+            : 1;
+}
+
+static async Task<int> RunMoveCalibrationProtocolSmokeAsync(string outputPath)
+{
+    var protocol = MimirMoveCalibrationProtocol.CreateStarfireNightwingProtocol(
+        new DateTimeOffset(2026, 6, 12, 14, 45, 0, TimeSpan.Zero));
+    var errors = MimirMoveCalibrationProtocol.Validate(protocol);
+    if (errors.Length > 0)
+    {
+        Console.Error.WriteLine($"move-calibration-protocol-smoke invalid errors={string.Join(",", errors)}");
+        return 1;
+    }
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
+    using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
+    {
+        PullOnOpen = File.Exists(outputPath)
+    }).ConfigureAwait(false);
+    await cache.UpsertAsync(
+        protocol,
+        new CultRecordHandle<MimirMoveCalibrationProtocolDocument>(new CultRecordKey($"mimir-move-calibration-protocol:{protocol.ProtocolId}")))
+        .ConfigureAwait(false);
+    await cache.FlushAsync().ConfigureAwait(false);
+
+    var requiredStreams = protocol.StreamRequirements.Count(stream => stream.Required);
+    var optionalStreams = protocol.StreamRequirements.Length - requiredStreams;
+    var totalDuration = protocol.Phases.Sum(phase => phase.DurationSeconds);
+    Console.WriteLine(
+        $"move-calibration-protocol-smoke path={outputPath} protocol={protocol.ProtocolId} requiredStreams={requiredStreams} optionalStreams={optionalStreams} phases={protocol.Phases.Length} durationSeconds={totalDuration:0.0} outputs={protocol.Outputs.Length} periwinkleOptional={protocol.StreamRequirements.Any(stream => stream.StreamId.StartsWith("periwinkle:", StringComparison.Ordinal))}");
+
+    return requiredStreams >= 3 &&
+        protocol.Phases.Length == 7 &&
+        protocol.Outputs.Length == 4 &&
+        protocol.Acceptance.RequiredDerivedOutputs.Length == 4
             ? 0
             : 1;
 }
