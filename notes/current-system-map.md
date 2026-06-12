@@ -147,15 +147,14 @@ Mimir to derive rig calibration, IMU calibration, controller identity mapping,
 and a calibration receipt before orientation can stop being
 `orientation:imu-unresolved`.
 
-Quest USB preflight proof: `dotnet run --project
-.\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj --
---quest-usb-preflight-smoke --output
-artifacts\move-calibration\quest-usb-preflight.cc` writes
-`mimir.quest_usb_preflight.v1`. On 2026-06-12, `adb devices -l` reported
-authorized Quest 2 device `1WMHHB68PG1515` with product/device `hollywood`.
-This proves Starfire can query the headset over USB; it does not provide
-Quest headset/controller poses until a Quest/OpenXR witness bridge publishes
-those pose samples.
+Quest USB access belongs to Muninn, not Mimir. Starfire Muninn runs with
+`--quest-adb --quest-serial 1WMHHB68PG1515` and publishes
+`muninn.quest_access.v1`, including stream ids for Quest input, Quest poses, and
+warp-corrected video input from Brokkr/Unity. On 2026-06-12, `adb devices -l`
+reported authorized Quest 2 device `1WMHHB68PG1515` with product/device
+`hollywood`. This proves Starfire can query the headset over USB; it does not
+provide Quest headset/controller poses until a Quest/OpenXR witness bridge
+publishes those pose samples through Muninn.
 
 Live Nightwing bring-up uses `scripts/start-nightwing-move-tracking.ps1`.
 Starfire starts `Mimir.EveSensorReceiver` on `/eve/periwinkle`, stages

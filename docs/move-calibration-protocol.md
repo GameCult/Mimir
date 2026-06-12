@@ -42,28 +42,30 @@ lowers to local UDP for OBS compatibility.
 7. `validation-pass`: held-out free motion; promote only if triangulated optical
    residuals and IMU prediction residuals pass.
 
-## Quest USB Preflight
+## Quest Access Preflight
 
-The Quest must be authorized for USB debugging before Starfire can query it.
-Check it with:
-
-```powershell
-adb devices -l
-```
-
-If it reports `unauthorized`, put on the headset and accept the USB debugging
-prompt. When it reports an authorized Quest, persist the USB witness receipt:
+The Quest must be authorized for USB debugging before Starfire Muninn can query
+it. Muninn owns the access surface:
 
 ```powershell
-dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --quest-usb-preflight-smoke --output artifacts\move-calibration\quest-usb-preflight.cc
+muninn serve --store C:\Meta\Odin\state\muninn.telemetry.cc --host starfire --quest-adb --quest-serial 1WMHHB68PG1515
 ```
 
-That writes `mimir.quest_usb_preflight.v1`. It proves USB access, device
-identity, and basic headset state only. It does not expose Quest headset or
-controller poses; those still require a Quest/OpenXR witness bridge that
-publishes pose samples into Mimir's calibration capture. The current calibration
-protocol can still run without Quest, but Quest poses are the preferred external
-reference when the headset and both controllers are sitting around the Move.
+When the Quest is authorized, Muninn publishes `muninn.quest_access.v1` and
+advertises `muninn:<host>:quest-input`, `muninn:<host>:quest-poses`, and
+`muninn:<host>:quest-warped-video-input`. Mimir consumes the access/pose
+surfaces as calibration evidence; it does not own Quest USB access.
+
+```powershell
+muninn quest-access-status --store C:\Meta\Odin\state\muninn.telemetry.cc
+```
+
+ADB authorization proves USB access, device identity, and basic headset state
+only. It does not expose Quest headset or controller poses; those still require
+a Quest/OpenXR witness bridge that publishes pose samples through Muninn. The
+current calibration protocol can still run without Quest, but Quest poses are
+the preferred external reference when the headset and both controllers are
+sitting around the Move.
 
 ## Data Products
 
@@ -80,11 +82,9 @@ reference when the headset and both controllers are sitting around the Move.
 
 ```powershell
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --move-calibration-protocol-smoke --output artifacts\move-calibration\protocol.cc
-dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --quest-usb-preflight-smoke --output artifacts\move-calibration\quest-usb-preflight.cc
 ```
 
 That writes the typed protocol as `mimir.move_calibration_protocol.v1` into a
-CultCache receipt and writes the Quest USB preflight as
-`mimir.quest_usb_preflight.v1` when the headset is authorized. The real hardware
-runner should consume these documents and append capture receipts instead of
-inventing a parallel checklist.
+CultCache receipt. The real hardware runner should consume this document plus
+Muninn's `muninn.quest_access.v1` when Quest is available, then append capture
+receipts instead of inventing a parallel checklist.
