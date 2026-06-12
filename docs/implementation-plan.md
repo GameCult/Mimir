@@ -72,6 +72,10 @@ a named invariant that the native runtime cannot protect yet.
   Quest headset/controller pose witnesses, stillness/sweep/validation phases, and
   the four derived calibration outputs Mimir must produce before IMU
   orientation can become authority.
+- `MimirQuestUsbPreflight` publishes the typed USB witness receipt for an
+  authorized Quest. It proves ADB/device access and records the explicit
+  boundary that Quest headset/controller poses still require a Quest/OpenXR
+  witness bridge before they can become calibration evidence.
 - `scripts/start-nightwing-move-tracking.ps1` is the narrow live Nightwing
   bring-up path: it starts the `/eve/periwinkle` receiver/recorder on Starfire,
   stages the Nightwing Eye/Move Python worker, keeps a heartbeat for field

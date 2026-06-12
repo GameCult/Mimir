@@ -145,8 +145,17 @@ artifacts\move-calibration\protocol.cc` writes
 left/right controller poses over USB as an external VR reference; and requires
 Mimir to derive rig calibration, IMU calibration, controller identity mapping,
 and a calibration receipt before orientation can stop being
-`orientation:imu-unresolved`. ADB currently sees the Quest over USB, but it must
-be authorized in-headset before Starfire can query it.
+`orientation:imu-unresolved`.
+
+Quest USB preflight proof: `dotnet run --project
+.\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj --
+--quest-usb-preflight-smoke --output
+artifacts\move-calibration\quest-usb-preflight.cc` writes
+`mimir.quest_usb_preflight.v1`. On 2026-06-12, `adb devices -l` reported
+authorized Quest 2 device `1WMHHB68PG1515` with product/device `hollywood`.
+This proves Starfire can query the headset over USB; it does not provide
+Quest headset/controller poses until a Quest/OpenXR witness bridge publishes
+those pose samples.
 
 Live Nightwing bring-up uses `scripts/start-nightwing-move-tracking.ps1`.
 Starfire starts `Mimir.EveSensorReceiver` on `/eve/periwinkle`, stages

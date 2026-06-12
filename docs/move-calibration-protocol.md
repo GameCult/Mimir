@@ -52,9 +52,18 @@ adb devices -l
 ```
 
 If it reports `unauthorized`, put on the headset and accept the USB debugging
-prompt. The current calibration protocol can still run without Quest, but Quest
-poses are the preferred external reference when the headset and both
-controllers are sitting around the Move.
+prompt. When it reports an authorized Quest, persist the USB witness receipt:
+
+```powershell
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --quest-usb-preflight-smoke --output artifacts\move-calibration\quest-usb-preflight.cc
+```
+
+That writes `mimir.quest_usb_preflight.v1`. It proves USB access, device
+identity, and basic headset state only. It does not expose Quest headset or
+controller poses; those still require a Quest/OpenXR witness bridge that
+publishes pose samples into Mimir's calibration capture. The current calibration
+protocol can still run without Quest, but Quest poses are the preferred external
+reference when the headset and both controllers are sitting around the Move.
 
 ## Data Products
 
@@ -71,8 +80,11 @@ controllers are sitting around the Move.
 
 ```powershell
 dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --move-calibration-protocol-smoke --output artifacts\move-calibration\protocol.cc
+dotnet run --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --quest-usb-preflight-smoke --output artifacts\move-calibration\quest-usb-preflight.cc
 ```
 
 That writes the typed protocol as `mimir.move_calibration_protocol.v1` into a
-CultCache receipt. The real hardware runner should consume this document and
-append capture receipts instead of inventing a parallel checklist.
+CultCache receipt and writes the Quest USB preflight as
+`mimir.quest_usb_preflight.v1` when the headset is authorized. The real hardware
+runner should consume these documents and append capture receipts instead of
+inventing a parallel checklist.

@@ -118,6 +118,10 @@ accepted_design:
     optional Quest headset/controller pose witnesses over USB,
     stillness/sweep/validation phases, and the calibration outputs Mimir must
     derive before orientation can stop being `orientation:imu-unresolved`.
+  - `MimirQuestUsbPreflight` defines the typed Quest USB witness receipt. It
+    proves ADB authorization/device identity for the optional external VR
+    reference, but it explicitly does not claim Quest headset/controller pose
+    capture until a Quest/OpenXR witness bridge publishes those samples.
   - Starfire should have Muninn for source-local Move HID control and local
     sensor publication, but some Starfire audio/video paths still enter Mimir
     through local Mimir producers or diagnostic process bridges while native
