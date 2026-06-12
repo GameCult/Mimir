@@ -14,7 +14,7 @@ job-interview answer for why it belongs in the body of the machine.
 | Alignment actuator | `Mimir.Runtime` + Faust | Converts sync state into bounded fractional-delay, gain, and sample-rate-offset controls; Faust moves samples. | `src/Mimir.Runtime/Synchronization/MimirAudioAlignmentActuator.cs` |
 | Audio actuator strategies | `Mimir.Runtime` + Faust | Integer baseline, Farrow fractional delay, variable ASRC, and hybrid delay/ASRC strategy profiles. | `src/Mimir.Runtime/Synchronization/MimirAudioActuatorConfiguration.cs` |
 | CultMesh contracts | `Mimir.Runtime` | Typed codebook, decoder, acoustic path, actuator, program, Move evidence, and Mimir-fused Move controller pose documents for distributed Mimir nodes. | `src/Mimir.Runtime/Synchronization/MimirCultMeshContracts.cs`, `src/Mimir.Runtime/Synchronization/MimirTrackingObservation.cs` |
-| Move controller fusion | `Mimir.Runtime` + native reservoir + Fensalir | Mimir admits Muninn marker candidates plus controller/IMU/button feeds into native `move_evidence` buffers, fuses them into `mimir.move_controller_pose.v1`, and Fensalir consumes the resolved pose stream for interactive environments. | `src/Mimir.Runtime/Synchronization/MimirTrackingObservation.cs`, `src/Mimir.Runtime/Synchronization/MimirMuninnMoveEvidence.cs`, `src/Mimir.Runtime/Synchronization/MimirNativeReservoirRuntime.cs`, `native/reservoir/src/lib.rs` |
+| Move controller fusion | `Mimir.Runtime` + native reservoir + Fensalir | Mimir admits Muninn marker candidates plus controller/IMU/button feeds into native `move_evidence` buffers. `MimirMoveFusion` now publishes calibrated `mimir.move_controller_pose.v1` position/button/gyro poses only when camera witnesses are calibrated, and `MimirMovePoseStream` carries those poses over a realtime CultMesh frame. IMU orientation/prediction remains the next earned 6DoF step before Fensalir treats the stream as VR-grade controller input. | `src/Mimir.Runtime/Synchronization/MimirTrackingObservation.cs`, `src/Mimir.Runtime/Synchronization/MimirMuninnMoveEvidence.cs`, `src/Mimir.Runtime/Synchronization/MimirMoveFusion.cs`, `src/Mimir.Runtime/Synchronization/MimirMovePoseStream.cs`, `src/Mimir.Runtime/Synchronization/MimirNativeReservoirRuntime.cs`, `native/reservoir/src/lib.rs` |
 | Acoustic path learning | `Mimir.Runtime` | Calibration stages for usable bands, confusion, global delay, group delay, and codebook adaptation. | `src/Mimir.Runtime/Synchronization/MimirAcousticPathLearningConfiguration.cs` |
 | Acoustic localization | `Mimir.Runtime` + Fensalir | Pairwise TDOA, SRP-PHAT grid, sparse source, and visual-constrained localization profiles plus a small SRP/TDOA scorer. | `src/Mimir.Runtime/Synchronization/MimirAcousticLocalizationConfiguration.cs`, `src/Mimir.Runtime/Synchronization/MimirAcousticLocalizationSolver.cs` |
 | Benchmark panels | `Mimir.Runtime` | Decoder golf and meatspace acceptance degradation panels with receipt roots and thresholds. | `src/Mimir.Runtime/Synchronization/MimirBenchmarkPanelConfiguration.cs` |
@@ -46,9 +46,14 @@ job-interview answer for why it belongs in the body of the machine.
 - USB-attached Moves on Starfire and Nightwing publish source-local Muninn
   evidence streams: glowing-orb marker candidates and controller/IMU/button
   state. Odin discovers/projects those streams. Mimir owns native evidence
-  buffer admission/layout, calibration, association, triangulation, IMU fusion,
-  prediction, and `mimir.move_controller_pose.v1` publication. Fensalir
-  consumes that resolved pose stream for interactive environments.
+  buffer admission/layout, calibration, association, triangulation, confidence,
+  and `mimir.move_controller_pose.v1` publication. The current fusion pass
+  resolves calibrated optical position and controller state; orientation remains
+  explicitly unresolved until IMU fusion/prediction lands. Fensalir consumes the
+  resolved pose stream for interactive environments once that contract is wired.
+- Resolved Move poses are framed as
+  `mimir.move_controller_pose_stream_frame.v1` on CultMesh shared-memory bytes
+  streams; the stream is a Mimir output surface, not a new fusion owner.
 - OBS may receive compatibility program surfaces and stems. It does not own
   calibration, composition, preview/control, or publication.
 
@@ -65,6 +70,7 @@ dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --move-native-reservoir-smoke --native-reservoir .\native\reservoir\target\debug\localcast_reservoir.dll
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --muninn-move-evidence-smoke --native-reservoir .\native\reservoir\target\debug\localcast_reservoir.dll
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --muninn-move-cultmesh-stream-smoke --native-reservoir .\native\reservoir\target\debug\localcast_reservoir.dll
+dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --move-fusion-smoke
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --perfect-machine-manifest
 dotnet run --no-build --project .\src\Mimir.BufferSmoke\Mimir.BufferSmoke.csproj -- --bioacoustic-actuator-self-test
 ```

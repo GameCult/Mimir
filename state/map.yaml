@@ -103,6 +103,16 @@ accepted_design:
   - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract for
     Fensalir-facing interaction. Mimir owns calibration, association,
     triangulation, IMU fusion, prediction, confidence, and latency accounting.
+  - `MimirMoveFusion` is the current Move pose owner. It consumes native Muninn
+    Move evidence samples, refuses to publish poses without calibrated optical
+    witnesses, triangulates multi-camera orb position, carries controller
+    buttons/trigger/gyro into `mimir.move_controller_pose.v1`, and marks
+    orientation as `orientation:imu-unresolved` until IMU fusion/prediction
+    earns a full 6DoF controller contract.
+  - `MimirMovePoseStream` publishes resolved Mimir-owned Move poses as
+    `mimir.move_controller_pose_stream_frame.v1` CultMesh shared-memory byte
+    frames for Fensalir and other realtime consumers; it carries poses and does
+    not own calibration or fusion decisions.
   - `scripts/start-nightwing-move-tracking.ps1` restores the live Nightwing
     Eye/Move witness path: Starfire owns the `/eve/periwinkle` receiver and
     recorder, Nightwing owns PS Move HID report `0x06` LED writes and PS3 Eye

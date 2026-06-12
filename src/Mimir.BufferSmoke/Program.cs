@@ -115,6 +115,11 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-cultmesh-stream-smoke", St
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveFusionSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--import-obs-program-scene", StringComparison.OrdinalIgnoreCase)))
 {
     return await ImportObsProgramSceneAsync(
@@ -1708,6 +1713,157 @@ static int RunMuninnMoveCultMeshStreamSmoke(string nativeReservoirPath)
         handle.PayloadHandle != 0 &&
         status.TotalSampleCount.ToUInt64() == 1 &&
         status.MoveEvidenceCount.ToUInt64() == 1
+            ? 0
+            : 1;
+}
+
+static int RunMoveFusionSmoke()
+{
+    const ulong leftWitnessHash = 0x00000000000A11CE;
+    const ulong rightWitnessHash = 0x0000000000000B0B;
+    var observedAt = "2026-06-11T18:30:00.0040000Z";
+    var markers = new[]
+    {
+        new MuninnMoveMarkerCandidateDocument(
+            StreamId: "nightwing:ps3-eye-0:move-marker-candidates",
+            HostId: "nightwing",
+            CameraId: "ps3-eye-0",
+            FrameSequence: 9101,
+            SourceIdHash: leftWitnessHash,
+            TileX: 10,
+            TileY: 10,
+            CenterXPx: 170.0f,
+            CenterYPx: 120.0f,
+            RadiusPx: 12.0f,
+            AreaPx: 452,
+            MeanLuma: 0.64f,
+            PeakLuma: 252,
+            Score: 0.90f,
+            ObservedAt: observedAt),
+        new MuninnMoveMarkerCandidateDocument(
+            StreamId: "starfire:ps3-eye-1:move-marker-candidates",
+            HostId: "starfire",
+            CameraId: "ps3-eye-1",
+            FrameSequence: 9102,
+            SourceIdHash: rightWitnessHash,
+            TileX: 11,
+            TileY: 10,
+            CenterXPx: 150.0f,
+            CenterYPx: 120.0f,
+            RadiusPx: 12.0f,
+            AreaPx: 449,
+            MeanLuma: 0.62f,
+            PeakLuma: 250,
+            Score: 0.86f,
+            ObservedAt: observedAt)
+    };
+    var controllers = new[]
+    {
+        new MuninnMoveControllerStateDocument(
+            StreamId: "nightwing:move-usb:move-controller-state",
+            HostId: "nightwing",
+            MoveId: "move-usb",
+            Sequence: 79,
+            SourceTimestampNs: 1_781_202_600_004_000_000,
+            AccelerometerXyz: [-0.01f, 0.10f, 0.99f],
+            GyroscopeXyz: [0.02f, -0.01f, 0.04f],
+            MagnetometerXyz: [0.0f, 0.0f, 0.0f],
+            TriggerValue: 0.5f,
+            Buttons: ["move", "trigger"],
+            Battery01: 0.72f,
+            ObservedAt: observedAt)
+    };
+    var calibration = new MimirMoveFusionRigCalibration(
+        CalibrationId: "mimir-move-stage-calibration-smoke",
+        TrackingSpaceId: "mimir-stage-space",
+        Cameras:
+        [
+            new MimirMoveFusionCameraCalibration(
+                CameraId: "nightwing:ps3-eye-0",
+                WitnessIdHash: leftWitnessHash,
+                PositionMeters: new MimirVector3Snapshot(-0.1, 0.0, 0.0),
+                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                FocalLengthXPx: 100.0,
+                FocalLengthYPx: 100.0,
+                PrincipalPointXPx: 160.0,
+                PrincipalPointYPx: 120.0),
+            new MimirMoveFusionCameraCalibration(
+                CameraId: "starfire:ps3-eye-1",
+                WitnessIdHash: rightWitnessHash,
+                PositionMeters: new MimirVector3Snapshot(0.1, 0.0, 0.0),
+                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                FocalLengthXPx: 100.0,
+                FocalLengthYPx: 100.0,
+                PrincipalPointXPx: 160.0,
+                PrincipalPointYPx: 120.0)
+        ],
+        MaximumAssociationSkewMilliseconds: 20.0);
+
+    var samples = MimirMuninnMoveEvidenceAdapter.BuildNativeSamples(markers, controllers);
+    var fused = MimirMoveFusion.Fuse(samples, calibration);
+    var uncalibrated = MimirMoveFusion.Fuse(samples, calibration with { Cameras = [] });
+    var pose = fused.Poses.SingleOrDefault();
+    var streamId = "mimir:starfire:move-controller-poses";
+    var catalog = CultMesh.CreateStreamCatalog();
+    catalog.Declare(MimirMovePoseStream.CreateStreamDescriptor(
+        streamId,
+        "mimir-live",
+        "mimir:starfire",
+        "mimir:starfire:clock",
+        calibration.TrackingSpaceId,
+        calibration.CalibrationId));
+    using var ring = catalog.CreateSharedMemoryRing(streamId, slotCount: 4, slotByteLength: 8192);
+    var poseFrame = MimirMovePoseStream.CreateFrame(
+        frameId: "mimir-move-pose-frame:79",
+        producerPeerId: "mimir:starfire",
+        publishedAtNs: pose?.EstimatedAtNs ?? 0,
+        trackingSpaceId: calibration.TrackingSpaceId,
+        calibrationId: calibration.CalibrationId,
+        poses: fused.Poses);
+    var posePayload = MimirMovePoseStream.SerializeFrame(poseFrame);
+    var streamOk = ring.TryPublishCopy(posePayload, poseFrame.PublishedAtNs, durationNs: 0, out var published);
+    MimirMoveControllerPoseStreamFrame? decodedPoseFrame = null;
+    if (streamOk)
+    {
+        catalog.PublishFrame(published);
+        streamOk = ring.TryAcquireLatestRead(out var lease);
+        if (streamOk)
+        {
+            using (lease)
+            {
+                decodedPoseFrame = MimirMovePoseStream.DeserializeFrame(lease.Memory[..lease.Handle.ByteLength]);
+            }
+        }
+    }
+
+    var positionOk = pose is not null &&
+        Math.Abs(pose.PositionMeters.X) <= 0.025 &&
+        Math.Abs(pose.PositionMeters.Y) <= 0.025 &&
+        Math.Abs(pose.PositionMeters.Z - 1.0) <= 0.05;
+    var evidenceOk = pose is not null &&
+        pose.EvidenceKinds.Contains("optical-marker:triangulated", StringComparer.Ordinal) &&
+        pose.EvidenceKinds.Contains("orientation:imu-unresolved", StringComparer.Ordinal) &&
+        pose.Buttons.Any(button => button.Id == "move" && button.Pressed) &&
+        pose.Buttons.Any(button => button.Id == "trigger" && button.Value >= 0.49);
+    streamOk = streamOk &&
+        posePayload.Length > 0 &&
+        catalog.LatestFrame(streamId)?.Sequence == published.Sequence &&
+        decodedPoseFrame?.Poses.Length == 1 &&
+        decodedPoseFrame.Poses[0].PoseId == pose?.PoseId &&
+        decodedPoseFrame.TrackingSpaceId == calibration.TrackingSpaceId &&
+        decodedPoseFrame.CalibrationId == calibration.CalibrationId;
+
+    Console.WriteLine(
+        $"move-fusion-smoke poses={fused.Poses.Count} controllers={fused.ControllerEvidenceCount} optical={fused.OpticalEvidenceCount} calibrated={fused.CalibratedOpticalEvidenceCount} uncalibratedPoses={uncalibrated.Poses.Count} streamPoses={decodedPoseFrame?.Poses.Length ?? 0} pos=({pose?.PositionMeters.X:F3},{pose?.PositionMeters.Y:F3},{pose?.PositionMeters.Z:F3}) confidence={pose?.Confidence:F3} evidence={string.Join(",", pose?.EvidenceKinds ?? [])}");
+
+    return fused.Poses.Count == 1 &&
+        fused.ControllerEvidenceCount == 1 &&
+        fused.OpticalEvidenceCount == 2 &&
+        fused.CalibratedOpticalEvidenceCount == 2 &&
+        uncalibrated.Poses.Count == 0 &&
+        positionOk &&
+        evidenceOk &&
+        streamOk
             ? 0
             : 1;
 }
