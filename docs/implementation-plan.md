@@ -69,7 +69,7 @@ a named invariant that the native runtime cannot protect yet.
   for Mimir-fused controller input.
 - `MimirMoveCalibrationProtocol` publishes the typed calibration preflight for
   Starfire/Nightwing Moves: required Muninn evidence streams, optional
-  Periwinkle motion/camera witnesses, stillness/sweep/validation phases, and
+  Quest headset/controller pose witnesses, stillness/sweep/validation phases, and
   the four derived calibration outputs Mimir must produce before IMU
   orientation can become authority.
 - `scripts/start-nightwing-move-tracking.ps1` is the narrow live Nightwing

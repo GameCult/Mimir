@@ -1901,7 +1901,7 @@ static async Task<int> RunMoveCalibrationProtocolSmokeAsync(string outputPath)
     var optionalStreams = protocol.StreamRequirements.Length - requiredStreams;
     var totalDuration = protocol.Phases.Sum(phase => phase.DurationSeconds);
     Console.WriteLine(
-        $"move-calibration-protocol-smoke path={outputPath} protocol={protocol.ProtocolId} requiredStreams={requiredStreams} optionalStreams={optionalStreams} phases={protocol.Phases.Length} durationSeconds={totalDuration:0.0} outputs={protocol.Outputs.Length} periwinkleOptional={protocol.StreamRequirements.Any(stream => stream.StreamId.StartsWith("periwinkle:", StringComparison.Ordinal))}");
+        $"move-calibration-protocol-smoke path={outputPath} protocol={protocol.ProtocolId} requiredStreams={requiredStreams} optionalStreams={optionalStreams} phases={protocol.Phases.Length} durationSeconds={totalDuration:0.0} outputs={protocol.Outputs.Length} questOptional={protocol.StreamRequirements.Any(stream => stream.StreamId.StartsWith("quest:", StringComparison.Ordinal))}");
 
     return requiredStreams >= 3 &&
         protocol.Phases.Length == 7 &&

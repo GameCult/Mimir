@@ -13,8 +13,9 @@ resolved poses after Mimir has earned them.
   stream address is `muninn:nightwing:move-evidence`.
 - Mimir on Starfire publishes resolved pose frames at
   `mimir:starfire:move-controller-poses`.
-- Periwinkle can participate through Eve sensor observations:
-  `periwinkle:eve:motion` and optionally `periwinkle:eve:camera`.
+- Quest can participate as an external tracked VR reference over USB:
+  `quest:usb:headset-pose`, `quest:usb:left-controller-pose`, and
+  `quest:usb:right-controller-pose`.
 - Starfire ASIO/Scarlett loopback can provide cue timing, but it is not a Move
   pose authority.
 
@@ -36,10 +37,24 @@ lowers to local UDP for OBS compatibility.
    frame, and optical angular consistency.
 5. `figure-eight`: broad figure-eight motion; fit magnetometer hard/soft iron
    and cross-axis coupling.
-6. `periwinkle-witness`: optional phone motion/camera witness near the active
-   Move for independent body and clock evidence.
+6. `quest-reference`: optional Quest headset/controller reference with the Move
+   between the two Quest controllers in front of the headset.
 7. `validation-pass`: held-out free motion; promote only if triangulated optical
    residuals and IMU prediction residuals pass.
+
+## Quest USB Preflight
+
+The Quest must be authorized for USB debugging before Starfire can query it.
+Check it with:
+
+```powershell
+adb devices -l
+```
+
+If it reports `unauthorized`, put on the headset and accept the USB debugging
+prompt. The current calibration protocol can still run without Quest, but Quest
+poses are the preferred external reference when the headset and both
+controllers are sitting around the Move.
 
 ## Data Products
 

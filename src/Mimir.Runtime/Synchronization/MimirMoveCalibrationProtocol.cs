@@ -48,7 +48,7 @@ public sealed record MimirMoveCalibrationOutput(
 public sealed record MimirMoveCalibrationAcceptance(
     [property: Key(0)] int MinimumControllerStateSamplesPerMove,
     [property: Key(1)] int MinimumOpticalSamplesPerCamera,
-    [property: Key(2)] int MinimumPeriwinkleMotionSamples,
+    [property: Key(2)] int MinimumExternalPoseSamples,
     [property: Key(3)] double MaximumClockSkewMilliseconds,
     [property: Key(4)] double MaximumStillGyroRadiansPerSecond,
     [property: Key(5)] double MinimumTriangulatedPoseConfidence,
@@ -90,21 +90,29 @@ public static class MimirMoveCalibrationProtocol
                     Required: true,
                     "The calibration run must prove Mimir can republish resolved poses."),
                 new(
-                    "periwinkle:eve:motion",
-                    "periwinkle",
-                    "Periwinkle Eve client",
-                    "phone IMU/motion witness",
-                    "CultMesh observation ledger through Mimir Eve sensor intake",
+                    "quest:usb:headset-pose",
+                    "starfire",
+                    "Quest USB/OpenXR witness",
+                    "Quest headset pose near the Move/controllers calibration cluster",
+                    "USB ADB/OpenXR witness bridged into Mimir calibration capture",
                     Required: false,
-                    "Independent body/clock witness for staged motions and operator cues."),
+                    "External tracked VR frame for validating Mimir's optical/IMU pose frame."),
                 new(
-                    "periwinkle:eve:camera",
-                    "periwinkle",
-                    "Periwinkle Eve client",
-                    "phone camera/media witness",
-                    "CultMesh observation ledger through Mimir Eve sensor intake",
+                    "quest:usb:left-controller-pose",
+                    "starfire",
+                    "Quest USB/OpenXR witness",
+                    "Quest left controller pose",
+                    "USB ADB/OpenXR witness bridged into Mimir calibration capture",
                     Required: false,
-                    "Optional visual record of calibration poses and sweep compliance."),
+                    "External tracked controller reference sitting beside the Move."),
+                new(
+                    "quest:usb:right-controller-pose",
+                    "starfire",
+                    "Quest USB/OpenXR witness",
+                    "Quest right controller pose",
+                    "USB ADB/OpenXR witness bridged into Mimir calibration capture",
+                    Required: false,
+                    "External tracked controller reference sitting beside the Move."),
                 new(
                     "starfire:scarlett:loopback",
                     "starfire",
@@ -120,7 +128,7 @@ public static class MimirMoveCalibrationProtocol
                     "preflight-streams",
                     "Stream liveness and clock edge check",
                     10.0,
-                    "Hold both Moves still and visible. Confirm Starfire, Nightwing, and optional Periwinkle streams are fresh.",
+                    "Hold both Moves still and visible. Confirm Starfire, Nightwing, and optional Quest pose streams are fresh.",
                     ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence"],
                     ["stream-freshness", "clock-skew-estimate", "controller-id-map"]),
                 new(
@@ -148,16 +156,16 @@ public static class MimirMoveCalibrationProtocol
                     "figure-eight",
                     "Magnetometer and cross-axis motion",
                     20.0,
-                    "Move each controller through a broad figure-eight. Keep Periwinkle nearby if it is being used as the phone witness.",
+                    "Move each controller through a broad figure-eight. Leave the Quest headset/controllers stationary as the external VR reference cluster.",
                     ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence"],
                     ["magnetometer-hard-soft-iron-fit", "cross-axis-coupling-check"]),
                 new(
-                    "periwinkle-witness",
-                    "Optional Periwinkle body witness",
+                    "quest-reference",
+                    "Optional Quest headset/controller reference",
                     12.0,
-                    "Hold Periwinkle rigidly near the active Move for a short synchronized sweep if the phone is available.",
-                    ["periwinkle:eve:motion"],
-                    ["independent-motion-witness", "phone-clock-offset-estimate"]),
+                    "Keep the Move between the two Quest controllers in front of the headset. Capture the static Quest controller/headset frame while Mimir observes the Move.",
+                    ["quest:usb:headset-pose", "quest:usb:left-controller-pose", "quest:usb:right-controller-pose"],
+                    ["external-vr-pose-frame", "quest-to-mimir-frame-fit", "quest-clock-offset-estimate"]),
                 new(
                     "validation-pass",
                     "Held-out tracking validation",
@@ -192,7 +200,7 @@ public static class MimirMoveCalibrationProtocol
             Acceptance: new(
                 MinimumControllerStateSamplesPerMove: 600,
                 MinimumOpticalSamplesPerCamera: 300,
-                MinimumPeriwinkleMotionSamples: 120,
+                MinimumExternalPoseSamples: 120,
                 MaximumClockSkewMilliseconds: 20.0,
                 MaximumStillGyroRadiansPerSecond: 0.035,
                 MinimumTriangulatedPoseConfidence: 0.65,
@@ -207,7 +215,7 @@ public static class MimirMoveCalibrationProtocol
             [
                 "Mimir owns fusion and calibration promotion. Muninn only publishes source-local evidence and executes local Move light commands.",
                 "CultCache receipts are durable evidence; CultMesh stream frames are the hot path.",
-                "Do not promote orientation until gyro bias/scale, gravity alignment, optical residuals, and held-out validation all pass."
+                "Do not promote orientation until gyro bias/scale, gravity alignment, optical residuals, external Quest reference residuals when available, and held-out validation all pass."
             ]);
 
     public static string[] Validate(MimirMoveCalibrationProtocolDocument protocol)

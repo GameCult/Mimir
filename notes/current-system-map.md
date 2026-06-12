@@ -141,10 +141,12 @@ artifacts\move-calibration\protocol.cc` writes
 `mimir.move_calibration_protocol.v1` for
 `mimir-move-calibration-starfire-nightwing-v1`. The protocol requires
 `muninn:starfire:move-evidence`, `muninn:nightwing:move-evidence`, and
-`mimir:starfire:move-controller-poses`; optionally drinks Periwinkle motion and
-camera witnesses; and requires Mimir to derive rig calibration, IMU calibration,
-controller identity mapping, and a calibration receipt before orientation can
-stop being `orientation:imu-unresolved`.
+`mimir:starfire:move-controller-poses`; optionally drinks Quest headset and
+left/right controller poses over USB as an external VR reference; and requires
+Mimir to derive rig calibration, IMU calibration, controller identity mapping,
+and a calibration receipt before orientation can stop being
+`orientation:imu-unresolved`. ADB currently sees the Quest over USB, but it must
+be authorized in-headset before Starfire can query it.
 
 Live Nightwing bring-up uses `scripts/start-nightwing-move-tracking.ps1`.
 Starfire starts `Mimir.EveSensorReceiver` on `/eve/periwinkle`, stages

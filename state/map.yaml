@@ -115,9 +115,9 @@ accepted_design:
     not own calibration or fusion decisions.
   - `MimirMoveCalibrationProtocol` defines the runnable Starfire/Nightwing Move
     calibration preflight as typed state: required Muninn Move evidence streams,
-    optional Periwinkle motion/camera witnesses, stillness/sweep/validation
-    phases, and the calibration outputs Mimir must derive before orientation
-    can stop being `orientation:imu-unresolved`.
+    optional Quest headset/controller pose witnesses over USB,
+    stillness/sweep/validation phases, and the calibration outputs Mimir must
+    derive before orientation can stop being `orientation:imu-unresolved`.
   - Starfire should have Muninn for source-local Move HID control and local
     sensor publication, but some Starfire audio/video paths still enter Mimir
     through local Mimir producers or diagnostic process bridges while native
