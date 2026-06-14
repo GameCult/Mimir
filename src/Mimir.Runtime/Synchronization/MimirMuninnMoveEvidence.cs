@@ -37,7 +37,8 @@ public sealed record MuninnMoveControllerStateDocument(
     [property: Key(8)] float TriggerValue,
     [property: Key(9)] string[] Buttons,
     [property: Key(10)] float Battery01,
-    [property: Key(11)] string ObservedAt);
+    [property: Key(11)] string ObservedAt,
+    [property: Key(12)] string SourcePath = "");
 
 [MessagePackObject]
 public sealed record MimirMuninnMoveEvidenceStreamFrame(
