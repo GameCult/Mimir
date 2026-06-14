@@ -7,6 +7,8 @@ const ushort SonyVid = 0x054C;
 const ushort PsMovePid = 0x03D5;
 
 var readReports = args.Any(arg => string.Equals(arg, "--read", StringComparison.OrdinalIgnoreCase));
+var readCount = TryGetIntOption(args, "--read-count", 1);
+var readTimeoutMs = TryGetIntOption(args, "--read-timeout-ms", 350);
 var pairHost = TryGetOption(args, "--pair-host");
 var rgb = TryGetOption(args, "--rgb");
 var pulseMs = TryGetIntOption(args, "--pulse-ms", 0);
@@ -124,8 +126,11 @@ foreach (var device in devices)
 
     if (readReports)
     {
-        var result = await WindowsHid.TryReadInputReportAsync(device, TimeSpan.FromMilliseconds(350));
-        Console.WriteLine($"  read={result}");
+        for (var readIndex = 0; readIndex < Math.Max(1, readCount); readIndex++)
+        {
+            var result = await WindowsHid.TryReadInputReportAsync(device, TimeSpan.FromMilliseconds(Math.Max(1, readTimeoutMs)));
+            Console.WriteLine($"  read[{readIndex}]={result}");
+        }
     }
 
     if (!string.IsNullOrWhiteSpace(rgb))
