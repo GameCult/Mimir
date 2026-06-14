@@ -3,6 +3,7 @@ param(
     [int]$RefreshMs = 250,
     [double]$HoldSeconds = 0,
     [switch]$TurnOffOnExit,
+    [switch]$KeepExisting,
     [switch]$DryRun
 )
 
@@ -19,8 +20,16 @@ if (-not (Test-Path $probe)) {
     dotnet build (Join-Path $repo "src\Mimir.PsMoveProbe\Mimir.PsMoveProbe.csproj") -c Release -p:UseSharedCompilation=false
 }
 
+if (-not $KeepExisting) {
+    Get-Process -Name "Mimir.PsMoveProbe" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Stop-Process -Id $_.Id -Force
+        }
+}
+
 $args = @(
     "--rgb", $Rgb,
+    "--breathe-led",
     "--hold-seconds", "$HoldSeconds",
     "--refresh-ms", "$RefreshMs",
     "--event-log", $eventLog

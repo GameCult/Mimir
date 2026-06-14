@@ -17,6 +17,9 @@ var intervalMs = TryGetIntOption(args, "--interval-ms", 500);
 var holdSeconds = TryGetDoubleOption(args, "--hold-seconds", -1.0);
 var refreshMs = TryGetIntOption(args, "--refresh-ms", 250);
 var eventLog = TryGetOption(args, "--event-log");
+var breatheLed = args.Any(arg =>
+    string.Equals(arg, "--breathe-led", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(arg, "--breath-led", StringComparison.OrdinalIgnoreCase));
 var pairedChirpTrain = args.Any(arg => string.Equals(arg, "--paired-chirp-train", StringComparison.OrdinalIgnoreCase));
 var outputAudio = TryGetOption(args, "--output-audio");
 var eventCount = TryGetIntOption(args, "--event-count", pulseCount);
@@ -52,8 +55,29 @@ Console.WriteLine();
 
 if (devices.Count == 0)
 {
-    Console.WriteLine("No PS Move HID collections are visible. Check the USB cable and Windows Device Manager.");
-    return 1;
+    if (!breatheLed)
+    {
+        Console.WriteLine("No PS Move HID collections are visible. Check the USB cable and Windows Device Manager.");
+        return 1;
+    }
+}
+
+if (breatheLed)
+{
+    if (string.IsNullOrWhiteSpace(rgb))
+    {
+        Console.WriteLine("--breathe-led requires --rgb #rrggbb or --rgb r,g,b.");
+        return 1;
+    }
+
+    var result = await WindowsHid.TryBreatheLedAsync(
+        rgb,
+        TimeSpan.FromSeconds(Math.Max(0.0, holdSeconds)),
+        TimeSpan.FromMilliseconds(Math.Max(25, refreshMs)),
+        eventLog,
+        args.Any(arg => string.Equals(arg, "--turn-off-on-exit", StringComparison.OrdinalIgnoreCase))).ConfigureAwait(false);
+    Console.WriteLine($"breatheLed={result}");
+    return result.StartsWith("ok", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
 }
 
 if (pairedChirpTrain)
@@ -730,6 +754,74 @@ internal static class WindowsHid
 
         return $"ok holdWrites={writes} rgb=#{r:X2}{g:X2}{b:X2} durationSeconds={duration.TotalSeconds:0.###} refreshMs={refresh.TotalMilliseconds:0}";
     }
+
+    public static async Task<string> TryBreatheLedAsync(
+        string rgb,
+        TimeSpan duration,
+        TimeSpan refresh,
+        string? eventLogPath,
+        bool turnOffOnExit)
+    {
+        if (!TryParseRgb(rgb, out var baseR, out var baseG, out var baseB))
+        {
+            return $"invalid rgb: {rgb}";
+        }
+
+        var stopRequested = false;
+        Console.CancelKeyPress += (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            stopRequested = true;
+        };
+
+        var eventId = $"starfire-usb-move-breathe:{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        var stopwatch = Stopwatch.StartNew();
+        var writes = 0;
+        while (!stopRequested && (duration == TimeSpan.Zero || stopwatch.Elapsed < duration))
+        {
+            var intensity = Math.Abs(Math.Sin(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0)) * 0.5 + 0.5;
+            var r = ScaleColorChannel(baseR, intensity);
+            var g = ScaleColorChannel(baseG, intensity);
+            var b = ScaleColorChannel(baseB, intensity);
+            var devices = Enumerate()
+                .Where(static device =>
+                    device.Caps.OutputReportByteLength > 0 &&
+                    device.Path.IndexOf("&col01#", StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(static device => device.Path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var device in devices)
+            {
+                var started = NowNs();
+                var result = TryWriteLed(device, r, g, b);
+                var completed = NowNs();
+                AppendPulseEvent(eventLogPath, eventId, writes, "breathe", r, g, b, started, completed, result);
+                writes++;
+            }
+
+            await Task.Delay(refresh).ConfigureAwait(false);
+        }
+
+        if (turnOffOnExit)
+        {
+            foreach (var device in Enumerate()
+                .Where(static device =>
+                    device.Caps.OutputReportByteLength > 0 &&
+                    device.Path.IndexOf("&col01#", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                var started = NowNs();
+                var result = TryWriteLed(device, 0, 0, 0);
+                var completed = NowNs();
+                AppendPulseEvent(eventLogPath, eventId, writes, "off", 0, 0, 0, started, completed, result);
+                writes++;
+            }
+        }
+
+        return $"ok breatheWrites={writes} rgb=#{baseR:X2}{baseG:X2}{baseB:X2} durationSeconds={duration.TotalSeconds:0.###} refreshMs={refresh.TotalMilliseconds:0}";
+    }
+
+    private static byte ScaleColorChannel(byte channel, double intensity) =>
+        (byte)Math.Clamp((int)Math.Round(channel * intensity), 0, 255);
 
     public static async Task<string> TryWriteScheduledLedTrainAsync(
         HidDeviceInfo device,
