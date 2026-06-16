@@ -21,9 +21,11 @@ var mimirObservationLogPath = ParseString(args, "--mimir-observation-log", @"E:\
 var idunnRudpHealth = ParseString(args, "--idunn-rudp-health", Environment.GetEnvironmentVariable("MIMIR_EVE_DASHBOARD_IDUNN_RUDP_HEALTH") ?? "");
 var idunnDaemon = ParseString(args, "--idunn-daemon", Environment.GetEnvironmentVariable("MIMIR_EVE_DASHBOARD_IDUNN_DAEMON") ?? "mimir-eve-dashboard");
 var idunnHealthContract = ParseString(args, "--idunn-health-contract", Environment.GetEnvironmentVariable("MIMIR_EVE_DASHBOARD_IDUNN_HEALTH_CONTRACT") ?? "mimir.cultnet-rudp-provider-health");
+var idunnServiceDaemon = ParseString(args, "--idunn-service-daemon", Environment.GetEnvironmentVariable("MIMIR_EVE_DASHBOARD_IDUNN_SERVICE_DAEMON") ?? "");
+var idunnServiceHealthContract = ParseString(args, "--idunn-service-health-contract", Environment.GetEnvironmentVariable("MIMIR_EVE_DASHBOARD_IDUNN_SERVICE_HEALTH_CONTRACT") ?? "");
 var providers = EveDashboardProviderCatalog.Create(ParseProviderSpecs(args), voidBotSwarmStatePath, mimirTelemetryLogPath, mimirObservationLogPath);
 using var cultNetPublisher = await EveDashboardCultNetPublisher.StartAsync(cultNetCachePath, cultNetPort).ConfigureAwait(false);
-using var server = new EveDashboardServer(port, providers, cultNetPublisher, new IdunnRudpHealthOptions(idunnRudpHealth, idunnDaemon, idunnHealthContract));
+using var server = new EveDashboardServer(port, providers, cultNetPublisher, IdunnRudpHealthOptions.Create(idunnRudpHealth, idunnDaemon, idunnHealthContract, idunnServiceDaemon, idunnServiceHealthContract));
 await server.RunAsync();
 
 static int ParseInt(IReadOnlyList<string> args, string name, int fallback)
@@ -94,7 +96,7 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         Console.WriteLine($"Mimir Eve dashboard CultNet publisher listening on cultnet://0.0.0.0:{cultNetPublisher.Port}");
         Console.WriteLine(string.IsNullOrWhiteSpace(idunnRudpHealth.Endpoint)
             ? "Mimir Eve dashboard Idunn RUDP health publisher disabled."
-            : $"Mimir Eve dashboard Idunn RUDP health publisher targeting {idunnRudpHealth.Endpoint} as {idunnRudpHealth.DaemonId}.");
+            : $"Mimir Eve dashboard Idunn RUDP health publisher targeting {idunnRudpHealth.Endpoint} for {idunnRudpHealth.Targets.Count} record(s).");
         Console.WriteLine($"Compatibility endpoint remains ws://0.0.0.0:{port}/eve/dashboard");
         _ = Task.Run(BroadcastHeartbeatAsync);
         while (!stopping.IsCancellationRequested)
@@ -348,8 +350,7 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         {
             return new IdunnRudpHealthStatus(
                 idunnRudpHealth.Endpoint,
-                idunnRudpHealth.DaemonId,
-                idunnRudpHealth.HealthContract,
+                idunnRudpHealth.Targets,
                 idunnRudpPublishStatus,
                 idunnRudpPublishError,
                 idunnRudpPublishInFlight,
@@ -372,16 +373,18 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         }
 
         var observedAtText = observedAt.ToString("O", CultureInfo.InvariantCulture);
-        var health = new IdunnDaemonHealthRecord
+        var healthRecords = idunnRudpHealth.Targets.Select(target => new IdunnDaemonHealthRecord
         {
-            DaemonId = idunnRudpHealth.DaemonId,
+            DaemonId = target.DaemonId,
             State = "healthy",
-            Detail = $"Mimir Eve dashboard broker active; provider={state.ProviderId}; providerVersion={state.Version}; providers={providers.Manifests.Count}; clients={clients.Count}; cultMeshPort={cultNetPublisher.Port}",
+            Detail = target.DetailPrefix == "service"
+                ? $"Nightwing Eve dashboard service active; provider={state.ProviderId}; providerVersion={state.Version}; providers={providers.Manifests.Count}; clients={clients.Count}; cultMeshPort={cultNetPublisher.Port}; process=Mimir.EveDashboard"
+                : $"Mimir Eve dashboard broker active; provider={state.ProviderId}; providerVersion={state.Version}; providers={providers.Manifests.Count}; clients={clients.Count}; cultMeshPort={cultNetPublisher.Port}",
             ObservedAt = observedAtText,
-            HealthContract = idunnRudpHealth.HealthContract,
+            HealthContract = target.HealthContract,
             PublicationSource = "daemon-published",
             Transport = "cultnet.transport.rudp.v0",
-        };
+        }).ToArray();
 
         lock (idunnRudpPublishLock)
         {
@@ -404,7 +407,11 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
         {
             try
             {
-                IdunnRudpHealthPublisher.Publish(idunnRudpHealth.Endpoint, health);
+                foreach (var health in healthRecords)
+                {
+                    IdunnRudpHealthPublisher.Publish(idunnRudpHealth.Endpoint, health);
+                }
+
                 lock (idunnRudpPublishLock)
                 {
                     idunnRudpPublishStatus = "published";
@@ -727,12 +734,34 @@ internal sealed class EveDashboardServer(int port, EveDashboardProviderCatalog p
     }
 }
 
-internal sealed record IdunnRudpHealthOptions(string Endpoint, string DaemonId, string HealthContract);
+internal sealed record IdunnRudpHealthOptions(string Endpoint, IReadOnlyList<IdunnRudpHealthTarget> Targets)
+{
+    public static IdunnRudpHealthOptions Create(
+        string endpoint,
+        string daemonId,
+        string healthContract,
+        string serviceDaemonId,
+        string serviceHealthContract)
+    {
+        var targets = new List<IdunnRudpHealthTarget>
+        {
+            new(daemonId, healthContract, "broker"),
+        };
+
+        if (!string.IsNullOrWhiteSpace(serviceDaemonId) && !string.IsNullOrWhiteSpace(serviceHealthContract))
+        {
+            targets.Add(new IdunnRudpHealthTarget(serviceDaemonId, serviceHealthContract, "service"));
+        }
+
+        return new IdunnRudpHealthOptions(endpoint, targets);
+    }
+}
+
+internal sealed record IdunnRudpHealthTarget(string DaemonId, string HealthContract, string DetailPrefix);
 
 internal sealed record IdunnRudpHealthStatus(
     string Endpoint,
-    string Daemon,
-    string Contract,
+    IReadOnlyList<IdunnRudpHealthTarget> Targets,
     string Status,
     string Error,
     bool InFlight,
