@@ -257,13 +257,12 @@ video archive. Yggdrasil relays CultNet reliable UDP over the WireGuard mesh.
 Starfire lowers the subscribed stream to local UDP for compatibility sinks
 because OBS is not a CultMesh runtime.
 
-Source audit correction: the desired transport is explicit CultNet RUDP, and
-CultLib now provides C# `CultMesh.CreateRudpServer`,
-`CultMesh.CreateRudpClient`, and authorized-peer helper APIs. The current
-`Mimir.CultMeshMedia` source still uses older `CultMesh.StartNodeAsync` and
-`CultMesh.ConnectClient` entrypoints. Treat that as migration debt: the bridge
-should be cut to explicit RUDP helpers before it is considered aligned with the
-daemon-swarm transport doctrine.
+Source audit correction resolved: `Mimir.CultMeshMedia` now uses explicit
+CultLib RUDP helpers for the sender/receiver and a relay-owned RUDP
+socket/session loop for multi-peer forwarding. The older
+`CultMesh.StartNodeAsync` and `CultMesh.ConnectClient` path no longer owns this
+media lane. The relay still persists received puts to CultCache as evidence and
+for inspection; live network transit is the RUDP schema-document path.
 
 Current deployment: Yggdrasil runs the relay from
 `/opt/gamecult/mimir-cultmesh-media/Mimir.CultMeshMedia` with cache
@@ -315,7 +314,8 @@ browser/dashboard WebSocket paths are still renderer/client lowerings. They may
 remain as lowering adapters, but any provider catalog, retained service state,
 command boundary, transport profile, or lifecycle health claim must be
 published as typed CultNet/RUDP records instead of being inferred from those
-TCP/WebSocket surfaces.
+TCP/WebSocket surfaces. The media-frame bridge is already on that side of the
+line.
 
 ## Audio Field
 

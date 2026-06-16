@@ -279,14 +279,14 @@ a named invariant that the native runtime cannot protect yet.
   controls/previews/stats, Yggdrasil publishes to the site, and OBS is
   compatibility-only.
 - `src/Mimir.CultMeshMedia` is the first explicit CultMesh media/body bridge:
-  `relay` hosts the document relay on CultNet UDP `3075`, `send` reads an
+  `relay` hosts the document relay on CultNet RUDP `3075`, `send` reads an
   MPEG-TS byte stream from stdin and publishes rolling
   `mimir.cultmesh_media_frame` documents, and `recv` subscribes to those
   documents and writes ordered MPEG-TS bytes to a Starfire-local UDP endpoint
-  for compatibility sinks. Source audit: its C# implementation still uses older
-  `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient` entrypoints; migrate the
-  bridge to CultLib's explicit C# RUDP helpers before treating it as fully
-  aligned with the daemon-swarm transport cut.
+  for compatibility sinks. Its C# implementation now uses explicit CultLib
+  RUDP client/session helpers; the older
+  `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient` entrypoints no longer own
+  the media transport lane.
 - `scripts/start-raven-cultmesh-av-sender.ps1`,
   `scripts/start-yggdrasil-cultmesh-media-relay.ps1`, and
   `scripts/start-starfire-cultmesh-av-receiver.ps1` are the CultMesh bridge
@@ -322,9 +322,9 @@ a named invariant that the native runtime cannot protect yet.
   discovery, Idunn owns keepalive decisions, and Mimir-owned dashboard/reference
   surfaces only report their own observed state. TCP/HTTP/WebSocket stay
   lowerings or compatibility evidence.
-- `Mimir.CultMeshMedia` still needs an explicit RUDP transport cut. Do not add
-  another TCP bridge, HTTP status shim, or WebSocket-derived service truth while
-  the C# RUDP helpers exist.
+- `Mimir.CultMeshMedia` has completed its explicit RUDP transport cut. Do not
+  add another TCP bridge, HTTP status shim, or WebSocket-derived service truth
+  while the RUDP document lane exists.
 - Process-backed stream sources are only acceptable for network bridge feeds or
   diagnostics. Six-camera local ingest belongs behind direct capture drivers.
 - Frame-event process sources are diagnostic only. They prove source cadence and
@@ -337,9 +337,10 @@ a named invariant that the native runtime cannot protect yet.
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
    other cameras.
-2. Cut `src/Mimir.CultMeshMedia` from older CultMesh node/client entrypoints to
-   explicit CultNet RUDP helpers, preferably authorized-peer dialing where the
-   peer catalog exists. Preserve OBS-local UDP as egress only.
+2. Cut the remaining dashboard, recorder, and witness service truth paths from
+   older TCP/WebSocket-derived assumptions to explicit CultNet RUDP records,
+   preferably authorized-peer dialing where the peer catalog exists. Preserve
+   OBS-local UDP as egress only for compatibility sinks.
 3. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
 4. Promote the packet-song physical calibration receipt into the runtime

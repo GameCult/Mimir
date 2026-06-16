@@ -383,12 +383,10 @@ accepted_design:
     `mimir.cultmesh_media_frame` documents over CultNet reliable UDP,
     Yggdrasil relays them on `10.77.0.1:3075`, and Starfire lowers the
     subscribed stream to `udp://127.0.0.1:5200` for the OBS source
-    `Raven Monitor + Realtek`. Source audit warning: the current C# bridge
-    still calls older `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient`
-    entrypoints; now that CultLib exposes C# RUDP facade helpers, the next
-    transport cut should move this bridge onto explicit RUDP server/client or
-    authorized-peer helpers and demote any TCP-like node/client path to
-    compatibility evidence.
+    `Raven Monitor + Realtek`. The bridge now uses explicit CultLib RUDP
+    socket/session helpers for relay, sender, and receiver. The old
+    `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient` node/client path is no
+    longer a transport authority for this media lane.
   - `src/Mimir.EveDashboard` publishes `mimir.eve_dashboard_state` through
     CultNet/CultMesh and can push `idunn.daemon_health` records over
     `cultnet.transport.rudp.v0` for itself and a paired service daemon. Its
@@ -433,9 +431,11 @@ active_subgoals:
     keepalive, and Mimir surfaces publish typed RUDP self-health rather than
     private watchdog loops or TCP/HTTP status truth.
   - Cut remaining older CultMesh node/client transport assumptions in
-    `src/Mimir.CultMeshMedia`, `src/Mimir.EveDashboard`, and witness tooling:
-    daemon truth and typed program/media document paths should use explicit
-    CultNet RUDP helpers; HTTP/WebSocket remain render/client lowerings only.
+    `src/Mimir.EveDashboard` and witness tooling: daemon truth, provider
+    catalogs, command boundaries, and typed program document paths should use
+    explicit CultNet RUDP helpers; HTTP/WebSocket remain render/client
+    lowerings only. `src/Mimir.CultMeshMedia` has completed this cut for the
+    Raven/Yggdrasil/Starfire media-frame lane.
 
 current_status:
   summary: >

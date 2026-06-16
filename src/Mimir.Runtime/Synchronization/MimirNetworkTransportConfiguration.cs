@@ -6,12 +6,14 @@ public enum MimirNetworkPayloadKind
     RawAudioDebugWindow,
     CompressedAudioProgramFeed,
     CompressedVideoProgramFeed,
-    RawVideoDiagnosticWindow
+    RawVideoDiagnosticWindow,
+    MuxedAudioVideoProgramFeed
 }
 
 public enum MimirNetworkTransportKind
 {
     CultMeshTypedState,
+    CultMeshReliableUdpMedia,
     LanUdpDatagrams,
     SrtDiagnosticMedia,
     WebRtcExperimental,
@@ -68,6 +70,18 @@ public static class MimirNetworkTransportConfigurations
         RejectionConditions: ["used-as-clock-authority", "used-for-local-hot-path"],
         "Useful bridge. Not the Perfect Machine's synchronization core.");
 
+    public static MimirNetworkTransportConfiguration CultMeshProgramBridge { get; } = new(
+        "cultmesh-program-bridge",
+        "Reliable-UDP CultMesh media bridge for muxed program frames that OBS consumes through a local Starfire endpoint.",
+        MimirNetworkTransportKind.CultMeshReliableUdpMedia,
+        MimirNetworkPayloadKind.MuxedAudioVideoProgramFeed,
+        MayAffectClock: false,
+        CarriesRawMedia: true,
+        TargetLatencyMilliseconds: 500.0,
+        RequiredDocuments: ["mimir.cultmesh_media_frame"],
+        RejectionConditions: ["used-as-clock-authority", "unbounded-media-cache", "non-local-obs-egress"],
+        "Raven publishes rolling media-frame documents over CultNet reliable UDP; Starfire lowers them to a local OBS MPEG-TS endpoint.");
+
     public static MimirNetworkTransportConfiguration WebRtcExperiment { get; } = CultMeshTimingState with
     {
         Id = "webrtc-experimental-media",
@@ -84,6 +98,7 @@ public static class MimirNetworkTransportConfigurations
     [
         CultMeshTimingState,
         RawAudioDebugWindow,
+        CultMeshProgramBridge,
         SrtProgramBridge,
         WebRtcExperiment
     ];

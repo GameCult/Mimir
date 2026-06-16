@@ -25,10 +25,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - V1 now also has an explicit CultMesh media bridge for Raven program feeds:
   `src/Mimir.CultMeshMedia` sends rolling `mimir.cultmesh_media_frame`
   documents over CultNet reliable UDP through Yggdrasil and lowers them on
-  Starfire to local MPEG-TS UDP for OBS. Source audit warning: the current C#
-  bridge still uses older `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient`;
-  migrate it to explicit C# RUDP helpers before treating the media bridge as
-  fully aligned with the swarm transport cut.
+  Starfire to local MPEG-TS UDP for OBS. The bridge now uses explicit CultLib
+  RUDP helpers/session plumbing; the old
+  `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient` path no longer owns this
+  media lane.
 - CultLib has moved the daemon-swarm direction to CultNet over RUDP across
   runtimes. Mimir's typed daemon truth should default to
   `cultnet.transport.rudp.v0`; TCP/HTTP/WebSocket are client lowerings,
@@ -103,9 +103,9 @@ Get-Content .\state\evidence.jsonl -Tail 8
   dashboard boundary cut is provider advertisement, retained state,
   command_boundary, and transport_profile over RUDP so HTTP/WebSocket catalog
   ingestion can be demoted to client/debug lowering.
-- Cut `Mimir.CultMeshMedia` to explicit CultNet RUDP helpers next; no new TCP,
-  HTTP, or WebSocket surface should be allowed to become daemon or transport
-  truth.
+- Cut the remaining Eve dashboard, recorder, and witness service truth paths to
+  explicit CultNet RUDP records next; no new TCP, HTTP, or WebSocket surface
+  should be allowed to become daemon or transport truth.
 - Kiyo Pro has two UVC extension units. Moving it to a motherboard USB3 port
   changed the descriptor path to `root_hub30` / `bcdUSB=0x0320` and exposed
   720p/1080p YUY2/MJPG/H264/NV12 at 60 fps, but Windows still reports

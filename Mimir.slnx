@@ -6,5 +6,6 @@
     <Project Path="src/Mimir.EveSensorReceiver/Mimir.EveSensorReceiver.csproj" />
     <Project Path="src/Mimir.VerseRecorder/Mimir.VerseRecorder.csproj" />
     <Project Path="src/Mimir.PsMoveProbe/Mimir.PsMoveProbe.csproj" />
+    <Project Path="src/Mimir.CultMeshMedia/Mimir.CultMeshMedia.csproj" />
   </Folder>
 </Solution>
