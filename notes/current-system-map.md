@@ -53,6 +53,11 @@ Ownership:
   Fensalir-facing wand pose stream.
 - Mimir owns program composition, source subscription policy, preview/control
   state, stats, and publication intent.
+- Mimir-owned Eve dashboard and browser reference processes publish their own
+  typed health/freshness to Idunn over RUDP when configured. Their intended
+  daemon-owned provider state, command boundaries, and transport profiles also
+  belong on CultNet/RUDP; HTTP/WebSocket are client lowerings and compatibility
+  evidence, not daemon truth.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
   D3D12 interop, runtime UI lowering, and local program texture output.
 - Faust/native DSP owns hot audio alignment, suppression, separation,
@@ -252,6 +257,14 @@ video archive. Yggdrasil relays CultNet reliable UDP over the WireGuard mesh.
 Starfire lowers the subscribed stream to local UDP for compatibility sinks
 because OBS is not a CultMesh runtime.
 
+Source audit correction: the desired transport is explicit CultNet RUDP, and
+CultLib now provides C# `CultMesh.CreateRudpServer`,
+`CultMesh.CreateRudpClient`, and authorized-peer helper APIs. The current
+`Mimir.CultMeshMedia` source still uses older `CultMesh.StartNodeAsync` and
+`CultMesh.ConnectClient` entrypoints. Treat that as migration debt: the bridge
+should be cut to explicit RUDP helpers before it is considered aligned with the
+daemon-swarm transport doctrine.
+
 Current deployment: Yggdrasil runs the relay from
 `/opt/gamecult/mimir-cultmesh-media/Mimir.CultMeshMedia` with cache
 `/var/lib/gamecult/mimir/cultmesh-media.cc` and log
@@ -263,6 +276,46 @@ and writes `raven-primary-av` to `udp://127.0.0.1:5200`. OBS source
 Raven SSH over WireGuard timed out during the initial deployment pass, so the
 Raven sender still needs to be launched on Raven directly with
 `scripts/start-raven-cultmesh-av-sender.ps1`.
+
+## Daemon Health And Idunn
+
+Odin owns the accepted Verse/service map. Idunn owns continuity after a daemon
+is known: boot recovery, crash recovery, deployment freshness, stale-health
+watching, restart/deploy intent, and operator escalation. Mimir does not run a
+private lifecycle supervisor for these surfaces.
+
+CultLib's current direction is RUDP everywhere for typed CultNet/CultMesh
+documents across runtimes. That means health, provider advertisements, command
+boundaries, transport profiles, and selected program/media document lanes should
+default to `cultnet.transport.rudp.v0`. TCP, HTTP, and WebSocket are acceptable
+as renderer/client lowerings, debug tools, or migration debt; they must not own
+daemon truth once an RUDP contract exists.
+
+Mimir's current daemon-health publishers are local RUDP witnesses:
+
+- `src/Mimir.EveDashboard` publishes `mimir.eve_dashboard_state` through
+  CultNet/CultMesh and, when `--idunn-rudp-health` or
+  `MIMIR_EVE_DASHBOARD_IDUNN_RUDP_HEALTH` is set, sends
+  `idunn.daemon_health` records tagged `cultnet.transport.rudp.v0` for the
+  dashboard broker and optionally a paired service daemon. The next daemon
+  boundary work is to publish its provider advertisement, retained state,
+  command boundary, and transport profile as typed RUDP records so Odin can
+  prefer those over compatibility HTTP catalog ingestion.
+- `src/Mimir.EveBrowserReference` serves a static browser lowering and, when
+  configured with `--idunn-rudp-health` or
+  `MIMIR_EVE_BROWSER_REFERENCE_IDUNN_RUDP_HEALTH`, sends its own
+  `idunn.daemon_health` record over the same RUDP document path.
+
+Invariant: health publication is not ownership. The daemon reports what it can
+honestly observe about itself; Idunn decides keepalive action through the
+shared typed record path.
+
+Source audit debt: `Mimir.EveSensorReceiver`, `Mimir.VerseRecorder`, and the
+browser/dashboard WebSocket paths are still renderer/client lowerings. They may
+remain as lowering adapters, but any provider catalog, retained service state,
+command boundary, transport profile, or lifecycle health claim must be
+published as typed CultNet/RUDP records instead of being inferred from those
+TCP/WebSocket surfaces.
 
 ## Audio Field
 

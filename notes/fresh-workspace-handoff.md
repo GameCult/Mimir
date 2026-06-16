@@ -25,7 +25,19 @@ Get-Content .\state\evidence.jsonl -Tail 8
 - V1 now also has an explicit CultMesh media bridge for Raven program feeds:
   `src/Mimir.CultMeshMedia` sends rolling `mimir.cultmesh_media_frame`
   documents over CultNet reliable UDP through Yggdrasil and lowers them on
-  Starfire to local MPEG-TS UDP for OBS.
+  Starfire to local MPEG-TS UDP for OBS. Source audit warning: the current C#
+  bridge still uses older `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient`;
+  migrate it to explicit C# RUDP helpers before treating the media bridge as
+  fully aligned with the swarm transport cut.
+- CultLib has moved the daemon-swarm direction to CultNet over RUDP across
+  runtimes. Mimir's typed daemon truth should default to
+  `cultnet.transport.rudp.v0`; TCP/HTTP/WebSocket are client lowerings,
+  compatibility probes, or migration debt unless a specific runtime has not
+  earned RUDP yet.
+- Mimir has daemon-health publication edges into the Odin/Idunn swarm:
+  `src/Mimir.EveDashboard` and `src/Mimir.EveBrowserReference` publish
+  `idunn.daemon_health` records over `cultnet.transport.rudp.v0` when
+  configured. These are self-health witnesses, not lifecycle owners.
 - The live stream app is C# plus Fensalir: `Mimir.slnx` contains
   `src/Mimir.App` and `src/Mimir.Runtime`.
 - `src/Mimir.App` hosts Fensalir as the windowing/rendering/D3D12 bridge.
@@ -85,6 +97,15 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `Raven Monitor + Realtek` has been repointed from old SRT to that local UDP
   endpoint. Raven SSH timed out, so launch
   `scripts/start-raven-cultmesh-av-sender.ps1` on Raven directly.
+- Keep Eve dashboard/browser-reference RUDP health aligned with Odin/Idunn:
+  Odin accepts the Verse/service map, Idunn owns daemon continuity, and Mimir
+  processes publish typed health/freshness only for themselves. The next
+  dashboard boundary cut is provider advertisement, retained state,
+  command_boundary, and transport_profile over RUDP so HTTP/WebSocket catalog
+  ingestion can be demoted to client/debug lowering.
+- Cut `Mimir.CultMeshMedia` to explicit CultNet RUDP helpers next; no new TCP,
+  HTTP, or WebSocket surface should be allowed to become daemon or transport
+  truth.
 - Kiyo Pro has two UVC extension units. Moving it to a motherboard USB3 port
   changed the descriptor path to `root_hub30` / `bcdUSB=0x0320` and exposed
   720p/1080p YUY2/MJPG/H264/NV12 at 60 fps, but Windows still reports

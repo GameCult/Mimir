@@ -283,13 +283,27 @@ a named invariant that the native runtime cannot protect yet.
   MPEG-TS byte stream from stdin and publishes rolling
   `mimir.cultmesh_media_frame` documents, and `recv` subscribes to those
   documents and writes ordered MPEG-TS bytes to a Starfire-local UDP endpoint
-  for compatibility sinks.
+  for compatibility sinks. Source audit: its C# implementation still uses older
+  `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient` entrypoints; migrate the
+  bridge to CultLib's explicit C# RUDP helpers before treating it as fully
+  aligned with the daemon-swarm transport cut.
 - `scripts/start-raven-cultmesh-av-sender.ps1`,
   `scripts/start-yggdrasil-cultmesh-media-relay.ps1`, and
   `scripts/start-starfire-cultmesh-av-receiver.ps1` are the CultMesh bridge
   operators. Raven capture defaults to FFmpeg desktop frames plus Mimir's
   WASAPI loopback capture muxed as H.264/AAC MPEG-TS; DirectShow audio remains
   an explicit fallback.
+- `src/Mimir.EveDashboard` is a CultMesh/Eve dashboard broker. It publishes
+  `mimir.eve_dashboard_state` through CultNet/CultMesh and can report
+  `idunn.daemon_health` over `cultnet.transport.rudp.v0` for itself and an
+  optional paired service daemon. The live direction is daemon-owned RUDP
+  publication for provider advertisement, retained state, command boundary, and
+  transport profile too; HTTP/WebSocket are client lowerings. This is a health
+  witness for Idunn, not a lifecycle owner.
+- `src/Mimir.EveBrowserReference` serves static browser lowerings and can
+  publish its own `idunn.daemon_health` record over
+  `cultnet.transport.rudp.v0`. It remains a renderer/reference surface, not
+  program authority.
 - Documentation for OBS receiver setup, native rebuild boundaries, the viable
   stream app, and the Mimir Face.
 
@@ -301,6 +315,16 @@ a named invariant that the native runtime cannot protect yet.
   because OBS is not a CultMesh consumer. Network transit between Raven,
   Yggdrasil, and Starfire is the CultMesh/CultNet path; OBS-local UDP is an
   egress adapter only.
+- CultLib RUDP is the default typed CultNet/CultMesh document transport for
+  daemon truth. Idunn RUDP health publication is the current freshness witness;
+  provider advertisements, command boundaries, transport profiles, and retained
+  daemon state should follow the same path. Odin still owns Verse/service
+  discovery, Idunn owns keepalive decisions, and Mimir-owned dashboard/reference
+  surfaces only report their own observed state. TCP/HTTP/WebSocket stay
+  lowerings or compatibility evidence.
+- `Mimir.CultMeshMedia` still needs an explicit RUDP transport cut. Do not add
+  another TCP bridge, HTTP status shim, or WebSocket-derived service truth while
+  the C# RUDP helpers exist.
 - Process-backed stream sources are only acceptable for network bridge feeds or
   diagnostics. Six-camera local ingest belongs behind direct capture drivers.
 - Frame-event process sources are diagnostic only. They prove source cadence and
@@ -313,37 +337,40 @@ a named invariant that the native runtime cannot protect yet.
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
    other cameras.
-2. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
+2. Cut `src/Mimir.CultMeshMedia` from older CultMesh node/client entrypoints to
+   explicit CultNet RUDP helpers, preferably authorized-peer dialing where the
+   peer catalog exists. Preserve OBS-local UDP as egress only.
+3. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
    frame cadence in the rolling buffers.
-3. Promote the packet-song physical calibration receipt into the runtime
+4. Promote the packet-song physical calibration receipt into the runtime
    receiver. The live decoder should keep its ear open for self-identifying
    song contours, extract intra-call time/frequency anchors from log-mel parts,
    apply learned per-output/mic path weighting, and feed a global
    delay/clock/path hypothesis. Keep chirp-bin calibration artifacts as
    reference data, not the runtime target.
-4. Add the synchronization actuator: drive a variable-rate resampler and
+5. Add the synchronization actuator: drive a variable-rate resampler and
    fractional delay line per non-reference stream from the smoothed
    `MimirAudioSynchronizationState`. First, prove the bioacoustic motif decoder
    through real loopback and microphone paths so every correctly heard word
    becomes a deterministic timeline anchor before the actuator moves samples.
-5. Prove the bioacoustic hybrid fallback through real loopback and microphones
+6. Prove the bioacoustic hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
-6. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
+7. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-7. Implement the Mimir program scene graph as the shared commit primitive for
+8. Implement the Mimir program scene graph as the shared commit primitive for
    source subscription, transforms, crop, chroma key, visibility, layer order,
    preview, and output publication. Import the current OBS scene only as an
    initial mirror, then make Eve GUI/TUI the operator surface.
-8. Add the Yggdrasil-facing site publisher daemon that consumes the Mimir
+9. Add the Yggdrasil-facing site publisher daemon that consumes the Mimir
    program output and publishes it without owning a second composition.
-9. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:
+10. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:
    sample buffer-domain paths stochastically by visual contribution, emit SDF
    splat probes, write them into the spatiotemporal splat reservoir, and sample
    that reservoir in the temporally antialiased scene pass. The direct spline
    preview must stay a witness until this path owns rendering.
-10. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+11. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
-11. Move mic alignment, room suppression, voice separation, spatialization, and
+12. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-12. Keep the OBS bridge witness ledger as evidence before expanding receiver
+13. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

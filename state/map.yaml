@@ -40,6 +40,18 @@ constraints:
   - CultMesh/CultNet is the default Raven-to-Starfire media transit. OBS may
     consume a Starfire-local UDP MPEG-TS egress as a compatibility sink, but
     Mimir owns program selection, composition, preview/control, and publication.
+  - CultLib is moving every runtime's typed CultNet/CultMesh document transport
+    to `cultnet.transport.rudp.v0`. Health, provider advertisements, command
+    boundaries, transport profiles, and program/media document lanes should use
+    RUDP by default. TCP/HTTP/WebSocket surfaces are renderer lowerings,
+    compatibility probes, or migration debt unless a specific runtime has not
+    earned its RUDP path yet.
+  - Daemon health and freshness are separate in authority from media transport,
+    not separate because they need TCP. Mimir-facing Eve dashboards and browser
+    reference lowerers publish `idunn.daemon_health` records over
+    `cultnet.transport.rudp.v0` for Idunn. Idunn owns continuity once Odin has
+    accepted a daemon; Mimir-owned surfaces only publish their own health
+    witnesses.
   - Mimir explicitly trades latency and memory for throughput and field quality:
     the default five-second buffer is compute budget for stream alignment,
     GPU/audio analysis, and volumetric sound-field extraction.
@@ -371,7 +383,23 @@ accepted_design:
     `mimir.cultmesh_media_frame` documents over CultNet reliable UDP,
     Yggdrasil relays them on `10.77.0.1:3075`, and Starfire lowers the
     subscribed stream to `udp://127.0.0.1:5200` for the OBS source
-    `Raven Monitor + Realtek`.
+    `Raven Monitor + Realtek`. Source audit warning: the current C# bridge
+    still calls older `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient`
+    entrypoints; now that CultLib exposes C# RUDP facade helpers, the next
+    transport cut should move this bridge onto explicit RUDP server/client or
+    authorized-peer helpers and demote any TCP-like node/client path to
+    compatibility evidence.
+  - `src/Mimir.EveDashboard` publishes `mimir.eve_dashboard_state` through
+    CultNet/CultMesh and can push `idunn.daemon_health` records over
+    `cultnet.transport.rudp.v0` for itself and a paired service daemon. Its
+    intended daemon shape is to publish provider advertisement, retained state,
+    command boundary, and transport profile over RUDP as typed records; HTTP and
+    WebSocket remain client lowerings. It owns Eve surface publication and
+    dashboard broker health only; it does not own daemon lifecycle.
+  - `src/Mimir.EveBrowserReference` serves a static Eve/browser lowering and
+    can publish its own `idunn.daemon_health` record over
+    `cultnet.transport.rudp.v0`. It is a renderer/reference health witness, not
+    an authority over Mimir program state or Idunn keepalive decisions.
   - `research/perfect-machine-study-2026-05-23/` preserves the architecture
     rumination, optimization ledger, research references, source/hotspot audits,
     Fensalir/native boundary maps, benchmark plan, calibration-session spec,
@@ -400,6 +428,14 @@ active_subgoals:
     replaces them.
   - Launch Raven's CultMesh sender directly on Raven because SSH to Raven over
     WireGuard timed out during the initial relay deployment pass.
+  - Keep Mimir Eve dashboard and browser reference health publication aligned
+    with Odin/Idunn doctrine: Odin accepts Verse/service visibility, Idunn owns
+    keepalive, and Mimir surfaces publish typed RUDP self-health rather than
+    private watchdog loops or TCP/HTTP status truth.
+  - Cut remaining older CultMesh node/client transport assumptions in
+    `src/Mimir.CultMeshMedia`, `src/Mimir.EveDashboard`, and witness tooling:
+    daemon truth and typed program/media document paths should use explicit
+    CultNet RUDP helpers; HTTP/WebSocket remain render/client lowerings only.
 
 current_status:
   summary: >
