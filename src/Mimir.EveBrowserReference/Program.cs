@@ -5,20 +5,28 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GameCult.Caching;
+using GameCult.Caching.MessagePack;
 using GameCult.Networking;
 using MessagePack;
 
 var port = ParseInt(args, "--port", 8891);
 var bind = ParseString(args, "--bind", Environment.GetEnvironmentVariable("MIMIR_EVE_BROWSER_REFERENCE_BIND") ?? "0.0.0.0");
 var directory = ParseString(args, "--directory", Environment.GetEnvironmentVariable("MIMIR_EVE_BROWSER_REFERENCE_DIRECTORY") ?? Directory.GetCurrentDirectory());
+var cultCacheWitnessPath = ParseString(
+    args,
+    "--cultcache-witness",
+    Environment.GetEnvironmentVariable("MIMIR_EVE_BROWSER_REFERENCE_CULTCACHE_WITNESS") ?? DefaultPaths.CultCacheWitnessPath);
 var idunnRudpHealth = ParseString(args, "--idunn-rudp-health", Environment.GetEnvironmentVariable("MIMIR_EVE_BROWSER_REFERENCE_IDUNN_RUDP_HEALTH") ?? "");
 var idunnDaemon = ParseString(args, "--idunn-daemon", Environment.GetEnvironmentVariable("MIMIR_EVE_BROWSER_REFERENCE_IDUNN_DAEMON") ?? "nightwing-eve-browser-reference");
 var idunnHealthContract = ParseString(args, "--idunn-health-contract", Environment.GetEnvironmentVariable("MIMIR_EVE_BROWSER_REFERENCE_IDUNN_HEALTH_CONTRACT") ?? "nightwing.cultnet-rudp-browser-reference-health");
 
+using var verseRuntime = EveBrowserReferenceVerseRuntime.Create(cultCacheWitnessPath);
 using var server = new EveBrowserReferenceServer(
     IPAddress.Parse(bind),
     port,
     Path.GetFullPath(directory),
+    verseRuntime,
     new IdunnRudpHealthOptions(idunnRudpHealth, idunnDaemon, idunnHealthContract));
 await server.RunAsync().ConfigureAwait(false);
 
@@ -50,7 +58,20 @@ static string ParseString(IReadOnlyList<string> args, string name, string fallba
     return fallback;
 }
 
-internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port, string documentRoot, IdunnRudpHealthOptions idunnRudpHealth) : IDisposable
+internal static class DefaultPaths
+{
+    public static string CultCacheWitnessPath =>
+        OperatingSystem.IsWindows()
+            ? @"E:\Projects\Mimir\state\eve-browser-reference.service.cc"
+            : "/var/lib/gamecult/eve-browser-reference/cultcache/eve-browser-reference.service.cc";
+}
+
+internal sealed class EveBrowserReferenceServer(
+    IPAddress bindAddress,
+    int port,
+    string documentRoot,
+    EveBrowserReferenceVerseRuntime verseRuntime,
+    IdunnRudpHealthOptions idunnRudpHealth) : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -66,6 +87,7 @@ internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port,
     private string idunnRudpPublishObservedAt = "";
     private bool idunnRudpPublishInFlight;
     private DateTimeOffset lastHealthPublishAttemptAt = DateTimeOffset.MinValue;
+    private DateTimeOffset lastWitnessPublishAttemptAt = DateTimeOffset.MinValue;
 
     public async Task RunAsync()
     {
@@ -79,6 +101,7 @@ internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port,
         Console.WriteLine(string.IsNullOrWhiteSpace(idunnRudpHealth.Endpoint)
             ? "Mimir Eve browser reference Idunn RUDP health publisher disabled."
             : $"Mimir Eve browser reference Idunn RUDP health publisher targeting {idunnRudpHealth.Endpoint} as {idunnRudpHealth.DaemonId}.");
+        Console.WriteLine($"Mimir Eve browser reference witness store publishing to {verseRuntime.WitnessPath}");
         _ = Task.Run(PublishHealthLoopAsync);
         while (!stopping.IsCancellationRequested)
         {
@@ -92,7 +115,9 @@ internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port,
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
         while (!stopping.IsCancellationRequested && await timer.WaitForNextTickAsync(stopping.Token).ConfigureAwait(false))
         {
-            QueueIdunnRudpHealthIfDue(DateTimeOffset.UtcNow);
+            var observedAt = DateTimeOffset.UtcNow;
+            PublishWitnessIfDue(observedAt);
+            QueueIdunnRudpHealthIfDue(observedAt);
         }
     }
 
@@ -108,6 +133,7 @@ internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port,
                 documentRoot,
                 port,
                 transport = "static-http-lowering",
+                cultCacheWitness = verseRuntime.GetWitnessStatus(),
                 idunnRudpHealth = GetIdunnRudpHealthStatus(),
             }, JsonOptions);
             await WriteHttpResponseAsync(stream, "200 OK", "application/json", Encoding.UTF8.GetBytes(health)).ConfigureAwait(false);
@@ -140,6 +166,22 @@ internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port,
         }
     }
 
+    private void PublishWitnessIfDue(DateTimeOffset observedAt)
+    {
+        if (lastWitnessPublishAttemptAt != DateTimeOffset.MinValue &&
+            observedAt - lastWitnessPublishAttemptAt < TimeSpan.FromSeconds(5))
+        {
+            return;
+        }
+
+        lastWitnessPublishAttemptAt = observedAt;
+        verseRuntime.Publish(
+            CreateDaemonHealthRecord(observedAt),
+            documentRoot,
+            port,
+            observedAt);
+    }
+
     private void QueueIdunnRudpHealthIfDue(DateTimeOffset observedAt)
     {
         if (string.IsNullOrWhiteSpace(idunnRudpHealth.Endpoint))
@@ -154,17 +196,8 @@ internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port,
             return;
         }
 
-        var observedAtText = observedAt.ToString("O", CultureInfo.InvariantCulture);
-        var health = new IdunnDaemonHealthRecord
-        {
-            DaemonId = idunnRudpHealth.DaemonId,
-            State = "healthy",
-            Detail = $"Nightwing Eve browser reference serving static lowering; root={documentRoot}; port={port}",
-            ObservedAt = observedAtText,
-            HealthContract = idunnRudpHealth.HealthContract,
-            PublicationSource = "daemon-published",
-            Transport = "cultnet.transport.rudp.v0",
-        };
+        var health = CreateDaemonHealthRecord(observedAt);
+        var observedAtText = health.ObservedAt;
 
         lock (idunnRudpPublishLock)
         {
@@ -209,6 +242,21 @@ internal sealed class EveBrowserReferenceServer(IPAddress bindAddress, int port,
                 }
             }
         });
+    }
+
+    private IdunnDaemonHealthRecord CreateDaemonHealthRecord(DateTimeOffset observedAt)
+    {
+        var observedAtText = observedAt.ToString("O", CultureInfo.InvariantCulture);
+        return new IdunnDaemonHealthRecord
+        {
+            DaemonId = idunnRudpHealth.DaemonId,
+            State = "healthy",
+            Detail = $"Nightwing Eve browser reference serving static lowering; root={documentRoot}; port={port}; witness={verseRuntime.WitnessPath}",
+            ObservedAt = observedAtText,
+            HealthContract = idunnRudpHealth.HealthContract,
+            PublicationSource = "daemon-published",
+            Transport = "cultnet.transport.rudp.v0",
+        };
     }
 
     private string? ResolveStaticFilePath(string path)
@@ -280,6 +328,13 @@ internal sealed record HttpRequest(string Path);
 
 internal sealed record IdunnRudpHealthOptions(string Endpoint, string DaemonId, string HealthContract);
 
+internal sealed record CultCacheWitnessStatus(
+    string Path,
+    string Status,
+    string Error,
+    string ObservedAtUtc,
+    IReadOnlyList<string> PublishedSchemas);
+
 internal sealed record IdunnRudpHealthStatus(
     string Endpoint,
     string Daemon,
@@ -289,6 +344,7 @@ internal sealed record IdunnRudpHealthStatus(
     bool InFlight,
     string ObservedAtUtc);
 
+[CultDocument("idunn.daemon_health", "idunn.daemon_health.v1")]
 [MessagePackObject(AllowPrivate = true)]
 internal sealed class IdunnDaemonHealthRecord
 {
@@ -299,6 +355,311 @@ internal sealed class IdunnDaemonHealthRecord
     [Key(4)] public string HealthContract { get; set; } = "nightwing.cultnet-rudp-browser-reference-health";
     [Key(5)] public string PublicationSource { get; set; } = "daemon-published";
     [Key(6)] public string Transport { get; set; } = "cultnet.transport.rudp.v0";
+}
+
+internal sealed class EveBrowserReferenceVerseRuntime : IDisposable
+{
+    private static readonly CultRecordKey ManifestKey = new("nightwing-eve-browser-reference");
+    private static readonly CultRecordKey StaticSurfaceKey = new("nightwing-eve-browser-reference");
+    private static readonly CultRecordKey CommandBoundaryKey = new("nightwing-eve-browser-reference");
+    private static readonly CultRecordKey TransportProfileKey = new("nightwing-eve-browser-reference");
+    private static readonly string[] PublishedSchemas =
+    [
+        "mimir.eve_browser_reference_manifest.v1",
+        "mimir.eve_browser_reference_static_surface.v1",
+        "mimir.eve_browser_reference_command_boundary.v1",
+        "mimir.eve_browser_reference_transport_profile.v1",
+        "idunn.daemon_health.v1",
+    ];
+
+    private readonly CultDocumentRegistry registry = new();
+    private readonly string witnessPath;
+    private readonly object publishLock = new();
+    private string witnessStatus = "starting";
+    private string witnessError = string.Empty;
+    private string witnessObservedAtUtc = string.Empty;
+
+    private EveBrowserReferenceVerseRuntime(string witnessPath)
+    {
+        this.witnessPath = Path.GetFullPath(witnessPath);
+    }
+
+    public string WitnessPath => witnessPath;
+
+    public static EveBrowserReferenceVerseRuntime Create(string witnessPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(witnessPath)) ?? ".");
+        return new EveBrowserReferenceVerseRuntime(witnessPath);
+    }
+
+    public CultCacheWitnessStatus GetWitnessStatus()
+    {
+        lock (publishLock)
+        {
+            return new CultCacheWitnessStatus(
+                witnessPath,
+                witnessStatus,
+                witnessError,
+                witnessObservedAtUtc,
+                PublishedSchemas);
+        }
+    }
+
+    public void Publish(
+        IdunnDaemonHealthRecord healthRecord,
+        string documentRoot,
+        int port,
+        DateTimeOffset observedAt)
+    {
+        var observedAtUtc = observedAt.ToString("O", CultureInfo.InvariantCulture);
+
+        try
+        {
+            lock (publishLock)
+            {
+                var records = new List<CultPersistedRecord>();
+                var schemas = new Dictionary<string, CultSchemaCatalogEntry>(StringComparer.Ordinal);
+                var assets = EnumerateRelativeFiles(documentRoot);
+                var fixtures = assets
+                    .Where(path => path.StartsWith("fixtures/", StringComparison.Ordinal))
+                    .ToArray();
+
+                AddRecord(records, schemas, ToManifestDocument(documentRoot, port, assets), ManifestKey, observedAtUtc);
+                AddRecord(records, schemas, ToStaticSurfaceDocument(documentRoot, assets, fixtures, observedAtUtc), StaticSurfaceKey, observedAtUtc);
+                AddRecord(records, schemas, ToCommandBoundaryDocument(observedAtUtc), CommandBoundaryKey, observedAtUtc);
+                AddRecord(records, schemas, ToTransportProfileDocument(observedAtUtc), TransportProfileKey, observedAtUtc);
+                AddRecord(records, schemas, healthRecord, new CultRecordKey(healthRecord.DaemonId), observedAtUtc);
+
+                WriteSnapshot(new CultPersistedStoreSnapshot
+                {
+                    FormatVersion = "cultcache.store.v1",
+                    SchemaCatalog = schemas.Values.OrderBy(entry => entry.SchemaName, StringComparer.Ordinal).ToArray(),
+                    Records = records.OrderBy(entry => entry.Key, StringComparer.Ordinal).ToArray(),
+                });
+                witnessStatus = "published";
+                witnessError = string.Empty;
+                witnessObservedAtUtc = observedAtUtc;
+            }
+        }
+        catch (Exception error)
+        {
+            lock (publishLock)
+            {
+                witnessStatus = "publish-error";
+                witnessError = error.Message;
+                witnessObservedAtUtc = observedAtUtc;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+    }
+
+    private void AddRecord<T>(
+        List<CultPersistedRecord> records,
+        Dictionary<string, CultSchemaCatalogEntry> schemas,
+        T document,
+        CultRecordKey key,
+        string observedAtUtc) where T : class
+    {
+        var descriptor = registry.GetRequired<T>();
+        var payload = descriptor.GeneratedPayloadSerializer != null
+            ? descriptor.GeneratedPayloadSerializer(document)
+            : MessagePackSerializer.Serialize(typeof(T), document, CultNetSchemaMessageSerialization.Options);
+        schemas[descriptor.SchemaId] = descriptor.ToCatalogEntry();
+        records.Add(new CultPersistedRecord
+        {
+            Key = key.Value,
+            SchemaId = descriptor.SchemaId,
+            StoredAt = observedAtUtc,
+            Payload = payload,
+        });
+    }
+
+    private void WriteSnapshot(CultPersistedStoreSnapshot snapshot)
+    {
+        var payload = CultDocumentMessagePackSerialization.SerializeSnapshot(snapshot);
+        var directory = Path.GetDirectoryName(witnessPath) ?? ".";
+        Directory.CreateDirectory(directory);
+        var tempPath = Path.Combine(directory, $".{Path.GetFileName(witnessPath)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            using (var stream = new FileStream(
+                       tempPath,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None,
+                       bufferSize: 4096,
+                       FileOptions.WriteThrough))
+            {
+                stream.Write(payload, 0, payload.Length);
+                stream.Flush(true);
+            }
+
+            if (File.Exists(witnessPath))
+            {
+                File.Replace(tempPath, witnessPath, null);
+            }
+            else
+            {
+                File.Move(tempPath, witnessPath);
+            }
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    private static EveBrowserReferenceManifestRecord ToManifestDocument(
+        string documentRoot,
+        int port,
+        IReadOnlyList<string> assets) =>
+        new()
+        {
+            DaemonId = "nightwing-eve-browser-reference",
+            SiteTitle = "Nightwing Eve Browser Reference",
+            DocumentRoot = documentRoot,
+            EntryPoint = "index.html",
+            Port = port,
+            Assets = assets.ToArray(),
+            SurfaceTransport = "static-http-lowering",
+        };
+
+    private static EveBrowserReferenceStaticSurfaceRecord ToStaticSurfaceDocument(
+        string documentRoot,
+        IReadOnlyList<string> assets,
+        IReadOnlyList<string> fixtures,
+        string observedAtUtc) =>
+        new()
+        {
+            DaemonId = "nightwing-eve-browser-reference",
+            UpdatedAtUtc = observedAtUtc,
+            DocumentRoot = documentRoot,
+            EntryPoint = "index.html",
+            Assets = assets.ToArray(),
+            FixtureDocuments = fixtures.ToArray(),
+            CurrentCutLine = "Static browser lowering assets are published into the daemon-owned witness store so Nightwing and Odin can reason about the lowering body without treating the HTTP service probe as lifecycle truth.",
+        };
+
+    private static EveBrowserReferenceCommandBoundaryRecord ToCommandBoundaryDocument(string observedAtUtc) =>
+        new()
+        {
+            DaemonId = "nightwing-eve-browser-reference",
+            UpdatedAtUtc = observedAtUtc,
+            Mode = "static-read-only-lowering",
+            WritesAccepted = false,
+            OperatorInputAuthority = "served browser assets only; no write path is accepted by this daemon",
+            LifecycleAuthority = "idunn.local-command.restart + compatibility.systemd.nightwing-eve-browser-reference.service",
+            AcceptedCommands = [],
+            RejectedCommands =
+            [
+                "surface-mutation",
+                "provider-catalog-ownership",
+                "daemon-health-override",
+                "service-restart",
+            ],
+        };
+
+    private EveBrowserReferenceTransportProfileRecord ToTransportProfileDocument(string observedAtUtc) =>
+        new()
+        {
+            DaemonId = "nightwing-eve-browser-reference",
+            UpdatedAtUtc = observedAtUtc,
+            CurrentState = "partial-rudp-health-and-provider-store-live",
+            InputTransport = "compatibility.http-static-lowering",
+            OutputTransport = "daemon-owned-cultcache-boundary-store + daemon-published-rudp-health",
+            HealthContract = "nightwing.cultnet-rudp-browser-reference-health",
+            IdunnRudpHealth = "idunn.health-published-separately",
+            WitnessPath = witnessPath,
+            CurrentCutLine = "The Nightwing Eve browser reference runtime now owns its manifest, static surface witness, command boundary, and transport profile in a daemon-owned CultCache store; systemd and HTTP remain compatibility witnesses while projections learn to consume the typed store directly.",
+        };
+
+    private static string[] EnumerateRelativeFiles(string root)
+    {
+        if (!Directory.Exists(root))
+        {
+            return [];
+        }
+
+        return Directory
+            .EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+    }
+}
+
+[CultDocument("mimir.eve_browser_reference_manifest", "mimir.eve_browser_reference_manifest.v1")]
+[MessagePackObject(AllowPrivate = true)]
+internal sealed class EveBrowserReferenceManifestRecord
+{
+    [Key(0)]
+    [CultName]
+    public string DaemonId { get; set; } = string.Empty;
+
+    [Key(1)] public string SiteTitle { get; set; } = string.Empty;
+    [Key(2)] public string DocumentRoot { get; set; } = string.Empty;
+    [Key(3)] public string EntryPoint { get; set; } = string.Empty;
+    [Key(4)] public int Port { get; set; }
+    [Key(5)] public string[] Assets { get; set; } = [];
+    [Key(6)] public string SurfaceTransport { get; set; } = string.Empty;
+}
+
+[CultDocument("mimir.eve_browser_reference_static_surface", "mimir.eve_browser_reference_static_surface.v1")]
+[MessagePackObject(AllowPrivate = true)]
+internal sealed class EveBrowserReferenceStaticSurfaceRecord
+{
+    [Key(0)]
+    [CultName]
+    public string DaemonId { get; set; } = string.Empty;
+
+    [Key(1)] public string UpdatedAtUtc { get; set; } = string.Empty;
+    [Key(2)] public string DocumentRoot { get; set; } = string.Empty;
+    [Key(3)] public string EntryPoint { get; set; } = string.Empty;
+    [Key(4)] public string[] Assets { get; set; } = [];
+    [Key(5)] public string[] FixtureDocuments { get; set; } = [];
+    [Key(6)] public string CurrentCutLine { get; set; } = string.Empty;
+}
+
+[CultDocument("mimir.eve_browser_reference_command_boundary", "mimir.eve_browser_reference_command_boundary.v1")]
+[MessagePackObject(AllowPrivate = true)]
+internal sealed class EveBrowserReferenceCommandBoundaryRecord
+{
+    [Key(0)]
+    [CultName]
+    public string DaemonId { get; set; } = string.Empty;
+
+    [Key(1)] public string UpdatedAtUtc { get; set; } = string.Empty;
+    [Key(2)] public string Mode { get; set; } = string.Empty;
+    [Key(3)] public bool WritesAccepted { get; set; }
+    [Key(4)] public string OperatorInputAuthority { get; set; } = string.Empty;
+    [Key(5)] public string LifecycleAuthority { get; set; } = string.Empty;
+    [Key(6)] public string[] AcceptedCommands { get; set; } = [];
+    [Key(7)] public string[] RejectedCommands { get; set; } = [];
+}
+
+[CultDocument("mimir.eve_browser_reference_transport_profile", "mimir.eve_browser_reference_transport_profile.v1")]
+[MessagePackObject(AllowPrivate = true)]
+internal sealed class EveBrowserReferenceTransportProfileRecord
+{
+    [Key(0)]
+    [CultName]
+    public string DaemonId { get; set; } = string.Empty;
+
+    [Key(1)] public string UpdatedAtUtc { get; set; } = string.Empty;
+    [Key(2)] public string CurrentState { get; set; } = string.Empty;
+    [Key(3)] public string InputTransport { get; set; } = string.Empty;
+    [Key(4)] public string OutputTransport { get; set; } = string.Empty;
+    [Key(5)] public string HealthContract { get; set; } = string.Empty;
+    [Key(6)] public string IdunnRudpHealth { get; set; } = string.Empty;
+    [Key(7)] public string WitnessPath { get; set; } = string.Empty;
+    [Key(8)] public string CurrentCutLine { get; set; } = string.Empty;
 }
 
 internal static class IdunnRudpHealthPublisher
