@@ -171,6 +171,139 @@ public sealed record MimirEveOperatorSurfaceDocument(
     [property: Key(6)] bool CanShowStats,
     [property: Key(7)] string[] CommandTopics);
 
+[CultDocument("mimir.eve_dashboard_manifest", "mimir.eve_dashboard_manifest.v1")]
+[MessagePackObject]
+public sealed record MimirEveDashboardManifestDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string ProviderId,
+    [property: Key(1)] string Title,
+    [property: Key(2)] string Description,
+    [property: Key(3)] string Version,
+    [property: Key(4)] string Endpoint,
+    [property: Key(5)] string[] Capabilities,
+    [property: Key(6)] bool UsesCultMesh,
+    [property: Key(7)] string Transport);
+
+[CultDocument("mimir.eve_dashboard_state", "mimir.eve_dashboard_state.v1")]
+[MessagePackObject]
+public sealed record MimirEveDashboardStateDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string ProviderId,
+    [property: Key(1)] string Title,
+    [property: Key(2)] long Version,
+    [property: Key(3)] string UpdatedAtUtc,
+    [property: Key(4)] string SelectedNodeId,
+    [property: Key(5)] string LutPreset,
+    [property: Key(6)] MimirEveDashboardNodeSnapshot[] Nodes,
+    [property: Key(7)] MimirEveDashboardSurfaceSnapshot? Surface);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardNodeSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] string Label,
+    [property: Key(2)] string Kind,
+    [property: Key(3)] bool Visible,
+    [property: Key(4)] double X,
+    [property: Key(5)] double Y,
+    [property: Key(6)] double Z,
+    [property: Key(7)] double Rotation,
+    [property: Key(8)] double Scale,
+    [property: Key(9)] double Width,
+    [property: Key(10)] double Height,
+    [property: Key(11)] string Health,
+    [property: Key(12)] string? ProviderId,
+    [property: Key(13)] string? Command,
+    [property: Key(14)] string? Endpoint);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardSurfaceSnapshot(
+    [property: Key(0)] string Schema,
+    [property: Key(1)] string Id,
+    [property: Key(2)] string Title,
+    [property: Key(3)] MimirEveDashboardUiElementSnapshot Root,
+    [property: Key(4)] MimirEveDashboardSurfaceAssetSnapshot[] Assets);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardSurfaceAssetSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] string Kind,
+    [property: Key(2)] string Uri);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiElementSnapshot(
+    [property: Key(0)] string Id,
+    [property: Key(1)] string Kind,
+    [property: Key(2)] string? Role,
+    [property: Key(3)] string? Text,
+    [property: Key(4)] string? AssetRef,
+    [property: Key(5)] string? AssetUri,
+    [property: Key(6)] string? BindNodeId,
+    [property: Key(7)] string? CommandId,
+    [property: Key(8)] MimirEveDashboardUiLayoutSnapshot? Layout,
+    [property: Key(9)] MimirEveDashboardUiStyleSnapshot? Style,
+    [property: Key(10)] MimirEveDashboardUiMetricSnapshot? Metric,
+    [property: Key(11)] MimirEveDashboardUiElementSnapshot[] Children,
+    [property: Key(12)] MimirEveDashboardUiBindingSnapshot? Binding = null);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiBindingSnapshot(
+    [property: Key(0)] string DocumentSchema,
+    [property: Key(1)] string DocumentId,
+    [property: Key(2)] string Path,
+    [property: Key(3)] string ValueKind,
+    [property: Key(4)] string Access,
+    [property: Key(5)] string Authority,
+    [property: Key(6)] string? CommandId);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiLayoutSnapshot(
+    [property: Key(0)] string Direction,
+    [property: Key(1)] double? Width,
+    [property: Key(2)] double? Height,
+    [property: Key(3)] double? Grow,
+    [property: Key(4)] double? Gap,
+    [property: Key(5)] double? Padding,
+    [property: Key(6)] string? Overflow,
+    [property: Key(7)] double? MinWidth = null,
+    [property: Key(8)] double? MinHeight = null,
+    [property: Key(9)] double? PreferredWidth = null,
+    [property: Key(10)] double? PreferredHeight = null,
+    [property: Key(11)] double? Priority = null,
+    [property: Key(12)] string? Density = null,
+    [property: Key(13)] string? ViewportMode = null);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiStyleSnapshot(
+    [property: Key(0)] string Variant,
+    [property: Key(1)] string? Tone);
+
+[MessagePackObject]
+public sealed record MimirEveDashboardUiMetricSnapshot(
+    [property: Key(0)] string Label,
+    [property: Key(1)] double Value,
+    [property: Key(2)] string Tone);
+
+[CultDocument("mimir.eve_dashboard_command", "mimir.eve_dashboard_command.v1")]
+[MessagePackObject]
+public sealed record MimirEveDashboardCommandDocument(
+    [property: Key(0)]
+    [property: CultName]
+    string CommandId,
+    [property: Key(1)] string DeviceId,
+    [property: Key(2)] string ClientId,
+    [property: Key(3)] string ProviderId,
+    [property: Key(4)] string Type,
+    [property: Key(5)] string NodeId,
+    [property: Key(6)] double? X,
+    [property: Key(7)] double? Y,
+    [property: Key(8)] double? Rotation,
+    [property: Key(9)] double? Scale,
+    [property: Key(10)] bool? Visible,
+    [property: Key(11)] long Sequence,
+    [property: Key(12)] long DeviceTimestampNs);
+
 [CultDocument("mimir.eve_sensor_observation", "mimir.eve_sensor_observation.v1")]
 [MessagePackObject]
 public sealed record MimirEveSensorObservationDocument(
