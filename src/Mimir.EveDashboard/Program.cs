@@ -790,6 +790,7 @@ internal static class IdunnRudpHealthPublisher
         socket.Bind(new IPEndPoint(IPAddress.Any, 0));
         socket.Blocking = false;
         socket.ReceiveTimeout = 100;
+        socket.SendTimeout = 1000;
         using var transport = new CultNetRudpSocketTransportConnection(new CultNetRudpSocketTransportOptions
         {
             RuntimeId = "mimir-eve-dashboard",
