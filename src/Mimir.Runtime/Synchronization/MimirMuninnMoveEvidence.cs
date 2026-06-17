@@ -63,6 +63,19 @@ public sealed record MimirMuninnMoveIdentitySnapshot(
     ulong ObservedAtNs,
     ulong ControllerIdHash);
 
+public sealed record MimirMuninnMoveRosterEntry(
+    string MoveId,
+    ulong ControllerIdHash,
+    string LatestHostId,
+    string LatestState,
+    string StateSummary,
+    string BluetoothHostAddress,
+    bool HasUsbWitness,
+    string[] UsbHostIds,
+    string[] BluetoothPickupHostIds,
+    string[] SourcePaths,
+    ulong ObservedAtNs);
+
 [MessagePackObject]
 public sealed record MimirMuninnMoveEvidenceStreamFrame(
     [property: Key(0)] string FrameId,
@@ -160,6 +173,17 @@ public static class MimirMuninnMoveEvidenceAdapter
             .ToArray();
     }
 
+    public static IReadOnlyList<MimirMuninnMoveRosterEntry> BuildIdentityRoster(
+        IEnumerable<MuninnMoveIdentityDocument> identities)
+    {
+        ArgumentNullException.ThrowIfNull(identities);
+        return BuildIdentitySnapshots(identities)
+            .GroupBy(identity => identity.MoveId, StringComparer.Ordinal)
+            .Select(ToRosterEntry)
+            .OrderBy(entry => entry.MoveId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public static MimirMuninnMoveIdentitySnapshot ToIdentitySnapshot(MuninnMoveIdentityDocument identity)
     {
         ArgumentNullException.ThrowIfNull(identity);
@@ -174,6 +198,71 @@ public static class MimirMuninnMoveEvidenceAdapter
             ObservedAtNs: ObservedAtToUnixNs(identity.ObservedAt),
             ControllerIdHash: Fnva64($"{identity.HostId}:{identity.MoveId}"));
     }
+
+    private static MimirMuninnMoveRosterEntry ToRosterEntry(
+        IGrouping<string, MimirMuninnMoveIdentitySnapshot> group)
+    {
+        var snapshots = group
+            .OrderByDescending(identity => identity.ObservedAtNs)
+            .ThenBy(identity => identity.HostId, StringComparer.Ordinal)
+            .ThenBy(identity => identity.SourcePath, StringComparer.Ordinal)
+            .ToArray();
+        var latest = snapshots[0];
+        var usbHostIds = snapshots
+            .Where(IsUsbVisible)
+            .Select(identity => identity.HostId)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var pickupHostIds = snapshots
+            .Where(IsBluetoothPickupState)
+            .Select(identity => identity.HostId)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var sourcePaths = snapshots
+            .Select(identity => identity.SourcePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return new MimirMuninnMoveRosterEntry(
+            MoveId: group.Key,
+            ControllerIdHash: Fnva64($"move:{group.Key}"),
+            LatestHostId: latest.HostId,
+            LatestState: latest.State,
+            StateSummary: string.Join("+", snapshots.Select(identity => identity.State)
+                .Where(state => !string.IsNullOrWhiteSpace(state))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(StateRank)
+                .ThenBy(state => state, StringComparer.Ordinal)),
+            BluetoothHostAddress: snapshots
+                .Select(identity => identity.BluetoothHostAddress)
+                .FirstOrDefault(address => !string.IsNullOrWhiteSpace(address)) ?? string.Empty,
+            HasUsbWitness: usbHostIds.Length > 0,
+            UsbHostIds: usbHostIds,
+            BluetoothPickupHostIds: pickupHostIds,
+            SourcePaths: sourcePaths,
+            ObservedAtNs: latest.ObservedAtNs);
+    }
+
+    private static bool IsUsbVisible(MimirMuninnMoveIdentitySnapshot identity) =>
+        identity.State.Equals("usb-visible", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBluetoothPickupState(MimirMuninnMoveIdentitySnapshot identity) =>
+        identity.State.Equals("bluetooth-waiting", StringComparison.OrdinalIgnoreCase) ||
+        identity.State.Equals("bluetooth-connected", StringComparison.OrdinalIgnoreCase);
+
+    private static int StateRank(string state) =>
+        state.ToLowerInvariant() switch
+        {
+            "usb-visible" => 0,
+            "bluetooth-connected" => 1,
+            "bluetooth-waiting" => 2,
+            "bluetooth-known" => 3,
+            _ => 9
+        };
 
     public static MimirNativeMoveEvidenceSample ToNativeSample(MuninnMoveMarkerCandidateDocument marker)
     {

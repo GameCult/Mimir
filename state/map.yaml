@@ -110,6 +110,12 @@ accepted_design:
     `muninn.move_marker_candidate.v1` and `muninn.move_controller_state.v1`
     document shapes and maps them into native Move evidence samples without
     claiming association or pose authority.
+  - `MimirMuninnMoveEvidenceAdapter` also consumes
+    `muninn.move_identity.v1` records into a deduped Move roster projection.
+    The roster can show a controller as USB-visible on one Muninn host and
+    Bluetooth-waiting/connected on Nightwing at the same time, so blind USB
+    rotation remains inspectable without promoting identity-only records into
+    motion evidence.
   - Realtime Muninn Move witnesses enter over CultMesh streaming frames. CultCache
     remains persistence/receipt/debug state, not the hot tracking feed.
   - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract for
