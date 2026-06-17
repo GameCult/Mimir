@@ -69,10 +69,13 @@ public sealed record MimirMuninnMoveRosterEntry(
     string LatestHostId,
     string LatestState,
     string StateSummary,
+    string PickupReadiness,
+    bool IsBluetoothPickupReady,
     string BluetoothHostAddress,
     bool HasUsbWitness,
     string[] UsbHostIds,
     string[] BluetoothPickupHostIds,
+    string[] UsbBlockingHostIds,
     string[] SourcePaths,
     ulong ObservedAtNs);
 
@@ -220,6 +223,18 @@ public static class MimirMuninnMoveEvidenceAdapter
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
+        var waitingPickupHostIds = snapshots
+            .Where(identity => identity.State.Equals("bluetooth-waiting", StringComparison.OrdinalIgnoreCase))
+            .Select(identity => identity.HostId)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var hasConnectedBluetooth = snapshots.Any(identity =>
+            identity.State.Equals("bluetooth-connected", StringComparison.OrdinalIgnoreCase));
+        var pickupReadiness = ResolvePickupReadiness(
+            usbHostIds,
+            waitingPickupHostIds,
+            hasConnectedBluetooth);
         var sourcePaths = snapshots
             .Select(identity => identity.SourcePath)
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -237,14 +252,40 @@ public static class MimirMuninnMoveEvidenceAdapter
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(StateRank)
                 .ThenBy(state => state, StringComparer.Ordinal)),
+            PickupReadiness: pickupReadiness,
+            IsBluetoothPickupReady: pickupReadiness == "pickup-ready",
             BluetoothHostAddress: snapshots
                 .Select(identity => identity.BluetoothHostAddress)
                 .FirstOrDefault(address => !string.IsNullOrWhiteSpace(address)) ?? string.Empty,
             HasUsbWitness: usbHostIds.Length > 0,
             UsbHostIds: usbHostIds,
             BluetoothPickupHostIds: pickupHostIds,
+            UsbBlockingHostIds: usbHostIds.Length > 0 ? usbHostIds : [],
             SourcePaths: sourcePaths,
             ObservedAtNs: latest.ObservedAtNs);
+    }
+
+    private static string ResolvePickupReadiness(
+        string[] usbHostIds,
+        string[] waitingPickupHostIds,
+        bool hasConnectedBluetooth)
+    {
+        if (usbHostIds.Length > 0)
+        {
+            return "usb-owned";
+        }
+
+        if (hasConnectedBluetooth)
+        {
+            return "bluetooth-connected";
+        }
+
+        if (waitingPickupHostIds.Length > 0)
+        {
+            return "pickup-ready";
+        }
+
+        return "unknown";
     }
 
     private static bool IsUsbVisible(MimirMuninnMoveIdentitySnapshot identity) =>
