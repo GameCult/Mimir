@@ -40,6 +40,29 @@ public sealed record MuninnMoveControllerStateDocument(
     [property: Key(11)] string ObservedAt,
     [property: Key(12)] string SourcePath = "");
 
+[CultDocument("muninn.move_identity", "muninn.move_identity.v1")]
+[MessagePackObject]
+public sealed record MuninnMoveIdentityDocument(
+    [property: Key(0)] string IdentityId,
+    [property: Key(1)] string HostId,
+    [property: Key(2)] string MoveId,
+    [property: Key(3)] string SourcePath,
+    [property: Key(4)] string BluetoothHostAddress,
+    [property: Key(5)] string State,
+    [property: Key(6)] string Detail,
+    [property: Key(7)] string ObservedAt);
+
+public sealed record MimirMuninnMoveIdentitySnapshot(
+    string IdentityId,
+    string HostId,
+    string MoveId,
+    string SourcePath,
+    string BluetoothHostAddress,
+    string State,
+    string Detail,
+    ulong ObservedAtNs,
+    ulong ControllerIdHash);
+
 [MessagePackObject]
 public sealed record MimirMuninnMoveEvidenceStreamFrame(
     [property: Key(0)] string FrameId,
@@ -124,6 +147,32 @@ public static class MimirMuninnMoveEvidenceAdapter
             .ThenBy(sample => sample.ArrivalNs)
             .ThenBy(sample => sample.Sequence)
             .ToArray();
+    }
+
+    public static IReadOnlyList<MimirMuninnMoveIdentitySnapshot> BuildIdentitySnapshots(
+        IEnumerable<MuninnMoveIdentityDocument> identities)
+    {
+        ArgumentNullException.ThrowIfNull(identities);
+        return identities
+            .Select(ToIdentitySnapshot)
+            .OrderBy(identity => identity.MoveId, StringComparer.Ordinal)
+            .ThenByDescending(identity => identity.ObservedAtNs)
+            .ToArray();
+    }
+
+    public static MimirMuninnMoveIdentitySnapshot ToIdentitySnapshot(MuninnMoveIdentityDocument identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        return new MimirMuninnMoveIdentitySnapshot(
+            IdentityId: identity.IdentityId,
+            HostId: identity.HostId,
+            MoveId: identity.MoveId,
+            SourcePath: identity.SourcePath,
+            BluetoothHostAddress: identity.BluetoothHostAddress,
+            State: identity.State,
+            Detail: identity.Detail,
+            ObservedAtNs: ObservedAtToUnixNs(identity.ObservedAt),
+            ControllerIdHash: Fnva64($"{identity.HostId}:{identity.MoveId}"));
     }
 
     public static MimirNativeMoveEvidenceSample ToNativeSample(MuninnMoveMarkerCandidateDocument marker)

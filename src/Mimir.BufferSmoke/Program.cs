@@ -109,6 +109,11 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-evidence-smoke", StringCom
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
+if (args.Any(arg => string.Equals(arg, "--muninn-move-identity-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMuninnMoveIdentitySmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--muninn-move-cultmesh-stream-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMuninnMoveCultMeshStreamSmoke(
@@ -1633,6 +1638,38 @@ static int RunMuninnMoveEvidenceSmoke(string nativeReservoirPath)
         handle.PayloadHandle != 0 &&
         status.TotalSampleCount.ToUInt64() == 1 &&
         status.MoveEvidenceCount.ToUInt64() == 1
+            ? 0
+            : 1;
+}
+
+static int RunMuninnMoveIdentitySmoke()
+{
+    var identity = new MuninnMoveIdentityDocument(
+        IdentityId: "starfire:move-000704a800d0:move-identity",
+        HostId: "starfire",
+        MoveId: "move-000704a800d0",
+        SourcePath: @"windows-psmove:\\?\hid#vid_054c&pid_03d5&col01#a&976df89&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}",
+        BluetoothHostAddress: "5C:93:A2:9C:A8:A8",
+        State: "usb-visible",
+        Detail: "Muninn discovered this PS Move on a local USB/HID input path.",
+        ObservedAt: "2026-06-17T02:24:16.0000000Z");
+
+    var encoded = MessagePackSerializer.Serialize(identity);
+    var decoded = MessagePackSerializer.Deserialize<MuninnMoveIdentityDocument>(encoded);
+    var snapshot = MimirMuninnMoveEvidenceAdapter.BuildIdentitySnapshots([decoded]).Single();
+    var expectedHash = MimirMuninnMoveEvidenceAdapter.Fnva64("starfire:move-000704a800d0");
+
+    Console.WriteLine(
+        $"muninn-move-identity-smoke identity={snapshot.IdentityId} move={snapshot.MoveId} source={snapshot.SourcePath} bluetoothHost={snapshot.BluetoothHostAddress} state={snapshot.State} observedNs={snapshot.ObservedAtNs} controllerHash=0x{snapshot.ControllerIdHash:X}");
+
+    return snapshot.IdentityId == identity.IdentityId &&
+        snapshot.HostId == "starfire" &&
+        snapshot.MoveId == "move-000704a800d0" &&
+        snapshot.SourcePath.Contains("vid_054c&pid_03d5", StringComparison.OrdinalIgnoreCase) &&
+        snapshot.BluetoothHostAddress == "5C:93:A2:9C:A8:A8" &&
+        snapshot.State == "usb-visible" &&
+        snapshot.ObservedAtNs > 0 &&
+        snapshot.ControllerIdHash == expectedHash
             ? 0
             : 1;
 }
