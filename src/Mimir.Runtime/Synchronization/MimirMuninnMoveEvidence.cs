@@ -231,10 +231,13 @@ public static class MimirMuninnMoveEvidenceAdapter
             .ToArray();
         var hasConnectedBluetooth = snapshots.Any(identity =>
             identity.State.Equals("bluetooth-connected", StringComparison.OrdinalIgnoreCase));
+        var hasUnreachableBluetooth = snapshots.Any(identity =>
+            identity.State.Equals("bluetooth-unreachable", StringComparison.OrdinalIgnoreCase));
         var pickupReadiness = ResolvePickupReadiness(
             usbHostIds,
             waitingPickupHostIds,
-            hasConnectedBluetooth);
+            hasConnectedBluetooth,
+            hasUnreachableBluetooth);
         var sourcePaths = snapshots
             .Select(identity => identity.SourcePath)
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -268,7 +271,8 @@ public static class MimirMuninnMoveEvidenceAdapter
     private static string ResolvePickupReadiness(
         string[] usbHostIds,
         string[] waitingPickupHostIds,
-        bool hasConnectedBluetooth)
+        bool hasConnectedBluetooth,
+        bool hasUnreachableBluetooth)
     {
         if (usbHostIds.Length > 0)
         {
@@ -278,6 +282,11 @@ public static class MimirMuninnMoveEvidenceAdapter
         if (hasConnectedBluetooth)
         {
             return "bluetooth-connected";
+        }
+
+        if (hasUnreachableBluetooth)
+        {
+            return "bluetooth-unreachable";
         }
 
         if (waitingPickupHostIds.Length > 0)
@@ -300,8 +309,9 @@ public static class MimirMuninnMoveEvidenceAdapter
         {
             "usb-visible" => 0,
             "bluetooth-connected" => 1,
-            "bluetooth-waiting" => 2,
-            "bluetooth-known" => 3,
+            "bluetooth-unreachable" => 2,
+            "bluetooth-waiting" => 3,
+            "bluetooth-known" => 4,
             _ => 9
         };
 

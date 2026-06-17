@@ -1709,18 +1709,28 @@ static int RunMuninnMoveIdentitySmoke()
         State: "bluetooth-waiting",
         Detail: "Muninn sees this trusted PS Move in BlueZ and will attempt bounded pickup while disconnected.",
         ObservedAt: "2026-06-17T02:24:21.0000000Z");
+    var unreachable = new MuninnMoveIdentityDocument(
+        IdentityId: "nightwing:move-000704a12345:move-identity",
+        HostId: "nightwing",
+        MoveId: "move-000704a12345",
+        SourcePath: "bluetooth:00:07:04:A1:23:45",
+        BluetoothHostAddress: "5C:93:A2:9C:A8:A8",
+        State: "bluetooth-unreachable",
+        Detail: "Muninn sees this trusted PS Move in BlueZ and will attempt bounded pickup while disconnected. Last pickup attempt: Failed to connect: org.bluez.Error.Failed br-connection-create-socket",
+        ObservedAt: "2026-06-17T02:24:22.0000000Z");
 
     var encoded = MessagePackSerializer.Serialize(identity);
     var decoded = MessagePackSerializer.Deserialize<MuninnMoveIdentityDocument>(encoded);
     var snapshot = MimirMuninnMoveEvidenceAdapter.BuildIdentitySnapshots([decoded]).Single();
     var expectedHash = MimirMuninnMoveEvidenceAdapter.Fnva64("starfire:move-000704a800d0");
-    var roster = MimirMuninnMoveEvidenceAdapter.BuildIdentityRoster([decoded, nightwingWaiting, connected, pickupReady]);
+    var roster = MimirMuninnMoveEvidenceAdapter.BuildIdentityRoster([decoded, nightwingWaiting, connected, pickupReady, unreachable]);
     var rotating = roster.Single(entry => entry.MoveId == "move-000704a800d0");
     var pickedUp = roster.Single(entry => entry.MoveId == "move-000704a6be5f");
     var ready = roster.Single(entry => entry.MoveId == "move-000704a39772");
+    var blocked = roster.Single(entry => entry.MoveId == "move-000704a12345");
 
     Console.WriteLine(
-        $"muninn-move-identity-smoke identity={snapshot.IdentityId} move={snapshot.MoveId} source={snapshot.SourcePath} bluetoothHost={snapshot.BluetoothHostAddress} state={snapshot.State} observedNs={snapshot.ObservedAtNs} controllerHash=0x{snapshot.ControllerIdHash:X} roster={roster.Count} rotating={rotating.StateSummary}/{rotating.PickupReadiness} usbHosts={string.Join(',', rotating.UsbHostIds)} pickupHosts={string.Join(',', rotating.BluetoothPickupHostIds)} pickedUp={pickedUp.StateSummary}/{pickedUp.PickupReadiness} ready={ready.StateSummary}/{ready.PickupReadiness}");
+        $"muninn-move-identity-smoke identity={snapshot.IdentityId} move={snapshot.MoveId} source={snapshot.SourcePath} bluetoothHost={snapshot.BluetoothHostAddress} state={snapshot.State} observedNs={snapshot.ObservedAtNs} controllerHash=0x{snapshot.ControllerIdHash:X} roster={roster.Count} rotating={rotating.StateSummary}/{rotating.PickupReadiness} usbHosts={string.Join(',', rotating.UsbHostIds)} pickupHosts={string.Join(',', rotating.BluetoothPickupHostIds)} pickedUp={pickedUp.StateSummary}/{pickedUp.PickupReadiness} ready={ready.StateSummary}/{ready.PickupReadiness} blocked={blocked.StateSummary}/{blocked.PickupReadiness}");
 
     return snapshot.IdentityId == identity.IdentityId &&
         snapshot.HostId == "starfire" &&
@@ -1730,7 +1740,7 @@ static int RunMuninnMoveIdentitySmoke()
         snapshot.State == "usb-visible" &&
         snapshot.ObservedAtNs > 0 &&
         snapshot.ControllerIdHash == expectedHash &&
-        roster.Count == 3 &&
+        roster.Count == 4 &&
         rotating.HasUsbWitness &&
         rotating.UsbHostIds.SequenceEqual(["starfire"]) &&
         rotating.BluetoothPickupHostIds.SequenceEqual(["nightwing"]) &&
@@ -1745,7 +1755,12 @@ static int RunMuninnMoveIdentitySmoke()
         ready.StateSummary == "bluetooth-waiting" &&
         ready.PickupReadiness == "pickup-ready" &&
         ready.IsBluetoothPickupReady &&
-        ready.UsbBlockingHostIds.Length == 0
+        ready.UsbBlockingHostIds.Length == 0 &&
+        blocked.StateSummary == "bluetooth-unreachable" &&
+        blocked.PickupReadiness == "bluetooth-unreachable" &&
+        !blocked.IsBluetoothPickupReady &&
+        blocked.BluetoothPickupHostIds.Length == 0 &&
+        blocked.UsbBlockingHostIds.Length == 0
             ? 0
             : 1;
 }
