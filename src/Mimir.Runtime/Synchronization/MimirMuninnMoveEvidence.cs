@@ -393,6 +393,13 @@ public static class MimirMuninnMoveEvidenceAdapter
 
     private static ulong ObservedAtToUnixNs(string observedAt)
     {
+        const string unixPrefix = "unix-";
+        if (observedAt.StartsWith(unixPrefix, StringComparison.OrdinalIgnoreCase) &&
+            ulong.TryParse(observedAt[unixPrefix.Length..], out var unixSeconds))
+        {
+            return checked(unixSeconds * 1_000_000_000UL);
+        }
+
         if (!DateTimeOffset.TryParse(observedAt, out var parsed))
         {
             return 0;

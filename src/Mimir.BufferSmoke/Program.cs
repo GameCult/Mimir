@@ -114,6 +114,16 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-identity-smoke", StringCom
     return RunMuninnMoveIdentitySmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--muninn-move-live-roster-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return await RunMuninnMoveLiveRosterSmokeAsync(
+        ParseRepeatedStringOption(
+            args,
+            "--identity-store",
+            [@"C:\Meta\Odin\state\starfire.muninn.telemetry.cc"]))
+        .ConfigureAwait(false);
+}
+
 if (args.Any(arg => string.Equals(arg, "--muninn-move-cultmesh-stream-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMuninnMoveCultMeshStreamSmoke(
@@ -419,6 +429,25 @@ static string ParseStringOption(IReadOnlyList<string> args, string name, string 
     }
 
     return fallback;
+}
+
+static string[] ParseRepeatedStringOption(IReadOnlyList<string> args, string name, string[] fallback)
+{
+    var values = new List<string>();
+    for (var index = 0; index < args.Count - 1; index++)
+    {
+        if (!string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase))
+        {
+            continue;
+        }
+
+        values.AddRange(args[index + 1]
+            .Split([';', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    return values.Count > 0
+        ? values.ToArray()
+        : fallback;
 }
 
 static string DescribeBands(IReadOnlyList<MimirChirpletBandResponse> bands)
@@ -1717,6 +1746,61 @@ static int RunMuninnMoveIdentitySmoke()
         ready.PickupReadiness == "pickup-ready" &&
         ready.IsBluetoothPickupReady &&
         ready.UsbBlockingHostIds.Length == 0
+            ? 0
+            : 1;
+}
+
+static async Task<int> RunMuninnMoveLiveRosterSmokeAsync(IReadOnlyList<string> identityStorePaths)
+{
+    var identities = new List<MuninnMoveIdentityDocument>();
+    var loadedStores = 0;
+    foreach (var path in identityStorePaths)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            continue;
+        }
+
+        var fullPath = Path.GetFullPath(path);
+        if (!File.Exists(fullPath))
+        {
+            Console.Error.WriteLine($"muninn-move-live-roster-smoke missing-store path={fullPath}");
+            continue;
+        }
+
+        using var cache = await CultCacheMessagePack.OpenAsync(fullPath, new CultCacheOpenOptions
+        {
+            PullOnOpen = true
+        }).ConfigureAwait(false);
+        var storeIdentities = cache.GetAll<MuninnMoveIdentityDocument>().ToArray();
+        identities.AddRange(storeIdentities);
+        loadedStores++;
+        Console.WriteLine($"muninn-move-live-roster-smoke store={fullPath} identities={storeIdentities.Length}");
+    }
+
+    var roster = MimirMuninnMoveEvidenceAdapter.BuildIdentityRoster(identities);
+    foreach (var entry in roster)
+    {
+        Console.WriteLine(
+            $"muninn-move-live-roster-smoke move={entry.MoveId} readiness={entry.PickupReadiness} latest={entry.LatestHostId}/{entry.LatestState} states={entry.StateSummary} usbHosts={string.Join(',', entry.UsbHostIds)} usbBlockingHosts={string.Join(',', entry.UsbBlockingHostIds)} pickupHosts={string.Join(',', entry.BluetoothPickupHostIds)} bluetoothHost={entry.BluetoothHostAddress} sources={string.Join('|', entry.SourcePaths)} observedNs={entry.ObservedAtNs}");
+    }
+
+    var hasIdentityRecords = identities.Count > 0;
+    var hasRoster = roster.Count > 0;
+    var readinessIsCoherent = roster.All(entry =>
+    {
+        var hasUsbBlocker = entry.UsbBlockingHostIds.Length > 0;
+        return entry.PickupReadiness == "usb-owned"
+            ? hasUsbBlocker
+            : !hasUsbBlocker;
+    });
+    Console.WriteLine(
+        $"muninn-move-live-roster-smoke stores={loadedStores}/{identityStorePaths.Count} identities={identities.Count} roster={roster.Count} readinessCoherent={readinessIsCoherent}");
+
+    return loadedStores > 0 &&
+        hasIdentityRecords &&
+        hasRoster &&
+        readinessIsCoherent
             ? 0
             : 1;
 }
@@ -6377,3 +6461,27 @@ public sealed record ComplexContourChannelModelEvaluationCase(
     double DeltaAbsolutePredictionErrorMicroseconds,
     double DeltaMeanAbsoluteErrorSamples,
     double DeltaMeanAbsolutePhaseErrorRadians);
+
+[CultDocument("gamecult.eve.provider_advertisement", "gamecult.eve.provider_advertisement.v1")]
+[MessagePackObject]
+public sealed record MimirMuninnStoreProviderAdvertisementCompatDocument;
+
+[CultDocument("muninn.command_boundary", "muninn.command_boundary.v1")]
+[MessagePackObject]
+public sealed record MimirMuninnStoreCommandBoundaryCompatDocument;
+
+[CultDocument("muninn.obs_stream_catalog", "muninn.obs_stream_catalog.v1")]
+[MessagePackObject]
+public sealed record MimirMuninnStoreObsStreamCatalogCompatDocument;
+
+[CultDocument("muninn.quest_access", "muninn.quest_access.v1")]
+[MessagePackObject]
+public sealed record MimirMuninnStoreQuestAccessCompatDocument;
+
+[CultDocument("muninn.telemetry_surface", "muninn.telemetry_surface.v1")]
+[MessagePackObject]
+public sealed record MimirMuninnStoreTelemetrySurfaceCompatDocument;
+
+[CultDocument("muninn.transport_profile", "muninn.transport_profile.v1")]
+[MessagePackObject]
+public sealed record MimirMuninnStoreTransportProfileCompatDocument;
