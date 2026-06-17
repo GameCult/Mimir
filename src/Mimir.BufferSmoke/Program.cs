@@ -1718,19 +1718,38 @@ static int RunMuninnMoveIdentitySmoke()
         State: "bluetooth-unreachable",
         Detail: "Muninn sees this trusted PS Move in BlueZ and will attempt bounded pickup while disconnected. Last pickup attempt: Failed to connect: org.bluez.Error.Failed br-connection-create-socket",
         ObservedAt: "2026-06-17T02:24:22.0000000Z");
+    var staleUsb = new MuninnMoveIdentityDocument(
+        IdentityId: "starfire:move-000704a99999:move-identity",
+        HostId: "starfire",
+        MoveId: "move-000704a99999",
+        SourcePath: @"windows-psmove:\\?\hid#vid_054c&pid_03d5&col01#old#{guid}",
+        BluetoothHostAddress: "5C:93:A2:9C:A8:A8",
+        State: "usb-visible",
+        Detail: "Old USB observation retained in CultCache history.",
+        ObservedAt: "2026-06-17T02:20:00.0000000Z");
+    var freshWaitingAfterStaleUsb = new MuninnMoveIdentityDocument(
+        IdentityId: "nightwing:move-000704a99999:move-identity",
+        HostId: "nightwing",
+        MoveId: "move-000704a99999",
+        SourcePath: "bluetooth:00:07:04:A9:99:99",
+        BluetoothHostAddress: "5C:93:A2:9C:A8:A8",
+        State: "bluetooth-waiting",
+        Detail: "Fresh Bluetooth pickup witness after stale USB observation.",
+        ObservedAt: "2026-06-17T02:24:30.0000000Z");
 
     var encoded = MessagePackSerializer.Serialize(identity);
     var decoded = MessagePackSerializer.Deserialize<MuninnMoveIdentityDocument>(encoded);
     var snapshot = MimirMuninnMoveEvidenceAdapter.BuildIdentitySnapshots([decoded]).Single();
     var expectedHash = MimirMuninnMoveEvidenceAdapter.Fnva64("starfire:move-000704a800d0");
-    var roster = MimirMuninnMoveEvidenceAdapter.BuildIdentityRoster([decoded, nightwingWaiting, connected, pickupReady, unreachable]);
+    var roster = MimirMuninnMoveEvidenceAdapter.BuildIdentityRoster([decoded, nightwingWaiting, connected, pickupReady, unreachable, staleUsb, freshWaitingAfterStaleUsb]);
     var rotating = roster.Single(entry => entry.MoveId == "move-000704a800d0");
     var pickedUp = roster.Single(entry => entry.MoveId == "move-000704a6be5f");
     var ready = roster.Single(entry => entry.MoveId == "move-000704a39772");
     var blocked = roster.Single(entry => entry.MoveId == "move-000704a12345");
+    var staleReleased = roster.Single(entry => entry.MoveId == "move-000704a99999");
 
     Console.WriteLine(
-        $"muninn-move-identity-smoke identity={snapshot.IdentityId} move={snapshot.MoveId} source={snapshot.SourcePath} bluetoothHost={snapshot.BluetoothHostAddress} state={snapshot.State} observedNs={snapshot.ObservedAtNs} controllerHash=0x{snapshot.ControllerIdHash:X} roster={roster.Count} rotating={rotating.StateSummary}/{rotating.PickupReadiness} usbHosts={string.Join(',', rotating.UsbHostIds)} pickupHosts={string.Join(',', rotating.BluetoothPickupHostIds)} pickedUp={pickedUp.StateSummary}/{pickedUp.PickupReadiness} ready={ready.StateSummary}/{ready.PickupReadiness} blocked={blocked.StateSummary}/{blocked.PickupReadiness}");
+        $"muninn-move-identity-smoke identity={snapshot.IdentityId} move={snapshot.MoveId} source={snapshot.SourcePath} bluetoothHost={snapshot.BluetoothHostAddress} state={snapshot.State} observedNs={snapshot.ObservedAtNs} controllerHash=0x{snapshot.ControllerIdHash:X} roster={roster.Count} rotating={rotating.StateSummary}/{rotating.PickupReadiness} usbHosts={string.Join(',', rotating.UsbHostIds)} pickupHosts={string.Join(',', rotating.BluetoothPickupHostIds)} pickedUp={pickedUp.StateSummary}/{pickedUp.PickupReadiness} ready={ready.StateSummary}/{ready.PickupReadiness} blocked={blocked.StateSummary}/{blocked.PickupReadiness} staleReleased={staleReleased.StateSummary}/{staleReleased.PickupReadiness}");
 
     return snapshot.IdentityId == identity.IdentityId &&
         snapshot.HostId == "starfire" &&
@@ -1740,7 +1759,7 @@ static int RunMuninnMoveIdentitySmoke()
         snapshot.State == "usb-visible" &&
         snapshot.ObservedAtNs > 0 &&
         snapshot.ControllerIdHash == expectedHash &&
-        roster.Count == 4 &&
+        roster.Count == 5 &&
         rotating.HasUsbWitness &&
         rotating.UsbHostIds.SequenceEqual(["starfire"]) &&
         rotating.BluetoothPickupHostIds.SequenceEqual(["nightwing"]) &&
@@ -1760,7 +1779,11 @@ static int RunMuninnMoveIdentitySmoke()
         blocked.PickupReadiness == "bluetooth-unreachable" &&
         !blocked.IsBluetoothPickupReady &&
         blocked.BluetoothPickupHostIds.Length == 0 &&
-        blocked.UsbBlockingHostIds.Length == 0
+        blocked.UsbBlockingHostIds.Length == 0 &&
+        staleReleased.StateSummary == "bluetooth-waiting" &&
+        staleReleased.PickupReadiness == "pickup-ready" &&
+        staleReleased.IsBluetoothPickupReady &&
+        staleReleased.UsbBlockingHostIds.Length == 0
             ? 0
             : 1;
 }

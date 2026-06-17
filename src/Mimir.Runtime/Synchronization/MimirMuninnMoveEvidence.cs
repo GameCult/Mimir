@@ -89,6 +89,8 @@ public sealed record MimirMuninnMoveEvidenceStreamFrame(
 
 public static class MimirMuninnMoveEvidenceAdapter
 {
+    private const ulong LiveIdentityWindowNs = 60_000_000_000UL;
+
     public const string StreamMetadataSchemaId = "mimir.muninn_move_evidence_stream_frame.v1";
 
     public static CultMeshStreamDescriptor CreateStreamDescriptor(
@@ -205,12 +207,19 @@ public static class MimirMuninnMoveEvidenceAdapter
     private static MimirMuninnMoveRosterEntry ToRosterEntry(
         IGrouping<string, MimirMuninnMoveIdentitySnapshot> group)
     {
-        var snapshots = group
+        var orderedSnapshots = group
             .OrderByDescending(identity => identity.ObservedAtNs)
             .ThenBy(identity => identity.HostId, StringComparer.Ordinal)
             .ThenBy(identity => identity.SourcePath, StringComparer.Ordinal)
             .ToArray();
-        var latest = snapshots[0];
+        var latest = orderedSnapshots[0];
+        var snapshots = orderedSnapshots
+            .Where(identity => IsLiveIdentitySnapshot(identity, latest.ObservedAtNs))
+            .ToArray();
+        if (snapshots.Length == 0)
+        {
+            snapshots = [latest];
+        }
         var usbHostIds = snapshots
             .Where(IsUsbVisible)
             .Select(identity => identity.HostId)
@@ -299,6 +308,12 @@ public static class MimirMuninnMoveEvidenceAdapter
 
     private static bool IsUsbVisible(MimirMuninnMoveIdentitySnapshot identity) =>
         identity.State.Equals("usb-visible", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLiveIdentitySnapshot(MimirMuninnMoveIdentitySnapshot identity, ulong latestObservedAtNs) =>
+        identity.ObservedAtNs <= 0 ||
+        latestObservedAtNs <= 0 ||
+        identity.ObservedAtNs > latestObservedAtNs ||
+        latestObservedAtNs - identity.ObservedAtNs <= LiveIdentityWindowNs;
 
     private static bool IsBluetoothPickupState(MimirMuninnMoveIdentitySnapshot identity) =>
         identity.State.Equals("bluetooth-waiting", StringComparison.OrdinalIgnoreCase) ||
