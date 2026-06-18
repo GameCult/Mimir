@@ -10,6 +10,7 @@
 
 #include "muninn_media_wire.h"
 #include "muninn_rudp_ack.h"
+#include "muninn_rudp_fragments.h"
 #include "muninn_rudp_url.h"
 
 struct MuninnMediaPayload {
@@ -374,6 +375,7 @@ int main(int argc, char **argv)
                   << "       muninn_media_decoder_probe --feedback-fixture\n"
                   << "       muninn_media_decoder_probe --feedback-fixture-hex\n"
                   << "       muninn_media_decoder_probe --ack-fixture\n"
+                  << "       muninn_media_decoder_probe --fragment-fixture\n"
                   << "       muninn_media_decoder_probe --rudp-url <url>\n";
         return 2;
     }
@@ -393,6 +395,25 @@ int main(int argc, char **argv)
             const auto [ack, ack_mask] = tracker.state();
             std::cout << "ack ack=" << ack
                       << " mask=0x" << std::hex << ack_mask << std::dec << "\n";
+            decoded_any = true;
+            continue;
+        } else if (std::string(argv[index]) == "--fragment-fixture") {
+            muninn_rudp_fragments::FragmentAssembler assembler;
+            const auto now = std::chrono::steady_clock::now();
+            const uint8_t second[] = {3, 4};
+            const uint8_t first[] = {1, 2};
+            const auto pending = assembler.insert("media", 7, 1, 2, 12, second, sizeof(second), now);
+            const auto assembled = assembler.insert("media", 7, 0, 2, 11, first, sizeof(first), now);
+            std::cout << "fragment pending=" << (pending ? 1 : 0);
+            if (assembled) {
+                std::cout << " first_sequence=" << assembled->first_sequence
+                          << " payload_bytes=" << assembled->payload.size()
+                          << " first=" << static_cast<unsigned>(assembled->payload[0])
+                          << " last=" << static_cast<unsigned>(assembled->payload.back());
+            } else {
+                std::cout << " none";
+            }
+            std::cout << "\n";
             decoded_any = true;
             continue;
         } else if (std::string(argv[index]) == "--feedback-fixture-hex") {
