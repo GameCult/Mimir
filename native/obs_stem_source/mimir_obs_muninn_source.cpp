@@ -630,6 +630,9 @@ private:
             next_data_sequence_ = sequence + 1;
             packets_forwarded_ = 0;
             bytes_forwarded_ = 0;
+            payloads_decoded_dropped_ = 0;
+            video_forward_failures_ = 0;
+            audio_forward_failures_ = 0;
             send_control_packet(2, 0x03, bridge_sequence++, sequence, remote);
             blog(LOG_INFO, "Muninn RUDP bridge accepted media connection sequence %u", sequence);
             return;
@@ -650,23 +653,56 @@ private:
     {
         const auto media = decode_muninn_media_payload(payload, payload_len);
         if (!media || media->payload.empty()) {
+            ++payloads_decoded_dropped_;
+            log_bridge_pressure("dropped undecodable media payload");
             return;
         }
         if (media->kind == MuninnMediaPayload::Kind::Video) {
-            sendto(video_socket, reinterpret_cast<const char *>(media->payload.data()), static_cast<int>(media->payload.size()), 0,
-                   reinterpret_cast<const sockaddr *>(&video_addr), sizeof(video_addr));
+            const int sent = sendto(video_socket, reinterpret_cast<const char *>(media->payload.data()), static_cast<int>(media->payload.size()), 0,
+                                    reinterpret_cast<const sockaddr *>(&video_addr), sizeof(video_addr));
+            if (sent < 0) {
+                ++video_forward_failures_;
+                log_bridge_pressure("failed forwarding video payload to local decoder socket");
+                return;
+            }
         } else if (media->kind == MuninnMediaPayload::Kind::Audio) {
-            sendto(audio_socket, reinterpret_cast<const char *>(media->payload.data()), static_cast<int>(media->payload.size()), 0,
-                   reinterpret_cast<const sockaddr *>(&audio_addr), sizeof(audio_addr));
+            const int sent = sendto(audio_socket, reinterpret_cast<const char *>(media->payload.data()), static_cast<int>(media->payload.size()), 0,
+                                    reinterpret_cast<const sockaddr *>(&audio_addr), sizeof(audio_addr));
+            if (sent < 0) {
+                ++audio_forward_failures_;
+                log_bridge_pressure("failed forwarding audio payload to local decoder socket");
+                return;
+            }
         } else {
+            ++payloads_decoded_dropped_;
+            log_bridge_pressure("dropped unknown media payload");
             return;
         }
         ++packets_forwarded_;
         bytes_forwarded_ += media->payload.size();
         if (packets_forwarded_ == 1 || packets_forwarded_ % 900 == 0) {
-            blog(LOG_INFO, "Muninn RUDP bridge forwarded %llu typed media payloads / %llu encoded bytes",
+            blog(LOG_INFO,
+                 "Muninn RUDP bridge forwarded=%llu bytes=%llu decode_dropped=%llu video_failures=%llu audio_failures=%llu",
                  static_cast<unsigned long long>(packets_forwarded_),
-                 static_cast<unsigned long long>(bytes_forwarded_));
+                 static_cast<unsigned long long>(bytes_forwarded_),
+                 static_cast<unsigned long long>(payloads_decoded_dropped_),
+                 static_cast<unsigned long long>(video_forward_failures_),
+                 static_cast<unsigned long long>(audio_forward_failures_));
+        }
+    }
+
+    void log_bridge_pressure(const char *reason)
+    {
+        const uint64_t pressure = payloads_decoded_dropped_ + video_forward_failures_ + audio_forward_failures_;
+        if (pressure == 1 || pressure % 300 == 0) {
+            blog(LOG_WARNING,
+                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu video_failures=%llu audio_failures=%llu",
+                 reason,
+                 static_cast<unsigned long long>(packets_forwarded_),
+                 static_cast<unsigned long long>(bytes_forwarded_),
+                 static_cast<unsigned long long>(payloads_decoded_dropped_),
+                 static_cast<unsigned long long>(video_forward_failures_),
+                 static_cast<unsigned long long>(audio_forward_failures_));
         }
     }
 
@@ -740,6 +776,9 @@ private:
     std::optional<std::chrono::steady_clock::time_point> gap_wait_started_;
     uint64_t packets_forwarded_ = 0;
     uint64_t bytes_forwarded_ = 0;
+    uint64_t payloads_decoded_dropped_ = 0;
+    uint64_t video_forward_failures_ = 0;
+    uint64_t audio_forward_failures_ = 0;
     std::string source_url_;
     RudpBridgeOutputs outputs_;
 };
