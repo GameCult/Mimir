@@ -1,6 +1,7 @@
 config/localcast.json
 config/audio-field.json
 logs/
+scratch/
 *.log
 *.tmp
 .quartz-build/
