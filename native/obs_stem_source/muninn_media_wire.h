@@ -176,7 +176,8 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
     const std::string &stream_id,
     const std::string &session_id,
     uint64_t frame_id,
-    const std::vector<std::string> &missing_chunk_keys)
+    const std::vector<std::string> &missing_chunk_keys,
+    const std::string &observed_at)
 {
     MsgpackWriter record;
     record.write_array_len(11);
@@ -193,7 +194,7 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
     record.write_bool(true);
     record.write_i64(0);
     record.write_i64(0);
-    record.write_string(feedback_observed_at());
+    record.write_string(observed_at);
     write_string_array(record, missing_chunk_keys);
 
     const std::string record_key = stream_id + ":" + session_id + ":feedback:starfire.obs";
@@ -207,7 +208,7 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
     document.write_string("recordKey");
     document.write_string(record_key);
     document.write_string("storedAt");
-    document.write_string(feedback_observed_at());
+    document.write_string(observed_at);
     document.write_string("payloadEncoding");
     document.write_string("messagepack");
     document.write_string("payload");
@@ -230,6 +231,20 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
     wire.write_string("document");
     wire.write_raw(document.bytes());
     return wire.bytes();
+}
+
+inline std::vector<uint8_t> encode_receiver_feedback_payload(
+    const std::string &stream_id,
+    const std::string &session_id,
+    uint64_t frame_id,
+    const std::vector<std::string> &missing_chunk_keys)
+{
+    return encode_receiver_feedback_payload(
+        stream_id,
+        session_id,
+        frame_id,
+        missing_chunk_keys,
+        feedback_observed_at());
 }
 
 } // namespace muninn_media_wire

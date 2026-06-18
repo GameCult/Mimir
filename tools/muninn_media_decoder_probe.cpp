@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <iomanip>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -368,7 +369,8 @@ int main(int argc, char **argv)
 {
     if (argc < 2) {
         std::cerr << "usage: muninn_media_decoder_probe <wire.bin> [more-wire.bin ...]\n"
-                  << "       muninn_media_decoder_probe --feedback-fixture\n";
+                  << "       muninn_media_decoder_probe --feedback-fixture\n"
+                  << "       muninn_media_decoder_probe --feedback-fixture-hex\n";
         return 2;
     }
 
@@ -379,6 +381,16 @@ int main(int argc, char **argv)
         if (std::string(argv[index]) == "--feedback-fixture") {
             bytes = muninn_media_wire::encode_receiver_feedback_payload(
                 "muninn.raven.av.rudp", "raven:test:video", 42, {"42:1", "42:3"});
+        } else if (std::string(argv[index]) == "--feedback-fixture-hex") {
+            bytes = muninn_media_wire::encode_receiver_feedback_payload(
+                "muninn.raven.av.rudp", "raven:test:video", 42, {"42:1", "42:3"}, "unix-ms:1000");
+            for (const auto byte : bytes) {
+                std::cout << std::hex << std::setw(2) << std::setfill('0')
+                          << static_cast<unsigned>(byte);
+            }
+            std::cout << "\n";
+            decoded_any = true;
+            continue;
         } else {
             std::ifstream file(argv[index], std::ios::binary);
             bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
