@@ -23,10 +23,12 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -596,6 +598,9 @@ private:
         if (packet_type == 1) {
             pending_payloads_.clear();
             video_assemblies_.clear();
+            received_sequences_.clear();
+            highest_received_sequence_.reset();
+            remember_received_sequence(sequence);
             gap_wait_started_.reset();
             next_data_sequence_ = sequence + 1;
             packets_forwarded_ = 0;
@@ -604,12 +609,14 @@ private:
             video_assemblies_expired_ = 0;
             video_forward_failures_ = 0;
             audio_forward_failures_ = 0;
-            send_control_packet(2, 0x03, bridge_sequence++, sequence, remote);
+            const auto [ack, ack_mask] = ack_state();
+            send_control_packet(2, 0x03, bridge_sequence++, ack, ack_mask, remote);
             blog(LOG_INFO, "Muninn RUDP bridge accepted media connection sequence %u", sequence);
             return;
         }
 
         if (packet_type == 3 && fragment_count == 0) {
+            remember_received_sequence(sequence);
             if (!next_data_sequence_) {
                 next_data_sequence_ = sequence;
             }
@@ -617,7 +624,8 @@ private:
                 pending_payloads_[sequence] = std::vector<uint8_t>(packet + payload_offset, packet + payload_offset + payload_len);
                 flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
             }
-            send_control_packet(4, 0x00, bridge_sequence++, sequence, remote);
+            const auto [ack, ack_mask] = ack_state();
+            send_control_packet(4, 0x00, bridge_sequence++, ack, ack_mask, remote);
         }
     }
 
@@ -821,7 +829,38 @@ private:
         }
     }
 
-    void send_control_packet(uint8_t packet_type, uint8_t flags, uint32_t sequence, uint32_t ack, const sockaddr_in &remote)
+    void remember_received_sequence(uint32_t sequence)
+    {
+        received_sequences_.insert(sequence);
+        if (!highest_received_sequence_ || sequence > *highest_received_sequence_) {
+            highest_received_sequence_ = sequence;
+        }
+        if (!highest_received_sequence_) {
+            return;
+        }
+        const uint32_t highest = *highest_received_sequence_;
+        for (auto iterator = received_sequences_.begin(); iterator != received_sequences_.end();) {
+            if (*iterator + 32 < highest) {
+                iterator = received_sequences_.erase(iterator);
+            } else {
+                ++iterator;
+            }
+        }
+    }
+
+    std::pair<uint32_t, uint32_t> ack_state() const
+    {
+        const uint32_t ack = highest_received_sequence_.value_or(0);
+        uint32_t ack_mask = 0;
+        for (uint32_t bit = 0; bit < 32; ++bit) {
+            if (ack > bit && received_sequences_.find(ack - bit - 1) != received_sequences_.end()) {
+                ack_mask |= 1u << bit;
+            }
+        }
+        return {ack, ack_mask};
+    }
+
+    void send_control_packet(uint8_t packet_type, uint8_t flags, uint32_t sequence, uint32_t ack, uint32_t ack_mask, const sockaddr_in &remote)
     {
         const std::string channel = "control";
         std::vector<uint8_t> response(36 + channel.size());
@@ -836,7 +875,7 @@ private:
         write_be32(response, 8, parts_.connection_id);
         write_be32(response, 12, sequence);
         write_be32(response, 16, ack);
-        write_be32(response, 20, 0);
+        write_be32(response, 20, ack_mask);
         write_be16(response, 24, 0);
         write_be16(response, 26, 0);
         write_be16(response, 28, 0);
@@ -862,8 +901,9 @@ private:
         response[7] = static_cast<uint8_t>(36 + channel.size());
         write_be32(response, 8, parts_.connection_id);
         write_be32(response, 12, sequence);
-        write_be32(response, 16, 0);
-        write_be32(response, 20, 0);
+        const auto [ack, ack_mask] = ack_state();
+        write_be32(response, 16, ack);
+        write_be32(response, 20, ack_mask);
         write_be16(response, 24, 0);
         write_be16(response, 26, 0);
         write_be16(response, 28, 0);
@@ -884,7 +924,9 @@ private:
     muninn_rudp_url::RudpUrlParts parts_;
     std::map<uint32_t, std::vector<uint8_t>> pending_payloads_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
+    std::set<uint32_t> received_sequences_;
     std::optional<uint32_t> next_data_sequence_;
+    std::optional<uint32_t> highest_received_sequence_;
     std::optional<std::chrono::steady_clock::time_point> gap_wait_started_;
     uint64_t packets_forwarded_ = 0;
     uint64_t bytes_forwarded_ = 0;
