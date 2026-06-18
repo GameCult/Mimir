@@ -459,9 +459,9 @@ public:
         source_url_ = url;
         parts_ = *parsed;
         outputs_.video_url = "udp://127.0.0.1:" + std::to_string(parts_.video_local_port) +
-                             "?fifo_size=131072&overrun_nonfatal=1&buffer_size=1048576";
+                             "?fifo_size=32768&overrun_nonfatal=1&buffer_size=262144";
         outputs_.audio_url = "udp://127.0.0.1:" + std::to_string(parts_.audio_local_port) +
-                             "?fifo_size=131072&overrun_nonfatal=1&buffer_size=1048576";
+                             "?fifo_size=32768&overrun_nonfatal=1&buffer_size=262144";
         running_ = true;
         worker_ = std::thread([this] { run(); });
         blog(LOG_INFO,
@@ -610,7 +610,13 @@ private:
         }
 
         if (packet_type == 3 && fragment_count == 0) {
-            forward_payload(packet + payload_offset, payload_len, video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
+            if (!next_data_sequence_) {
+                next_data_sequence_ = sequence;
+            }
+            if (sequence >= *next_data_sequence_) {
+                pending_payloads_[sequence] = std::vector<uint8_t>(packet + payload_offset, packet + payload_offset + payload_len);
+                flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
+            }
             send_control_packet(4, 0x00, bridge_sequence++, sequence, remote);
         }
     }
