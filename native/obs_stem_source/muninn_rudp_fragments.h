@@ -11,6 +11,8 @@
 
 namespace muninn_rudp_fragments {
 
+constexpr uint32_t CompletedFragmentIdQuarantineMs = 2000;
+
 struct FragmentResult {
     uint32_t first_sequence = 0;
     std::vector<uint8_t> payload;
@@ -21,6 +23,7 @@ public:
     void reset()
     {
         assemblies_.clear();
+        recently_closed_.clear();
         expired_count_ = 0;
     }
 
@@ -38,6 +41,12 @@ public:
         }
 
         const std::string key = channel_id + ":" + std::to_string(fragment_id);
+        expire_recently_closed(now);
+        const auto existing = assemblies_.find(key);
+        if (existing == assemblies_.end() && recently_closed_.find(key) != recently_closed_.end()) {
+            return std::nullopt;
+        }
+
         auto &assembly = assemblies_[key];
         if (assembly.payloads.empty()) {
             assembly.channel_id = channel_id;
@@ -67,17 +76,20 @@ public:
             result.first_sequence = std::min(result.first_sequence, sequence_found->second);
         }
         assemblies_.erase(key);
+        recently_closed_[key] = now;
         return result;
     }
 
     uint64_t expire(std::chrono::steady_clock::time_point now, uint32_t expire_after_ms)
     {
+        expire_recently_closed(now);
         uint64_t expired = 0;
         for (auto iterator = assemblies_.begin(); iterator != assemblies_.end();) {
             if (now - iterator->second.started_at < std::chrono::milliseconds(expire_after_ms)) {
                 ++iterator;
                 continue;
             }
+            recently_closed_[iterator->first] = now;
             iterator = assemblies_.erase(iterator);
             ++expired;
         }
@@ -88,6 +100,17 @@ public:
     uint64_t expired_count() const { return expired_count_; }
 
 private:
+    void expire_recently_closed(std::chrono::steady_clock::time_point now)
+    {
+        for (auto iterator = recently_closed_.begin(); iterator != recently_closed_.end();) {
+            if (now - iterator->second < std::chrono::milliseconds(CompletedFragmentIdQuarantineMs)) {
+                ++iterator;
+                continue;
+            }
+            iterator = recently_closed_.erase(iterator);
+        }
+    }
+
     struct Assembly {
         std::string channel_id;
         uint16_t fragment_count = 0;
@@ -97,6 +120,7 @@ private:
     };
 
     std::map<std::string, Assembly> assemblies_;
+    std::map<std::string, std::chrono::steady_clock::time_point> recently_closed_;
     uint64_t expired_count_ = 0;
 };
 

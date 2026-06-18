@@ -164,9 +164,13 @@ The current Raven-room default route is LAN-first: command requests go to
 deprecated WireGuard defaults `10.77.0.4:17873` and `10.77.0.2` are migrated on
 load. Custom operator-entered endpoints are left alone.
 
-The source polls the catalog while active and republishes activation requests on
-a bounded reconnect cadence, so a Raven daemon restart or media child exit does
-not require reopening the source properties.
+The source polls the catalog while active, but reconnect is owned by the RUDP
+receiver bridge rather than catalog labels. The bridge tracks the last packet
+and the last forwarded video/audio payload. If startup produces no media, or a
+previously live stream goes stale, OBS refreshes its local FFmpeg child readers
+and republishes the typed activation command on a short bounded cadence. A Raven
+daemon restart or media child exit should therefore recover without reopening
+source properties.
 
 For `rudp://` stream URLs, the plugin binds the advertised media port, accepts
 the CultNet RUDP handshake, acknowledges packets, reassembles RUDP fragments,
@@ -178,6 +182,11 @@ media is reliable but unordered, so frame ids, chunk ids, and the advertised
 `assembly_deadline_ms` own video reconstruction. Incomplete video frames expire
 inside that budget and emit `muninn.media_receiver_feedback.v1` keyframe
 pressure instead of stalling newer media behind an obsolete sequence gap.
+RUDP fragment ids are quarantined briefly after completion/expiry so late
+duplicates cannot seed a corrupt assembly when the sender's 16-bit fragment id
+space wraps under sustained LAN pressure. The local OBS FFmpeg UDP readers use
+large loopback buffers; those buffers absorb receiver bursts without becoming a
+second transport authority.
 
 ## Install
 
