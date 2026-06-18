@@ -12,6 +12,7 @@
 #include "muninn_rudp_url.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -46,7 +47,9 @@ constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
 constexpr uint64_t MuninnCatalogRefreshMs = 2000;
-constexpr uint64_t MuninnActivationRetryMs = 30000;
+constexpr uint64_t MuninnActivationRetryMs = 120000;
+constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
+constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -83,6 +86,7 @@ struct MuninnSource {
     std::string stream_url;
     std::string last_requested_stream_id;
     std::vector<MuninnStreamOption> catalog_options;
+    std::unique_ptr<class CatalogDiscoveryReceiver> catalog_discovery;
     std::chrono::steady_clock::time_point next_catalog_refresh = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point last_activation_request = std::chrono::steady_clock::time_point::min();
 };
@@ -1106,6 +1110,36 @@ static std::string canonical_muninn_stream_id(const std::string &stream_id)
     return stream_id;
 }
 
+static std::string rudp_url_stream_id(const std::string &url)
+{
+    const auto authority_start = std::string("rudp://").size();
+    const auto path_start = url.find('/', authority_start);
+    if (path_start == std::string::npos || path_start + 1 >= url.size()) {
+        return {};
+    }
+    const auto query_start = url.find('?', path_start + 1);
+    return url.substr(path_start + 1, (query_start == std::string::npos ? url.size() : query_start) - path_start - 1);
+}
+
+static bool equivalent_rudp_stream_url(const std::string &left, const std::string &right)
+{
+    if (!starts_with(left, "rudp://") || !starts_with(right, "rudp://")) {
+        return left == right;
+    }
+    try {
+        const auto left_parts = muninn_rudp_url::parse(left);
+        const auto right_parts = muninn_rudp_url::parse(right);
+        if (!left_parts || !right_parts) {
+            return left == right;
+        }
+        return left_parts->port == right_parts->port &&
+               canonical_muninn_stream_id(rudp_url_stream_id(left)) == canonical_muninn_stream_id(rudp_url_stream_id(right)) &&
+               left_parts->connection_id == right_parts->connection_id;
+    } catch (...) {
+        return left == right;
+    }
+}
+
 static std::string endpoint_setting(obs_data_t *settings, const char *key, const char *current_default, const char *deprecated_default)
 {
     std::string value = obs_string(settings, key, current_default);
@@ -1474,6 +1508,185 @@ static std::vector<MuninnStreamOption> read_catalog(const std::string &path)
     return {};
 }
 
+class CatalogDiscoveryReceiver {
+public:
+    CatalogDiscoveryReceiver() = default;
+
+    ~CatalogDiscoveryReceiver()
+    {
+        stop();
+    }
+
+    void start()
+    {
+        if (running_) {
+            return;
+        }
+        running_ = true;
+        worker_ = std::thread([this] { run(); });
+    }
+
+    void stop()
+    {
+        running_ = false;
+        if (socket_ != INVALID_SOCKET) {
+            closesocket(socket_);
+            socket_ = INVALID_SOCKET;
+        }
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+    }
+
+    std::vector<MuninnStreamOption> options() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return options_;
+    }
+
+private:
+    void run()
+    {
+#ifdef _WIN32
+        WSADATA wsa = {};
+        if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+            return;
+        }
+#endif
+        socket_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (socket_ == INVALID_SOCKET) {
+#ifdef _WIN32
+            WSACleanup();
+#endif
+            return;
+        }
+        sockaddr_in addr = {};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        addr.sin_port = htons(MuninnCatalogDiscoveryPort);
+        if (bind(socket_, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) != 0) {
+            closesocket(socket_);
+            socket_ = INVALID_SOCKET;
+#ifdef _WIN32
+            WSACleanup();
+#endif
+            return;
+        }
+
+        timeval timeout = {};
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 200000;
+        setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&timeout), sizeof(timeout));
+
+        std::array<uint8_t, 4096> buffer = {};
+        uint32_t bridge_sequence = 1;
+        while (running_) {
+            sockaddr_in remote = {};
+            int remote_len = sizeof(remote);
+            const int received = recvfrom(socket_, reinterpret_cast<char *>(buffer.data()), static_cast<int>(buffer.size()), 0,
+                                          reinterpret_cast<sockaddr *>(&remote), &remote_len);
+            if (received <= 0) {
+                continue;
+            }
+            handle_packet(buffer.data(), static_cast<size_t>(received), remote, bridge_sequence);
+        }
+
+        if (socket_ != INVALID_SOCKET) {
+            closesocket(socket_);
+            socket_ = INVALID_SOCKET;
+        }
+#ifdef _WIN32
+        WSACleanup();
+#endif
+    }
+
+    void handle_packet(const uint8_t *packet, size_t size, const sockaddr_in &remote, uint32_t &bridge_sequence)
+    {
+        if (size < 36 || packet[0] != 'C' || packet[1] != 'N' || packet[2] != 'R' || packet[3] != '0') {
+            return;
+        }
+        const uint8_t version = packet[4];
+        const uint8_t packet_type = packet[5];
+        const uint8_t header_bytes = packet[7];
+        const uint32_t connection_id = read_be32(packet + 8);
+        const uint32_t sequence = read_be32(packet + 12);
+        const uint16_t fragment_count = read_be16(packet + 28);
+        const uint32_t payload_len = read_be32(packet + 30);
+        const uint8_t channel_len = packet[34];
+        if (version != 0 || connection_id != MuninnCatalogDiscoveryConnectionId || header_bytes < 36 || size < header_bytes) {
+            return;
+        }
+        const size_t payload_offset = static_cast<size_t>(header_bytes);
+        if (payload_offset + payload_len > size || 36 + channel_len > header_bytes) {
+            return;
+        }
+
+        if (packet_type == 1) {
+            ack_tracker_.reset();
+            ack_tracker_.remember(sequence);
+            const auto [ack, ack_mask] = ack_tracker_.state();
+            send_control_packet(2, 0x03, bridge_sequence++, ack, ack_mask, remote);
+            return;
+        }
+
+        if (packet_type != 3 || fragment_count != 0) {
+            return;
+        }
+        ack_tracker_.remember(sequence);
+        try {
+            auto decoded = decode_obs_catalog_payload(
+                std::vector<uint8_t>(packet + payload_offset, packet + payload_offset + payload_len));
+            if (!decoded.empty()) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                const bool first_discovery = options_.empty();
+                options_ = std::move(decoded);
+                if (first_discovery) {
+                    blog(LOG_INFO, "Muninn Stream accepted %llu stream option(s) from RUDP catalog discovery",
+                         static_cast<unsigned long long>(options_.size()));
+                }
+            }
+        } catch (const std::exception &error) {
+            blog(LOG_WARNING, "Muninn Stream could not decode RUDP catalog discovery payload: %s", error.what());
+        }
+        const auto [ack, ack_mask] = ack_tracker_.state();
+        send_control_packet(2, 0x02, bridge_sequence++, ack, ack_mask, remote);
+    }
+
+    void send_control_packet(uint8_t packet_type, uint8_t flags, uint32_t sequence, uint32_t ack, uint32_t ack_mask, const sockaddr_in &remote)
+    {
+        const std::string channel = "control";
+        std::vector<uint8_t> response(36 + channel.size());
+        response[0] = 'C';
+        response[1] = 'N';
+        response[2] = 'R';
+        response[3] = '0';
+        response[4] = 0;
+        response[5] = packet_type;
+        response[6] = flags;
+        response[7] = static_cast<uint8_t>(36 + channel.size());
+        write_be32(response, 8, MuninnCatalogDiscoveryConnectionId);
+        write_be32(response, 12, sequence);
+        write_be32(response, 16, ack);
+        write_be32(response, 20, ack_mask);
+        write_be16(response, 24, 0);
+        write_be16(response, 26, 0);
+        write_be16(response, 28, 0);
+        write_be32(response, 30, 0);
+        response[34] = static_cast<uint8_t>(channel.size());
+        response[35] = 0;
+        std::copy(channel.begin(), channel.end(), response.begin() + 36);
+        sendto(socket_, reinterpret_cast<const char *>(response.data()), static_cast<int>(response.size()), 0,
+               reinterpret_cast<const sockaddr *>(&remote), sizeof(remote));
+    }
+
+    std::atomic<bool> running_ = false;
+    SOCKET socket_ = INVALID_SOCKET;
+    std::thread worker_;
+    mutable std::mutex mutex_;
+    std::vector<MuninnStreamOption> options_;
+    muninn_rudp_ack::AckTracker ack_tracker_;
+};
+
 static void release_media(MuninnSource *ctx)
 {
     if (ctx->bridge) {
@@ -1529,7 +1742,8 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url)
         return;
     }
 
-    if (ctx->media && ctx->stream_url == url) {
+    if (ctx->media && equivalent_rudp_stream_url(ctx->stream_url, url)) {
+        ctx->stream_url = url;
         return;
     }
 
@@ -1565,7 +1779,11 @@ static void refresh_catalog(MuninnSource *ctx)
     if (!ctx) {
         return;
     }
-    ctx->catalog_options = read_catalog(ctx->store_path);
+    ctx->catalog_options =
+        ctx->catalog_discovery ? ctx->catalog_discovery->options() : std::vector<MuninnStreamOption>{};
+    if (ctx->catalog_options.empty()) {
+        ctx->catalog_options = read_catalog(ctx->store_path);
+    }
     if (ctx->catalog_options.empty()) {
         ctx->catalog_options.push_back(default_muninn_stream_option());
     }
@@ -1589,7 +1807,10 @@ static void reconcile_selected_stream(MuninnSource *ctx)
         return;
     }
 
-    const bool selection_changed = ctx->stream_id != selected->stream_id;
+    const auto previous_canonical_stream_id = canonical_muninn_stream_id(ctx->stream_id);
+    const auto selected_canonical_stream_id = canonical_muninn_stream_id(selected->stream_id);
+    const bool selection_changed =
+        !previous_canonical_stream_id.empty() && previous_canonical_stream_id != selected_canonical_stream_id;
     ctx->stream_id = selected->stream_id;
     if (selection_changed) {
         ctx->last_requested_stream_id.clear();
@@ -1734,6 +1955,8 @@ static void *muninn_create(obs_data_t *settings, obs_source_t *source)
     auto *ctx = new MuninnSource();
     ctx->source = source;
     ctx->bridge = std::make_unique<RudpMediaBridge>();
+    ctx->catalog_discovery = std::make_unique<CatalogDiscoveryReceiver>();
+    ctx->catalog_discovery->start();
     start_audio_worker(ctx);
     muninn_update(ctx, settings);
     return ctx;
@@ -1743,6 +1966,9 @@ static void muninn_destroy(void *data)
 {
     auto *ctx = static_cast<MuninnSource *>(data);
     release_media(ctx);
+    if (ctx->catalog_discovery) {
+        ctx->catalog_discovery->stop();
+    }
     stop_audio_worker(ctx);
     delete ctx;
 }

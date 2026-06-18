@@ -126,7 +126,13 @@ CultCache/CultMesh stream catalog. The operator-facing UI is intentionally just
 the stream dropdown. Store paths, command endpoints, and media return endpoints
 are source defaults and migration state, not user-facing stream selection.
 
-The source reads Muninn's local `.cc` store:
+The source listens for Raven's typed OBS catalog projection on local UDP port
+`17874`. Raven Muninn sends the catalog over a small CultNet RUDP discovery lane
+using connection id `0x6d750003`; OBS uses that live catalog for the dropdown
+when present.
+
+If live discovery is absent, the source falls back to Muninn's local `.cc`
+store:
 
 ```text
 C:\Meta\Odin\state\muninn.telemetry.cc
@@ -145,11 +151,12 @@ media profile, the source publishes the same typed
 Muninn `serve` still owns whether capture starts and which local FFmpeg/WASAPI
 children exist.
 
-If the local catalog projection is absent or stale, the source keeps a
-LAN-default Raven A/V stream option instead of showing an empty source. That is
-a resilience fallback for the OBS machine, not a second stream authority. Stale
-catalog `rudp://` URLs that do not carry the current low-latency LAN profile are
-sanitized back to the source-derived URL before the bridge starts.
+If both live discovery and the local catalog projection are absent or stale, the
+source keeps a LAN-default Raven A/V stream option instead of showing an empty
+source. That is a resilience fallback for the OBS machine, not a second stream
+authority. Stale catalog `rudp://` URLs that do not carry the current
+low-latency LAN profile are sanitized back to the source-derived URL before the
+bridge starts.
 
 The current Raven-room default route is LAN-first: command requests go to
 `192.168.1.84:17873`, and Raven sends media back to Starfire at
