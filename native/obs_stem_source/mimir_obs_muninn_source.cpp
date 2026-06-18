@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <climits>
 #include <condition_variable>
 #include <cstdint>
 #include <cctype>
@@ -37,6 +38,7 @@ constexpr uint16_t MuninnDefaultMediaPort = 5204;
 constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
+constexpr const char *MuninnMediaReceiverFeedbackSchema = "muninn.media_receiver_feedback.v1";
 constexpr uint32_t MuninnMediaRudpConnectionId = 0x6d750001;
 constexpr auto MuninnVideoAssemblyDeadline = std::chrono::milliseconds(75);
 
@@ -103,6 +105,9 @@ struct MuninnMediaPayload {
 };
 
 struct MuninnVideoFrameAssembly {
+    std::string stream_id;
+    std::string session_id;
+    uint64_t frame_id = 0;
     uint16_t chunk_count = 0;
     uint16_t chunks_received = 0;
     std::chrono::steady_clock::time_point started_at;
@@ -427,6 +432,228 @@ private:
     }
 };
 
+class MediaMsgpackWriter {
+public:
+    const std::vector<uint8_t> &bytes() const { return bytes_; }
+
+    void write_raw(const std::vector<uint8_t> &value)
+    {
+        bytes_.insert(bytes_.end(), value.begin(), value.end());
+    }
+
+    void write_nil() { bytes_.push_back(0xc0); }
+
+    void write_bool(bool value) { bytes_.push_back(value ? 0xc3 : 0xc2); }
+
+    void write_u64(uint64_t value)
+    {
+        if (value <= 0x7f) {
+            bytes_.push_back(static_cast<uint8_t>(value));
+        } else if (value <= 0xff) {
+            bytes_.push_back(0xcc);
+            bytes_.push_back(static_cast<uint8_t>(value));
+        } else if (value <= 0xffff) {
+            bytes_.push_back(0xcd);
+            write_be16_value(static_cast<uint16_t>(value));
+        } else if (value <= 0xffffffffull) {
+            bytes_.push_back(0xce);
+            write_be32_value(static_cast<uint32_t>(value));
+        } else {
+            bytes_.push_back(0xcf);
+            write_be64_value(value);
+        }
+    }
+
+    void write_i64(int64_t value)
+    {
+        if (value >= 0) {
+            write_u64(static_cast<uint64_t>(value));
+            return;
+        }
+        if (value >= -32) {
+            bytes_.push_back(static_cast<uint8_t>(0xe0 | (value + 32)));
+        } else if (value >= INT8_MIN) {
+            bytes_.push_back(0xd0);
+            bytes_.push_back(static_cast<uint8_t>(value));
+        } else if (value >= INT16_MIN) {
+            bytes_.push_back(0xd1);
+            write_be16_value(static_cast<uint16_t>(value));
+        } else if (value >= INT32_MIN) {
+            bytes_.push_back(0xd2);
+            write_be32_value(static_cast<uint32_t>(value));
+        } else {
+            bytes_.push_back(0xd3);
+            write_be64_value(static_cast<uint64_t>(value));
+        }
+    }
+
+    void write_string(const std::string &value)
+    {
+        const auto length = value.size();
+        if (length <= 31) {
+            bytes_.push_back(static_cast<uint8_t>(0xa0 | length));
+        } else if (length <= 0xff) {
+            bytes_.push_back(0xd9);
+            bytes_.push_back(static_cast<uint8_t>(length));
+        } else if (length <= 0xffff) {
+            bytes_.push_back(0xda);
+            write_be16_value(static_cast<uint16_t>(length));
+        } else {
+            bytes_.push_back(0xdb);
+            write_be32_value(static_cast<uint32_t>(length));
+        }
+        bytes_.insert(bytes_.end(), value.begin(), value.end());
+    }
+
+    void write_binary(const std::vector<uint8_t> &value)
+    {
+        const auto length = value.size();
+        if (length <= 0xff) {
+            bytes_.push_back(0xc4);
+            bytes_.push_back(static_cast<uint8_t>(length));
+        } else if (length <= 0xffff) {
+            bytes_.push_back(0xc5);
+            write_be16_value(static_cast<uint16_t>(length));
+        } else {
+            bytes_.push_back(0xc6);
+            write_be32_value(static_cast<uint32_t>(length));
+        }
+        bytes_.insert(bytes_.end(), value.begin(), value.end());
+    }
+
+    void write_array_len(uint32_t length)
+    {
+        if (length <= 15) {
+            bytes_.push_back(static_cast<uint8_t>(0x90 | length));
+        } else if (length <= 0xffff) {
+            bytes_.push_back(0xdc);
+            write_be16_value(static_cast<uint16_t>(length));
+        } else {
+            bytes_.push_back(0xdd);
+            write_be32_value(length);
+        }
+    }
+
+    void write_map_len(uint32_t length)
+    {
+        if (length <= 15) {
+            bytes_.push_back(static_cast<uint8_t>(0x80 | length));
+        } else if (length <= 0xffff) {
+            bytes_.push_back(0xde);
+            write_be16_value(static_cast<uint16_t>(length));
+        } else {
+            bytes_.push_back(0xdf);
+            write_be32_value(length);
+        }
+    }
+
+private:
+    std::vector<uint8_t> bytes_;
+
+    void write_be16_value(uint16_t value)
+    {
+        bytes_.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+        bytes_.push_back(static_cast<uint8_t>(value & 0xff));
+    }
+
+    void write_be32_value(uint32_t value)
+    {
+        bytes_.push_back(static_cast<uint8_t>((value >> 24) & 0xff));
+        bytes_.push_back(static_cast<uint8_t>((value >> 16) & 0xff));
+        bytes_.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+        bytes_.push_back(static_cast<uint8_t>(value & 0xff));
+    }
+
+    void write_be64_value(uint64_t value)
+    {
+        write_be32_value(static_cast<uint32_t>((value >> 32) & 0xffffffffull));
+        write_be32_value(static_cast<uint32_t>(value & 0xffffffffull));
+    }
+};
+
+static std::string muninn_feedback_observed_at()
+{
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    return "unix-ms:" + std::to_string(millis);
+}
+
+static void write_string_array(MediaMsgpackWriter &writer, const std::vector<std::string> &values)
+{
+    writer.write_array_len(static_cast<uint32_t>(values.size()));
+    for (const auto &value : values) {
+        writer.write_string(value);
+    }
+}
+
+static void write_u64_array(MediaMsgpackWriter &writer, const std::vector<uint64_t> &values)
+{
+    writer.write_array_len(static_cast<uint32_t>(values.size()));
+    for (const auto value : values) {
+        writer.write_u64(value);
+    }
+}
+
+static std::vector<uint8_t> encode_muninn_receiver_feedback_payload(
+    const std::string &stream_id,
+    const std::string &session_id,
+    uint64_t frame_id,
+    const std::vector<std::string> &missing_chunk_keys)
+{
+    MediaMsgpackWriter record;
+    record.write_array_len(11);
+    record.write_string(stream_id);
+    record.write_string(session_id);
+    record.write_string("starfire.obs");
+    if (frame_id > 0) {
+        record.write_u64(frame_id - 1);
+    } else {
+        record.write_nil();
+    }
+    write_u64_array(record, {});
+    write_u64_array(record, {frame_id});
+    record.write_bool(true);
+    record.write_i64(0);
+    record.write_i64(0);
+    record.write_string(muninn_feedback_observed_at());
+    write_string_array(record, missing_chunk_keys);
+
+    const std::string record_key = stream_id + ":" + session_id + ":feedback:starfire.obs";
+    const std::string message_id =
+        "muninn-media:" + std::string(MuninnMediaReceiverFeedbackSchema) + ":" + record_key;
+
+    MediaMsgpackWriter document;
+    document.write_map_len(9);
+    document.write_string("schemaId");
+    document.write_string(MuninnMediaReceiverFeedbackSchema);
+    document.write_string("recordKey");
+    document.write_string(record_key);
+    document.write_string("storedAt");
+    document.write_string(muninn_feedback_observed_at());
+    document.write_string("payloadEncoding");
+    document.write_string("messagepack");
+    document.write_string("payload");
+    document.write_binary(record.bytes());
+    document.write_string("sourceRuntimeId");
+    document.write_string("starfire");
+    document.write_string("sourceAgentId");
+    document.write_nil();
+    document.write_string("sourceRole");
+    document.write_string("mimir.obs");
+    document.write_string("tags");
+    write_string_array(document, {"muninn.media"});
+
+    MediaMsgpackWriter wire;
+    wire.write_map_len(3);
+    wire.write_string("schemaVersion");
+    wire.write_string("cultnet.document_put_raw.v0");
+    wire.write_string("messageId");
+    wire.write_string(message_id);
+    wire.write_string("document");
+    wire.write_raw(document.bytes());
+    return wire.bytes();
+}
+
 static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8_t *payload, uint32_t payload_len)
 {
     try {
@@ -604,8 +831,8 @@ private:
             const int received = recvfrom(socket_, reinterpret_cast<char *>(buffer.data()), static_cast<int>(buffer.size()), 0,
                                           reinterpret_cast<sockaddr *>(&remote), &remote_len);
             if (received <= 0) {
-                flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr);
-                expire_video_assemblies(std::chrono::steady_clock::now());
+                flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
+                expire_video_assemblies(std::chrono::steady_clock::now(), bridge_sequence);
                 continue;
             }
             handle_packet(buffer.data(), static_cast<size_t>(received), remote, bridge_sequence, video_socket, video_addr, audio_socket, audio_addr);
@@ -649,6 +876,7 @@ private:
         if (version != 0 || connection_id != parts_.connection_id || header_bytes < 36 || size < header_bytes) {
             return;
         }
+        last_remote_ = remote;
         const size_t payload_offset = static_cast<size_t>(header_bytes);
         if (payload_offset + payload_len > size || 36 + channel_len > header_bytes) {
             return;
@@ -671,7 +899,7 @@ private:
         }
 
         if (packet_type == 3 && fragment_count == 0) {
-            forward_payload(packet + payload_offset, payload_len, video_socket, video_addr, audio_socket, audio_addr);
+            forward_payload(packet + payload_offset, payload_len, video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
             send_control_packet(4, 0x00, bridge_sequence++, sequence, remote);
         }
     }
@@ -681,7 +909,8 @@ private:
                          SOCKET video_socket,
                          const sockaddr_in &video_addr,
                          SOCKET audio_socket,
-                         const sockaddr_in &audio_addr)
+                         const sockaddr_in &audio_addr,
+                         uint32_t &bridge_sequence)
     {
         const auto media = decode_muninn_media_payload(payload, payload_len);
         if (!media || media->payload.empty()) {
@@ -691,7 +920,7 @@ private:
         }
         size_t forwarded_bytes = 0;
         if (media->kind == MuninnMediaPayload::Kind::Video) {
-            const auto assembled = assemble_video_payload(*media);
+            const auto assembled = assemble_video_payload(*media, bridge_sequence);
             if (!assembled) {
                 return;
             }
@@ -731,9 +960,9 @@ private:
         }
     }
 
-    std::optional<std::vector<uint8_t>> assemble_video_payload(const MuninnMediaPayload &media)
+    std::optional<std::vector<uint8_t>> assemble_video_payload(const MuninnMediaPayload &media, uint32_t &bridge_sequence)
     {
-        expire_video_assemblies(std::chrono::steady_clock::now());
+        expire_video_assemblies(std::chrono::steady_clock::now(), bridge_sequence);
         if (media.chunk_count == 0 || media.chunk_index >= media.chunk_count || media.payload.empty()) {
             ++payloads_decoded_dropped_;
             log_bridge_pressure("dropped invalid video chunk metadata");
@@ -747,6 +976,9 @@ private:
             media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
         auto &assembly = video_assemblies_[key];
         if (assembly.chunks.empty()) {
+            assembly.stream_id = media.stream_id;
+            assembly.session_id = media.session_id;
+            assembly.frame_id = media.frame_id;
             assembly.chunk_count = media.chunk_count;
             assembly.chunks.resize(media.chunk_count);
             assembly.started_at = std::chrono::steady_clock::now();
@@ -780,17 +1012,42 @@ private:
         return assembled;
     }
 
-    void expire_video_assemblies(std::chrono::steady_clock::time_point now)
+    void expire_video_assemblies(std::chrono::steady_clock::time_point now, uint32_t &bridge_sequence)
     {
         for (auto iterator = video_assemblies_.begin(); iterator != video_assemblies_.end();) {
             if (now - iterator->second.started_at < MuninnVideoAssemblyDeadline) {
                 ++iterator;
                 continue;
             }
+            const auto missing_chunk_keys = missing_video_chunk_keys(iterator->second);
+            send_receiver_feedback(iterator->second, missing_chunk_keys, bridge_sequence);
             iterator = video_assemblies_.erase(iterator);
             ++video_assemblies_expired_;
             log_bridge_pressure("expired incomplete video frame assembly");
         }
+    }
+
+    std::vector<std::string> missing_video_chunk_keys(const MuninnVideoFrameAssembly &assembly) const
+    {
+        std::vector<std::string> keys;
+        for (uint16_t index = 0; index < assembly.chunk_count; ++index) {
+            if (index >= assembly.chunks.size() || assembly.chunks[index].empty()) {
+                keys.push_back(std::to_string(assembly.frame_id) + ":" + std::to_string(index));
+            }
+        }
+        return keys;
+    }
+
+    void send_receiver_feedback(const MuninnVideoFrameAssembly &assembly,
+                                const std::vector<std::string> &missing_chunk_keys,
+                                uint32_t &bridge_sequence)
+    {
+        if (!last_remote_ || assembly.stream_id.empty() || assembly.session_id.empty()) {
+            return;
+        }
+        const auto payload = encode_muninn_receiver_feedback_payload(
+            assembly.stream_id, assembly.session_id, assembly.frame_id, missing_chunk_keys);
+        send_media_packet(payload, bridge_sequence++, *last_remote_);
     }
 
     void log_bridge_pressure(const char *reason)
@@ -810,7 +1067,11 @@ private:
         }
     }
 
-    void flush_forward_payloads(SOCKET video_socket, const sockaddr_in &video_addr, SOCKET audio_socket, const sockaddr_in &audio_addr)
+    void flush_forward_payloads(SOCKET video_socket,
+                                const sockaddr_in &video_addr,
+                                SOCKET audio_socket,
+                                const sockaddr_in &audio_addr,
+                                uint32_t &bridge_sequence)
     {
         if (!next_data_sequence_) {
             return;
@@ -837,7 +1098,7 @@ private:
             }
             gap_wait_started_.reset();
             const auto &payload = found->second;
-            forward_payload(payload.data(), static_cast<uint32_t>(payload.size()), video_socket, video_addr, audio_socket, audio_addr);
+            forward_payload(payload.data(), static_cast<uint32_t>(payload.size()), video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
             pending_payloads_.erase(found);
             ++(*next_data_sequence_);
         }
@@ -870,7 +1131,36 @@ private:
                reinterpret_cast<const sockaddr *>(&remote), sizeof(remote));
     }
 
+    void send_media_packet(const std::vector<uint8_t> &payload, uint32_t sequence, const sockaddr_in &remote)
+    {
+        const std::string channel = "media";
+        std::vector<uint8_t> response(36 + channel.size() + payload.size());
+        response[0] = 'C';
+        response[1] = 'N';
+        response[2] = 'R';
+        response[3] = '0';
+        response[4] = 0;
+        response[5] = 3;
+        response[6] = 0x01;
+        response[7] = static_cast<uint8_t>(36 + channel.size());
+        write_be32(response, 8, parts_.connection_id);
+        write_be32(response, 12, sequence);
+        write_be32(response, 16, 0);
+        write_be32(response, 20, 0);
+        write_be16(response, 24, 0);
+        write_be16(response, 26, 0);
+        write_be16(response, 28, 0);
+        write_be32(response, 30, static_cast<uint32_t>(payload.size()));
+        response[34] = static_cast<uint8_t>(channel.size());
+        response[35] = 0;
+        std::copy(channel.begin(), channel.end(), response.begin() + 36);
+        std::copy(payload.begin(), payload.end(), response.begin() + 36 + channel.size());
+        sendto(socket_, reinterpret_cast<const char *>(response.data()), static_cast<int>(response.size()), 0,
+               reinterpret_cast<const sockaddr *>(&remote), sizeof(remote));
+    }
+
     SOCKET socket_ = INVALID_SOCKET;
+    std::optional<sockaddr_in> last_remote_;
 #endif
     std::atomic<bool> running_{false};
     std::thread worker_;
