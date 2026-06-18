@@ -441,6 +441,7 @@ int main(int argc, char **argv)
                       << " video_local_port=" << parsed->video_local_port
                       << " audio_local_port=" << parsed->audio_local_port
                       << " connection=0x" << std::hex << parsed->connection_id << std::dec
+                      << " sender_resend_delay_ms=" << parsed->sender_resend_delay_ms
                       << " reliable_expire_after_ms=" << parsed->reliable_expire_after_ms
                       << " assembly_deadline_ms=" << parsed->video_assembly_deadline_ms
                       << " gap_wait_ms=" << parsed->gap_wait_ms << "\n";
