@@ -93,7 +93,18 @@ struct RudpBridgeOutputs {
 struct MuninnMediaPayload {
     enum class Kind { Unknown, Video, Audio };
     Kind kind = Kind::Unknown;
+    std::string stream_id;
+    std::string session_id;
+    uint64_t frame_id = 0;
+    uint16_t chunk_index = 0;
+    uint16_t chunk_count = 1;
     std::vector<uint8_t> payload;
+};
+
+struct MuninnVideoFrameAssembly {
+    uint16_t chunk_count = 0;
+    uint16_t chunks_received = 0;
+    std::vector<std::vector<uint8_t>> chunks;
 };
 
 static bool starts_with(const std::string &value, const std::string &prefix)
@@ -454,10 +465,23 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             if (record_len < 14) {
                 return std::nullopt;
             }
-            for (uint32_t index = 0; index < 13; ++index) {
-                record.skip();
-            }
-            return MuninnMediaPayload{MuninnMediaPayload::Kind::Video, record.read_bytes()};
+            MuninnMediaPayload media;
+            media.kind = MuninnMediaPayload::Kind::Video;
+            media.stream_id = record.read_string();
+            media.session_id = record.read_string();
+            media.frame_id = record.read_unsigned();
+            record.skip(); // codec
+            record.skip(); // pts_ticks
+            record.skip(); // duration_ticks
+            record.skip(); // timebase_num
+            record.skip(); // timebase_den
+            record.skip(); // keyframe
+            record.skip(); // dependency_frame_id
+            record.skip(); // deadline_ticks
+            media.chunk_index = static_cast<uint16_t>(record.read_unsigned());
+            media.chunk_count = static_cast<uint16_t>(record.read_unsigned());
+            media.payload = record.read_bytes();
+            return media;
         }
         if (schema_id == "muninn.media_audio_packet.v1") {
             if (record_len < 10) {
@@ -466,7 +490,10 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             for (uint32_t index = 0; index < 9; ++index) {
                 record.skip();
             }
-            return MuninnMediaPayload{MuninnMediaPayload::Kind::Audio, record.read_bytes()};
+            MuninnMediaPayload media;
+            media.kind = MuninnMediaPayload::Kind::Audio;
+            media.payload = record.read_bytes();
+            return media;
         }
     } catch (const std::exception &error) {
         blog(LOG_WARNING, "Muninn RUDP bridge could not decode typed media payload: %s", error.what());
@@ -626,6 +653,7 @@ private:
 
         if (packet_type == 1) {
             pending_payloads_.clear();
+            video_assemblies_.clear();
             gap_wait_started_.reset();
             next_data_sequence_ = sequence + 1;
             packets_forwarded_ = 0;
@@ -657,8 +685,14 @@ private:
             log_bridge_pressure("dropped undecodable media payload");
             return;
         }
+        size_t forwarded_bytes = 0;
         if (media->kind == MuninnMediaPayload::Kind::Video) {
-            const int sent = sendto(video_socket, reinterpret_cast<const char *>(media->payload.data()), static_cast<int>(media->payload.size()), 0,
+            const auto assembled = assemble_video_payload(*media);
+            if (!assembled) {
+                return;
+            }
+            forwarded_bytes = assembled->size();
+            const int sent = sendto(video_socket, reinterpret_cast<const char *>(assembled->data()), static_cast<int>(assembled->size()), 0,
                                     reinterpret_cast<const sockaddr *>(&video_addr), sizeof(video_addr));
             if (sent < 0) {
                 ++video_forward_failures_;
@@ -666,6 +700,7 @@ private:
                 return;
             }
         } else if (media->kind == MuninnMediaPayload::Kind::Audio) {
+            forwarded_bytes = media->payload.size();
             const int sent = sendto(audio_socket, reinterpret_cast<const char *>(media->payload.data()), static_cast<int>(media->payload.size()), 0,
                                     reinterpret_cast<const sockaddr *>(&audio_addr), sizeof(audio_addr));
             if (sent < 0) {
@@ -679,7 +714,7 @@ private:
             return;
         }
         ++packets_forwarded_;
-        bytes_forwarded_ += media->payload.size();
+        bytes_forwarded_ += forwarded_bytes;
         if (packets_forwarded_ == 1 || packets_forwarded_ % 900 == 0) {
             blog(LOG_INFO,
                  "Muninn RUDP bridge forwarded=%llu bytes=%llu decode_dropped=%llu video_failures=%llu audio_failures=%llu",
@@ -689,6 +724,53 @@ private:
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
         }
+    }
+
+    std::optional<std::vector<uint8_t>> assemble_video_payload(const MuninnMediaPayload &media)
+    {
+        if (media.chunk_count == 0 || media.chunk_index >= media.chunk_count || media.payload.empty()) {
+            ++payloads_decoded_dropped_;
+            log_bridge_pressure("dropped invalid video chunk metadata");
+            return std::nullopt;
+        }
+        if (media.chunk_count == 1) {
+            return media.payload;
+        }
+
+        const std::string key =
+            media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
+        auto &assembly = video_assemblies_[key];
+        if (assembly.chunks.empty()) {
+            assembly.chunk_count = media.chunk_count;
+            assembly.chunks.resize(media.chunk_count);
+        }
+        if (assembly.chunk_count != media.chunk_count) {
+            video_assemblies_.erase(key);
+            ++payloads_decoded_dropped_;
+            log_bridge_pressure("dropped video frame with mixed chunk count");
+            return std::nullopt;
+        }
+        auto &slot = assembly.chunks[media.chunk_index];
+        if (!slot.empty()) {
+            return std::nullopt;
+        }
+        slot = media.payload;
+        ++assembly.chunks_received;
+        if (assembly.chunks_received != assembly.chunk_count) {
+            return std::nullopt;
+        }
+
+        std::vector<uint8_t> assembled;
+        size_t byte_count = 0;
+        for (const auto &chunk : assembly.chunks) {
+            byte_count += chunk.size();
+        }
+        assembled.reserve(byte_count);
+        for (const auto &chunk : assembly.chunks) {
+            assembled.insert(assembled.end(), chunk.begin(), chunk.end());
+        }
+        video_assemblies_.erase(key);
+        return assembled;
     }
 
     void log_bridge_pressure(const char *reason)
@@ -772,6 +854,7 @@ private:
     std::thread worker_;
     RudpUrlParts parts_;
     std::map<uint32_t, std::vector<uint8_t>> pending_payloads_;
+    std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
     std::optional<uint32_t> next_data_sequence_;
     std::optional<std::chrono::steady_clock::time_point> gap_wait_started_;
     uint64_t packets_forwarded_ = 0;

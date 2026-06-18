@@ -9,6 +9,11 @@
 struct MuninnMediaPayload {
     enum class Kind { Unknown, Video, Audio };
     Kind kind = Kind::Unknown;
+    std::string stream_id;
+    std::string session_id;
+    uint64_t frame_id = 0;
+    uint16_t chunk_index = 0;
+    uint16_t chunk_count = 1;
     std::vector<uint8_t> payload;
 };
 
@@ -233,13 +238,31 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
     const uint32_t record_len = record.read_array_len();
     if (schema_id == "muninn.media_video_access_unit.v1") {
         if (record_len < 14) return std::nullopt;
-        for (uint32_t index = 0; index < 13; ++index) record.skip();
-        return MuninnMediaPayload{MuninnMediaPayload::Kind::Video, record.read_bytes()};
+        MuninnMediaPayload media;
+        media.kind = MuninnMediaPayload::Kind::Video;
+        media.stream_id = record.read_string();
+        media.session_id = record.read_string();
+        media.frame_id = record.read_unsigned();
+        record.skip();
+        record.skip();
+        record.skip();
+        record.skip();
+        record.skip();
+        record.skip();
+        record.skip();
+        record.skip();
+        media.chunk_index = static_cast<uint16_t>(record.read_unsigned());
+        media.chunk_count = static_cast<uint16_t>(record.read_unsigned());
+        media.payload = record.read_bytes();
+        return media;
     }
     if (schema_id == "muninn.media_audio_packet.v1") {
         if (record_len < 10) return std::nullopt;
         for (uint32_t index = 0; index < 9; ++index) record.skip();
-        return MuninnMediaPayload{MuninnMediaPayload::Kind::Audio, record.read_bytes()};
+        MuninnMediaPayload media;
+        media.kind = MuninnMediaPayload::Kind::Audio;
+        media.payload = record.read_bytes();
+        return media;
     }
     return std::nullopt;
 }
@@ -257,8 +280,12 @@ int main(int argc, char **argv)
         std::cout << "none\n";
         return 1;
     }
-    std::cout << (decoded->kind == MuninnMediaPayload::Kind::Video ? "video" : "audio")
-              << " payload_bytes=" << decoded->payload.size() << " first=";
+    std::cout << (decoded->kind == MuninnMediaPayload::Kind::Video ? "video" : "audio");
+    if (decoded->kind == MuninnMediaPayload::Kind::Video) {
+        std::cout << " frame_id=" << decoded->frame_id
+                  << " chunk=" << decoded->chunk_index << "/" << decoded->chunk_count;
+    }
+    std::cout << " payload_bytes=" << decoded->payload.size() << " first=";
     if (!decoded->payload.empty()) {
         std::cout << static_cast<unsigned>(decoded->payload[0]);
     }
