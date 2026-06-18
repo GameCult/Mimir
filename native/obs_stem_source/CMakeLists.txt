@@ -15,3 +15,9 @@ target_compile_definitions(mimir_obs_stem_source PRIVATE
     NOMINMAX
     _WIN32_WINNT=0x0A00)
 target_link_libraries(mimir_obs_stem_source PRIVATE OBS::libobs d3d11 d3d12 dxgi ws2_32)
+
+add_executable(muninn_media_decoder_probe
+    ../../tools/muninn_media_decoder_probe.cpp)
+target_compile_features(muninn_media_decoder_probe PRIVATE cxx_std_20)
+target_include_directories(muninn_media_decoder_probe PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})

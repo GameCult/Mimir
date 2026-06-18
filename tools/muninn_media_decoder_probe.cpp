@@ -7,14 +7,19 @@
 #include <string>
 #include <vector>
 
+#include "muninn_media_wire.h"
+
 struct MuninnMediaPayload {
-    enum class Kind { Unknown, Video, Audio };
+    enum class Kind { Unknown, Video, Audio, Feedback };
     Kind kind = Kind::Unknown;
     std::string stream_id;
     std::string session_id;
     uint64_t frame_id = 0;
     uint16_t chunk_index = 0;
     uint16_t chunk_count = 1;
+    uint64_t receiver_late_frames = 0;
+    uint64_t receiver_missing_chunks = 0;
+    bool receiver_requested_keyframe = false;
     std::vector<uint8_t> payload;
 };
 
@@ -96,6 +101,14 @@ public:
         if (tag == 0xce) return read_u32();
         if (tag == 0xcf) return read_u64();
         throw std::runtime_error("expected MessagePack unsigned integer");
+    }
+
+    bool read_bool()
+    {
+        const uint8_t tag = read_u8();
+        if (tag == 0xc2) return false;
+        if (tag == 0xc3) return true;
+        throw std::runtime_error("expected MessagePack bool");
     }
 
     void skip()
@@ -271,6 +284,25 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
         media.payload = record.read_bytes();
         return media;
     }
+    if (schema_id == "muninn.media_receiver_feedback.v1") {
+        if (record_len < 11) return std::nullopt;
+        MuninnMediaPayload media;
+        media.kind = MuninnMediaPayload::Kind::Feedback;
+        media.stream_id = record.read_string();
+        media.session_id = record.read_string();
+        record.skip(); // receiver_id
+        record.skip(); // highest_decodable_frame_id
+        record.skip(); // missing_frame_ids
+        media.receiver_late_frames = record.read_array_len();
+        for (uint32_t index = 0; index < media.receiver_late_frames; ++index) record.skip();
+        media.receiver_requested_keyframe = record.read_bool();
+        record.skip(); // jitter_us
+        record.skip(); // decode_queue_us
+        record.skip(); // observed_at
+        media.receiver_missing_chunks = record.read_array_len();
+        for (uint32_t index = 0; index < media.receiver_missing_chunks; ++index) record.skip();
+        return media;
+    }
     return std::nullopt;
 }
 
@@ -312,6 +344,14 @@ static std::optional<std::vector<uint8_t>> assemble_video_payload(
 
 static void print_payload(const MuninnMediaPayload &decoded)
 {
+    if (decoded.kind == MuninnMediaPayload::Kind::Feedback) {
+        std::cout << "feedback stream_id=" << decoded.stream_id
+                  << " session_id=" << decoded.session_id
+                  << " requested_keyframe=" << (decoded.receiver_requested_keyframe ? 1 : 0)
+                  << " late_frames=" << decoded.receiver_late_frames
+                  << " missing_chunks=" << decoded.receiver_missing_chunks << "\n";
+        return;
+    }
     std::cout << (decoded.kind == MuninnMediaPayload::Kind::Video ? "video" : "audio");
     if (decoded.kind == MuninnMediaPayload::Kind::Video) {
         std::cout << " frame_id=" << decoded.frame_id
@@ -327,15 +367,22 @@ static void print_payload(const MuninnMediaPayload &decoded)
 int main(int argc, char **argv)
 {
     if (argc < 2) {
-        std::cerr << "usage: muninn_media_decoder_probe <wire.bin> [more-wire.bin ...]\n";
+        std::cerr << "usage: muninn_media_decoder_probe <wire.bin> [more-wire.bin ...]\n"
+                  << "       muninn_media_decoder_probe --feedback-fixture\n";
         return 2;
     }
 
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies;
     bool decoded_any = false;
     for (int index = 1; index < argc; ++index) {
-        std::ifstream file(argv[index], std::ios::binary);
-        std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        std::vector<uint8_t> bytes;
+        if (std::string(argv[index]) == "--feedback-fixture") {
+            bytes = muninn_media_wire::encode_receiver_feedback_payload(
+                "muninn.raven.av.rudp", "raven:test:video", 42, {"42:1", "42:3"});
+        } else {
+            std::ifstream file(argv[index], std::ios::binary);
+            bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        }
         const auto decoded = decode_muninn_media_payload(bytes.data(), static_cast<uint32_t>(bytes.size()));
         if (!decoded) {
             std::cout << "none path=" << argv[index] << "\n";
