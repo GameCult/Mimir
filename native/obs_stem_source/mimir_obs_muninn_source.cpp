@@ -36,13 +36,17 @@ namespace {
 
 constexpr const char *MuninnStorePath = "C:\\Meta\\Odin\\state\\muninn.telemetry.cc";
 constexpr const char *MuninnCommandExePath = "C:\\Meta\\Odin\\Muninn\\muninn.exe";
-constexpr const char *MuninnCommandRudpTarget = "10.77.0.4:17873";
+constexpr const char *MuninnCommandRudpTarget = "192.168.1.84:17873";
+constexpr const char *MuninnDeprecatedWireGuardCommandRudpTarget = "10.77.0.4:17873";
 constexpr const char *MuninnDefaultHostId = "raven";
-constexpr const char *MuninnDefaultMediaTargetHost = "10.77.0.2";
+constexpr const char *MuninnDefaultMediaTargetHost = "192.168.1.66";
+constexpr const char *MuninnDeprecatedWireGuardMediaTargetHost = "10.77.0.2";
 constexpr uint16_t MuninnDefaultMediaPort = 5204;
 constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
+constexpr uint64_t MuninnCatalogRefreshMs = 2000;
+constexpr uint64_t MuninnActivationRetryMs = 30000;
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -78,6 +82,9 @@ struct MuninnSource {
     std::string stream_id;
     std::string stream_url;
     std::string last_requested_stream_id;
+    std::vector<MuninnStreamOption> catalog_options;
+    std::chrono::steady_clock::time_point next_catalog_refresh = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point last_activation_request = std::chrono::steady_clock::time_point::min();
 };
 
 static void muninn_child_audio(void *param, obs_source_t *source, const struct audio_data *audio_data, bool muted);
@@ -606,6 +613,8 @@ private:
             bytes_forwarded_ = 0;
             payloads_decoded_dropped_ = 0;
             video_assemblies_expired_ = 0;
+            video_recovery_dropped_ = 0;
+            waiting_for_video_keyframe_ = true;
             video_forward_failures_ = 0;
             audio_forward_failures_ = 0;
             const auto [ack, ack_mask] = ack_tracker_.state();
@@ -698,6 +707,14 @@ private:
             const auto assembled = assemble_video_payload(*media, bridge_sequence);
             if (!assembled) {
                 return;
+            }
+            if (waiting_for_video_keyframe_ && !h264_access_unit_has_idr(*assembled)) {
+                ++video_recovery_dropped_;
+                log_bridge_pressure("dropped video payload while waiting for decoder recovery keyframe");
+                return;
+            }
+            if (h264_access_unit_has_idr(*assembled)) {
+                waiting_for_video_keyframe_ = false;
             }
             forwarded_bytes = assembled->size();
             const int sent = sendto(video_socket, reinterpret_cast<const char *>(assembled->data()), static_cast<int>(assembled->size()), 0,
@@ -798,6 +815,7 @@ private:
             send_receiver_feedback(iterator->second, missing_chunk_keys, bridge_sequence);
             iterator = video_assemblies_.erase(iterator);
             ++video_assemblies_expired_;
+            waiting_for_video_keyframe_ = true;
             log_bridge_pressure("expired incomplete video frame assembly");
         }
     }
@@ -837,19 +855,51 @@ private:
     {
         const uint64_t pressure =
             payloads_decoded_dropped_ + video_assemblies_expired_ + packet_fragments_.expired_count() +
-            video_forward_failures_ + audio_forward_failures_;
+            video_recovery_dropped_ + video_forward_failures_ + audio_forward_failures_;
         if (pressure == 1 || pressure % 300 == 0) {
             blog(LOG_WARNING,
-                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu packet_fragments_expired=%llu video_failures=%llu audio_failures=%llu",
+                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu packet_fragments_expired=%llu recovery_dropped=%llu video_failures=%llu audio_failures=%llu",
                  reason,
                  static_cast<unsigned long long>(packets_forwarded_),
                  static_cast<unsigned long long>(bytes_forwarded_),
                  static_cast<unsigned long long>(payloads_decoded_dropped_),
                  static_cast<unsigned long long>(video_assemblies_expired_),
                  static_cast<unsigned long long>(packet_fragments_.expired_count()),
+                 static_cast<unsigned long long>(video_recovery_dropped_),
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
         }
+    }
+
+    static bool h264_access_unit_has_idr(const std::vector<uint8_t> &access_unit)
+    {
+        for (size_t index = 0; index + 4 < access_unit.size();) {
+            size_t start_code = std::string::npos;
+            size_t nal_offset = 0;
+            for (size_t cursor = index; cursor + 3 < access_unit.size(); ++cursor) {
+                if (access_unit[cursor] == 0x00 && access_unit[cursor + 1] == 0x00) {
+                    if (access_unit[cursor + 2] == 0x01) {
+                        start_code = cursor;
+                        nal_offset = cursor + 3;
+                        break;
+                    }
+                    if (cursor + 4 < access_unit.size() && access_unit[cursor + 2] == 0x00 && access_unit[cursor + 3] == 0x01) {
+                        start_code = cursor;
+                        nal_offset = cursor + 4;
+                        break;
+                    }
+                }
+            }
+            if (start_code == std::string::npos || nal_offset >= access_unit.size()) {
+                return false;
+            }
+            const uint8_t nal_type = access_unit[nal_offset] & 0x1f;
+            if (nal_type == 5) {
+                return true;
+            }
+            index = nal_offset + 1;
+        }
+        return false;
     }
 
     void send_control_packet(uint8_t packet_type, uint8_t flags, uint32_t sequence, uint32_t ack, uint32_t ack_mask, const sockaddr_in &remote)
@@ -921,8 +971,10 @@ private:
     uint64_t bytes_forwarded_ = 0;
     uint64_t payloads_decoded_dropped_ = 0;
     uint64_t video_assemblies_expired_ = 0;
+    uint64_t video_recovery_dropped_ = 0;
     uint64_t video_forward_failures_ = 0;
     uint64_t audio_forward_failures_ = 0;
+    bool waiting_for_video_keyframe_ = true;
     std::string source_url_;
     RudpBridgeOutputs outputs_;
 };
@@ -941,6 +993,21 @@ static const MuninnStreamOption *find_selected(const std::vector<MuninnStreamOpt
         }
     }
     return options.empty() ? nullptr : &options.front();
+}
+
+static bool is_playable_muninn_stream(const MuninnStreamOption &option)
+{
+    return !option.stream_id.empty() && option.state != "affordance";
+}
+
+static MuninnStreamOption default_muninn_stream_option()
+{
+    return MuninnStreamOption{
+        "muninn.raven.av.rudp",
+        "raven screen and loopback A/V",
+        "",
+        "activation-ready",
+    };
 }
 
 static std::string quote_windows_argument(const std::string &value)
@@ -1013,7 +1080,17 @@ static bool run_detached_command(const std::vector<std::string> &args)
 static std::string expected_rudp_stream_url(const MuninnSource *ctx, const std::string &stream_id)
 {
     return "rudp://" + ctx->media_target_host + ":" + std::to_string(ctx->media_port) + "/" + stream_id +
-           "?channel=media&format=muninn-typed-media&connection=0x6d750001";
+           "?channel=media&format=muninn-typed-media&connection=0x6d750001&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=250&assembly_deadline_ms=150&gap_wait_ms=8";
+}
+
+static std::string playable_rudp_stream_url(const MuninnSource *ctx, const MuninnStreamOption &selected)
+{
+    if (starts_with(selected.url, "rudp://") &&
+        selected.url.find("reliable_expire_after_ms=") != std::string::npos &&
+        selected.url.find("assembly_deadline_ms=") != std::string::npos) {
+        return selected.url;
+    }
+    return expected_rudp_stream_url(ctx, selected.stream_id);
 }
 
 static std::string canonical_muninn_stream_id(const std::string &stream_id)
@@ -1029,16 +1106,29 @@ static std::string canonical_muninn_stream_id(const std::string &stream_id)
     return stream_id;
 }
 
+static std::string endpoint_setting(obs_data_t *settings, const char *key, const char *current_default, const char *deprecated_default)
+{
+    std::string value = obs_string(settings, key, current_default);
+    if (value == deprecated_default) {
+        obs_data_set_string(settings, key, current_default);
+        return current_default;
+    }
+    return value;
+}
+
 static void request_stream_activation(MuninnSource *ctx, const std::string &stream_id)
 {
     const auto canonical_stream_id = canonical_muninn_stream_id(stream_id);
     if (!ctx || canonical_stream_id.empty() || ctx->command_exe_path.empty() || ctx->command_rudp_target.empty()) {
         return;
     }
-    if (ctx->last_requested_stream_id == canonical_stream_id) {
+    const auto now = std::chrono::steady_clock::now();
+    if (ctx->last_requested_stream_id == canonical_stream_id &&
+        now - ctx->last_activation_request < std::chrono::milliseconds(MuninnActivationRetryMs)) {
         return;
     }
     ctx->last_requested_stream_id = canonical_stream_id;
+    ctx->last_activation_request = now;
 
     const std::vector<std::string> args = {
         ctx->command_exe_path,
@@ -1313,12 +1403,16 @@ static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vec
         if (stream_ids[index].empty()) {
             continue;
         }
-        options.push_back(MuninnStreamOption{
+        MuninnStreamOption option{
             stream_ids[index],
             labels[index].empty() ? stream_ids[index] : labels[index],
             urls[index],
             states[index],
-        });
+        };
+        if (!is_playable_muninn_stream(option)) {
+            continue;
+        }
+        options.push_back(std::move(option));
     }
 
     std::sort(options.begin(), options.end(), [](const auto &left, const auto &right) {
@@ -1447,7 +1541,7 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url)
         }
         const auto outputs = ctx->bridge->start(url);
         ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Video", outputs.video_url, "h264", false);
-        ctx->audio_media = create_ffmpeg_child_source(ctx, "Muninn Stream Audio", outputs.audio_url, "adts", true);
+        ctx->audio_media = create_ffmpeg_child_source(ctx, "Muninn Stream Audio", outputs.audio_url, "aac", true);
         if (ctx->media || ctx->audio_media) {
             ctx->stream_url = url;
         } else {
@@ -1466,13 +1560,51 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url)
     }
 }
 
+static void refresh_catalog(MuninnSource *ctx)
+{
+    if (!ctx) {
+        return;
+    }
+    ctx->catalog_options = read_catalog(ctx->store_path);
+    if (ctx->catalog_options.empty()) {
+        ctx->catalog_options.push_back(default_muninn_stream_option());
+    }
+    ctx->next_catalog_refresh =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(MuninnCatalogRefreshMs);
+}
+
+static void reconcile_selected_stream(MuninnSource *ctx)
+{
+    if (!ctx) {
+        return;
+    }
+    if (ctx->catalog_options.empty()) {
+        create_or_update_media(ctx, "");
+        return;
+    }
+
+    const auto *selected = find_selected(ctx->catalog_options, ctx->stream_id);
+    if (!selected) {
+        create_or_update_media(ctx, "");
+        return;
+    }
+
+    const bool selection_changed = ctx->stream_id != selected->stream_id;
+    ctx->stream_id = selected->stream_id;
+    if (selection_changed) {
+        ctx->last_requested_stream_id.clear();
+    }
+
+    request_stream_activation(ctx, selected->stream_id);
+    create_or_update_media(ctx, playable_rudp_stream_url(ctx, *selected));
+}
+
 static void populate_stream_list(obs_property_t *property, const std::string &store_path)
 {
     obs_property_list_clear(property);
-    const auto options = read_catalog(store_path);
+    auto options = read_catalog(store_path);
     if (options.empty()) {
-        obs_property_list_add_string(property, "No active Muninn streams", "");
-        return;
+        options.push_back(default_muninn_stream_option());
     }
 
     for (const auto &option : options) {
@@ -1566,30 +1698,35 @@ static void stop_audio_worker(MuninnSource *ctx)
 static void muninn_update(void *data, obs_data_t *settings)
 {
     auto *ctx = static_cast<MuninnSource *>(data);
+    const auto previous_command_rudp_target = ctx->command_rudp_target;
+    const auto previous_media_target_host = ctx->media_target_host;
+    const auto previous_media_port = ctx->media_port;
+
     ctx->store_path = obs_string(settings, "store_path", MuninnStorePath);
     ctx->command_exe_path = obs_string(settings, "command_exe_path", MuninnCommandExePath);
-    ctx->command_rudp_target = obs_string(settings, "command_rudp_target", MuninnCommandRudpTarget);
+    ctx->command_rudp_target = endpoint_setting(
+        settings,
+        "command_rudp_target",
+        MuninnCommandRudpTarget,
+        MuninnDeprecatedWireGuardCommandRudpTarget);
     ctx->host_id = obs_string(settings, "host_id", MuninnDefaultHostId);
-    ctx->media_target_host = obs_string(settings, "media_target_host", MuninnDefaultMediaTargetHost);
+    ctx->media_target_host = endpoint_setting(
+        settings,
+        "media_target_host",
+        MuninnDefaultMediaTargetHost,
+        MuninnDeprecatedWireGuardMediaTargetHost);
     ctx->media_port = static_cast<uint16_t>(obs_data_get_int(settings, "media_port") > 0
                                                 ? obs_data_get_int(settings, "media_port")
                                                 : MuninnDefaultMediaPort);
     ctx->stream_id = obs_string(settings, "stream_id", "");
-
-    const auto options = read_catalog(ctx->store_path);
-    const auto *selected = find_selected(options, ctx->stream_id);
-    if (!selected) {
-        create_or_update_media(ctx, "");
-        return;
+    if (ctx->command_rudp_target != previous_command_rudp_target ||
+        ctx->media_target_host != previous_media_target_host ||
+        ctx->media_port != previous_media_port) {
+        ctx->last_requested_stream_id.clear();
     }
 
-    ctx->stream_id = selected->stream_id;
-    request_stream_activation(ctx, selected->stream_id);
-    if (selected->url.empty()) {
-        create_or_update_media(ctx, expected_rudp_stream_url(ctx, selected->stream_id));
-    } else {
-        create_or_update_media(ctx, selected->url);
-    }
+    refresh_catalog(ctx);
+    reconcile_selected_stream(ctx);
 }
 
 static void *muninn_create(obs_data_t *settings, obs_source_t *source)
@@ -1639,16 +1776,21 @@ static obs_properties_t *muninn_properties(void *data)
     const auto store_path = ctx ? ctx->store_path : std::string(MuninnStorePath);
 
     obs_properties_t *props = obs_properties_create();
-    obs_properties_add_text(props, "store_path", "Muninn CultCache store", OBS_TEXT_DEFAULT);
-    obs_properties_add_text(props, "command_exe_path", "Muninn command executable", OBS_TEXT_DEFAULT);
-    obs_properties_add_text(props, "command_rudp_target", "Muninn command RUDP target", OBS_TEXT_DEFAULT);
-    obs_properties_add_text(props, "host_id", "Muninn host", OBS_TEXT_DEFAULT);
-    obs_properties_add_text(props, "media_target_host", "Muninn media target host", OBS_TEXT_DEFAULT);
-    obs_properties_add_int(props, "media_port", "Muninn media UDP port", 1, 65535, 1);
     obs_property_t *streams = obs_properties_add_list(props, "stream_id", "Muninn stream", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
     populate_stream_list(streams, store_path);
-    obs_properties_add_button(props, "refresh_streams", "Refresh Muninn streams", muninn_refresh_streams);
     return props;
+}
+
+static void muninn_video_tick(void *data, float)
+{
+    auto *ctx = static_cast<MuninnSource *>(data);
+    if (!ctx) {
+        return;
+    }
+    if (std::chrono::steady_clock::now() >= ctx->next_catalog_refresh) {
+        refresh_catalog(ctx);
+    }
+    reconcile_selected_stream(ctx);
 }
 
 static void muninn_render(void *data, gs_effect_t *)
@@ -1721,6 +1863,7 @@ static obs_source_info muninn_source_info = {
     .get_defaults = muninn_defaults,
     .get_properties = muninn_properties,
     .update = muninn_update,
+    .video_tick = muninn_video_tick,
     .video_render = muninn_render,
     .enum_active_sources = muninn_enum_active_sources,
 };

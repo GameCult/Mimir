@@ -122,7 +122,11 @@ Muninn Stream
 ### Muninn Streams
 
 The `Muninn Stream` source is a thin OBS wrapper over Muninn's typed
-CultCache/CultMesh stream catalog. It reads Muninn's local `.cc` store:
+CultCache/CultMesh stream catalog. The operator-facing UI is intentionally just
+the stream dropdown. Store paths, command endpoints, and media return endpoints
+are source defaults and migration state, not user-facing stream selection.
+
+The source reads Muninn's local `.cc` store:
 
 ```text
 C:\Meta\Odin\state\muninn.telemetry.cc
@@ -140,6 +144,22 @@ media profile, the source publishes the same typed
 `muninn.capture_stream_command` that an operator would publish manually. Raven
 Muninn `serve` still owns whether capture starts and which local FFmpeg/WASAPI
 children exist.
+
+If the local catalog projection is absent or stale, the source keeps a
+LAN-default Raven A/V stream option instead of showing an empty source. That is
+a resilience fallback for the OBS machine, not a second stream authority. Stale
+catalog `rudp://` URLs that do not carry the current low-latency LAN profile are
+sanitized back to the source-derived URL before the bridge starts.
+
+The current Raven-room default route is LAN-first: command requests go to
+`192.168.1.84:17873`, and Raven sends media back to Starfire at
+`192.168.1.66:5204`. Older saved source settings that still point at the
+deprecated WireGuard defaults `10.77.0.4:17873` and `10.77.0.2` are migrated on
+load. Custom operator-entered endpoints are left alone.
+
+The source polls the catalog while active and republishes activation requests on
+a bounded reconnect cadence, so a Raven daemon restart or media child exit does
+not require reopening the source properties.
 
 For `rudp://` stream URLs, the plugin binds the advertised media port, accepts
 the CultNet RUDP handshake, acknowledges packets, reassembles RUDP fragments,
