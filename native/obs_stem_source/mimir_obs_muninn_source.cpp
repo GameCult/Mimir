@@ -1,19 +1,43 @@
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#endif
+
 #include <obs-module.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <cctype>
+#include <cstring>
+#include <deque>
 #include <fstream>
 #include <iterator>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
 
 constexpr const char *MuninnStorePath = "C:\\Meta\\Odin\\state\\muninn.telemetry.cc";
+constexpr const char *MuninnCommandExePath = "C:\\Meta\\Odin\\Muninn\\muninn.exe";
+constexpr const char *MuninnCommandRudpTarget = "10.77.0.4:17872";
+constexpr const char *MuninnDefaultHostId = "raven";
+constexpr const char *MuninnDefaultMediaTargetHost = "10.77.0.2";
+constexpr uint16_t MuninnDefaultMediaPort = 5204;
 constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
+constexpr uint32_t MuninnMediaRudpConnectionId = 0x6d750001;
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -22,12 +46,350 @@ struct MuninnStreamOption {
     std::string state;
 };
 
+struct MuninnQueuedAudio {
+    std::vector<uint8_t> planes[MAX_AV_PLANES];
+    uint32_t frames = 0;
+    uint64_t timestamp = 0;
+    enum speaker_layout speakers = SPEAKERS_STEREO;
+    uint32_t samples_per_sec = 48000;
+};
+
 struct MuninnSource {
     obs_source_t *source = nullptr;
     obs_source_t *media = nullptr;
+    std::unique_ptr<class RudpMediaBridge> bridge;
+    std::mutex audio_mutex;
+    std::condition_variable audio_cv;
+    std::deque<MuninnQueuedAudio> audio_queue;
+    std::thread audio_worker;
+    bool audio_worker_running = false;
     std::string store_path = MuninnStorePath;
+    std::string command_exe_path = MuninnCommandExePath;
+    std::string command_rudp_target = MuninnCommandRudpTarget;
+    std::string host_id = MuninnDefaultHostId;
+    std::string media_target_host = MuninnDefaultMediaTargetHost;
+    uint16_t media_port = MuninnDefaultMediaPort;
     std::string stream_id;
     std::string stream_url;
+    std::string last_requested_stream_id;
+};
+
+static void muninn_child_audio(void *param, obs_source_t *source, const struct audio_data *audio_data, bool muted);
+static void stop_audio_worker(MuninnSource *ctx);
+
+struct RudpUrlParts {
+    uint16_t port = 0;
+    uint16_t local_port = 0;
+    uint32_t connection_id = MuninnMediaRudpConnectionId;
+};
+
+static bool starts_with(const std::string &value, const std::string &prefix)
+{
+    return value.rfind(prefix, 0) == 0;
+}
+
+static uint32_t read_be32(const uint8_t *data)
+{
+    return (static_cast<uint32_t>(data[0]) << 24) | (static_cast<uint32_t>(data[1]) << 16) |
+           (static_cast<uint32_t>(data[2]) << 8) | static_cast<uint32_t>(data[3]);
+}
+
+static uint16_t read_be16(const uint8_t *data)
+{
+    return static_cast<uint16_t>((static_cast<uint16_t>(data[0]) << 8) | data[1]);
+}
+
+static void write_be32(std::vector<uint8_t> &data, size_t offset, uint32_t value)
+{
+    data[offset] = static_cast<uint8_t>((value >> 24) & 0xff);
+    data[offset + 1] = static_cast<uint8_t>((value >> 16) & 0xff);
+    data[offset + 2] = static_cast<uint8_t>((value >> 8) & 0xff);
+    data[offset + 3] = static_cast<uint8_t>(value & 0xff);
+}
+
+static void write_be16(std::vector<uint8_t> &data, size_t offset, uint16_t value)
+{
+    data[offset] = static_cast<uint8_t>((value >> 8) & 0xff);
+    data[offset + 1] = static_cast<uint8_t>(value & 0xff);
+}
+
+static std::optional<uint32_t> parse_u32_query_hex_or_decimal(const std::string &value)
+{
+    try {
+        size_t consumed = 0;
+        const int base = starts_with(value, "0x") || starts_with(value, "0X") ? 16 : 10;
+        const auto parsed = std::stoul(value, &consumed, base);
+        if (consumed == value.size()) {
+            return static_cast<uint32_t>(parsed);
+        }
+    } catch (...) {
+    }
+    return std::nullopt;
+}
+
+static std::optional<RudpUrlParts> parse_rudp_url(const std::string &url)
+{
+    if (!starts_with(url, "rudp://")) {
+        return std::nullopt;
+    }
+
+    const auto authority_start = std::string("rudp://").size();
+    const auto path_start = url.find('/', authority_start);
+    const auto query_start = url.find('?', authority_start);
+    const auto authority_end = std::min(path_start == std::string::npos ? url.size() : path_start,
+                                        query_start == std::string::npos ? url.size() : query_start);
+    const auto authority = url.substr(authority_start, authority_end - authority_start);
+    const auto colon = authority.rfind(':');
+    if (colon == std::string::npos || colon + 1 >= authority.size()) {
+        return std::nullopt;
+    }
+
+    RudpUrlParts parts;
+    parts.port = static_cast<uint16_t>(std::stoul(authority.substr(colon + 1)));
+    parts.local_port = static_cast<uint16_t>(parts.port + 10000);
+
+    if (query_start != std::string::npos) {
+        std::stringstream query(url.substr(query_start + 1));
+        std::string item;
+        while (std::getline(query, item, '&')) {
+            const auto equals = item.find('=');
+            if (equals == std::string::npos) {
+                continue;
+            }
+            const auto key = item.substr(0, equals);
+            const auto value = item.substr(equals + 1);
+            if (key == "connection") {
+                if (const auto parsed = parse_u32_query_hex_or_decimal(value)) {
+                    parts.connection_id = *parsed;
+                }
+            } else if (key == "local_port") {
+                parts.local_port = static_cast<uint16_t>(std::stoul(value));
+            }
+        }
+    }
+
+    return parts;
+}
+
+class RudpMediaBridge {
+public:
+    ~RudpMediaBridge() { stop(); }
+
+    std::string start(const std::string &url)
+    {
+        if (running_ && url == source_url_) {
+            return output_url_;
+        }
+
+        stop();
+        const auto parsed = parse_rudp_url(url);
+        if (!parsed) {
+            return url;
+        }
+
+        source_url_ = url;
+        parts_ = *parsed;
+        output_url_ = "udp://127.0.0.1:" + std::to_string(parts_.local_port) +
+                      "?fifo_size=50000000&overrun_nonfatal=1&buffer_size=10485760";
+        running_ = true;
+        worker_ = std::thread([this] { run(); });
+        blog(LOG_INFO, "Muninn RUDP bridge starting udp/%u -> udp/127.0.0.1:%u", parts_.port, parts_.local_port);
+        return output_url_;
+    }
+
+    void stop()
+    {
+        running_ = false;
+#ifdef _WIN32
+        if (socket_ != INVALID_SOCKET) {
+            closesocket(socket_);
+            socket_ = INVALID_SOCKET;
+        }
+#endif
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+        source_url_.clear();
+        output_url_.clear();
+    }
+
+private:
+    void run()
+    {
+#ifdef _WIN32
+        WSADATA data;
+        WSAStartup(MAKEWORD(2, 2), &data);
+
+        socket_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (socket_ == INVALID_SOCKET) {
+            blog(LOG_WARNING, "Muninn RUDP bridge could not create socket");
+            WSACleanup();
+            return;
+        }
+        const int socket_buffer_bytes = 16 * 1024 * 1024;
+        setsockopt(socket_, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&socket_buffer_bytes),
+                   sizeof(socket_buffer_bytes));
+
+        sockaddr_in bind_addr = {};
+        bind_addr.sin_family = AF_INET;
+        bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        bind_addr.sin_port = htons(parts_.port);
+        if (bind(socket_, reinterpret_cast<sockaddr *>(&bind_addr), sizeof(bind_addr)) != 0) {
+            blog(LOG_WARNING, "Muninn RUDP bridge could not bind udp/%u", parts_.port);
+            closesocket(socket_);
+            socket_ = INVALID_SOCKET;
+            WSACleanup();
+            return;
+        }
+
+        const SOCKET forward_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        setsockopt(forward_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char *>(&socket_buffer_bytes),
+                   sizeof(socket_buffer_bytes));
+        sockaddr_in forward_addr = {};
+        forward_addr.sin_family = AF_INET;
+        inet_pton(AF_INET, "127.0.0.1", &forward_addr.sin_addr);
+        forward_addr.sin_port = htons(parts_.local_port);
+
+        std::vector<uint8_t> buffer(65535);
+        uint32_t bridge_sequence = 1;
+        while (running_) {
+            sockaddr_in remote = {};
+            int remote_len = sizeof(remote);
+            const int received = recvfrom(socket_, reinterpret_cast<char *>(buffer.data()), static_cast<int>(buffer.size()), 0,
+                                          reinterpret_cast<sockaddr *>(&remote), &remote_len);
+            if (received <= 0) {
+                continue;
+            }
+            handle_packet(buffer.data(), static_cast<size_t>(received), remote, bridge_sequence, forward_socket, forward_addr);
+        }
+
+        if (forward_socket != INVALID_SOCKET) {
+            closesocket(forward_socket);
+        }
+        if (socket_ != INVALID_SOCKET) {
+            closesocket(socket_);
+            socket_ = INVALID_SOCKET;
+        }
+        WSACleanup();
+#endif
+    }
+
+#ifdef _WIN32
+    void handle_packet(const uint8_t *packet,
+                       size_t size,
+                       const sockaddr_in &remote,
+                       uint32_t &bridge_sequence,
+                       SOCKET forward_socket,
+                       const sockaddr_in &forward_addr)
+    {
+        if (size < 36 || packet[0] != 'C' || packet[1] != 'N' || packet[2] != 'R' || packet[3] != '0') {
+            return;
+        }
+        const uint8_t version = packet[4];
+        const uint8_t packet_type = packet[5];
+        const uint8_t header_bytes = packet[7];
+        const uint32_t connection_id = read_be32(packet + 8);
+        const uint32_t sequence = read_be32(packet + 12);
+        const uint16_t fragment_count = read_be16(packet + 28);
+        const uint32_t payload_len = read_be32(packet + 30);
+        const uint8_t channel_len = packet[34];
+        if (version != 0 || connection_id != parts_.connection_id || header_bytes < 36 || size < header_bytes) {
+            return;
+        }
+        const size_t payload_offset = static_cast<size_t>(header_bytes);
+        if (payload_offset + payload_len > size || 36 + channel_len > header_bytes) {
+            return;
+        }
+
+        if (packet_type == 1) {
+            pending_payloads_.clear();
+            next_data_sequence_ = sequence + 1;
+            packets_forwarded_ = 0;
+            bytes_forwarded_ = 0;
+            send_control_packet(2, 0x03, bridge_sequence++, sequence, remote);
+            blog(LOG_INFO, "Muninn RUDP bridge accepted media connection sequence %u", sequence);
+            return;
+        }
+
+        if (packet_type == 3 && fragment_count == 0) {
+            pending_payloads_[sequence] = std::vector<uint8_t>(packet + payload_offset, packet + payload_offset + payload_len);
+            flush_forward_payloads(forward_socket, forward_addr);
+            send_control_packet(4, 0x00, bridge_sequence++, sequence, remote);
+        }
+    }
+
+    void forward_payload(const uint8_t *payload, uint32_t payload_len, SOCKET forward_socket, const sockaddr_in &forward_addr)
+    {
+        sendto(forward_socket, reinterpret_cast<const char *>(payload), static_cast<int>(payload_len), 0,
+               reinterpret_cast<const sockaddr *>(&forward_addr), sizeof(forward_addr));
+        ++packets_forwarded_;
+        bytes_forwarded_ += payload_len;
+        if (packets_forwarded_ == 1 || packets_forwarded_ % 900 == 0) {
+            blog(LOG_INFO, "Muninn RUDP bridge forwarded %llu packets / %llu bytes",
+                 static_cast<unsigned long long>(packets_forwarded_),
+                 static_cast<unsigned long long>(bytes_forwarded_));
+        }
+    }
+
+    void flush_forward_payloads(SOCKET forward_socket, const sockaddr_in &forward_addr)
+    {
+        if (!next_data_sequence_) {
+            return;
+        }
+        while (true) {
+            const auto found = pending_payloads_.find(*next_data_sequence_);
+            if (found == pending_payloads_.end()) {
+                if (pending_payloads_.size() > 32) {
+                    *next_data_sequence_ = pending_payloads_.begin()->first;
+                    continue;
+                }
+                return;
+            }
+            const auto &payload = found->second;
+            forward_payload(payload.data(), static_cast<uint32_t>(payload.size()), forward_socket, forward_addr);
+            pending_payloads_.erase(found);
+            ++(*next_data_sequence_);
+        }
+    }
+
+    void send_control_packet(uint8_t packet_type, uint8_t flags, uint32_t sequence, uint32_t ack, const sockaddr_in &remote)
+    {
+        const std::string channel = "control";
+        std::vector<uint8_t> response(36 + channel.size());
+        response[0] = 'C';
+        response[1] = 'N';
+        response[2] = 'R';
+        response[3] = '0';
+        response[4] = 0;
+        response[5] = packet_type;
+        response[6] = flags;
+        response[7] = static_cast<uint8_t>(36 + channel.size());
+        write_be32(response, 8, parts_.connection_id);
+        write_be32(response, 12, sequence);
+        write_be32(response, 16, ack);
+        write_be32(response, 20, 0);
+        write_be16(response, 24, 0);
+        write_be16(response, 26, 0);
+        write_be16(response, 28, 0);
+        write_be32(response, 30, 0);
+        response[34] = static_cast<uint8_t>(channel.size());
+        response[35] = 0;
+        std::copy(channel.begin(), channel.end(), response.begin() + 36);
+        sendto(socket_, reinterpret_cast<const char *>(response.data()), static_cast<int>(response.size()), 0,
+               reinterpret_cast<const sockaddr *>(&remote), sizeof(remote));
+    }
+
+    SOCKET socket_ = INVALID_SOCKET;
+#endif
+    std::atomic<bool> running_{false};
+    std::thread worker_;
+    RudpUrlParts parts_;
+    std::map<uint32_t, std::vector<uint8_t>> pending_payloads_;
+    std::optional<uint32_t> next_data_sequence_;
+    uint64_t packets_forwarded_ = 0;
+    uint64_t bytes_forwarded_ = 0;
+    std::string source_url_;
+    std::string output_url_;
 };
 
 static std::string obs_string(obs_data_t *settings, const char *key, const char *fallback)
@@ -44,6 +406,130 @@ static const MuninnStreamOption *find_selected(const std::vector<MuninnStreamOpt
         }
     }
     return options.empty() ? nullptr : &options.front();
+}
+
+static std::string quote_windows_argument(const std::string &value)
+{
+    std::string result = "\"";
+    size_t backslashes = 0;
+    for (const char ch : value) {
+        if (ch == '\\') {
+            ++backslashes;
+            continue;
+        }
+        if (ch == '"') {
+            result.append(backslashes * 2 + 1, '\\');
+            result.push_back('"');
+            backslashes = 0;
+            continue;
+        }
+        result.append(backslashes, '\\');
+        backslashes = 0;
+        result.push_back(ch);
+    }
+    result.append(backslashes * 2, '\\');
+    result.push_back('"');
+    return result;
+}
+
+static bool run_detached_command(const std::vector<std::string> &args)
+{
+    if (args.empty()) {
+        return false;
+    }
+
+    std::string command_line;
+    for (const auto &arg : args) {
+        if (!command_line.empty()) {
+            command_line.push_back(' ');
+        }
+        command_line += quote_windows_argument(arg);
+    }
+
+#ifdef _WIN32
+    STARTUPINFOA startup = {};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process = {};
+    std::vector<char> mutable_command(command_line.begin(), command_line.end());
+    mutable_command.push_back('\0');
+    const BOOL ok = CreateProcessA(
+        nullptr,
+        mutable_command.data(),
+        nullptr,
+        nullptr,
+        FALSE,
+        CREATE_NO_WINDOW,
+        nullptr,
+        nullptr,
+        &startup,
+        &process);
+    if (!ok) {
+        blog(LOG_WARNING, "Muninn Stream could not launch command %s", command_line.c_str());
+        return false;
+    }
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return true;
+#else
+    return false;
+#endif
+}
+
+static std::string expected_rudp_stream_url(const MuninnSource *ctx, const std::string &stream_id)
+{
+    return "rudp://" + ctx->media_target_host + ":" + std::to_string(ctx->media_port) + "/" + stream_id +
+           "?channel=realtime&format=mpegts&connection=0x6d750001";
+}
+
+static std::string canonical_muninn_stream_id(const std::string &stream_id)
+{
+    const auto colon = stream_id.rfind(':');
+    if (colon == std::string::npos || colon + 1 >= stream_id.size()) {
+        return stream_id;
+    }
+    const auto suffix = stream_id.substr(colon + 1);
+    if (std::all_of(suffix.begin(), suffix.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; })) {
+        return stream_id.substr(0, colon);
+    }
+    return stream_id;
+}
+
+static void request_stream_activation(MuninnSource *ctx, const std::string &stream_id)
+{
+    const auto canonical_stream_id = canonical_muninn_stream_id(stream_id);
+    if (!ctx || canonical_stream_id.empty() || ctx->command_exe_path.empty() || ctx->command_rudp_target.empty()) {
+        return;
+    }
+    if (ctx->last_requested_stream_id == canonical_stream_id) {
+        return;
+    }
+    ctx->last_requested_stream_id = canonical_stream_id;
+
+    const std::vector<std::string> args = {
+        ctx->command_exe_path,
+        "request-stream",
+        "--host",
+        ctx->host_id,
+        "--stream",
+        canonical_stream_id,
+        "--stream-action",
+        "start",
+        "--target-host",
+        ctx->media_target_host,
+        "--port",
+        std::to_string(ctx->media_port),
+        "--media-transport",
+        "rudp",
+        "--no-obs-target",
+        "--capture-command-rudp-target",
+        ctx->command_rudp_target,
+    };
+    std::thread([args] {
+        if (!run_detached_command(args)) {
+            blog(LOG_WARNING, "Muninn Stream failed to publish activation request");
+        }
+    }).detach();
+    blog(LOG_INFO, "Muninn Stream requested activation for %s over RUDP %s", canonical_stream_id.c_str(), ctx->command_rudp_target.c_str());
 }
 
 class MsgpackReader {
@@ -361,10 +847,14 @@ static std::vector<MuninnStreamOption> read_catalog(const std::string &path)
 
 static void release_media(MuninnSource *ctx)
 {
+    if (ctx->bridge) {
+        ctx->bridge->stop();
+    }
     if (!ctx->media) {
         return;
     }
 
+    obs_source_remove_audio_capture_callback(ctx->media, muninn_child_audio, ctx);
     obs_source_remove_active_child(ctx->source, ctx->media);
     obs_source_release(ctx->media);
     ctx->media = nullptr;
@@ -384,9 +874,19 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url)
 
     release_media(ctx);
 
+    std::string media_url = url;
+    if (starts_with(url, "rudp://")) {
+        if (!ctx->bridge) {
+            ctx->bridge = std::make_unique<RudpMediaBridge>();
+        }
+        media_url = ctx->bridge->start(url);
+    } else if (ctx->bridge) {
+        ctx->bridge->stop();
+    }
+
     obs_data_t *settings = obs_data_create();
     obs_data_set_bool(settings, "is_local_file", false);
-    obs_data_set_string(settings, "input", url.c_str());
+    obs_data_set_string(settings, "input", media_url.c_str());
     obs_data_set_bool(settings, "restart_on_activate", true);
     obs_data_set_bool(settings, "clear_on_media_end", false);
     obs_data_set_bool(settings, "close_when_inactive", false);
@@ -394,11 +894,12 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url)
     ctx->media = obs_source_create_private("ffmpeg_source", "Muninn Stream Media", settings);
     obs_data_release(settings);
     if (ctx->media) {
+        obs_source_add_audio_capture_callback(ctx->media, muninn_child_audio, ctx);
         obs_source_add_active_child(ctx->source, ctx->media);
         ctx->stream_url = url;
     } else {
         ctx->stream_url.clear();
-        blog(LOG_WARNING, "Muninn Stream could not create OBS ffmpeg_source for %s", url.c_str());
+        blog(LOG_WARNING, "Muninn Stream could not create OBS ffmpeg_source for %s", media_url.c_str());
     }
 }
 
@@ -443,10 +944,73 @@ static const char *muninn_get_name(void *)
     return "Muninn Stream";
 }
 
+static void audio_worker_loop(MuninnSource *ctx)
+{
+    while (true) {
+        MuninnQueuedAudio packet;
+        {
+            std::unique_lock<std::mutex> lock(ctx->audio_mutex);
+            ctx->audio_cv.wait(lock, [&] { return !ctx->audio_worker_running || !ctx->audio_queue.empty(); });
+            if (!ctx->audio_worker_running && ctx->audio_queue.empty()) {
+                return;
+            }
+            packet = std::move(ctx->audio_queue.front());
+            ctx->audio_queue.pop_front();
+        }
+
+        if (!ctx->source || packet.frames == 0) {
+            continue;
+        }
+
+        struct obs_source_audio audio = {};
+        for (size_t plane = 0; plane < MAX_AV_PLANES; ++plane) {
+            if (!packet.planes[plane].empty()) {
+                audio.data[plane] = packet.planes[plane].data();
+            }
+        }
+        audio.frames = packet.frames;
+        audio.timestamp = packet.timestamp;
+        audio.format = AUDIO_FORMAT_FLOAT_PLANAR;
+        audio.speakers = packet.speakers;
+        audio.samples_per_sec = packet.samples_per_sec;
+        obs_source_output_audio(ctx->source, &audio);
+    }
+}
+
+static void start_audio_worker(MuninnSource *ctx)
+{
+    std::lock_guard<std::mutex> lock(ctx->audio_mutex);
+    if (ctx->audio_worker_running) {
+        return;
+    }
+    ctx->audio_worker_running = true;
+    ctx->audio_worker = std::thread([ctx] { audio_worker_loop(ctx); });
+}
+
+static void stop_audio_worker(MuninnSource *ctx)
+{
+    {
+        std::lock_guard<std::mutex> lock(ctx->audio_mutex);
+        ctx->audio_worker_running = false;
+        ctx->audio_queue.clear();
+    }
+    ctx->audio_cv.notify_all();
+    if (ctx->audio_worker.joinable()) {
+        ctx->audio_worker.join();
+    }
+}
+
 static void muninn_update(void *data, obs_data_t *settings)
 {
     auto *ctx = static_cast<MuninnSource *>(data);
     ctx->store_path = obs_string(settings, "store_path", MuninnStorePath);
+    ctx->command_exe_path = obs_string(settings, "command_exe_path", MuninnCommandExePath);
+    ctx->command_rudp_target = obs_string(settings, "command_rudp_target", MuninnCommandRudpTarget);
+    ctx->host_id = obs_string(settings, "host_id", MuninnDefaultHostId);
+    ctx->media_target_host = obs_string(settings, "media_target_host", MuninnDefaultMediaTargetHost);
+    ctx->media_port = static_cast<uint16_t>(obs_data_get_int(settings, "media_port") > 0
+                                                ? obs_data_get_int(settings, "media_port")
+                                                : MuninnDefaultMediaPort);
     ctx->stream_id = obs_string(settings, "stream_id", "");
 
     const auto options = read_catalog(ctx->store_path);
@@ -457,13 +1021,20 @@ static void muninn_update(void *data, obs_data_t *settings)
     }
 
     ctx->stream_id = selected->stream_id;
-    create_or_update_media(ctx, selected->url);
+    request_stream_activation(ctx, selected->stream_id);
+    if (selected->url.empty()) {
+        create_or_update_media(ctx, expected_rudp_stream_url(ctx, selected->stream_id));
+    } else {
+        create_or_update_media(ctx, selected->url);
+    }
 }
 
 static void *muninn_create(obs_data_t *settings, obs_source_t *source)
 {
     auto *ctx = new MuninnSource();
     ctx->source = source;
+    ctx->bridge = std::make_unique<RudpMediaBridge>();
+    start_audio_worker(ctx);
     muninn_update(ctx, settings);
     return ctx;
 }
@@ -472,6 +1043,7 @@ static void muninn_destroy(void *data)
 {
     auto *ctx = static_cast<MuninnSource *>(data);
     release_media(ctx);
+    stop_audio_worker(ctx);
     delete ctx;
 }
 
@@ -490,6 +1062,11 @@ static uint32_t muninn_height(void *data)
 static void muninn_defaults(obs_data_t *settings)
 {
     obs_data_set_default_string(settings, "store_path", MuninnStorePath);
+    obs_data_set_default_string(settings, "command_exe_path", MuninnCommandExePath);
+    obs_data_set_default_string(settings, "command_rudp_target", MuninnCommandRudpTarget);
+    obs_data_set_default_string(settings, "host_id", MuninnDefaultHostId);
+    obs_data_set_default_string(settings, "media_target_host", MuninnDefaultMediaTargetHost);
+    obs_data_set_default_int(settings, "media_port", MuninnDefaultMediaPort);
     obs_data_set_default_string(settings, "stream_id", "");
 }
 
@@ -500,6 +1077,11 @@ static obs_properties_t *muninn_properties(void *data)
 
     obs_properties_t *props = obs_properties_create();
     obs_properties_add_text(props, "store_path", "Muninn CultCache store", OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "command_exe_path", "Muninn command executable", OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "command_rudp_target", "Muninn command RUDP target", OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "host_id", "Muninn host", OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "media_target_host", "Muninn media target host", OBS_TEXT_DEFAULT);
+    obs_properties_add_int(props, "media_port", "Muninn media UDP port", 1, 65535, 1);
     obs_property_t *streams = obs_properties_add_list(props, "stream_id", "Muninn stream", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
     populate_stream_list(streams, store_path);
     obs_properties_add_button(props, "refresh_streams", "Refresh Muninn streams", muninn_refresh_streams);
@@ -512,6 +1094,45 @@ static void muninn_render(void *data, gs_effect_t *)
     if (ctx->media) {
         obs_source_video_render(ctx->media);
     }
+}
+
+static void muninn_child_audio(void *param, obs_source_t *, const struct audio_data *audio_data, bool muted)
+{
+    auto *ctx = static_cast<MuninnSource *>(param);
+    if (!ctx || !ctx->source || !audio_data || muted || audio_data->frames == 0) {
+        return;
+    }
+
+    struct obs_audio_info2 audio_info = {};
+    if (!obs_get_audio_info2(&audio_info)) {
+        return;
+    }
+
+    MuninnQueuedAudio packet;
+    packet.frames = audio_data->frames;
+    packet.timestamp = audio_data->timestamp;
+    packet.speakers = audio_info.speakers;
+    packet.samples_per_sec = audio_info.samples_per_sec;
+    const size_t bytes_per_plane = static_cast<size_t>(audio_data->frames) * sizeof(float);
+    for (size_t plane = 0; plane < MAX_AV_PLANES; ++plane) {
+        if (!audio_data->data[plane]) {
+            continue;
+        }
+        packet.planes[plane].resize(bytes_per_plane);
+        std::memcpy(packet.planes[plane].data(), audio_data->data[plane], bytes_per_plane);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(ctx->audio_mutex);
+        if (!ctx->audio_worker_running) {
+            return;
+        }
+        while (ctx->audio_queue.size() >= 24) {
+            ctx->audio_queue.pop_front();
+        }
+        ctx->audio_queue.push_back(std::move(packet));
+    }
+    ctx->audio_cv.notify_one();
 }
 
 static void muninn_enum_active_sources(void *data, obs_source_enum_proc_t enum_callback, void *param)

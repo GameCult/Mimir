@@ -14,4 +14,4 @@ target_compile_definitions(mimir_obs_stem_source PRIVATE
     WIN32_LEAN_AND_MEAN
     NOMINMAX
     _WIN32_WINNT=0x0A00)
-target_link_libraries(mimir_obs_stem_source PRIVATE OBS::libobs d3d11 d3d12 dxgi)
+target_link_libraries(mimir_obs_stem_source PRIVATE OBS::libobs d3d11 d3d12 dxgi ws2_32)
