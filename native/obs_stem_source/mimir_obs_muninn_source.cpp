@@ -108,6 +108,14 @@ struct MuninnVideoFrameAssembly {
     std::vector<std::vector<uint8_t>> chunks;
 };
 
+struct MuninnRudpPacketFragmentAssembly {
+    std::string channel_id;
+    uint16_t fragment_count = 0;
+    std::map<uint16_t, std::vector<uint8_t>> payloads;
+    std::map<uint16_t, uint32_t> sequences;
+    std::chrono::steady_clock::time_point started_at;
+};
+
 static bool starts_with(const std::string &value, const std::string &prefix)
 {
     return value.rfind(prefix, 0) == 0;
@@ -545,6 +553,7 @@ private:
                                           reinterpret_cast<sockaddr *>(&remote), &remote_len);
             if (received <= 0) {
                 flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
+                expire_rudp_packet_fragments(std::chrono::steady_clock::now());
                 expire_video_assemblies(std::chrono::steady_clock::now(), bridge_sequence);
                 continue;
             }
@@ -598,6 +607,7 @@ private:
         if (packet_type == 1) {
             pending_payloads_.clear();
             video_assemblies_.clear();
+            packet_fragments_.clear();
             ack_tracker_.reset();
             ack_tracker_.remember(sequence);
             gap_wait_started_.reset();
@@ -606,6 +616,7 @@ private:
             bytes_forwarded_ = 0;
             payloads_decoded_dropped_ = 0;
             video_assemblies_expired_ = 0;
+            packet_fragment_assemblies_expired_ = 0;
             video_forward_failures_ = 0;
             audio_forward_failures_ = 0;
             const auto [ack, ack_mask] = ack_tracker_.state();
@@ -614,18 +625,89 @@ private:
             return;
         }
 
-        if (packet_type == 3 && fragment_count == 0) {
+        if (packet_type == 3) {
             ack_tracker_.remember(sequence);
-            if (!next_data_sequence_) {
-                next_data_sequence_ = sequence;
+            const std::string channel_id(
+                reinterpret_cast<const char *>(packet + 36),
+                reinterpret_cast<const char *>(packet + 36 + channel_len));
+            std::optional<std::pair<uint32_t, std::vector<uint8_t>>> delivered;
+            if (fragment_count == 0) {
+                delivered = std::make_pair(
+                    sequence,
+                    std::vector<uint8_t>(packet + payload_offset, packet + payload_offset + payload_len));
+            } else {
+                delivered = assemble_rudp_packet_fragment(
+                    channel_id,
+                    read_be16(packet + 24),
+                    read_be16(packet + 26),
+                    fragment_count,
+                    sequence,
+                    packet + payload_offset,
+                    payload_len);
             }
-            if (sequence >= *next_data_sequence_) {
-                pending_payloads_[sequence] = std::vector<uint8_t>(packet + payload_offset, packet + payload_offset + payload_len);
-                flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
+            if (delivered) {
+                if (!next_data_sequence_) {
+                    next_data_sequence_ = delivered->first;
+                }
+                if (delivered->first >= *next_data_sequence_) {
+                    pending_payloads_[delivered->first] = std::move(delivered->second);
+                    flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
+                }
             }
             const auto [ack, ack_mask] = ack_tracker_.state();
             send_control_packet(4, 0x00, bridge_sequence++, ack, ack_mask, remote);
         }
+    }
+
+    std::optional<std::pair<uint32_t, std::vector<uint8_t>>> assemble_rudp_packet_fragment(
+        const std::string &channel_id,
+        uint16_t fragment_id,
+        uint16_t fragment_index,
+        uint16_t fragment_count,
+        uint32_t sequence,
+        const uint8_t *payload,
+        uint32_t payload_len)
+    {
+        expire_rudp_packet_fragments(std::chrono::steady_clock::now());
+        if (fragment_id == 0 || fragment_index >= fragment_count) {
+            ++payloads_decoded_dropped_;
+            log_bridge_pressure("dropped invalid RUDP packet fragment metadata");
+            return std::nullopt;
+        }
+
+        const std::string key = channel_id + ":" + std::to_string(fragment_id);
+        auto &assembly = packet_fragments_[key];
+        if (assembly.payloads.empty()) {
+            assembly.channel_id = channel_id;
+            assembly.fragment_count = fragment_count;
+            assembly.started_at = std::chrono::steady_clock::now();
+        }
+        if (assembly.channel_id != channel_id || assembly.fragment_count != fragment_count) {
+            packet_fragments_.erase(key);
+            ++payloads_decoded_dropped_;
+            log_bridge_pressure("dropped RUDP packet fragment set with changing metadata");
+            return std::nullopt;
+        }
+
+        assembly.payloads.emplace(fragment_index, std::vector<uint8_t>(payload, payload + payload_len));
+        assembly.sequences.emplace(fragment_index, sequence);
+        if (assembly.payloads.size() < assembly.fragment_count) {
+            return std::nullopt;
+        }
+
+        std::vector<uint8_t> assembled;
+        uint32_t first_sequence = UINT32_MAX;
+        for (uint16_t index = 0; index < assembly.fragment_count; ++index) {
+            const auto payload_found = assembly.payloads.find(index);
+            const auto sequence_found = assembly.sequences.find(index);
+            if (payload_found == assembly.payloads.end() || sequence_found == assembly.sequences.end()) {
+                return std::nullopt;
+            }
+            assembled.insert(assembled.end(), payload_found->second.begin(), payload_found->second.end());
+            first_sequence = std::min(first_sequence, sequence_found->second);
+        }
+        packet_fragments_.erase(key);
+        return std::make_pair(first_sequence, std::move(assembled));
     }
 
     void forward_payload(const uint8_t *payload,
@@ -751,6 +833,19 @@ private:
         }
     }
 
+    void expire_rudp_packet_fragments(std::chrono::steady_clock::time_point now)
+    {
+        for (auto iterator = packet_fragments_.begin(); iterator != packet_fragments_.end();) {
+            if (now - iterator->second.started_at < std::chrono::milliseconds(parts_.reliable_expire_after_ms)) {
+                ++iterator;
+                continue;
+            }
+            iterator = packet_fragments_.erase(iterator);
+            ++packet_fragment_assemblies_expired_;
+            log_bridge_pressure("expired incomplete RUDP packet fragment assembly");
+        }
+    }
+
     std::vector<std::string> missing_video_chunk_keys(const MuninnVideoFrameAssembly &assembly) const
     {
         std::vector<std::string> keys;
@@ -777,15 +872,17 @@ private:
     void log_bridge_pressure(const char *reason)
     {
         const uint64_t pressure =
-            payloads_decoded_dropped_ + video_assemblies_expired_ + video_forward_failures_ + audio_forward_failures_;
+            payloads_decoded_dropped_ + video_assemblies_expired_ + packet_fragment_assemblies_expired_ +
+            video_forward_failures_ + audio_forward_failures_;
         if (pressure == 1 || pressure % 300 == 0) {
             blog(LOG_WARNING,
-                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu video_failures=%llu audio_failures=%llu",
+                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu packet_fragments_expired=%llu video_failures=%llu audio_failures=%llu",
                  reason,
                  static_cast<unsigned long long>(packets_forwarded_),
                  static_cast<unsigned long long>(bytes_forwarded_),
                  static_cast<unsigned long long>(payloads_decoded_dropped_),
                  static_cast<unsigned long long>(video_assemblies_expired_),
+                 static_cast<unsigned long long>(packet_fragment_assemblies_expired_),
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
         }
@@ -892,6 +989,7 @@ private:
     muninn_rudp_url::RudpUrlParts parts_;
     std::map<uint32_t, std::vector<uint8_t>> pending_payloads_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
+    std::map<std::string, MuninnRudpPacketFragmentAssembly> packet_fragments_;
     muninn_rudp_ack::AckTracker ack_tracker_;
     std::optional<uint32_t> next_data_sequence_;
     std::optional<std::chrono::steady_clock::time_point> gap_wait_started_;
@@ -899,6 +997,7 @@ private:
     uint64_t bytes_forwarded_ = 0;
     uint64_t payloads_decoded_dropped_ = 0;
     uint64_t video_assemblies_expired_ = 0;
+    uint64_t packet_fragment_assemblies_expired_ = 0;
     uint64_t video_forward_failures_ = 0;
     uint64_t audio_forward_failures_ = 0;
     std::string source_url_;
