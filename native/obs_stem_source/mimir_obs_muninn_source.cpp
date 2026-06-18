@@ -7,6 +7,7 @@
 #include <obs-module.h>
 
 #include "muninn_media_wire.h"
+#include "muninn_rudp_url.h"
 
 #include <algorithm>
 #include <atomic>
@@ -39,9 +40,6 @@ constexpr uint16_t MuninnDefaultMediaPort = 5204;
 constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
-constexpr uint32_t MuninnMediaRudpConnectionId = 0x6d750001;
-constexpr uint32_t MuninnDefaultVideoAssemblyDeadlineMs = 75;
-constexpr uint32_t MuninnDefaultGapWaitMs = 8;
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -81,15 +79,6 @@ struct MuninnSource {
 
 static void muninn_child_audio(void *param, obs_source_t *source, const struct audio_data *audio_data, bool muted);
 static void stop_audio_worker(MuninnSource *ctx);
-
-struct RudpUrlParts {
-    uint16_t port = 0;
-    uint16_t video_local_port = 0;
-    uint16_t audio_local_port = 0;
-    uint32_t connection_id = MuninnMediaRudpConnectionId;
-    uint32_t video_assembly_deadline_ms = MuninnDefaultVideoAssemblyDeadlineMs;
-    uint32_t gap_wait_ms = MuninnDefaultGapWaitMs;
-};
 
 struct RudpBridgeOutputs {
     std::string video_url;
@@ -145,75 +134,6 @@ static void write_be16(std::vector<uint8_t> &data, size_t offset, uint16_t value
 {
     data[offset] = static_cast<uint8_t>((value >> 8) & 0xff);
     data[offset + 1] = static_cast<uint8_t>(value & 0xff);
-}
-
-static std::optional<uint32_t> parse_u32_query_hex_or_decimal(const std::string &value)
-{
-    try {
-        size_t consumed = 0;
-        const int base = starts_with(value, "0x") || starts_with(value, "0X") ? 16 : 10;
-        const auto parsed = std::stoul(value, &consumed, base);
-        if (consumed == value.size()) {
-            return static_cast<uint32_t>(parsed);
-        }
-    } catch (...) {
-    }
-    return std::nullopt;
-}
-
-static std::optional<RudpUrlParts> parse_rudp_url(const std::string &url)
-{
-    if (!starts_with(url, "rudp://")) {
-        return std::nullopt;
-    }
-
-    const auto authority_start = std::string("rudp://").size();
-    const auto path_start = url.find('/', authority_start);
-    const auto query_start = url.find('?', authority_start);
-    const auto authority_end = std::min(path_start == std::string::npos ? url.size() : path_start,
-                                        query_start == std::string::npos ? url.size() : query_start);
-    const auto authority = url.substr(authority_start, authority_end - authority_start);
-    const auto colon = authority.rfind(':');
-    if (colon == std::string::npos || colon + 1 >= authority.size()) {
-        return std::nullopt;
-    }
-
-    RudpUrlParts parts;
-    parts.port = static_cast<uint16_t>(std::stoul(authority.substr(colon + 1)));
-    parts.video_local_port = static_cast<uint16_t>(parts.port + 10000);
-    parts.audio_local_port = static_cast<uint16_t>(parts.port + 10001);
-
-    if (query_start != std::string::npos) {
-        std::stringstream query(url.substr(query_start + 1));
-        std::string item;
-        while (std::getline(query, item, '&')) {
-            const auto equals = item.find('=');
-            if (equals == std::string::npos) {
-                continue;
-            }
-            const auto key = item.substr(0, equals);
-            const auto value = item.substr(equals + 1);
-            if (key == "connection") {
-                if (const auto parsed = parse_u32_query_hex_or_decimal(value)) {
-                    parts.connection_id = *parsed;
-                }
-            } else if (key == "local_port" || key == "video_local_port") {
-                parts.video_local_port = static_cast<uint16_t>(std::stoul(value));
-            } else if (key == "audio_local_port") {
-                parts.audio_local_port = static_cast<uint16_t>(std::stoul(value));
-            } else if (key == "assembly_deadline_ms") {
-                if (const auto parsed = parse_u32_query_hex_or_decimal(value)) {
-                    parts.video_assembly_deadline_ms = std::clamp(*parsed, 1u, 1000u);
-                }
-            } else if (key == "gap_wait_ms") {
-                if (const auto parsed = parse_u32_query_hex_or_decimal(value)) {
-                    parts.gap_wait_ms = std::clamp(*parsed, 0u, 1000u);
-                }
-            }
-        }
-    }
-
-    return parts;
 }
 
 class MediaMsgpackReader {
@@ -531,7 +451,7 @@ public:
         }
 
         stop();
-        const auto parsed = parse_rudp_url(url);
+        const auto parsed = muninn_rudp_url::parse(url);
         if (!parsed) {
             return RudpBridgeOutputs{url, ""};
         }
@@ -955,7 +875,7 @@ private:
 #endif
     std::atomic<bool> running_{false};
     std::thread worker_;
-    RudpUrlParts parts_;
+    muninn_rudp_url::RudpUrlParts parts_;
     std::map<uint32_t, std::vector<uint8_t>> pending_payloads_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
     std::optional<uint32_t> next_data_sequence_;

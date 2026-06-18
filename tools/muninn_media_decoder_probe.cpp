@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "muninn_media_wire.h"
+#include "muninn_rudp_url.h"
 
 struct MuninnMediaPayload {
     enum class Kind { Unknown, Video, Audio, Feedback };
@@ -370,7 +371,8 @@ int main(int argc, char **argv)
     if (argc < 2) {
         std::cerr << "usage: muninn_media_decoder_probe <wire.bin> [more-wire.bin ...]\n"
                   << "       muninn_media_decoder_probe --feedback-fixture\n"
-                  << "       muninn_media_decoder_probe --feedback-fixture-hex\n";
+                  << "       muninn_media_decoder_probe --feedback-fixture-hex\n"
+                  << "       muninn_media_decoder_probe --rudp-url <url>\n";
         return 2;
     }
 
@@ -389,6 +391,25 @@ int main(int argc, char **argv)
                           << static_cast<unsigned>(byte);
             }
             std::cout << "\n";
+            decoded_any = true;
+            continue;
+        } else if (std::string(argv[index]) == "--rudp-url") {
+            if (index + 1 >= argc) {
+                std::cerr << "--rudp-url requires a URL\n";
+                return 2;
+            }
+            const auto parsed = muninn_rudp_url::parse(argv[++index]);
+            if (!parsed) {
+                std::cerr << "invalid RUDP URL\n";
+                return 1;
+            }
+            std::cout << "rudp"
+                      << " port=" << parsed->port
+                      << " video_local_port=" << parsed->video_local_port
+                      << " audio_local_port=" << parsed->audio_local_port
+                      << " connection=0x" << std::hex << parsed->connection_id << std::dec
+                      << " assembly_deadline_ms=" << parsed->video_assembly_deadline_ms
+                      << " gap_wait_ms=" << parsed->gap_wait_ms << "\n";
             decoded_any = true;
             continue;
         } else {
