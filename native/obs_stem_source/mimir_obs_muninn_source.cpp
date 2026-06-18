@@ -605,6 +605,7 @@ private:
                                           reinterpret_cast<sockaddr *>(&remote), &remote_len);
             if (received <= 0) {
                 flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr);
+                expire_video_assemblies(std::chrono::steady_clock::now());
                 continue;
             }
             handle_packet(buffer.data(), static_cast<size_t>(received), remote, bridge_sequence, video_socket, video_addr, audio_socket, audio_addr);
