@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "muninn_media_wire.h"
+#include "muninn_rudp_ack.h"
 #include "muninn_rudp_url.h"
 
 struct MuninnMediaPayload {
@@ -372,6 +373,7 @@ int main(int argc, char **argv)
         std::cerr << "usage: muninn_media_decoder_probe <wire.bin> [more-wire.bin ...]\n"
                   << "       muninn_media_decoder_probe --feedback-fixture\n"
                   << "       muninn_media_decoder_probe --feedback-fixture-hex\n"
+                  << "       muninn_media_decoder_probe --ack-fixture\n"
                   << "       muninn_media_decoder_probe --rudp-url <url>\n";
         return 2;
     }
@@ -383,6 +385,16 @@ int main(int argc, char **argv)
         if (std::string(argv[index]) == "--feedback-fixture") {
             bytes = muninn_media_wire::encode_receiver_feedback_payload(
                 "muninn.raven.av.rudp", "raven:test:video", 42, {"42:1", "42:3"});
+        } else if (std::string(argv[index]) == "--ack-fixture") {
+            muninn_rudp_ack::AckTracker tracker;
+            tracker.remember(10);
+            tracker.remember(12);
+            tracker.remember(11);
+            const auto [ack, ack_mask] = tracker.state();
+            std::cout << "ack ack=" << ack
+                      << " mask=0x" << std::hex << ack_mask << std::dec << "\n";
+            decoded_any = true;
+            continue;
         } else if (std::string(argv[index]) == "--feedback-fixture-hex") {
             bytes = muninn_media_wire::encode_receiver_feedback_payload(
                 "muninn.raven.av.rudp", "raven:test:video", 42, {"42:1", "42:3"}, "unix-ms:1000");
