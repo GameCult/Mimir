@@ -465,9 +465,9 @@ public:
         running_ = true;
         worker_ = std::thread([this] { run(); });
         blog(LOG_INFO,
-             "Muninn RUDP bridge starting udp/%u -> video udp/127.0.0.1:%u audio udp/127.0.0.1:%u assembly_deadline_ms=%u gap_wait_ms=%u",
+             "Muninn RUDP bridge starting udp/%u -> video udp/127.0.0.1:%u audio udp/127.0.0.1:%u reliable_expire_after_ms=%u assembly_deadline_ms=%u gap_wait_ms=%u",
              parts_.port, parts_.video_local_port, parts_.audio_local_port,
-             parts_.video_assembly_deadline_ms, parts_.gap_wait_ms);
+             parts_.reliable_expire_after_ms, parts_.video_assembly_deadline_ms, parts_.gap_wait_ms);
         return outputs_;
     }
 

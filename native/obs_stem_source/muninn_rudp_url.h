@@ -9,6 +9,7 @@
 namespace muninn_rudp_url {
 
 inline constexpr uint32_t DefaultMediaRudpConnectionId = 0x6d750001;
+inline constexpr uint32_t DefaultReliableExpireAfterMs = 75;
 inline constexpr uint32_t DefaultVideoAssemblyDeadlineMs = 75;
 inline constexpr uint32_t DefaultGapWaitMs = 8;
 
@@ -17,6 +18,7 @@ struct RudpUrlParts {
     uint16_t video_local_port = 0;
     uint16_t audio_local_port = 0;
     uint32_t connection_id = DefaultMediaRudpConnectionId;
+    uint32_t reliable_expire_after_ms = DefaultReliableExpireAfterMs;
     uint32_t video_assembly_deadline_ms = DefaultVideoAssemblyDeadlineMs;
     uint32_t gap_wait_ms = DefaultGapWaitMs;
 };
@@ -80,6 +82,10 @@ inline std::optional<RudpUrlParts> parse(const std::string &url)
                 parts.video_local_port = static_cast<uint16_t>(std::stoul(value));
             } else if (key == "audio_local_port") {
                 parts.audio_local_port = static_cast<uint16_t>(std::stoul(value));
+            } else if (key == "reliable_expire_after_ms") {
+                if (const auto parsed = parse_u32_hex_or_decimal(value)) {
+                    parts.reliable_expire_after_ms = std::clamp(*parsed, 1u, 1000u);
+                }
             } else if (key == "assembly_deadline_ms") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {
                     parts.video_assembly_deadline_ms = std::clamp(*parsed, 1u, 1000u);
