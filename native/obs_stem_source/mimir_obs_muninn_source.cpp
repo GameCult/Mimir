@@ -40,7 +40,8 @@ constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
 constexpr uint32_t MuninnMediaRudpConnectionId = 0x6d750001;
-constexpr auto MuninnVideoAssemblyDeadline = std::chrono::milliseconds(75);
+constexpr uint32_t MuninnDefaultVideoAssemblyDeadlineMs = 75;
+constexpr uint32_t MuninnDefaultGapWaitMs = 8;
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -86,6 +87,8 @@ struct RudpUrlParts {
     uint16_t video_local_port = 0;
     uint16_t audio_local_port = 0;
     uint32_t connection_id = MuninnMediaRudpConnectionId;
+    uint32_t video_assembly_deadline_ms = MuninnDefaultVideoAssemblyDeadlineMs;
+    uint32_t gap_wait_ms = MuninnDefaultGapWaitMs;
 };
 
 struct RudpBridgeOutputs {
@@ -198,6 +201,14 @@ static std::optional<RudpUrlParts> parse_rudp_url(const std::string &url)
                 parts.video_local_port = static_cast<uint16_t>(std::stoul(value));
             } else if (key == "audio_local_port") {
                 parts.audio_local_port = static_cast<uint16_t>(std::stoul(value));
+            } else if (key == "assembly_deadline_ms") {
+                if (const auto parsed = parse_u32_query_hex_or_decimal(value)) {
+                    parts.video_assembly_deadline_ms = std::clamp(*parsed, 1u, 1000u);
+                }
+            } else if (key == "gap_wait_ms") {
+                if (const auto parsed = parse_u32_query_hex_or_decimal(value)) {
+                    parts.gap_wait_ms = std::clamp(*parsed, 0u, 1000u);
+                }
             }
         }
     }
@@ -533,8 +544,10 @@ public:
                              "?fifo_size=131072&overrun_nonfatal=1&buffer_size=1048576";
         running_ = true;
         worker_ = std::thread([this] { run(); });
-        blog(LOG_INFO, "Muninn RUDP bridge starting udp/%u -> video udp/127.0.0.1:%u audio udp/127.0.0.1:%u",
-             parts_.port, parts_.video_local_port, parts_.audio_local_port);
+        blog(LOG_INFO,
+             "Muninn RUDP bridge starting udp/%u -> video udp/127.0.0.1:%u audio udp/127.0.0.1:%u assembly_deadline_ms=%u gap_wait_ms=%u",
+             parts_.port, parts_.video_local_port, parts_.audio_local_port,
+             parts_.video_assembly_deadline_ms, parts_.gap_wait_ms);
         return outputs_;
     }
 
@@ -793,7 +806,7 @@ private:
     void expire_video_assemblies(std::chrono::steady_clock::time_point now, uint32_t &bridge_sequence)
     {
         for (auto iterator = video_assemblies_.begin(); iterator != video_assemblies_.end();) {
-            if (now - iterator->second.started_at < MuninnVideoAssemblyDeadline) {
+            if (now - iterator->second.started_at < std::chrono::milliseconds(parts_.video_assembly_deadline_ms)) {
                 ++iterator;
                 continue;
             }
@@ -867,7 +880,7 @@ private:
                     return;
                 }
                 const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(now - *gap_wait_started_);
-                if (waited >= std::chrono::milliseconds(8) || pending_payloads_.size() > 16) {
+                if (waited >= std::chrono::milliseconds(parts_.gap_wait_ms) || pending_payloads_.size() > 16) {
                     *next_data_sequence_ = pending_payloads_.begin()->first;
                     gap_wait_started_.reset();
                     continue;
