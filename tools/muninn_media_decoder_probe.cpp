@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -15,6 +16,12 @@ struct MuninnMediaPayload {
     uint16_t chunk_index = 0;
     uint16_t chunk_count = 1;
     std::vector<uint8_t> payload;
+};
+
+struct MuninnVideoFrameAssembly {
+    uint16_t chunk_count = 0;
+    uint16_t chunks_received = 0;
+    std::vector<std::vector<uint8_t>> chunks;
 };
 
 class MediaMsgpackReader {
@@ -267,28 +274,83 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
     return std::nullopt;
 }
 
-int main(int argc, char **argv)
+static std::optional<std::vector<uint8_t>> assemble_video_payload(
+    const MuninnMediaPayload &media,
+    std::map<std::string, MuninnVideoFrameAssembly> &assemblies)
 {
-    if (argc != 2) {
-        std::cerr << "usage: muninn_media_decoder_probe <wire.bin>\n";
-        return 2;
+    if (media.kind != MuninnMediaPayload::Kind::Video || media.payload.empty()) return std::nullopt;
+    if (media.chunk_count == 0 || media.chunk_index >= media.chunk_count) return std::nullopt;
+    if (media.chunk_count == 1) return media.payload;
+
+    const auto key = media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
+    auto &assembly = assemblies[key];
+    if (assembly.chunks.empty()) {
+        assembly.chunk_count = media.chunk_count;
+        assembly.chunks.resize(media.chunk_count);
     }
-    std::ifstream file(argv[1], std::ios::binary);
-    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    const auto decoded = decode_muninn_media_payload(bytes.data(), static_cast<uint32_t>(bytes.size()));
-    if (!decoded) {
-        std::cout << "none\n";
-        return 1;
+    if (assembly.chunk_count != media.chunk_count) {
+        assemblies.erase(key);
+        return std::nullopt;
     }
-    std::cout << (decoded->kind == MuninnMediaPayload::Kind::Video ? "video" : "audio");
-    if (decoded->kind == MuninnMediaPayload::Kind::Video) {
-        std::cout << " frame_id=" << decoded->frame_id
-                  << " chunk=" << decoded->chunk_index << "/" << decoded->chunk_count;
+
+    auto &slot = assembly.chunks[media.chunk_index];
+    if (!slot.empty()) return std::nullopt;
+    slot = media.payload;
+    ++assembly.chunks_received;
+    if (assembly.chunks_received != assembly.chunk_count) return std::nullopt;
+
+    size_t byte_count = 0;
+    for (const auto &chunk : assembly.chunks) byte_count += chunk.size();
+    std::vector<uint8_t> assembled;
+    assembled.reserve(byte_count);
+    for (const auto &chunk : assembly.chunks) {
+        assembled.insert(assembled.end(), chunk.begin(), chunk.end());
     }
-    std::cout << " payload_bytes=" << decoded->payload.size() << " first=";
-    if (!decoded->payload.empty()) {
-        std::cout << static_cast<unsigned>(decoded->payload[0]);
+    assemblies.erase(key);
+    return assembled;
+}
+
+static void print_payload(const MuninnMediaPayload &decoded)
+{
+    std::cout << (decoded.kind == MuninnMediaPayload::Kind::Video ? "video" : "audio");
+    if (decoded.kind == MuninnMediaPayload::Kind::Video) {
+        std::cout << " frame_id=" << decoded.frame_id
+                  << " chunk=" << decoded.chunk_index << "/" << decoded.chunk_count;
+    }
+    std::cout << " payload_bytes=" << decoded.payload.size() << " first=";
+    if (!decoded.payload.empty()) {
+        std::cout << static_cast<unsigned>(decoded.payload[0]);
     }
     std::cout << "\n";
-    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc < 2) {
+        std::cerr << "usage: muninn_media_decoder_probe <wire.bin> [more-wire.bin ...]\n";
+        return 2;
+    }
+
+    std::map<std::string, MuninnVideoFrameAssembly> video_assemblies;
+    bool decoded_any = false;
+    for (int index = 1; index < argc; ++index) {
+        std::ifstream file(argv[index], std::ios::binary);
+        std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        const auto decoded = decode_muninn_media_payload(bytes.data(), static_cast<uint32_t>(bytes.size()));
+        if (!decoded) {
+            std::cout << "none path=" << argv[index] << "\n";
+            continue;
+        }
+        decoded_any = true;
+        print_payload(*decoded);
+        if (const auto assembled = assemble_video_payload(*decoded, video_assemblies)) {
+            std::cout << "assembled_video frame_id=" << decoded->frame_id
+                      << " payload_bytes=" << assembled->size() << " first=";
+            if (!assembled->empty()) {
+                std::cout << static_cast<unsigned>((*assembled)[0]);
+            }
+            std::cout << "\n";
+        }
+    }
+    return decoded_any ? 0 : 1;
 }
