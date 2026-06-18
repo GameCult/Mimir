@@ -546,7 +546,6 @@ private:
             const int received = recvfrom(socket_, reinterpret_cast<char *>(buffer.data()), static_cast<int>(buffer.size()), 0,
                                           reinterpret_cast<sockaddr *>(&remote), &remote_len);
             if (received <= 0) {
-                flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
                 expire_rudp_packet_fragments(std::chrono::steady_clock::now());
                 expire_video_assemblies(std::chrono::steady_clock::now(), bridge_sequence);
                 continue;
@@ -599,13 +598,10 @@ private:
         }
 
         if (packet_type == 1) {
-            pending_payloads_.clear();
             video_assemblies_.clear();
             packet_fragments_.reset();
             ack_tracker_.reset();
             ack_tracker_.remember(sequence);
-            gap_wait_started_.reset();
-            next_data_sequence_ = sequence + 1;
             packets_forwarded_ = 0;
             bytes_forwarded_ = 0;
             payloads_decoded_dropped_ = 0;
@@ -639,13 +635,13 @@ private:
                     payload_len);
             }
             if (delivered) {
-                if (!next_data_sequence_) {
-                    next_data_sequence_ = delivered->first;
-                }
-                if (delivered->first >= *next_data_sequence_) {
-                    pending_payloads_[delivered->first] = std::move(delivered->second);
-                    flush_forward_payloads(video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
-                }
+                forward_payload(delivered->second.data(),
+                                static_cast<uint32_t>(delivered->second.size()),
+                                video_socket,
+                                video_addr,
+                                audio_socket,
+                                audio_addr,
+                                bridge_sequence);
             }
             const auto [ack, ack_mask] = ack_tracker_.state();
             send_control_packet(4, 0x00, bridge_sequence++, ack, ack_mask, remote);
@@ -856,43 +852,6 @@ private:
         }
     }
 
-    void flush_forward_payloads(SOCKET video_socket,
-                                const sockaddr_in &video_addr,
-                                SOCKET audio_socket,
-                                const sockaddr_in &audio_addr,
-                                uint32_t &bridge_sequence)
-    {
-        if (!next_data_sequence_) {
-            return;
-        }
-        while (true) {
-            const auto found = pending_payloads_.find(*next_data_sequence_);
-            if (found == pending_payloads_.end()) {
-                if (pending_payloads_.empty()) {
-                    gap_wait_started_.reset();
-                    return;
-                }
-                const auto now = std::chrono::steady_clock::now();
-                if (!gap_wait_started_) {
-                    gap_wait_started_ = now;
-                    return;
-                }
-                const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(now - *gap_wait_started_);
-                if (waited >= std::chrono::milliseconds(parts_.gap_wait_ms) || pending_payloads_.size() > 16) {
-                    *next_data_sequence_ = pending_payloads_.begin()->first;
-                    gap_wait_started_.reset();
-                    continue;
-                }
-                return;
-            }
-            gap_wait_started_.reset();
-            const auto &payload = found->second;
-            forward_payload(payload.data(), static_cast<uint32_t>(payload.size()), video_socket, video_addr, audio_socket, audio_addr, bridge_sequence);
-            pending_payloads_.erase(found);
-            ++(*next_data_sequence_);
-        }
-    }
-
     void send_control_packet(uint8_t packet_type, uint8_t flags, uint32_t sequence, uint32_t ack, uint32_t ack_mask, const sockaddr_in &remote)
     {
         const std::string channel = "control";
@@ -955,12 +914,9 @@ private:
     std::atomic<bool> running_{false};
     std::thread worker_;
     muninn_rudp_url::RudpUrlParts parts_;
-    std::map<uint32_t, std::vector<uint8_t>> pending_payloads_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
     muninn_rudp_fragments::FragmentAssembler packet_fragments_;
     muninn_rudp_ack::AckTracker ack_tracker_;
-    std::optional<uint32_t> next_data_sequence_;
-    std::optional<std::chrono::steady_clock::time_point> gap_wait_started_;
     uint64_t packets_forwarded_ = 0;
     uint64_t bytes_forwarded_ = 0;
     uint64_t payloads_decoded_dropped_ = 0;

@@ -135,9 +135,22 @@ muninn.obs_stream_catalog
 ```
 
 Muninn owns that catalog as typed CultCache state. OBS owns only the selected
-scene source and media rendering. The source does not probe devices and does
-not activate streams by itself; use Muninn's explicit activation command before
-selecting a stream that requires capture resources.
+scene source and media rendering. When a selected stream uses Muninn's RUDP
+media profile, the source publishes the same typed
+`muninn.capture_stream_command` that an operator would publish manually. Raven
+Muninn `serve` still owns whether capture starts and which local FFmpeg/WASAPI
+children exist.
+
+For `rudp://` stream URLs, the plugin binds the advertised media port, accepts
+the CultNet RUDP handshake, acknowledges packets, reassembles RUDP fragments,
+decodes typed `muninn.media_video_access_unit.v1` and
+`muninn.media_audio_packet.v1` records, and lowers elementary H.264 plus ADTS
+AAC into local loopback UDP sockets for OBS FFmpeg child sources. The bridge
+does not impose a global packet-sequence FIFO over the media lane: CultNet RUDP
+media is reliable but unordered, so frame ids, chunk ids, and the advertised
+`assembly_deadline_ms` own video reconstruction. Incomplete video frames expire
+inside that budget and emit `muninn.media_receiver_feedback.v1` keyframe
+pressure instead of stalling newer media behind an obsolete sequence gap.
 
 ## Install
 
