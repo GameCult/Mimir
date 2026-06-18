@@ -38,6 +38,7 @@ constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
 constexpr uint32_t MuninnMediaRudpConnectionId = 0x6d750001;
+constexpr auto MuninnVideoAssemblyDeadline = std::chrono::milliseconds(75);
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -104,6 +105,7 @@ struct MuninnMediaPayload {
 struct MuninnVideoFrameAssembly {
     uint16_t chunk_count = 0;
     uint16_t chunks_received = 0;
+    std::chrono::steady_clock::time_point started_at;
     std::vector<std::vector<uint8_t>> chunks;
 };
 
@@ -659,6 +661,7 @@ private:
             packets_forwarded_ = 0;
             bytes_forwarded_ = 0;
             payloads_decoded_dropped_ = 0;
+            video_assemblies_expired_ = 0;
             video_forward_failures_ = 0;
             audio_forward_failures_ = 0;
             send_control_packet(2, 0x03, bridge_sequence++, sequence, remote);
@@ -717,10 +720,11 @@ private:
         bytes_forwarded_ += forwarded_bytes;
         if (packets_forwarded_ == 1 || packets_forwarded_ % 900 == 0) {
             blog(LOG_INFO,
-                 "Muninn RUDP bridge forwarded=%llu bytes=%llu decode_dropped=%llu video_failures=%llu audio_failures=%llu",
+                 "Muninn RUDP bridge forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu video_failures=%llu audio_failures=%llu",
                  static_cast<unsigned long long>(packets_forwarded_),
                  static_cast<unsigned long long>(bytes_forwarded_),
                  static_cast<unsigned long long>(payloads_decoded_dropped_),
+                 static_cast<unsigned long long>(video_assemblies_expired_),
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
         }
@@ -728,6 +732,7 @@ private:
 
     std::optional<std::vector<uint8_t>> assemble_video_payload(const MuninnMediaPayload &media)
     {
+        expire_video_assemblies(std::chrono::steady_clock::now());
         if (media.chunk_count == 0 || media.chunk_index >= media.chunk_count || media.payload.empty()) {
             ++payloads_decoded_dropped_;
             log_bridge_pressure("dropped invalid video chunk metadata");
@@ -743,6 +748,7 @@ private:
         if (assembly.chunks.empty()) {
             assembly.chunk_count = media.chunk_count;
             assembly.chunks.resize(media.chunk_count);
+            assembly.started_at = std::chrono::steady_clock::now();
         }
         if (assembly.chunk_count != media.chunk_count) {
             video_assemblies_.erase(key);
@@ -773,16 +779,31 @@ private:
         return assembled;
     }
 
+    void expire_video_assemblies(std::chrono::steady_clock::time_point now)
+    {
+        for (auto iterator = video_assemblies_.begin(); iterator != video_assemblies_.end();) {
+            if (now - iterator->second.started_at < MuninnVideoAssemblyDeadline) {
+                ++iterator;
+                continue;
+            }
+            iterator = video_assemblies_.erase(iterator);
+            ++video_assemblies_expired_;
+            log_bridge_pressure("expired incomplete video frame assembly");
+        }
+    }
+
     void log_bridge_pressure(const char *reason)
     {
-        const uint64_t pressure = payloads_decoded_dropped_ + video_forward_failures_ + audio_forward_failures_;
+        const uint64_t pressure =
+            payloads_decoded_dropped_ + video_assemblies_expired_ + video_forward_failures_ + audio_forward_failures_;
         if (pressure == 1 || pressure % 300 == 0) {
             blog(LOG_WARNING,
-                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu video_failures=%llu audio_failures=%llu",
+                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu video_failures=%llu audio_failures=%llu",
                  reason,
                  static_cast<unsigned long long>(packets_forwarded_),
                  static_cast<unsigned long long>(bytes_forwarded_),
                  static_cast<unsigned long long>(payloads_decoded_dropped_),
+                 static_cast<unsigned long long>(video_assemblies_expired_),
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
         }
@@ -860,6 +881,7 @@ private:
     uint64_t packets_forwarded_ = 0;
     uint64_t bytes_forwarded_ = 0;
     uint64_t payloads_decoded_dropped_ = 0;
+    uint64_t video_assemblies_expired_ = 0;
     uint64_t video_forward_failures_ = 0;
     uint64_t audio_forward_failures_ = 0;
     std::string source_url_;
