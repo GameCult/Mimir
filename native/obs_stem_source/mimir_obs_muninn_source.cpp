@@ -617,6 +617,10 @@ public:
             stale_reported_.store(false);
             return false;
         }
+        if (!has_forwarded_media()) {
+            stale_reported_.store(false);
+            return false;
+        }
         bool expected = false;
         return stale_reported_.compare_exchange_strong(expected, true);
     }
