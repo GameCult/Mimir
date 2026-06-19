@@ -62,7 +62,7 @@ constexpr size_t MuninnVideoParityCacheMaxEntries = 4096;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
-constexpr uint32_t MuninnDefaultMediaPacketBytes = 860;
+constexpr uint32_t MuninnDefaultMediaPacketBytes = 848;
 constexpr uint32_t MuninnDefaultRudpVideoBitrateKbps = 16000;
 constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 1200;
 constexpr uint32_t MuninnMaxRudpVideoBitrateKbps = 100000;
@@ -558,6 +558,39 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             media.payload = record.read_bytes();
             return media;
         }
+        if (schema_id == "muninn.media_video_parity_shard.v2") {
+            if (record_len < 17) {
+                return std::nullopt;
+            }
+            MuninnMediaPayload media;
+            media.kind = MuninnMediaPayload::Kind::VideoParity;
+            media.stream_id = record.read_string();
+            media.session_id = record.read_string();
+            media.frame_id = record.read_unsigned();
+            record.skip(); // codec
+            record.skip(); // pts_ticks
+            record.skip(); // duration_ticks
+            record.skip(); // timebase_num
+            record.skip(); // timebase_den
+            media.keyframe = record.read_bool();
+            media.dependency_frame_id = record.read_optional_unsigned();
+            record.skip(); // deadline_ticks
+            media.chunk_count = static_cast<uint16_t>(record.read_unsigned());
+            media.parity_index = static_cast<uint16_t>(record.read_unsigned());
+            media.parity_count = static_cast<uint16_t>(record.read_unsigned());
+            const uint32_t chunk_payload_bytes = static_cast<uint32_t>(record.read_unsigned());
+            const uint32_t last_chunk_payload_bytes = static_cast<uint32_t>(record.read_unsigned());
+            if (media.chunk_count == 0 ||
+                chunk_payload_bytes == 0 ||
+                last_chunk_payload_bytes == 0 ||
+                last_chunk_payload_bytes > chunk_payload_bytes) {
+                return std::nullopt;
+            }
+            media.chunk_payload_lengths.assign(media.chunk_count, chunk_payload_bytes);
+            media.chunk_payload_lengths.back() = last_chunk_payload_bytes;
+            media.payload = record.read_bytes();
+            return media;
+        }
         if (schema_id == "muninn.media_audio_packet.v1") {
             if (record_len < 10) {
                 return std::nullopt;
@@ -1045,10 +1078,8 @@ private:
                               const uint8_t *data,
                               size_t size) const
     {
-        constexpr size_t MaxLocalUdpPayload = 1200;
-        constexpr size_t PaceEveryChunks = 16;
+        constexpr size_t MaxLocalUdpPayload = 16 * 1024;
         size_t offset = 0;
-        size_t chunks_sent = 0;
         while (offset < size) {
             const size_t chunk_size = std::min(MaxLocalUdpPayload, size - offset);
             const int sent = sendto(socket,
@@ -1061,10 +1092,6 @@ private:
                 return false;
             }
             offset += chunk_size;
-            ++chunks_sent;
-            if (offset < size && chunks_sent % PaceEveryChunks == 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
         }
         return true;
     }
