@@ -63,8 +63,8 @@ constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
 constexpr uint32_t MuninnDefaultMediaPacketBytes = 848;
-constexpr uint32_t MuninnDefaultRudpVideoBitrateKbps = 16000;
-constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 1200;
+constexpr uint32_t MuninnDefaultRudpVideoBitrateKbps = 12000;
+constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 2000;
 constexpr uint32_t MuninnMaxRudpVideoBitrateKbps = 100000;
 constexpr uint32_t MuninnMaxRudpLatencyBudgetMs = 2000;
 
@@ -155,7 +155,8 @@ struct MuninnVideoFrameAssembly {
     std::chrono::steady_clock::time_point started_at;
     bool repair_requested = false;
     std::vector<uint32_t> chunk_payload_lengths;
-    std::vector<uint8_t> parity_payload;
+    uint16_t parity_count = 0;
+    std::map<uint16_t, std::vector<uint8_t>> parity_payloads;
     std::vector<std::vector<uint8_t>> chunks;
 };
 
@@ -166,6 +167,8 @@ struct MuninnVideoParityCacheEntry {
     bool keyframe = false;
     std::optional<uint64_t> dependency_frame_id;
     uint16_t chunk_count = 0;
+    uint16_t parity_index = 0;
+    uint16_t parity_count = 0;
     std::chrono::steady_clock::time_point received_at;
     std::vector<uint32_t> chunk_payload_lengths;
     std::vector<uint8_t> payload;
@@ -1160,8 +1163,9 @@ private:
     {
         ++video_parity_received_;
         if (media.chunk_count == 0 ||
-            media.parity_index != 0 ||
-            media.parity_count != 1 ||
+            media.parity_count == 0 ||
+            media.parity_index >= media.parity_count ||
+            media.parity_count > media.chunk_count ||
             media.chunk_payload_lengths.size() != media.chunk_count ||
             media.payload.empty()) {
             ++payloads_decoded_dropped_;
@@ -1191,7 +1195,15 @@ private:
             return std::nullopt;
         }
         assembly.chunk_payload_lengths = media.chunk_payload_lengths;
-        assembly.parity_payload = media.payload;
+        if (assembly.parity_count != 0 && assembly.parity_count != media.parity_count) {
+            video_assemblies_.erase(key);
+            ++payloads_decoded_dropped_;
+            ++video_parity_unusable_;
+            log_bridge_pressure("dropped video parity with mixed stripe count");
+            return std::nullopt;
+        }
+        assembly.parity_count = media.parity_count;
+        assembly.parity_payloads[media.parity_index] = media.payload;
         if (try_recover_video_assembly_from_parity(assembly)) {
             ++video_parity_recovered_;
             return finish_video_assembly(key, assembly);
@@ -1209,10 +1221,12 @@ private:
         entry.keyframe = media.keyframe;
         entry.dependency_frame_id = media.dependency_frame_id;
         entry.chunk_count = media.chunk_count;
+        entry.parity_index = media.parity_index;
+        entry.parity_count = media.parity_count;
         entry.received_at = std::chrono::steady_clock::now();
         entry.chunk_payload_lengths = media.chunk_payload_lengths;
         entry.payload = media.payload;
-        video_parity_cache_[key] = std::move(entry);
+        video_parity_cache_[key].push_back(std::move(entry));
         ++video_parity_cached_;
         trim_video_parity_cache();
     }
@@ -1223,14 +1237,19 @@ private:
         if (iterator == video_parity_cache_.end()) {
             return;
         }
-        const auto &entry = iterator->second;
-        if (entry.chunk_count == assembly.chunk_count &&
-            entry.keyframe == assembly.keyframe &&
-            entry.dependency_frame_id == assembly.dependency_frame_id) {
-            assembly.chunk_payload_lengths = entry.chunk_payload_lengths;
-            assembly.parity_payload = entry.payload;
-        } else {
-            ++video_parity_unusable_;
+        for (const auto &entry : iterator->second) {
+            if (entry.chunk_count == assembly.chunk_count &&
+                entry.keyframe == assembly.keyframe &&
+                entry.dependency_frame_id == assembly.dependency_frame_id &&
+                entry.parity_count != 0 &&
+                entry.parity_index < entry.parity_count &&
+                (assembly.parity_count == 0 || assembly.parity_count == entry.parity_count)) {
+                assembly.chunk_payload_lengths = entry.chunk_payload_lengths;
+                assembly.parity_count = entry.parity_count;
+                assembly.parity_payloads[entry.parity_index] = entry.payload;
+            } else {
+                ++video_parity_unusable_;
+            }
         }
         video_parity_cache_.erase(iterator);
     }
@@ -1253,49 +1272,73 @@ private:
 
     bool try_recover_video_assembly_from_parity(MuninnVideoFrameAssembly &assembly)
     {
-        if (assembly.parity_payload.empty() ||
+        if (assembly.parity_count == 0 ||
+            assembly.parity_payloads.empty() ||
             assembly.chunk_payload_lengths.size() != assembly.chunk_count ||
             assembly.chunks.size() != assembly.chunk_count) {
             return false;
         }
-        uint16_t missing_index = 0;
-        uint16_t missing_count = 0;
-        for (uint16_t index = 0; index < assembly.chunk_count; ++index) {
-            if (assembly.chunks[index].empty()) {
-                missing_index = index;
-                ++missing_count;
+        bool recovered_any = true;
+        while (recovered_any && assembly.chunks_received < assembly.chunk_count) {
+            recovered_any = false;
+            for (const auto &parity : assembly.parity_payloads) {
+                const uint16_t parity_index = parity.first;
+                if (parity_index >= assembly.parity_count || parity.second.empty()) {
+                    continue;
+                }
+                uint16_t missing_index = 0;
+                uint16_t missing_count = 0;
+                for (uint16_t index = parity_index; index < assembly.chunk_count; index += assembly.parity_count) {
+                    if (assembly.chunks[index].empty()) {
+                        missing_index = index;
+                        ++missing_count;
+                    }
+                }
+                if (missing_count != 1) {
+                    continue;
+                }
+                const uint32_t missing_len = assembly.chunk_payload_lengths[missing_index];
+                if (missing_len == 0 || missing_len > parity.second.size()) {
+                    continue;
+                }
+                std::vector<uint8_t> recovered = parity.second;
+                bool stripe_complete = true;
+                for (uint16_t index = parity_index; index < assembly.chunk_count; index += assembly.parity_count) {
+                    if (index == missing_index) {
+                        continue;
+                    }
+                    const auto &chunk = assembly.chunks[index];
+                    if (chunk.empty()) {
+                        stripe_complete = false;
+                        break;
+                    }
+                    for (size_t offset = 0; offset < chunk.size() && offset < recovered.size(); ++offset) {
+                        recovered[offset] ^= chunk[offset];
+                    }
+                }
+                if (!stripe_complete) {
+                    continue;
+                }
+                recovered.resize(missing_len);
+                assembly.chunks[missing_index] = std::move(recovered);
+                ++assembly.chunks_received;
+                recovered_any = true;
             }
         }
-        if (missing_count != 1) {
-            return false;
-        }
-        const uint32_t missing_len = assembly.chunk_payload_lengths[missing_index];
-        if (missing_len == 0 || missing_len > assembly.parity_payload.size()) {
-            return false;
-        }
-        std::vector<uint8_t> recovered = assembly.parity_payload;
-        for (uint16_t index = 0; index < assembly.chunk_count; ++index) {
-            if (index == missing_index) {
-                continue;
-            }
-            const auto &chunk = assembly.chunks[index];
-            if (chunk.empty()) {
-                return false;
-            }
-            for (size_t offset = 0; offset < chunk.size() && offset < recovered.size(); ++offset) {
-                recovered[offset] ^= chunk[offset];
-            }
-        }
-        recovered.resize(missing_len);
-        assembly.chunks[missing_index] = std::move(recovered);
-        ++assembly.chunks_received;
         return assembly.chunks_received == assembly.chunk_count;
     }
 
     void expire_video_parity_cache(std::chrono::steady_clock::time_point now)
     {
         for (auto iterator = video_parity_cache_.begin(); iterator != video_parity_cache_.end();) {
-            if (now - iterator->second.received_at < std::chrono::milliseconds(parts_.video_assembly_deadline_ms)) {
+            const auto newest = std::max_element(
+                iterator->second.begin(),
+                iterator->second.end(),
+                [](const MuninnVideoParityCacheEntry &left, const MuninnVideoParityCacheEntry &right) {
+                    return left.received_at < right.received_at;
+                });
+            if (newest != iterator->second.end() &&
+                now - newest->received_at < std::chrono::milliseconds(parts_.video_assembly_deadline_ms)) {
                 ++iterator;
                 continue;
             }
@@ -1311,7 +1354,25 @@ private:
                 video_parity_cache_.begin(),
                 video_parity_cache_.end(),
                 [](const auto &left, const auto &right) {
-                    return left.second.received_at < right.second.received_at;
+                    const auto left_oldest = std::min_element(
+                        left.second.begin(),
+                        left.second.end(),
+                        [](const MuninnVideoParityCacheEntry &a, const MuninnVideoParityCacheEntry &b) {
+                            return a.received_at < b.received_at;
+                        });
+                    const auto right_oldest = std::min_element(
+                        right.second.begin(),
+                        right.second.end(),
+                        [](const MuninnVideoParityCacheEntry &a, const MuninnVideoParityCacheEntry &b) {
+                            return a.received_at < b.received_at;
+                        });
+                    if (left_oldest == left.second.end()) {
+                        return true;
+                    }
+                    if (right_oldest == right.second.end()) {
+                        return false;
+                    }
+                    return left_oldest->received_at < right_oldest->received_at;
                 });
             if (oldest == video_parity_cache_.end()) {
                 return;
@@ -1381,7 +1442,7 @@ private:
              missing_chunk_keys.size(),
              static_cast<long long>(age_ms),
              assembly.repair_requested ? "true" : "false",
-             assembly.parity_payload.empty() ? "false" : "true");
+             assembly.parity_payloads.empty() ? "false" : "true");
     }
 
     void request_video_chunk_repair_if_due(MuninnVideoFrameAssembly &assembly,
@@ -1572,7 +1633,7 @@ private:
     std::thread worker_;
     muninn_rudp_url::RudpUrlParts parts_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
-    std::map<std::string, MuninnVideoParityCacheEntry> video_parity_cache_;
+    std::map<std::string, std::vector<MuninnVideoParityCacheEntry>> video_parity_cache_;
     std::deque<std::string> expired_video_frame_order_;
     std::set<std::string> expired_video_frame_keys_;
     muninn_rudp_fragments::FragmentAssembler packet_fragments_;
