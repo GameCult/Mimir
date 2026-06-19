@@ -13,7 +13,7 @@ inline constexpr uint32_t DefaultAudioRudpConnectionId = 0x6d750004;
 inline constexpr uint32_t DefaultReliableExpireAfterMs = 75;
 inline constexpr uint32_t DefaultVideoAssemblyDeadlineMs = 75;
 inline constexpr uint32_t DefaultGapWaitMs = 8;
-inline constexpr uint32_t DefaultAudioReorderMs = 1000;
+inline constexpr uint32_t DefaultAudioReorderMs = 2000;
 inline constexpr uint32_t DefaultSenderResendDelayMs = 5;
 inline constexpr uint32_t MaxLatencyBudgetMs = 2000;
 
