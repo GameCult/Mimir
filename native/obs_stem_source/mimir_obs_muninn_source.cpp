@@ -3431,22 +3431,84 @@ static void populate_source_list(
     }
 }
 
-static std::vector<std::pair<std::string, std::string>> catalog_video_sources(const MuninnSource *ctx)
+static std::vector<std::pair<std::string, std::string>> catalog_video_sources_for_stream(
+    const MuninnSource *ctx,
+    const std::string &stream_id)
 {
-    const auto *selected = ctx ? find_selected(ctx->catalog_options, ctx->stream_id) : nullptr;
+    const auto *selected = ctx ? find_selected(ctx->catalog_options, stream_id) : nullptr;
     if (selected && !selected->video_sources.empty()) {
         return selected->video_sources;
     }
     return {{"display:0", "Display 1"}};
 }
 
-static std::vector<std::pair<std::string, std::string>> catalog_audio_sources(const MuninnSource *ctx)
+static std::vector<std::pair<std::string, std::string>> catalog_video_sources(const MuninnSource *ctx)
 {
-    const auto *selected = ctx ? find_selected(ctx->catalog_options, ctx->stream_id) : nullptr;
+    return catalog_video_sources_for_stream(ctx, ctx ? ctx->stream_id : std::string{});
+}
+
+static std::vector<std::pair<std::string, std::string>> catalog_audio_sources_for_stream(
+    const MuninnSource *ctx,
+    const std::string &stream_id)
+{
+    const auto *selected = ctx ? find_selected(ctx->catalog_options, stream_id) : nullptr;
     if (selected && !selected->audio_sources.empty()) {
         return selected->audio_sources;
     }
     return {{"wasapi-loopback:Realtek", "Realtek loopback"}};
+}
+
+static std::vector<std::pair<std::string, std::string>> catalog_audio_sources(const MuninnSource *ctx)
+{
+    return catalog_audio_sources_for_stream(ctx, ctx ? ctx->stream_id : std::string{});
+}
+
+static bool refresh_source_properties_for_settings(
+    obs_properties_t *props,
+    MuninnSource *ctx,
+    obs_data_t *settings)
+{
+    if (!props || !ctx) {
+        return false;
+    }
+
+    refresh_catalog(ctx);
+    const std::string selected_stream_id = settings ? obs_string(settings, "stream_id", ctx->stream_id.c_str()) : ctx->stream_id;
+
+    obs_property_t *stream_list = obs_properties_get(props, "stream_id");
+    if (stream_list) {
+        populate_stream_list_from_options(stream_list, ctx->catalog_options);
+    }
+
+    if (source_wants_video(ctx)) {
+        obs_property_t *video_list = obs_properties_get(props, "video_source_id");
+        const auto video_sources = catalog_video_sources_for_stream(ctx, selected_stream_id);
+        if (video_list) {
+            populate_source_list(video_list, video_sources);
+        }
+        if (settings) {
+            const auto selected_video_source = selected_source_id(
+                video_sources,
+                obs_string(settings, "video_source_id", ctx->video_source_id.c_str()));
+            obs_data_set_string(settings, "video_source_id", selected_video_source.c_str());
+        }
+    }
+
+    if (source_wants_audio(ctx)) {
+        obs_property_t *audio_list = obs_properties_get(props, "audio_source_id");
+        const auto audio_sources = catalog_audio_sources_for_stream(ctx, selected_stream_id);
+        if (audio_list) {
+            populate_source_list(audio_list, audio_sources);
+        }
+        if (settings) {
+            const auto selected_audio_source = selected_source_id(
+                audio_sources,
+                obs_string(settings, "audio_source_id", ctx->audio_source_id.c_str()));
+            obs_data_set_string(settings, "audio_source_id", selected_audio_source.c_str());
+        }
+    }
+
+    return true;
 }
 
 static void populate_stream_list(obs_property_t *property, const std::string &store_path)
@@ -3464,25 +3526,24 @@ static bool muninn_refresh_streams(obs_properties_t *props, obs_property_t *, vo
     if (data) {
         auto *ctx = static_cast<MuninnSource *>(data);
         store_path = ctx->store_path;
+        return refresh_source_properties_for_settings(props, ctx, nullptr);
     }
 
     obs_property_t *stream_list = obs_properties_get(props, "stream_id");
     if (stream_list) {
         populate_stream_list(stream_list, store_path);
     }
-    if (data) {
-        auto *ctx = static_cast<MuninnSource *>(data);
-        refresh_catalog(ctx);
-        obs_property_t *video_list = obs_properties_get(props, "video_source_id");
-        obs_property_t *audio_list = obs_properties_get(props, "audio_source_id");
-        if (video_list && source_wants_video(ctx)) {
-            populate_source_list(video_list, catalog_video_sources(ctx));
-        }
-        if (audio_list && source_wants_audio(ctx)) {
-            populate_source_list(audio_list, catalog_audio_sources(ctx));
-        }
-    }
     return true;
+}
+
+static bool muninn_stream_selection_modified(
+    void *priv,
+    obs_properties_t *props,
+    obs_property_t *,
+    obs_data_t *settings)
+{
+    auto *ctx = static_cast<MuninnSource *>(priv);
+    return refresh_source_properties_for_settings(props, ctx, settings);
 }
 
 static const char *muninn_get_name_combined(void *)
@@ -3741,6 +3802,7 @@ static obs_properties_t *muninn_properties_kind(void *data, MuninnSourceKind kin
     if (ctx) {
         refresh_catalog(ctx);
         populate_stream_list_from_options(streams, ctx->catalog_options);
+        obs_property_set_modified_callback2(streams, muninn_stream_selection_modified, ctx);
     } else {
         populate_stream_list(streams, store_path);
     }

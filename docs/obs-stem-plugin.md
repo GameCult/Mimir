@@ -123,8 +123,9 @@ Muninn Stream
 
 The `Muninn Stream` source is a thin OBS wrapper over Muninn's typed
 CultCache/CultMesh stream catalog. The operator-facing UI is intentionally just
-the stream dropdown. Store paths, command endpoints, and media return endpoints
-are source defaults and migration state, not user-facing stream selection.
+the stream dropdown plus independent video and audio device pickers for the
+selected source. Store paths, command endpoints, and media return endpoints are
+source defaults and migration state, not user-facing stream selection.
 
 The source listens for Raven's typed OBS catalog projection on local UDP port
 `17874`. Raven Muninn sends the catalog over a small CultNet RUDP discovery lane
@@ -145,8 +146,9 @@ muninn.obs_stream_catalog
 ```
 
 Muninn owns that catalog as typed CultCache state. OBS owns only the selected
-scene source and media rendering. When a selected stream uses Muninn's RUDP
-media profile, the source publishes the same typed
+scene source, the selected video leg, the selected audio leg, and media
+rendering. When a selected stream uses Muninn's RUDP media profile, the source
+publishes the same typed
 `muninn.capture_stream_command` that an operator would publish manually. Raven
 Muninn `serve` still owns whether capture starts and which local FFmpeg/WASAPI
 children exist.
