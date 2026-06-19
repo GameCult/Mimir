@@ -13,6 +13,7 @@ inline constexpr uint32_t DefaultReliableExpireAfterMs = 75;
 inline constexpr uint32_t DefaultVideoAssemblyDeadlineMs = 75;
 inline constexpr uint32_t DefaultGapWaitMs = 8;
 inline constexpr uint32_t DefaultSenderResendDelayMs = 5;
+inline constexpr uint32_t MaxLatencyBudgetMs = 2000;
 
 struct RudpUrlParts {
     uint16_t port = 0;
@@ -86,7 +87,7 @@ inline std::optional<RudpUrlParts> parse(const std::string &url)
                 parts.audio_local_port = static_cast<uint16_t>(std::stoul(value));
             } else if (key == "reliable_expire_after_ms") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {
-                    parts.reliable_expire_after_ms = std::clamp(*parsed, 1u, 1000u);
+                    parts.reliable_expire_after_ms = std::clamp(*parsed, 1u, MaxLatencyBudgetMs);
                 }
             } else if (key == "sender_resend_delay_ms") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {
@@ -94,7 +95,7 @@ inline std::optional<RudpUrlParts> parse(const std::string &url)
                 }
             } else if (key == "assembly_deadline_ms") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {
-                    parts.video_assembly_deadline_ms = std::clamp(*parsed, 1u, 1000u);
+                    parts.video_assembly_deadline_ms = std::clamp(*parsed, 1u, MaxLatencyBudgetMs);
                 }
             } else if (key == "gap_wait_ms") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {

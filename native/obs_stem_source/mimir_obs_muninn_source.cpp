@@ -62,7 +62,7 @@ constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
 constexpr uint32_t MuninnDefaultMediaPacketBytes = 860;
 constexpr uint32_t MuninnDefaultRudpVideoBitrateKbps = 16000;
-constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 800;
+constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 1200;
 constexpr uint32_t MuninnMaxRudpVideoBitrateKbps = 100000;
 constexpr uint32_t MuninnMaxRudpLatencyBudgetMs = 2000;
 
