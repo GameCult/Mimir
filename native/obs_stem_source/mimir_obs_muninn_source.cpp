@@ -1521,7 +1521,7 @@ static std::string expected_rudp_stream_url(const MuninnSource *ctx, const std::
 static std::string playable_rudp_stream_url(const MuninnSource *ctx, const MuninnStreamOption &selected)
 {
     if (starts_with(selected.url, "rudp://") &&
-        selected.url.find("reliable_expire_after_ms=") != std::string::npos &&
+        selected.url.find("sender_resend_delay_ms=") != std::string::npos &&
         selected.url.find("assembly_deadline_ms=") != std::string::npos) {
         return selected.url;
     }
@@ -1565,7 +1565,11 @@ static bool equivalent_rudp_stream_url(const std::string &left, const std::strin
         }
         return left_parts->port == right_parts->port &&
                canonical_muninn_stream_id(rudp_url_stream_id(left)) == canonical_muninn_stream_id(rudp_url_stream_id(right)) &&
-               left_parts->connection_id == right_parts->connection_id;
+               left_parts->connection_id == right_parts->connection_id &&
+               left_parts->sender_resend_delay_ms == right_parts->sender_resend_delay_ms &&
+               left_parts->reliable_expire_after_ms == right_parts->reliable_expire_after_ms &&
+               left_parts->video_assembly_deadline_ms == right_parts->video_assembly_deadline_ms &&
+               left_parts->gap_wait_ms == right_parts->gap_wait_ms;
     } catch (...) {
         return left == right;
     }
@@ -2216,6 +2220,17 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
     }
 
     if (starts_with(url, "rudp://")) {
+        if (!force_restart && ctx->bridge && ctx->media && ctx->audio_media && !ctx->stream_url.empty()) {
+            const auto previous_parts = muninn_rudp_url::parse(ctx->stream_url);
+            const auto next_parts = muninn_rudp_url::parse(url);
+            if (previous_parts && next_parts &&
+                previous_parts->video_local_port == next_parts->video_local_port &&
+                previous_parts->audio_local_port == next_parts->audio_local_port) {
+                ctx->bridge->start(url);
+                ctx->stream_url = url;
+                return;
+            }
+        }
         if (force_restart && ctx->bridge && equivalent_rudp_stream_url(ctx->stream_url, url)) {
             release_ffmpeg_children(ctx);
         } else {
@@ -2309,11 +2324,21 @@ static void reconcile_selected_stream(MuninnSource *ctx)
         ctx->last_requested_stream_id.clear();
     }
 
-    const auto stream_url = playable_rudp_stream_url(ctx, *selected);
+    const auto stream_url = selected->url.empty() && ctx->bridge && !ctx->stream_url.empty()
+                                ? ctx->stream_url
+                                : playable_rudp_stream_url(ctx, *selected);
+    const bool stream_url_changed = stream_url != ctx->stream_url;
+    if (stream_url_changed) {
+        blog(LOG_INFO,
+             "Muninn Stream selected RUDP URL changed: previous='%s' selected='%s' effective='%s'",
+             ctx->stream_url.c_str(),
+             selected->url.c_str(),
+             stream_url.c_str());
+    }
     create_or_update_media(ctx, stream_url);
 
-    bool activation_needed = ctx->last_requested_stream_id != selected_canonical_stream_id;
-    bool force_activation = false;
+    bool activation_needed = stream_url_changed || ctx->last_requested_stream_id != selected_canonical_stream_id;
+    bool force_activation = stream_url_changed;
     if (ctx->bridge && starts_with(stream_url, "rudp://")) {
         const uint64_t now_ms = steady_millis();
         if (ctx->bridge->consume_decoder_reset_request()) {
