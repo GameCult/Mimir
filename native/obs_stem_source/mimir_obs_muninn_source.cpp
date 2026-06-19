@@ -51,6 +51,7 @@ constexpr uint64_t MuninnActivationRetryMs = 5000;
 constexpr uint64_t MuninnMediaStartupGraceMs = 3000;
 constexpr uint64_t MuninnMediaStaleMs = 1500;
 constexpr uint64_t MuninnMediaRestartCooldownMs = 5000;
+constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
@@ -694,6 +695,7 @@ private:
             waiting_for_video_keyframe_ = true;
             video_forward_failures_ = 0;
             audio_forward_failures_ = 0;
+            last_keyframe_request_ms_ = 0;
             media_connected_ = true;
             const auto [ack, ack_mask] = ack_tracker_.state();
             send_control_packet(2, 0x03, bridge_sequence++, ack, ack_mask, remote);
@@ -921,10 +923,9 @@ private:
                 continue;
             }
             const auto missing_chunk_keys = missing_video_chunk_keys(iterator->second);
-            send_receiver_feedback(iterator->second, missing_chunk_keys, bridge_sequence);
+            send_receiver_feedback_if_due(iterator->second, missing_chunk_keys, bridge_sequence);
             iterator = video_assemblies_.erase(iterator);
             ++video_assemblies_expired_;
-            waiting_for_video_keyframe_ = true;
             log_bridge_pressure("expired incomplete video frame assembly");
         }
     }
@@ -948,13 +949,19 @@ private:
         return keys;
     }
 
-    void send_receiver_feedback(const MuninnVideoFrameAssembly &assembly,
-                                const std::vector<std::string> &missing_chunk_keys,
-                                uint32_t &bridge_sequence)
+    void send_receiver_feedback_if_due(const MuninnVideoFrameAssembly &assembly,
+                                       const std::vector<std::string> &missing_chunk_keys,
+                                       uint32_t &bridge_sequence)
     {
         if (!last_remote_ || assembly.stream_id.empty() || assembly.session_id.empty()) {
             return;
         }
+        const uint64_t now = steady_millis();
+        const uint64_t last = last_keyframe_request_ms_.load();
+        if (last != 0 && now >= last && now - last < MuninnReceiverKeyframeRequestCooldownMs) {
+            return;
+        }
+        last_keyframe_request_ms_.store(now);
         const auto payload = muninn_media_wire::encode_receiver_feedback_payload(
             assembly.stream_id, assembly.session_id, assembly.frame_id, missing_chunk_keys);
         send_media_packet(payload, bridge_sequence++, *last_remote_);
@@ -1090,6 +1097,7 @@ private:
     uint64_t audio_forward_failures_ = 0;
     bool waiting_for_video_keyframe_ = true;
     bool media_connected_ = false;
+    std::atomic<uint64_t> last_keyframe_request_ms_ = 0;
     std::string source_url_;
     RudpBridgeOutputs outputs_;
 };
