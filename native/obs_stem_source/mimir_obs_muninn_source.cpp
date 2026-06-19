@@ -584,6 +584,11 @@ public:
         return last_video_forwarded_ms_.load() != 0 || last_audio_forwarded_ms_.load() != 0;
     }
 
+    bool is_running() const
+    {
+        return running_.load();
+    }
+
     bool consume_decoder_reset_request()
     {
         return decoder_reset_requested_.exchange(false);
@@ -640,6 +645,9 @@ private:
             return;
         }
         const int socket_buffer_bytes = 4 * 1024 * 1024;
+        const BOOL reuse_addr = TRUE;
+        setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&reuse_addr),
+                   sizeof(reuse_addr));
         setsockopt(socket_, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&socket_buffer_bytes),
                    sizeof(socket_buffer_bytes));
         const DWORD receive_timeout_ms = 2;
@@ -761,7 +769,21 @@ private:
 
         if (packet_type == 3) {
             if (!media_connected_) {
-                return;
+                video_assemblies_.clear();
+                packet_fragments_.reset();
+                ack_tracker_.reset();
+                packets_forwarded_ = 0;
+                bytes_forwarded_ = 0;
+                payloads_decoded_dropped_ = 0;
+                video_assemblies_expired_ = 0;
+                video_recovery_dropped_ = 0;
+                waiting_for_video_keyframe_ = true;
+                video_forward_failures_ = 0;
+                audio_forward_failures_ = 0;
+                last_keyframe_request_ms_ = 0;
+                media_connected_ = true;
+                decoder_reset_requested_.store(true);
+                blog(LOG_INFO, "Muninn RUDP bridge adopted existing media sender at sequence %u", sequence);
             }
             ack_tracker_.remember(sequence);
             const std::string channel_id(
@@ -2360,6 +2382,10 @@ static void reconcile_selected_stream(MuninnSource *ctx)
             activation_needed = true;
             force_activation = true;
         } else if (ctx->bridge->needs_activation(now_ms)) {
+            if (!ctx->bridge->is_running()) {
+                blog(LOG_WARNING, "Muninn Stream RUDP bridge is not running; rebuilding local media bridge");
+                create_or_update_media(ctx, stream_url, true);
+            }
             activation_needed = true;
         }
     }
