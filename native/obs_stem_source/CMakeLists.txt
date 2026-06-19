@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(mimir_obs_stem_source LANGUAGES CXX)
 
 find_package(libobs REQUIRED CONFIG)
+include(CTest)
 
 add_library(mimir_obs_stem_source MODULE
     mimir_obs_muninn_source.cpp
@@ -21,3 +22,10 @@ add_executable(muninn_media_decoder_probe
 target_compile_features(muninn_media_decoder_probe PRIVATE cxx_std_20)
 target_include_directories(muninn_media_decoder_probe PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(muninn_rudp_url_tests
+    tests/muninn_rudp_url_tests.cpp)
+target_compile_features(muninn_rudp_url_tests PRIVATE cxx_std_20)
+target_include_directories(muninn_rudp_url_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME muninn_rudp_url_tests COMMAND muninn_rudp_url_tests)
