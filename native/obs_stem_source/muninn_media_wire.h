@@ -177,6 +177,7 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
     const std::string &session_id,
     uint64_t frame_id,
     const std::vector<std::string> &missing_chunk_keys,
+    bool requested_keyframe,
     const std::string &observed_at)
 {
     MsgpackWriter record;
@@ -191,7 +192,7 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
     }
     write_u64_array(record, {});
     write_u64_array(record, {frame_id});
-    record.write_bool(true);
+    record.write_bool(requested_keyframe);
     record.write_i64(0);
     record.write_i64(0);
     record.write_string(observed_at);
@@ -237,6 +238,22 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
     const std::string &stream_id,
     const std::string &session_id,
     uint64_t frame_id,
+    const std::vector<std::string> &missing_chunk_keys,
+    bool requested_keyframe)
+{
+    return encode_receiver_feedback_payload(
+        stream_id,
+        session_id,
+        frame_id,
+        missing_chunk_keys,
+        requested_keyframe,
+        feedback_observed_at());
+}
+
+inline std::vector<uint8_t> encode_receiver_feedback_payload(
+    const std::string &stream_id,
+    const std::string &session_id,
+    uint64_t frame_id,
     const std::vector<std::string> &missing_chunk_keys)
 {
     return encode_receiver_feedback_payload(
@@ -244,7 +261,7 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
         session_id,
         frame_id,
         missing_chunk_keys,
-        feedback_observed_at());
+        true);
 }
 
 } // namespace muninn_media_wire

@@ -55,7 +55,7 @@ constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
-constexpr uint32_t MuninnDefaultMediaPacketBytes = 900;
+constexpr uint32_t MuninnDefaultMediaPacketBytes = 800;
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -118,6 +118,8 @@ struct MuninnMediaPayload {
     std::string stream_id;
     std::string session_id;
     uint64_t frame_id = 0;
+    bool keyframe = false;
+    std::optional<uint64_t> dependency_frame_id;
     uint16_t chunk_index = 0;
     uint16_t chunk_count = 1;
     std::vector<uint8_t> payload;
@@ -127,6 +129,8 @@ struct MuninnVideoFrameAssembly {
     std::string stream_id;
     std::string session_id;
     uint64_t frame_id = 0;
+    bool keyframe = false;
+    std::optional<uint64_t> dependency_frame_id;
     uint16_t chunk_count = 0;
     uint16_t chunks_received = 0;
     std::chrono::steady_clock::time_point started_at;
@@ -274,6 +278,42 @@ public:
             return read_u64();
         }
         throw std::runtime_error("expected MessagePack unsigned integer");
+    }
+
+    std::optional<uint64_t> read_optional_unsigned()
+    {
+        const uint8_t tag = read_u8();
+        if (tag == 0xc0) {
+            return std::nullopt;
+        }
+        if (tag <= 0x7f) {
+            return tag;
+        }
+        if (tag == 0xcc) {
+            return read_u8();
+        }
+        if (tag == 0xcd) {
+            return read_u16();
+        }
+        if (tag == 0xce) {
+            return read_u32();
+        }
+        if (tag == 0xcf) {
+            return read_u64();
+        }
+        throw std::runtime_error("expected optional MessagePack unsigned integer");
+    }
+
+    bool read_bool()
+    {
+        const uint8_t tag = read_u8();
+        if (tag == 0xc2) {
+            return false;
+        }
+        if (tag == 0xc3) {
+            return true;
+        }
+        throw std::runtime_error("expected MessagePack boolean");
     }
 
     void skip()
@@ -448,8 +488,8 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             record.skip(); // duration_ticks
             record.skip(); // timebase_num
             record.skip(); // timebase_den
-            record.skip(); // keyframe
-            record.skip(); // dependency_frame_id
+            media.keyframe = record.read_bool();
+            media.dependency_frame_id = record.read_optional_unsigned();
             record.skip(); // deadline_ticks
             media.chunk_index = static_cast<uint16_t>(record.read_unsigned());
             media.chunk_count = static_cast<uint16_t>(record.read_unsigned());
@@ -897,14 +937,18 @@ private:
             assembly.stream_id = media.stream_id;
             assembly.session_id = media.session_id;
             assembly.frame_id = media.frame_id;
+            assembly.keyframe = media.keyframe;
+            assembly.dependency_frame_id = media.dependency_frame_id;
             assembly.chunk_count = media.chunk_count;
             assembly.chunks.resize(media.chunk_count);
             assembly.started_at = std::chrono::steady_clock::now();
         }
-        if (assembly.chunk_count != media.chunk_count) {
+        if (assembly.chunk_count != media.chunk_count ||
+            assembly.keyframe != media.keyframe ||
+            assembly.dependency_frame_id != media.dependency_frame_id) {
             video_assemblies_.erase(key);
             ++payloads_decoded_dropped_;
-            log_bridge_pressure("dropped video frame with mixed chunk count");
+            log_bridge_pressure("dropped video frame with mixed metadata");
             return std::nullopt;
         }
         auto &slot = assembly.chunks[media.chunk_index];
@@ -938,8 +982,16 @@ private:
                 continue;
             }
             const auto missing_chunk_keys = missing_video_chunk_keys(iterator->second);
-            send_receiver_feedback_if_due(iterator->second, missing_chunk_keys, bridge_sequence);
-            waiting_for_video_keyframe_ = true;
+            const bool needs_decoder_recovery =
+                iterator->second.keyframe || iterator->second.dependency_frame_id.has_value();
+            send_receiver_feedback_if_due(
+                iterator->second,
+                missing_chunk_keys,
+                needs_decoder_recovery,
+                bridge_sequence);
+            if (needs_decoder_recovery) {
+                waiting_for_video_keyframe_ = true;
+            }
             iterator = video_assemblies_.erase(iterator);
             ++video_assemblies_expired_;
             log_bridge_pressure("expired incomplete video frame assembly");
@@ -967,6 +1019,7 @@ private:
 
     void send_receiver_feedback_if_due(const MuninnVideoFrameAssembly &assembly,
                                        const std::vector<std::string> &missing_chunk_keys,
+                                       bool requested_keyframe,
                                        uint32_t &bridge_sequence)
     {
         if (!last_remote_ || assembly.stream_id.empty() || assembly.session_id.empty()) {
@@ -979,7 +1032,7 @@ private:
         }
         last_keyframe_request_ms_.store(now);
         const auto payload = muninn_media_wire::encode_receiver_feedback_payload(
-            assembly.stream_id, assembly.session_id, assembly.frame_id, missing_chunk_keys);
+            assembly.stream_id, assembly.session_id, assembly.frame_id, missing_chunk_keys, requested_keyframe);
         send_media_packet(payload, bridge_sequence++, *last_remote_);
     }
 
