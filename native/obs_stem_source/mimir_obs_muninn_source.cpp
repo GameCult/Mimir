@@ -28,6 +28,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -55,6 +56,7 @@ constexpr uint64_t MuninnMediaStaleMs = 1500;
 constexpr uint64_t MuninnMediaRestartCooldownMs = 5000;
 constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
 constexpr uint64_t MuninnReceiverChunkRepairFirstWaitMs = 64;
+constexpr size_t MuninnExpiredVideoFrameRememberCount = 4096;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
@@ -971,6 +973,9 @@ private:
 
         const std::string key =
             media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
+        if (expired_video_frame_keys_.find(key) != expired_video_frame_keys_.end()) {
+            return std::nullopt;
+        }
         auto &assembly = video_assemblies_[key];
         if (assembly.chunks.empty()) {
             assembly.stream_id = media.stream_id;
@@ -1034,10 +1039,40 @@ private:
             if (needs_decoder_recovery) {
                 waiting_for_video_keyframe_ = true;
             }
+            log_video_assembly_expiry(iterator->second, missing_chunk_keys, now);
+            remember_expired_video_frame(iterator->first);
             iterator = video_assemblies_.erase(iterator);
             ++video_assemblies_expired_;
             log_bridge_pressure("expired incomplete video frame assembly");
         }
+    }
+
+    void remember_expired_video_frame(const std::string &key)
+    {
+        if (expired_video_frame_keys_.insert(key).second) {
+            expired_video_frame_order_.push_back(key);
+        }
+        while (expired_video_frame_order_.size() > MuninnExpiredVideoFrameRememberCount) {
+            expired_video_frame_keys_.erase(expired_video_frame_order_.front());
+            expired_video_frame_order_.pop_front();
+        }
+    }
+
+    void log_video_assembly_expiry(const MuninnVideoFrameAssembly &assembly,
+                                   const std::vector<std::string> &missing_chunk_keys,
+                                   std::chrono::steady_clock::time_point now) const
+    {
+        const auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - assembly.started_at).count();
+        blog(LOG_WARNING,
+             "Muninn RUDP bridge expired video frame id=%llu keyframe=%s dependency=%s chunks=%u/%u missing=%zu age_ms=%lld repair_requested=%s",
+             static_cast<unsigned long long>(assembly.frame_id),
+             assembly.keyframe ? "true" : "false",
+             assembly.dependency_frame_id.has_value() ? "true" : "false",
+             static_cast<unsigned int>(assembly.chunks_received),
+             static_cast<unsigned int>(assembly.chunk_count),
+             missing_chunk_keys.size(),
+             static_cast<long long>(age_ms),
+             assembly.repair_requested ? "true" : "false");
     }
 
     void request_video_chunk_repair_if_due(MuninnVideoFrameAssembly &assembly,
@@ -1223,6 +1258,8 @@ private:
     std::thread worker_;
     muninn_rudp_url::RudpUrlParts parts_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
+    std::deque<std::string> expired_video_frame_order_;
+    std::set<std::string> expired_video_frame_keys_;
     muninn_rudp_fragments::FragmentAssembler packet_fragments_;
     muninn_rudp_ack::AckTracker ack_tracker_;
     uint64_t packets_forwarded_ = 0;
