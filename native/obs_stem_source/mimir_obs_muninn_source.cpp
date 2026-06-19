@@ -3439,7 +3439,7 @@ static bool muninn_refresh_streams(obs_properties_t *props, obs_property_t *, vo
 
 static const char *muninn_get_name(void *)
 {
-    return "Muninn Stream";
+    return obs_module_text("MuninnStream");
 }
 
 static void audio_worker_loop(MuninnSource *ctx)
@@ -3615,7 +3615,8 @@ static obs_properties_t *muninn_properties(void *data)
     const auto store_path = ctx ? ctx->store_path : std::string(MuninnStorePath);
 
     obs_properties_t *props = obs_properties_create();
-    obs_property_t *streams = obs_properties_add_list(props, "stream_id", "Muninn stream", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+    obs_property_t *streams =
+        obs_properties_add_list(props, "stream_id", obs_module_text("MuninnStream.Stream"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
     if (ctx) {
         refresh_catalog(ctx);
         populate_stream_list_from_options(streams, ctx->catalog_options);
@@ -3623,9 +3624,9 @@ static obs_properties_t *muninn_properties(void *data)
         populate_stream_list(streams, store_path);
     }
     obs_property_t *video_sources =
-        obs_properties_add_list(props, "video_source_id", "Muninn video", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+        obs_properties_add_list(props, "video_source_id", obs_module_text("MuninnStream.Video"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
     obs_property_t *audio_sources =
-        obs_properties_add_list(props, "audio_source_id", "Muninn audio", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+        obs_properties_add_list(props, "audio_source_id", obs_module_text("MuninnStream.Audio"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
     if (ctx) {
         populate_source_list(video_sources, catalog_video_sources(ctx));
         populate_source_list(audio_sources, catalog_audio_sources(ctx));
@@ -3633,10 +3634,28 @@ static obs_properties_t *muninn_properties(void *data)
         populate_source_list(video_sources, {{"display:0", "Display 1"}});
         populate_source_list(audio_sources, {{"wasapi-loopback:Realtek", "Realtek loopback"}});
     }
-    obs_properties_add_int(props, "rudp_video_bitrate_kbps", "Video bitrate (kbps)", 1000, MuninnMaxRudpVideoBitrateKbps, 500);
-    obs_properties_add_int(props, "rudp_latency_budget_ms", "Video/transport latency (ms)", 100, MuninnMaxRudpLatencyBudgetMs, 50);
-    obs_properties_add_int(props, "rudp_audio_reorder_ms", "Audio reorder latency (ms)", 0, MuninnMaxRudpAudioReorderMs, 25);
-    obs_properties_add_button(props, "refresh_streams", "Refresh Muninn streams", muninn_refresh_streams);
+    obs_properties_add_int(
+        props,
+        "rudp_video_bitrate_kbps",
+        obs_module_text("MuninnStream.VideoBitrateKbps"),
+        1000,
+        MuninnMaxRudpVideoBitrateKbps,
+        500);
+    obs_properties_add_int(
+        props,
+        "rudp_latency_budget_ms",
+        obs_module_text("MuninnStream.VideoLatencyMs"),
+        100,
+        MuninnMaxRudpLatencyBudgetMs,
+        50);
+    obs_properties_add_int(
+        props,
+        "rudp_audio_reorder_ms",
+        obs_module_text("MuninnStream.AudioReorderMs"),
+        0,
+        MuninnMaxRudpAudioReorderMs,
+        25);
+    obs_properties_add_button(props, "refresh_streams", obs_module_text("MuninnStream.Refresh"), muninn_refresh_streams);
     return props;
 }
 

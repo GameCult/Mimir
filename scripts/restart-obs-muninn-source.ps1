@@ -9,12 +9,31 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Stop-Obs {
-    $processes = Get-Process obs64 -ErrorAction SilentlyContinue
+    $processes = Get-Process obs64,obs-browser-page,obs-ffmpeg-mux -ErrorAction SilentlyContinue
     if (-not $processes) {
         return
     }
 
-    & "$env:SystemRoot\System32\taskkill.exe" /IM obs64.exe /T /F | Write-Host
+    & "$env:SystemRoot\System32\taskkill.exe" /IM obs64.exe /IM obs-browser-page.exe /IM obs-ffmpeg-mux.exe /T /F | Write-Host
+
+    $deadline = (Get-Date).AddSeconds(15)
+    do {
+        Start-Sleep -Milliseconds 500
+        $remaining = Get-Process obs64,obs-browser-page,obs-ffmpeg-mux -ErrorAction SilentlyContinue
+        if (-not $remaining) {
+            return
+        }
+    } while ((Get-Date) -lt $deadline)
+
+    $remaining | ForEach-Object {
+        try {
+            Stop-Process -Id $_.Id -Force -ErrorAction Stop
+        } catch {
+            Write-Host "Failed to stop lingering $($_.ProcessName) PID $($_.Id): $($_.Exception.Message)"
+        }
+    }
+
+    Start-Sleep -Seconds 1
 }
 
 function Remove-ObsCrashSentinel {

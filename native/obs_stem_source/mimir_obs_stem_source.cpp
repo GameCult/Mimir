@@ -146,7 +146,7 @@ static void worker_loop(MimirStemSource *ctx)
 
 static const char *mimir_stem_get_name(void *)
 {
-    return "Mimir Audio Stem";
+    return obs_module_text("MimirAudioStem");
 }
 
 static void mimir_stem_update(void *data, obs_data_t *settings)
@@ -189,8 +189,8 @@ static void mimir_stem_defaults(obs_data_t *settings)
 static obs_properties_t *mimir_stem_properties(void *)
 {
     obs_properties_t *props = obs_properties_create();
-    obs_properties_add_text(props, "map_name", "Shared memory map", OBS_TEXT_DEFAULT);
-    obs_properties_add_text(props, "stem_id", "Stem id", OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "map_name", obs_module_text("MimirAudioStem.MapName"), OBS_TEXT_DEFAULT);
+    obs_properties_add_text(props, "stem_id", obs_module_text("MimirAudioStem.StemId"), OBS_TEXT_DEFAULT);
     return props;
 }
 

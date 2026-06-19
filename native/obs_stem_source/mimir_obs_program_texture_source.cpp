@@ -533,7 +533,7 @@ static bool copy_source_to_bridge(MimirProgramTextureSource *ctx)
 
 static const char *mimir_program_texture_get_name(void *)
 {
-    return "Mimir Program Texture";
+    return obs_module_text("MimirProgramTexture");
 }
 
 static void mimir_program_texture_update(void *data, obs_data_t *settings)
