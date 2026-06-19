@@ -768,6 +768,11 @@ private:
             waiting_for_video_keyframe_ = true;
             video_forward_failures_ = 0;
             audio_forward_failures_ = 0;
+            media_sequence_initialized_ = false;
+            last_media_sequence_ = 0;
+            media_sequence_gap_events_ = 0;
+            media_sequence_gap_packets_ = 0;
+            last_sequence_gap_log_ms_ = 0;
             last_keyframe_request_ms_ = 0;
             media_connected_ = true;
             if (was_connected) {
@@ -792,12 +797,18 @@ private:
                 waiting_for_video_keyframe_ = true;
                 video_forward_failures_ = 0;
                 audio_forward_failures_ = 0;
+                media_sequence_initialized_ = false;
+                last_media_sequence_ = 0;
+                media_sequence_gap_events_ = 0;
+                media_sequence_gap_packets_ = 0;
+                last_sequence_gap_log_ms_ = 0;
                 last_keyframe_request_ms_ = 0;
                 media_connected_ = true;
                 decoder_reset_requested_.store(true);
                 blog(LOG_INFO, "Muninn RUDP bridge adopted existing media sender at sequence %u", sequence);
             }
             ack_tracker_.remember(sequence);
+            observe_media_sequence(sequence);
             const std::string channel_id(
                 reinterpret_cast<const char *>(packet + 36),
                 reinterpret_cast<const char *>(packet + 36 + channel_len));
@@ -927,6 +938,36 @@ private:
                  static_cast<unsigned long long>(video_assemblies_expired_),
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
+        }
+    }
+
+    void observe_media_sequence(uint32_t sequence)
+    {
+        if (!media_sequence_initialized_) {
+            media_sequence_initialized_ = true;
+            last_media_sequence_ = sequence;
+            return;
+        }
+        if (sequence <= last_media_sequence_ + 1) {
+            last_media_sequence_ = sequence;
+            return;
+        }
+        const uint32_t missing = sequence - last_media_sequence_ - 1;
+        media_sequence_gap_events_ += 1;
+        media_sequence_gap_packets_ += missing;
+        last_media_sequence_ = sequence;
+        const uint64_t now = steady_millis();
+        if (media_sequence_gap_events_ == 1 ||
+            now > last_sequence_gap_log_ms_ + 5'000 ||
+            media_sequence_gap_events_ % 64 == 0) {
+            last_sequence_gap_log_ms_ = now;
+            blog(LOG_WARNING,
+                 "Muninn RUDP bridge observed media sequence gap missing=%u gap_events=%llu gap_packets=%llu forwarded=%llu assemblies_expired=%llu",
+                 missing,
+                 static_cast<unsigned long long>(media_sequence_gap_events_),
+                 static_cast<unsigned long long>(media_sequence_gap_packets_),
+                 static_cast<unsigned long long>(packets_forwarded_),
+                 static_cast<unsigned long long>(video_assemblies_expired_));
         }
     }
 
@@ -1269,6 +1310,11 @@ private:
     uint64_t video_recovery_dropped_ = 0;
     uint64_t video_forward_failures_ = 0;
     uint64_t audio_forward_failures_ = 0;
+    bool media_sequence_initialized_ = false;
+    uint32_t last_media_sequence_ = 0;
+    uint64_t media_sequence_gap_events_ = 0;
+    uint64_t media_sequence_gap_packets_ = 0;
+    uint64_t last_sequence_gap_log_ms_ = 0;
     bool waiting_for_video_keyframe_ = true;
     bool media_connected_ = false;
     std::atomic<uint64_t> last_keyframe_request_ms_ = 0;
