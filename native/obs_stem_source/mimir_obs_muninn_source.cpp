@@ -494,9 +494,9 @@ public:
         source_url_ = url;
         parts_ = *parsed;
         outputs_.video_url = "udp://127.0.0.1:" + std::to_string(parts_.video_local_port) +
-                             "?fifo_size=1048576&overrun_nonfatal=1&buffer_size=16777216";
+                             "?fifo_size=8388608&overrun_nonfatal=1&buffer_size=67108864";
         outputs_.audio_url = "udp://127.0.0.1:" + std::to_string(parts_.audio_local_port) +
-                             "?fifo_size=262144&overrun_nonfatal=1&buffer_size=4194304";
+                             "?fifo_size=1048576&overrun_nonfatal=1&buffer_size=8388608";
         const uint64_t now = steady_millis();
         started_ms_.store(now);
         last_packet_ms_.store(0);
@@ -539,6 +539,11 @@ public:
     bool has_forwarded_media() const
     {
         return last_video_forwarded_ms_.load() != 0 || last_audio_forwarded_ms_.load() != 0;
+    }
+
+    bool consume_decoder_reset_request()
+    {
+        return decoder_reset_requested_.exchange(false);
     }
 
     bool needs_activation(uint64_t now_ms) const
@@ -683,6 +688,7 @@ private:
         }
 
         if (packet_type == 1) {
+            const bool was_connected = media_connected_;
             video_assemblies_.clear();
             packet_fragments_.reset();
             ack_tracker_.reset();
@@ -697,6 +703,9 @@ private:
             audio_forward_failures_ = 0;
             last_keyframe_request_ms_ = 0;
             media_connected_ = true;
+            if (was_connected) {
+                decoder_reset_requested_.store(true);
+            }
             const auto [ack, ack_mask] = ack_tracker_.state();
             send_control_packet(2, 0x03, bridge_sequence++, ack, ack_mask, remote);
             blog(LOG_INFO, "Muninn RUDP bridge accepted media connection sequence %u", sequence);
@@ -846,7 +855,9 @@ private:
                               size_t size) const
     {
         constexpr size_t MaxLocalUdpPayload = 1200;
+        constexpr size_t PaceEveryChunks = 16;
         size_t offset = 0;
+        size_t chunks_sent = 0;
         while (offset < size) {
             const size_t chunk_size = std::min(MaxLocalUdpPayload, size - offset);
             const int sent = sendto(socket,
@@ -859,6 +870,10 @@ private:
                 return false;
             }
             offset += chunk_size;
+            ++chunks_sent;
+            if (offset < size && chunks_sent % PaceEveryChunks == 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
         return true;
     }
@@ -1084,6 +1099,7 @@ private:
     std::atomic<uint64_t> last_video_forwarded_ms_{0};
     std::atomic<uint64_t> last_audio_forwarded_ms_{0};
     std::atomic<bool> stale_reported_{false};
+    std::atomic<bool> decoder_reset_requested_{false};
     std::thread worker_;
     muninn_rudp_url::RudpUrlParts parts_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
@@ -2046,11 +2062,8 @@ private:
     muninn_rudp_ack::AckTracker ack_tracker_;
 };
 
-static void release_media(MuninnSource *ctx)
+static void release_ffmpeg_children(MuninnSource *ctx)
 {
-    if (ctx->bridge) {
-        ctx->bridge->stop();
-    }
     if (ctx->audio_media) {
         obs_source_remove_audio_capture_callback(ctx->audio_media, muninn_child_audio, ctx);
         obs_source_remove_active_child(ctx->source, ctx->audio_media);
@@ -2063,6 +2076,14 @@ static void release_media(MuninnSource *ctx)
         obs_source_release(ctx->media);
         ctx->media = nullptr;
     }
+}
+
+static void release_media(MuninnSource *ctx)
+{
+    if (ctx->bridge) {
+        ctx->bridge->stop();
+    }
+    release_ffmpeg_children(ctx);
 }
 
 static obs_source_t *create_ffmpeg_child_source(MuninnSource *ctx,
@@ -2106,9 +2127,12 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
         return;
     }
 
-    release_media(ctx);
-
     if (starts_with(url, "rudp://")) {
+        if (force_restart && ctx->bridge && equivalent_rudp_stream_url(ctx->stream_url, url)) {
+            release_ffmpeg_children(ctx);
+        } else {
+            release_media(ctx);
+        }
         if (!ctx->bridge) {
             ctx->bridge = std::make_unique<RudpMediaBridge>();
         }
@@ -2125,6 +2149,7 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
         ctx->bridge->stop();
     }
 
+    release_ffmpeg_children(ctx);
     ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Media", url, "mpegts", true);
     if (ctx->media) {
         ctx->stream_url = url;
@@ -2203,6 +2228,14 @@ static void reconcile_selected_stream(MuninnSource *ctx)
     bool force_activation = false;
     if (ctx->bridge && starts_with(stream_url, "rudp://")) {
         const uint64_t now_ms = steady_millis();
+        if (ctx->bridge->consume_decoder_reset_request()) {
+            blog(LOG_INFO, "Muninn Stream RUDP sender session changed; refreshing local decoder readers");
+            const auto now = std::chrono::steady_clock::now();
+            if (now - ctx->last_media_restart >= std::chrono::milliseconds(MuninnMediaRestartCooldownMs)) {
+                create_or_update_media(ctx, stream_url, true);
+                ctx->last_media_restart = now;
+            }
+        }
         if (ctx->bridge->consume_stale_transition(now_ms)) {
             blog(LOG_WARNING, "Muninn Stream receiver media is stale; refreshing local media readers and re-requesting activation");
             const auto now = std::chrono::steady_clock::now();
