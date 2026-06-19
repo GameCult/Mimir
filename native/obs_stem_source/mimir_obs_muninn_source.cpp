@@ -924,6 +924,7 @@ private:
             }
             const auto missing_chunk_keys = missing_video_chunk_keys(iterator->second);
             send_receiver_feedback_if_due(iterator->second, missing_chunk_keys, bridge_sequence);
+            waiting_for_video_keyframe_ = true;
             iterator = video_assemblies_.erase(iterator);
             ++video_assemblies_expired_;
             log_bridge_pressure("expired incomplete video frame assembly");
