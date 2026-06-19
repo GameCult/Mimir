@@ -56,6 +56,7 @@ constexpr uint64_t MuninnMediaStaleMs = 1500;
 constexpr uint64_t MuninnMediaRestartCooldownMs = 5000;
 constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
 constexpr uint64_t MuninnReceiverChunkRepairFirstWaitMs = 64;
+constexpr uint64_t MuninnVideoAssemblyExpiryScanMs = 10;
 constexpr size_t MuninnExpiredVideoFrameRememberCount = 4096;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
@@ -774,6 +775,7 @@ private:
             media_sequence_gap_packets_ = 0;
             last_sequence_gap_log_ms_ = 0;
             last_keyframe_request_ms_ = 0;
+            last_video_expiry_scan_ms_ = 0;
             media_connected_ = true;
             if (was_connected) {
                 decoder_reset_requested_.store(true);
@@ -803,6 +805,7 @@ private:
                 media_sequence_gap_packets_ = 0;
                 last_sequence_gap_log_ms_ = 0;
                 last_keyframe_request_ms_ = 0;
+                last_video_expiry_scan_ms_ = 0;
                 media_connected_ = true;
                 decoder_reset_requested_.store(true);
                 blog(LOG_INFO, "Muninn RUDP bridge adopted existing media sender at sequence %u", sequence);
@@ -1066,6 +1069,13 @@ private:
 
     void expire_video_assemblies(std::chrono::steady_clock::time_point now, uint32_t &bridge_sequence)
     {
+        const uint64_t now_ms = steady_millis();
+        if (last_video_expiry_scan_ms_ != 0 &&
+            now_ms > last_video_expiry_scan_ms_ &&
+            now_ms - last_video_expiry_scan_ms_ < MuninnVideoAssemblyExpiryScanMs) {
+            return;
+        }
+        last_video_expiry_scan_ms_ = now_ms;
         for (auto iterator = video_assemblies_.begin(); iterator != video_assemblies_.end();) {
             if (now - iterator->second.started_at < std::chrono::milliseconds(parts_.video_assembly_deadline_ms)) {
                 request_video_chunk_repair_if_due(iterator->second, now, bridge_sequence);
@@ -1318,6 +1328,7 @@ private:
     uint64_t media_sequence_gap_events_ = 0;
     uint64_t media_sequence_gap_packets_ = 0;
     uint64_t last_sequence_gap_log_ms_ = 0;
+    uint64_t last_video_expiry_scan_ms_ = 0;
     bool waiting_for_video_keyframe_ = true;
     bool media_connected_ = false;
     std::atomic<uint64_t> last_keyframe_request_ms_ = 0;
