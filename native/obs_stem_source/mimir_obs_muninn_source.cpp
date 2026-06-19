@@ -1958,7 +1958,12 @@ static void request_stream_activation(MuninnSource *ctx, const std::string &stre
             blog(LOG_WARNING, "Muninn Stream failed to publish native RUDP activation request");
         }
     }).detach();
-    blog(LOG_INFO, "Muninn Stream requested activation for %s over native RUDP %s", canonical_stream_id.c_str(), command_target.c_str());
+    blog(LOG_INFO,
+         "Muninn Stream requested activation for %s over native RUDP %s bitrate_kbps=%u latency_budget_ms=%u",
+         canonical_stream_id.c_str(),
+         command_target.c_str(),
+         ctx->rudp_video_bitrate_kbps,
+         ctx->rudp_latency_budget_ms);
 }
 
 class MsgpackReader {
