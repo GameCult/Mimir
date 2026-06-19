@@ -71,6 +71,14 @@ constexpr uint32_t MuninnMaxRudpLatencyBudgetMs = 2000;
 constexpr uint32_t MuninnMaxRudpAudioReorderMs = 2000;
 constexpr size_t MuninnAudioReorderMaxPackets = 128;
 constexpr size_t MuninnAudioQueueMaxPackets = 32;
+constexpr const char *MuninnDisabledVideoSourceId = "video:none";
+constexpr const char *MuninnDisabledAudioSourceId = "audio:none";
+
+enum class MuninnSourceKind {
+    Combined,
+    VideoOnly,
+    AudioOnly,
+};
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -96,6 +104,7 @@ struct MuninnQueuedAudio {
 };
 
 struct MuninnSource {
+    MuninnSourceKind kind = MuninnSourceKind::Combined;
     obs_source_t *source = nullptr;
     obs_source_t *media = nullptr;
     obs_source_t *audio_media = nullptr;
@@ -135,6 +144,16 @@ struct MuninnSource {
 static void muninn_child_audio(void *param, obs_source_t *source, const struct audio_data *audio_data, bool muted);
 static void stop_audio_worker(MuninnSource *ctx);
 static std::string canonical_muninn_stream_id(const std::string &stream_id);
+
+static bool source_wants_video(const MuninnSource *ctx)
+{
+    return !ctx || ctx->kind != MuninnSourceKind::AudioOnly;
+}
+
+static bool source_wants_audio(const MuninnSource *ctx)
+{
+    return !ctx || ctx->kind != MuninnSourceKind::VideoOnly;
+}
 
 struct RudpBridgeOutputs {
     std::string video_url;
@@ -2293,8 +2312,8 @@ static std::vector<uint8_t> encode_capture_stream_command_wire(const MuninnSourc
     record.write_string(observed_at);
     record.write_u64(ctx->rudp_video_bitrate_kbps);
     record.write_u64(ctx->rudp_latency_budget_ms);
-    record.write_string(ctx->video_source_id);
-    record.write_string(ctx->audio_source_id);
+    record.write_string(source_wants_video(ctx) ? ctx->video_source_id : MuninnDisabledVideoSourceId);
+    record.write_string(source_wants_audio(ctx) ? ctx->audio_source_id : MuninnDisabledAudioSourceId);
 
     muninn_media_wire::MsgpackWriter document;
     document.write_map_len(9);
@@ -3182,19 +3201,33 @@ static obs_source_t *create_ffmpeg_child_source(MuninnSource *ctx,
 
 static void create_or_update_media(MuninnSource *ctx, const std::string &url, bool force_restart = false)
 {
+    const bool wants_video = source_wants_video(ctx);
+    const bool wants_audio = source_wants_audio(ctx);
     if (url.empty()) {
         release_media(ctx);
         ctx->stream_url.clear();
         return;
     }
 
-    if (!force_restart && ctx->media && equivalent_rudp_stream_url(ctx->stream_url, url)) {
+    if (!wants_video && !wants_audio) {
+        release_media(ctx);
+        ctx->stream_url.clear();
+        return;
+    }
+
+    if (!force_restart &&
+        ((wants_video && ctx->media) || (wants_audio && ctx->audio_decoder)) &&
+        equivalent_rudp_stream_url(ctx->stream_url, url)) {
         ctx->stream_url = url;
         return;
     }
 
     if (starts_with(url, "rudp://")) {
-        if (!force_restart && ctx->bridge && ctx->media && ctx->audio_decoder && !ctx->stream_url.empty()) {
+        if (!force_restart &&
+            ctx->bridge &&
+            (!wants_video || ctx->media) &&
+            (!wants_audio || ctx->audio_decoder) &&
+            !ctx->stream_url.empty()) {
             const auto previous_parts = muninn_rudp_url::parse(ctx->stream_url);
             const auto next_parts = muninn_rudp_url::parse(url);
             if (previous_parts && next_parts &&
@@ -3214,12 +3247,19 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
             ctx->bridge = std::make_unique<RudpMediaBridge>();
         }
         const auto outputs = ctx->bridge->start(url);
-        ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Video", outputs.video_url, "h264", false);
-        if (!ctx->audio_decoder) {
-            ctx->audio_decoder = std::make_unique<FfmpegAudioDecoder>();
+        bool activated = false;
+        if (wants_video) {
+            ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Video", outputs.video_url, "h264", false);
+            activated = ctx->media != nullptr;
         }
-        ctx->audio_decoder->start(ctx, outputs.audio_url);
-        if (ctx->media) {
+        if (wants_audio) {
+            if (!ctx->audio_decoder) {
+                ctx->audio_decoder = std::make_unique<FfmpegAudioDecoder>();
+            }
+            ctx->audio_decoder->start(ctx, outputs.audio_url);
+            activated = true;
+        }
+        if (activated) {
             ctx->stream_url = url;
         } else {
             ctx->stream_url.clear();
@@ -3230,8 +3270,12 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
     }
 
     release_ffmpeg_children(ctx);
-    ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Media", url, "mpegts", true);
-    if (ctx->media) {
+    if (wants_video) {
+        ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Media", url, "mpegts", wants_audio);
+    } else if (wants_audio) {
+        ctx->audio_media = create_ffmpeg_child_source(ctx, "Muninn Stream Audio", url, "mpegts", true);
+    }
+    if (ctx->media || ctx->audio_media) {
         ctx->stream_url = url;
     } else {
         ctx->stream_url.clear();
@@ -3278,8 +3322,12 @@ static void reconcile_selected_stream(MuninnSource *ctx)
     ctx->stream_id = selected->stream_id;
     const auto previous_video_source_id = ctx->video_source_id;
     const auto previous_audio_source_id = ctx->audio_source_id;
-    ctx->video_source_id = selected_source_id(selected->video_sources, ctx->video_source_id);
-    ctx->audio_source_id = selected_source_id(selected->audio_sources, ctx->audio_source_id);
+    ctx->video_source_id = source_wants_video(ctx)
+                               ? selected_source_id(selected->video_sources, ctx->video_source_id)
+                               : MuninnDisabledVideoSourceId;
+    ctx->audio_source_id = source_wants_audio(ctx)
+                               ? selected_source_id(selected->audio_sources, ctx->audio_source_id)
+                               : MuninnDisabledAudioSourceId;
     const bool source_selection_changed =
         ctx->video_source_id != previous_video_source_id || ctx->audio_source_id != previous_audio_source_id;
     if (selection_changed || source_selection_changed) {
@@ -3427,19 +3475,29 @@ static bool muninn_refresh_streams(obs_properties_t *props, obs_property_t *, vo
         refresh_catalog(ctx);
         obs_property_t *video_list = obs_properties_get(props, "video_source_id");
         obs_property_t *audio_list = obs_properties_get(props, "audio_source_id");
-        if (video_list) {
+        if (video_list && source_wants_video(ctx)) {
             populate_source_list(video_list, catalog_video_sources(ctx));
         }
-        if (audio_list) {
+        if (audio_list && source_wants_audio(ctx)) {
             populate_source_list(audio_list, catalog_audio_sources(ctx));
         }
     }
     return true;
 }
 
-static const char *muninn_get_name(void *)
+static const char *muninn_get_name_combined(void *)
 {
     return obs_module_text("MuninnStream");
+}
+
+static const char *muninn_get_name_video(void *)
+{
+    return obs_module_text("MuninnVideoSource");
+}
+
+static const char *muninn_get_name_audio(void *)
+{
+    return obs_module_text("MuninnAudioSource");
 }
 
 static void audio_worker_loop(MuninnSource *ctx)
@@ -3498,9 +3556,10 @@ static void stop_audio_worker(MuninnSource *ctx)
     }
 }
 
-static void muninn_update(void *data, obs_data_t *settings)
+static void muninn_update_kind(void *data, obs_data_t *settings, MuninnSourceKind kind)
 {
     auto *ctx = static_cast<MuninnSource *>(data);
+    ctx->kind = kind;
     const auto previous_command_rudp_target = ctx->command_rudp_target;
     const auto previous_media_target_host = ctx->media_target_host;
     const auto previous_media_port = ctx->media_port;
@@ -3539,8 +3598,16 @@ static void muninn_update(void *data, obs_data_t *settings)
         configured_audio_reorder >= 0 ? std::min<int64_t>(configured_audio_reorder, MuninnMaxRudpAudioReorderMs)
                                       : MuninnDefaultRudpAudioReorderMs);
     ctx->stream_id = obs_string(settings, "stream_id", "");
-    ctx->video_source_id = obs_string(settings, "video_source_id", ctx->video_source_id.c_str());
-    ctx->audio_source_id = obs_string(settings, "audio_source_id", ctx->audio_source_id.c_str());
+    if (source_wants_video(ctx)) {
+        ctx->video_source_id = obs_string(settings, "video_source_id", ctx->video_source_id.c_str());
+    } else {
+        ctx->video_source_id = MuninnDisabledVideoSourceId;
+    }
+    if (source_wants_audio(ctx)) {
+        ctx->audio_source_id = obs_string(settings, "audio_source_id", ctx->audio_source_id.c_str());
+    } else {
+        ctx->audio_source_id = MuninnDisabledAudioSourceId;
+    }
     if (ctx->command_rudp_target != previous_command_rudp_target ||
         ctx->media_target_host != previous_media_target_host ||
         ctx->media_port != previous_media_port ||
@@ -3558,16 +3625,49 @@ static void muninn_update(void *data, obs_data_t *settings)
     reconcile_selected_stream(ctx);
 }
 
-static void *muninn_create(obs_data_t *settings, obs_source_t *source)
+static void muninn_update_combined(void *data, obs_data_t *settings)
+{
+    muninn_update_kind(data, settings, MuninnSourceKind::Combined);
+}
+
+static void muninn_update_video(void *data, obs_data_t *settings)
+{
+    muninn_update_kind(data, settings, MuninnSourceKind::VideoOnly);
+}
+
+static void muninn_update_audio(void *data, obs_data_t *settings)
+{
+    muninn_update_kind(data, settings, MuninnSourceKind::AudioOnly);
+}
+
+static void *muninn_create_kind(obs_data_t *settings, obs_source_t *source, MuninnSourceKind kind)
 {
     auto *ctx = new MuninnSource();
+    ctx->kind = kind;
     ctx->source = source;
     ctx->bridge = std::make_unique<RudpMediaBridge>();
     ctx->catalog_discovery = std::make_unique<CatalogDiscoveryReceiver>();
     ctx->catalog_discovery->start();
-    start_audio_worker(ctx);
-    muninn_update(ctx, settings);
+    if (source_wants_audio(ctx)) {
+        start_audio_worker(ctx);
+    }
+    muninn_update_kind(ctx, settings, kind);
     return ctx;
+}
+
+static void *muninn_create_combined(obs_data_t *settings, obs_source_t *source)
+{
+    return muninn_create_kind(settings, source, MuninnSourceKind::Combined);
+}
+
+static void *muninn_create_video(obs_data_t *settings, obs_source_t *source)
+{
+    return muninn_create_kind(settings, source, MuninnSourceKind::VideoOnly);
+}
+
+static void *muninn_create_audio(obs_data_t *settings, obs_source_t *source)
+{
+    return muninn_create_kind(settings, source, MuninnSourceKind::AudioOnly);
 }
 
 static void muninn_destroy(void *data)
@@ -3593,7 +3693,7 @@ static uint32_t muninn_height(void *data)
     return ctx->media ? obs_source_get_height(ctx->media) : 0;
 }
 
-static void muninn_defaults(obs_data_t *settings)
+static void muninn_defaults_kind(obs_data_t *settings, MuninnSourceKind kind)
 {
     obs_data_set_default_string(settings, "store_path", MuninnStorePath);
     obs_data_set_default_string(settings, "command_exe_path", MuninnCommandExePath);
@@ -3605,11 +3705,32 @@ static void muninn_defaults(obs_data_t *settings)
     obs_data_set_default_int(settings, "rudp_latency_budget_ms", MuninnDefaultRudpLatencyBudgetMs);
     obs_data_set_default_int(settings, "rudp_audio_reorder_ms", MuninnDefaultRudpAudioReorderMs);
     obs_data_set_default_string(settings, "stream_id", "");
-    obs_data_set_default_string(settings, "video_source_id", "display:0");
-    obs_data_set_default_string(settings, "audio_source_id", "wasapi-loopback:Realtek");
+    obs_data_set_default_string(
+        settings,
+        "video_source_id",
+        kind == MuninnSourceKind::AudioOnly ? MuninnDisabledVideoSourceId : "display:0");
+    obs_data_set_default_string(
+        settings,
+        "audio_source_id",
+        kind == MuninnSourceKind::VideoOnly ? MuninnDisabledAudioSourceId : "wasapi-loopback:Realtek");
 }
 
-static obs_properties_t *muninn_properties(void *data)
+static void muninn_defaults_combined(obs_data_t *settings)
+{
+    muninn_defaults_kind(settings, MuninnSourceKind::Combined);
+}
+
+static void muninn_defaults_video(obs_data_t *settings)
+{
+    muninn_defaults_kind(settings, MuninnSourceKind::VideoOnly);
+}
+
+static void muninn_defaults_audio(obs_data_t *settings)
+{
+    muninn_defaults_kind(settings, MuninnSourceKind::AudioOnly);
+}
+
+static obs_properties_t *muninn_properties_kind(void *data, MuninnSourceKind kind)
 {
     auto *ctx = static_cast<MuninnSource *>(data);
     const auto store_path = ctx ? ctx->store_path : std::string(MuninnStorePath);
@@ -3623,40 +3744,66 @@ static obs_properties_t *muninn_properties(void *data)
     } else {
         populate_stream_list(streams, store_path);
     }
-    obs_property_t *video_sources =
-        obs_properties_add_list(props, "video_source_id", obs_module_text("MuninnStream.Video"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-    obs_property_t *audio_sources =
-        obs_properties_add_list(props, "audio_source_id", obs_module_text("MuninnStream.Audio"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-    if (ctx) {
-        populate_source_list(video_sources, catalog_video_sources(ctx));
-        populate_source_list(audio_sources, catalog_audio_sources(ctx));
-    } else {
-        populate_source_list(video_sources, {{"display:0", "Display 1"}});
-        populate_source_list(audio_sources, {{"wasapi-loopback:Realtek", "Realtek loopback"}});
+    if (kind != MuninnSourceKind::AudioOnly) {
+        obs_property_t *video_sources =
+            obs_properties_add_list(props, "video_source_id", obs_module_text("MuninnStream.Video"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+        if (ctx) {
+            populate_source_list(video_sources, catalog_video_sources(ctx));
+        } else {
+            populate_source_list(video_sources, {{"display:0", "Display 1"}});
+        }
     }
-    obs_properties_add_int(
-        props,
-        "rudp_video_bitrate_kbps",
-        obs_module_text("MuninnStream.VideoBitrateKbps"),
-        1000,
-        MuninnMaxRudpVideoBitrateKbps,
-        500);
-    obs_properties_add_int(
-        props,
-        "rudp_latency_budget_ms",
-        obs_module_text("MuninnStream.VideoLatencyMs"),
-        100,
-        MuninnMaxRudpLatencyBudgetMs,
-        50);
-    obs_properties_add_int(
-        props,
-        "rudp_audio_reorder_ms",
-        obs_module_text("MuninnStream.AudioReorderMs"),
-        0,
-        MuninnMaxRudpAudioReorderMs,
-        25);
+    if (kind != MuninnSourceKind::VideoOnly) {
+        obs_property_t *audio_sources =
+            obs_properties_add_list(props, "audio_source_id", obs_module_text("MuninnStream.Audio"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+        if (ctx) {
+            populate_source_list(audio_sources, catalog_audio_sources(ctx));
+        } else {
+            populate_source_list(audio_sources, {{"wasapi-loopback:Realtek", "Realtek loopback"}});
+        }
+    }
+    if (kind != MuninnSourceKind::AudioOnly) {
+        obs_properties_add_int(
+            props,
+            "rudp_video_bitrate_kbps",
+            obs_module_text("MuninnStream.VideoBitrateKbps"),
+            1000,
+            MuninnMaxRudpVideoBitrateKbps,
+            500);
+        obs_properties_add_int(
+            props,
+            "rudp_latency_budget_ms",
+            obs_module_text("MuninnStream.VideoLatencyMs"),
+            100,
+            MuninnMaxRudpLatencyBudgetMs,
+            50);
+    }
+    if (kind != MuninnSourceKind::VideoOnly) {
+        obs_properties_add_int(
+            props,
+            "rudp_audio_reorder_ms",
+            obs_module_text("MuninnStream.AudioReorderMs"),
+            0,
+            MuninnMaxRudpAudioReorderMs,
+            25);
+    }
     obs_properties_add_button(props, "refresh_streams", obs_module_text("MuninnStream.Refresh"), muninn_refresh_streams);
     return props;
+}
+
+static obs_properties_t *muninn_properties_combined(void *data)
+{
+    return muninn_properties_kind(data, MuninnSourceKind::Combined);
+}
+
+static obs_properties_t *muninn_properties_video(void *data)
+{
+    return muninn_properties_kind(data, MuninnSourceKind::VideoOnly);
+}
+
+static obs_properties_t *muninn_properties_audio(void *data)
+{
+    return muninn_properties_kind(data, MuninnSourceKind::AudioOnly);
 }
 
 static void muninn_video_tick(void *data, float)
@@ -3716,14 +3863,48 @@ static obs_source_info muninn_source_info = {
     .id = "muninn_stream_source",
     .type = OBS_SOURCE_TYPE_INPUT,
     .output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
-    .get_name = muninn_get_name,
-    .create = muninn_create,
+    .get_name = muninn_get_name_combined,
+    .create = muninn_create_combined,
     .destroy = muninn_destroy,
     .get_width = muninn_width,
     .get_height = muninn_height,
-    .get_defaults = muninn_defaults,
-    .get_properties = muninn_properties,
-    .update = muninn_update,
+    .get_defaults = muninn_defaults_combined,
+    .get_properties = muninn_properties_combined,
+    .update = muninn_update_combined,
+    .video_tick = muninn_video_tick,
+    .video_render = muninn_render,
+    .enum_active_sources = muninn_enum_active_sources,
+};
+
+static obs_source_info muninn_video_source_info = {
+    .id = "muninn_video_source",
+    .type = OBS_SOURCE_TYPE_INPUT,
+    .output_flags = OBS_SOURCE_VIDEO,
+    .get_name = muninn_get_name_video,
+    .create = muninn_create_video,
+    .destroy = muninn_destroy,
+    .get_width = muninn_width,
+    .get_height = muninn_height,
+    .get_defaults = muninn_defaults_video,
+    .get_properties = muninn_properties_video,
+    .update = muninn_update_video,
+    .video_tick = muninn_video_tick,
+    .video_render = muninn_render,
+    .enum_active_sources = muninn_enum_active_sources,
+};
+
+static obs_source_info muninn_audio_source_info = {
+    .id = "muninn_audio_source",
+    .type = OBS_SOURCE_TYPE_INPUT,
+    .output_flags = OBS_SOURCE_AUDIO,
+    .get_name = muninn_get_name_audio,
+    .create = muninn_create_audio,
+    .destroy = muninn_destroy,
+    .get_width = muninn_width,
+    .get_height = muninn_height,
+    .get_defaults = muninn_defaults_audio,
+    .get_properties = muninn_properties_audio,
+    .update = muninn_update_audio,
     .video_tick = muninn_video_tick,
     .video_render = muninn_render,
     .enum_active_sources = muninn_enum_active_sources,
@@ -3734,4 +3915,6 @@ static obs_source_info muninn_source_info = {
 void mimir_register_muninn_source()
 {
     obs_register_source(&muninn_source_info);
+    obs_register_source(&muninn_video_source_info);
+    obs_register_source(&muninn_audio_source_info);
 }

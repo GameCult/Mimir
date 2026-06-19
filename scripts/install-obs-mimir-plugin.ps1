@@ -68,4 +68,4 @@ if ($WhatIf) {
 Copy-Item -LiteralPath $pluginDll -Destination $targetDll -Force
 Copy-Item -Path (Join-Path $localeSourceDir "*") -Destination $targetLocaleDir -Force
 Write-Host "Installed Mimir OBS plugin: $targetDll"
-Write-Host "OBS source types: Mimir Program Texture, Mimir Audio Stem, Muninn Stream"
+Write-Host "OBS source types: Mimir Program Texture, Mimir Audio Stem, Muninn Stream, Muninn Video, Muninn Audio"
