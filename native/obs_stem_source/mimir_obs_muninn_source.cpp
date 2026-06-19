@@ -5,6 +5,7 @@
 #endif
 
 #include <obs-module.h>
+#include <util/platform.h>
 
 #include "muninn_media_wire.h"
 #include "muninn_rudp_ack.h"
@@ -2408,7 +2409,7 @@ static void audio_worker_loop(MuninnSource *ctx)
             }
         }
         audio.frames = packet.frames;
-        audio.timestamp = packet.timestamp;
+        audio.timestamp = os_gettime_ns();
         audio.format = AUDIO_FORMAT_FLOAT_PLANAR;
         audio.speakers = packet.speakers;
         audio.samples_per_sec = packet.samples_per_sec;
