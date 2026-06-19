@@ -58,6 +58,10 @@ constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
 constexpr uint32_t MuninnDefaultMediaPacketBytes = 800;
+constexpr uint32_t MuninnDefaultRudpVideoBitrateKbps = 16000;
+constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 800;
+constexpr uint32_t MuninnMaxRudpVideoBitrateKbps = 100000;
+constexpr uint32_t MuninnMaxRudpLatencyBudgetMs = 2000;
 
 struct MuninnStreamOption {
     std::string stream_id;
@@ -68,6 +72,8 @@ struct MuninnStreamOption {
     std::string media_target_host;
     uint16_t media_port = MuninnDefaultMediaPort;
     uint32_t media_packet_bytes = MuninnDefaultMediaPacketBytes;
+    uint32_t rudp_video_bitrate_kbps = MuninnDefaultRudpVideoBitrateKbps;
+    uint32_t rudp_latency_budget_ms = MuninnDefaultRudpLatencyBudgetMs;
 };
 
 struct MuninnQueuedAudio {
@@ -95,6 +101,8 @@ struct MuninnSource {
     std::string media_target_host = MuninnDefaultMediaTargetHost;
     uint16_t media_port = MuninnDefaultMediaPort;
     uint32_t media_packet_bytes = MuninnDefaultMediaPacketBytes;
+    uint32_t rudp_video_bitrate_kbps = MuninnDefaultRudpVideoBitrateKbps;
+    uint32_t rudp_latency_budget_ms = MuninnDefaultRudpLatencyBudgetMs;
     std::string stream_id;
     std::string stream_url;
     std::string last_requested_stream_id;
@@ -1420,7 +1428,7 @@ static std::vector<uint8_t> encode_capture_stream_command_wire(const MuninnSourc
         ctx->host_id + ":" + canonical_stream_id + ":capture-stream:start:" + observed_at;
 
     muninn_media_wire::MsgpackWriter record;
-    record.write_array_len(14);
+    record.write_array_len(16);
     record.write_string(command_id);
     record.write_string(ctx->host_id);
     record.write_string(canonical_stream_id);
@@ -1435,6 +1443,8 @@ static std::vector<uint8_t> encode_capture_stream_command_wire(const MuninnSourc
     record.write_string("mimir.obs");
     record.write_string("OBS requested a daemon-owned capture stream over CultNet RUDP");
     record.write_string(observed_at);
+    record.write_u64(ctx->rudp_video_bitrate_kbps);
+    record.write_u64(ctx->rudp_latency_budget_ms);
 
     muninn_media_wire::MsgpackWriter document;
     document.write_map_len(9);
@@ -1536,18 +1546,18 @@ static bool publish_capture_command_rudp(const std::string &target, const std::v
 
 static std::string expected_rudp_stream_url(const MuninnSource *ctx, const std::string &stream_id)
 {
+    const auto reliable_expire_after_ms = std::max<uint32_t>(1, std::min<uint32_t>(ctx->rudp_latency_budget_ms, 600));
     return "rudp://" + ctx->media_target_host + ":" + std::to_string(ctx->media_port) + "/" + stream_id +
-           "?channel=media&format=muninn-typed-media&connection=0x6d750001&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=600&assembly_deadline_ms=400&gap_wait_ms=16";
+           "?channel=media&format=muninn-typed-media&connection=0x6d750001&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=" +
+           std::to_string(reliable_expire_after_ms) + "&assembly_deadline_ms=" + std::to_string(ctx->rudp_latency_budget_ms) + "&gap_wait_ms=16";
 }
 
 static std::string playable_rudp_stream_url(const MuninnSource *ctx, const MuninnStreamOption &selected)
 {
-    if (starts_with(selected.url, "rudp://") &&
-        selected.url.find("sender_resend_delay_ms=") != std::string::npos &&
-        selected.url.find("assembly_deadline_ms=") != std::string::npos) {
-        return selected.url;
+    if (starts_with(selected.url, "rudp://")) {
+        return expected_rudp_stream_url(ctx, canonical_muninn_stream_id(selected.stream_id));
     }
-    return expected_rudp_stream_url(ctx, selected.stream_id);
+    return selected.url.empty() ? expected_rudp_stream_url(ctx, selected.stream_id) : selected.url;
 }
 
 static std::string canonical_muninn_stream_id(const std::string &stream_id)
@@ -1874,6 +1884,8 @@ static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vec
     std::string media_target_host = MuninnDefaultMediaTargetHost;
     uint16_t media_port = MuninnDefaultMediaPort;
     uint32_t media_packet_bytes = MuninnDefaultMediaPacketBytes;
+    uint32_t rudp_video_bitrate_kbps = MuninnDefaultRudpVideoBitrateKbps;
+    uint32_t rudp_latency_budget_ms = MuninnDefaultRudpLatencyBudgetMs;
     if (length > 7) {
         command_rudp_target = reader.read_string();
     }
@@ -1892,7 +1904,19 @@ static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vec
             media_packet_bytes = static_cast<uint32_t>(parsed);
         }
     }
-    for (uint32_t index = 11; index < length; ++index) {
+    if (length > 11) {
+        const auto parsed = reader.read_unsigned();
+        if (parsed > 0 && parsed <= MuninnMaxRudpVideoBitrateKbps) {
+            rudp_video_bitrate_kbps = static_cast<uint32_t>(parsed);
+        }
+    }
+    if (length > 12) {
+        const auto parsed = reader.read_unsigned();
+        if (parsed > 0 && parsed <= MuninnMaxRudpLatencyBudgetMs) {
+            rudp_latency_budget_ms = static_cast<uint32_t>(parsed);
+        }
+    }
+    for (uint32_t index = 13; index < length; ++index) {
         reader.skip();
     }
 
@@ -1912,6 +1936,8 @@ static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vec
             media_target_host,
             media_port,
             media_packet_bytes,
+            rudp_video_bitrate_kbps,
+            rudp_latency_budget_ms,
         };
         if (!is_playable_muninn_stream(option)) {
             continue;
@@ -2124,6 +2150,12 @@ private:
                     }
                     if (option.media_packet_bytes == 0) {
                         option.media_packet_bytes = MuninnDefaultMediaPacketBytes;
+                    }
+                    if (option.rudp_video_bitrate_kbps == 0) {
+                        option.rudp_video_bitrate_kbps = MuninnDefaultRudpVideoBitrateKbps;
+                    }
+                    if (option.rudp_latency_budget_ms == 0) {
+                        option.rudp_latency_budget_ms = MuninnDefaultRudpLatencyBudgetMs;
                     }
                 }
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -2501,6 +2533,8 @@ static void muninn_update(void *data, obs_data_t *settings)
     const auto previous_command_rudp_target = ctx->command_rudp_target;
     const auto previous_media_target_host = ctx->media_target_host;
     const auto previous_media_port = ctx->media_port;
+    const auto previous_rudp_video_bitrate_kbps = ctx->rudp_video_bitrate_kbps;
+    const auto previous_rudp_latency_budget_ms = ctx->rudp_latency_budget_ms;
 
     ctx->store_path = obs_string(settings, "store_path", MuninnStorePath);
     ctx->command_exe_path = obs_string(settings, "command_exe_path", MuninnCommandExePath);
@@ -2518,10 +2552,20 @@ static void muninn_update(void *data, obs_data_t *settings)
     ctx->media_port = static_cast<uint16_t>(obs_data_get_int(settings, "media_port") > 0
                                                 ? obs_data_get_int(settings, "media_port")
                                                 : MuninnDefaultMediaPort);
+    const auto configured_bitrate = obs_data_get_int(settings, "rudp_video_bitrate_kbps");
+    ctx->rudp_video_bitrate_kbps = static_cast<uint32_t>(
+        configured_bitrate > 0 ? std::min<int64_t>(configured_bitrate, MuninnMaxRudpVideoBitrateKbps)
+                               : MuninnDefaultRudpVideoBitrateKbps);
+    const auto configured_latency = obs_data_get_int(settings, "rudp_latency_budget_ms");
+    ctx->rudp_latency_budget_ms = static_cast<uint32_t>(
+        configured_latency > 0 ? std::min<int64_t>(configured_latency, MuninnMaxRudpLatencyBudgetMs)
+                               : MuninnDefaultRudpLatencyBudgetMs);
     ctx->stream_id = obs_string(settings, "stream_id", "");
     if (ctx->command_rudp_target != previous_command_rudp_target ||
         ctx->media_target_host != previous_media_target_host ||
-        ctx->media_port != previous_media_port) {
+        ctx->media_port != previous_media_port ||
+        ctx->rudp_video_bitrate_kbps != previous_rudp_video_bitrate_kbps ||
+        ctx->rudp_latency_budget_ms != previous_rudp_latency_budget_ms) {
         ctx->last_requested_stream_id.clear();
     }
 
@@ -2572,6 +2616,8 @@ static void muninn_defaults(obs_data_t *settings)
     obs_data_set_default_string(settings, "host_id", MuninnDefaultHostId);
     obs_data_set_default_string(settings, "media_target_host", MuninnDefaultMediaTargetHost);
     obs_data_set_default_int(settings, "media_port", MuninnDefaultMediaPort);
+    obs_data_set_default_int(settings, "rudp_video_bitrate_kbps", MuninnDefaultRudpVideoBitrateKbps);
+    obs_data_set_default_int(settings, "rudp_latency_budget_ms", MuninnDefaultRudpLatencyBudgetMs);
     obs_data_set_default_string(settings, "stream_id", "");
 }
 
@@ -2588,6 +2634,9 @@ static obs_properties_t *muninn_properties(void *data)
     } else {
         populate_stream_list(streams, store_path);
     }
+    obs_properties_add_int(props, "rudp_video_bitrate_kbps", "Video bitrate (kbps)", 1000, MuninnMaxRudpVideoBitrateKbps, 500);
+    obs_properties_add_int(props, "rudp_latency_budget_ms", "Latency budget (ms)", 100, MuninnMaxRudpLatencyBudgetMs, 50);
+    obs_properties_add_button(props, "refresh_streams", "Refresh Muninn streams", muninn_refresh_streams);
     return props;
 }
 
