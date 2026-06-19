@@ -58,6 +58,7 @@ constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
 constexpr uint64_t MuninnReceiverChunkRepairFirstWaitMs = 64;
 constexpr uint64_t MuninnVideoAssemblyExpiryScanMs = 10;
 constexpr size_t MuninnExpiredVideoFrameRememberCount = 4096;
+constexpr size_t MuninnVideoParityCacheMaxEntries = 4096;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
@@ -128,7 +129,7 @@ struct RudpBridgeOutputs {
 };
 
 struct MuninnMediaPayload {
-    enum class Kind { Unknown, Video, Audio };
+    enum class Kind { Unknown, Video, VideoParity, Audio };
     Kind kind = Kind::Unknown;
     std::string stream_id;
     std::string session_id;
@@ -137,6 +138,9 @@ struct MuninnMediaPayload {
     std::optional<uint64_t> dependency_frame_id;
     uint16_t chunk_index = 0;
     uint16_t chunk_count = 1;
+    uint16_t parity_index = 0;
+    uint16_t parity_count = 0;
+    std::vector<uint32_t> chunk_payload_lengths;
     std::vector<uint8_t> payload;
 };
 
@@ -150,7 +154,21 @@ struct MuninnVideoFrameAssembly {
     uint16_t chunks_received = 0;
     std::chrono::steady_clock::time_point started_at;
     bool repair_requested = false;
+    std::vector<uint32_t> chunk_payload_lengths;
+    std::vector<uint8_t> parity_payload;
     std::vector<std::vector<uint8_t>> chunks;
+};
+
+struct MuninnVideoParityCacheEntry {
+    std::string stream_id;
+    std::string session_id;
+    uint64_t frame_id = 0;
+    bool keyframe = false;
+    std::optional<uint64_t> dependency_frame_id;
+    uint16_t chunk_count = 0;
+    std::chrono::steady_clock::time_point received_at;
+    std::vector<uint32_t> chunk_payload_lengths;
+    std::vector<uint8_t> payload;
 };
 
 static bool starts_with(const std::string &value, const std::string &prefix)
@@ -512,6 +530,34 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             media.payload = record.read_bytes();
             return media;
         }
+        if (schema_id == "muninn.media_video_parity_shard.v1") {
+            if (record_len < 16) {
+                return std::nullopt;
+            }
+            MuninnMediaPayload media;
+            media.kind = MuninnMediaPayload::Kind::VideoParity;
+            media.stream_id = record.read_string();
+            media.session_id = record.read_string();
+            media.frame_id = record.read_unsigned();
+            record.skip(); // codec
+            record.skip(); // pts_ticks
+            record.skip(); // duration_ticks
+            record.skip(); // timebase_num
+            record.skip(); // timebase_den
+            media.keyframe = record.read_bool();
+            media.dependency_frame_id = record.read_optional_unsigned();
+            record.skip(); // deadline_ticks
+            media.chunk_count = static_cast<uint16_t>(record.read_unsigned());
+            media.parity_index = static_cast<uint16_t>(record.read_unsigned());
+            media.parity_count = static_cast<uint16_t>(record.read_unsigned());
+            const uint32_t lengths = record.read_array_len();
+            media.chunk_payload_lengths.reserve(lengths);
+            for (uint32_t index = 0; index < lengths; ++index) {
+                media.chunk_payload_lengths.push_back(static_cast<uint32_t>(record.read_unsigned()));
+            }
+            media.payload = record.read_bytes();
+            return media;
+        }
         if (schema_id == "muninn.media_audio_packet.v1") {
             if (record_len < 10) {
                 return std::nullopt;
@@ -758,6 +804,7 @@ private:
         if (packet_type == 1) {
             const bool was_connected = media_connected_;
             video_assemblies_.clear();
+            video_parity_cache_.clear();
             packet_fragments_.reset();
             ack_tracker_.reset();
             ack_tracker_.remember(sequence);
@@ -766,6 +813,11 @@ private:
             payloads_decoded_dropped_ = 0;
             video_assemblies_expired_ = 0;
             video_recovery_dropped_ = 0;
+            video_parity_received_ = 0;
+            video_parity_cached_ = 0;
+            video_parity_ignored_ = 0;
+            video_parity_recovered_ = 0;
+            video_parity_unusable_ = 0;
             waiting_for_video_keyframe_ = true;
             video_forward_failures_ = 0;
             audio_forward_failures_ = 0;
@@ -789,6 +841,7 @@ private:
         if (packet_type == 3) {
             if (!media_connected_) {
                 video_assemblies_.clear();
+                video_parity_cache_.clear();
                 packet_fragments_.reset();
                 ack_tracker_.reset();
                 packets_forwarded_ = 0;
@@ -796,6 +849,11 @@ private:
                 payloads_decoded_dropped_ = 0;
                 video_assemblies_expired_ = 0;
                 video_recovery_dropped_ = 0;
+                video_parity_received_ = 0;
+                video_parity_cached_ = 0;
+                video_parity_ignored_ = 0;
+                video_parity_recovered_ = 0;
+                video_parity_unusable_ = 0;
                 waiting_for_video_keyframe_ = true;
                 video_forward_failures_ = 0;
                 audio_forward_failures_ = 0;
@@ -895,7 +953,7 @@ private:
             return;
         }
         size_t forwarded_bytes = 0;
-        if (media->kind == MuninnMediaPayload::Kind::Video) {
+        if (media->kind == MuninnMediaPayload::Kind::Video || media->kind == MuninnMediaPayload::Kind::VideoParity) {
             const auto assembled = assemble_video_payload(*media, bridge_sequence);
             if (!assembled) {
                 return;
@@ -934,11 +992,16 @@ private:
         bytes_forwarded_ += forwarded_bytes;
         if (packets_forwarded_ == 1 || packets_forwarded_ % 900 == 0) {
             blog(LOG_INFO,
-                 "Muninn RUDP bridge forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu video_failures=%llu audio_failures=%llu",
+                 "Muninn RUDP bridge forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu parity_received=%llu parity_cached=%llu parity_recovered=%llu parity_ignored=%llu parity_unusable=%llu video_failures=%llu audio_failures=%llu",
                  static_cast<unsigned long long>(packets_forwarded_),
                  static_cast<unsigned long long>(bytes_forwarded_),
                  static_cast<unsigned long long>(payloads_decoded_dropped_),
                  static_cast<unsigned long long>(video_assemblies_expired_),
+                 static_cast<unsigned long long>(video_parity_received_),
+                 static_cast<unsigned long long>(video_parity_cached_),
+                 static_cast<unsigned long long>(video_parity_recovered_),
+                 static_cast<unsigned long long>(video_parity_ignored_),
+                 static_cast<unsigned long long>(video_parity_unusable_),
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
         }
@@ -1009,6 +1072,10 @@ private:
     std::optional<std::vector<uint8_t>> assemble_video_payload(const MuninnMediaPayload &media, uint32_t &bridge_sequence)
     {
         expire_video_assemblies(std::chrono::steady_clock::now(), bridge_sequence);
+        expire_video_parity_cache(std::chrono::steady_clock::now());
+        if (media.kind == MuninnMediaPayload::Kind::VideoParity) {
+            return assemble_video_parity_payload(media, bridge_sequence);
+        }
         if (media.chunk_count == 0 || media.chunk_index >= media.chunk_count || media.payload.empty()) {
             ++payloads_decoded_dropped_;
             log_bridge_pressure("dropped invalid video chunk metadata");
@@ -1034,6 +1101,7 @@ private:
             assembly.chunks.resize(media.chunk_count);
             assembly.started_at = std::chrono::steady_clock::now();
             assembly.repair_requested = false;
+            apply_cached_video_parity(key, assembly);
         }
         if (assembly.chunk_count != media.chunk_count ||
             assembly.keyframe != media.keyframe ||
@@ -1050,10 +1118,98 @@ private:
         slot = media.payload;
         ++assembly.chunks_received;
         if (assembly.chunks_received != assembly.chunk_count) {
+            if (try_recover_video_assembly_from_parity(assembly)) {
+                ++video_parity_recovered_;
+                return finish_video_assembly(key, assembly);
+            }
             request_video_chunk_repair_if_due(assembly, std::chrono::steady_clock::now(), bridge_sequence);
             return std::nullopt;
         }
 
+        return finish_video_assembly(key, assembly);
+    }
+
+    std::optional<std::vector<uint8_t>> assemble_video_parity_payload(const MuninnMediaPayload &media, uint32_t &bridge_sequence)
+    {
+        ++video_parity_received_;
+        if (media.chunk_count == 0 ||
+            media.parity_index != 0 ||
+            media.parity_count != 1 ||
+            media.chunk_payload_lengths.size() != media.chunk_count ||
+            media.payload.empty()) {
+            ++payloads_decoded_dropped_;
+            ++video_parity_unusable_;
+            log_bridge_pressure("dropped invalid video parity metadata");
+            return std::nullopt;
+        }
+        const std::string key =
+            media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
+        if (expired_video_frame_keys_.find(key) != expired_video_frame_keys_.end()) {
+            ++video_parity_ignored_;
+            return std::nullopt;
+        }
+        auto iterator = video_assemblies_.find(key);
+        if (iterator == video_assemblies_.end()) {
+            cache_video_parity_payload(key, media);
+            return std::nullopt;
+        }
+        auto &assembly = iterator->second;
+        if (assembly.chunk_count != media.chunk_count ||
+            assembly.keyframe != media.keyframe ||
+            assembly.dependency_frame_id != media.dependency_frame_id) {
+            video_assemblies_.erase(key);
+            ++payloads_decoded_dropped_;
+            ++video_parity_unusable_;
+            log_bridge_pressure("dropped video parity with mixed metadata");
+            return std::nullopt;
+        }
+        assembly.chunk_payload_lengths = media.chunk_payload_lengths;
+        assembly.parity_payload = media.payload;
+        if (try_recover_video_assembly_from_parity(assembly)) {
+            ++video_parity_recovered_;
+            return finish_video_assembly(key, assembly);
+        }
+        request_video_chunk_repair_if_due(assembly, std::chrono::steady_clock::now(), bridge_sequence);
+        return std::nullopt;
+    }
+
+    void cache_video_parity_payload(const std::string &key, const MuninnMediaPayload &media)
+    {
+        MuninnVideoParityCacheEntry entry;
+        entry.stream_id = media.stream_id;
+        entry.session_id = media.session_id;
+        entry.frame_id = media.frame_id;
+        entry.keyframe = media.keyframe;
+        entry.dependency_frame_id = media.dependency_frame_id;
+        entry.chunk_count = media.chunk_count;
+        entry.received_at = std::chrono::steady_clock::now();
+        entry.chunk_payload_lengths = media.chunk_payload_lengths;
+        entry.payload = media.payload;
+        video_parity_cache_[key] = std::move(entry);
+        ++video_parity_cached_;
+        trim_video_parity_cache();
+    }
+
+    void apply_cached_video_parity(const std::string &key, MuninnVideoFrameAssembly &assembly)
+    {
+        auto iterator = video_parity_cache_.find(key);
+        if (iterator == video_parity_cache_.end()) {
+            return;
+        }
+        const auto &entry = iterator->second;
+        if (entry.chunk_count == assembly.chunk_count &&
+            entry.keyframe == assembly.keyframe &&
+            entry.dependency_frame_id == assembly.dependency_frame_id) {
+            assembly.chunk_payload_lengths = entry.chunk_payload_lengths;
+            assembly.parity_payload = entry.payload;
+        } else {
+            ++video_parity_unusable_;
+        }
+        video_parity_cache_.erase(iterator);
+    }
+
+    std::optional<std::vector<uint8_t>> finish_video_assembly(const std::string &key, const MuninnVideoFrameAssembly &assembly)
+    {
         std::vector<uint8_t> assembled;
         size_t byte_count = 0;
         for (const auto &chunk : assembly.chunks) {
@@ -1064,7 +1220,78 @@ private:
             assembled.insert(assembled.end(), chunk.begin(), chunk.end());
         }
         video_assemblies_.erase(key);
+        video_parity_cache_.erase(key);
         return assembled;
+    }
+
+    bool try_recover_video_assembly_from_parity(MuninnVideoFrameAssembly &assembly)
+    {
+        if (assembly.parity_payload.empty() ||
+            assembly.chunk_payload_lengths.size() != assembly.chunk_count ||
+            assembly.chunks.size() != assembly.chunk_count) {
+            return false;
+        }
+        uint16_t missing_index = 0;
+        uint16_t missing_count = 0;
+        for (uint16_t index = 0; index < assembly.chunk_count; ++index) {
+            if (assembly.chunks[index].empty()) {
+                missing_index = index;
+                ++missing_count;
+            }
+        }
+        if (missing_count != 1) {
+            return false;
+        }
+        const uint32_t missing_len = assembly.chunk_payload_lengths[missing_index];
+        if (missing_len == 0 || missing_len > assembly.parity_payload.size()) {
+            return false;
+        }
+        std::vector<uint8_t> recovered = assembly.parity_payload;
+        for (uint16_t index = 0; index < assembly.chunk_count; ++index) {
+            if (index == missing_index) {
+                continue;
+            }
+            const auto &chunk = assembly.chunks[index];
+            if (chunk.empty()) {
+                return false;
+            }
+            for (size_t offset = 0; offset < chunk.size() && offset < recovered.size(); ++offset) {
+                recovered[offset] ^= chunk[offset];
+            }
+        }
+        recovered.resize(missing_len);
+        assembly.chunks[missing_index] = std::move(recovered);
+        ++assembly.chunks_received;
+        return assembly.chunks_received == assembly.chunk_count;
+    }
+
+    void expire_video_parity_cache(std::chrono::steady_clock::time_point now)
+    {
+        for (auto iterator = video_parity_cache_.begin(); iterator != video_parity_cache_.end();) {
+            if (now - iterator->second.received_at < std::chrono::milliseconds(parts_.video_assembly_deadline_ms)) {
+                ++iterator;
+                continue;
+            }
+            ++video_parity_ignored_;
+            iterator = video_parity_cache_.erase(iterator);
+        }
+    }
+
+    void trim_video_parity_cache()
+    {
+        while (video_parity_cache_.size() > MuninnVideoParityCacheMaxEntries) {
+            auto oldest = std::min_element(
+                video_parity_cache_.begin(),
+                video_parity_cache_.end(),
+                [](const auto &left, const auto &right) {
+                    return left.second.received_at < right.second.received_at;
+                });
+            if (oldest == video_parity_cache_.end()) {
+                return;
+            }
+            ++video_parity_ignored_;
+            video_parity_cache_.erase(oldest);
+        }
     }
 
     void expire_video_assemblies(std::chrono::steady_clock::time_point now, uint32_t &bridge_sequence)
@@ -1118,7 +1345,7 @@ private:
     {
         const auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - assembly.started_at).count();
         blog(LOG_WARNING,
-             "Muninn RUDP bridge expired video frame id=%llu keyframe=%s dependency=%s chunks=%u/%u missing=%zu age_ms=%lld repair_requested=%s",
+             "Muninn RUDP bridge expired video frame id=%llu keyframe=%s dependency=%s chunks=%u/%u missing=%zu age_ms=%lld repair_requested=%s parity_present=%s",
              static_cast<unsigned long long>(assembly.frame_id),
              assembly.keyframe ? "true" : "false",
              assembly.dependency_frame_id.has_value() ? "true" : "false",
@@ -1126,7 +1353,8 @@ private:
              static_cast<unsigned int>(assembly.chunk_count),
              missing_chunk_keys.size(),
              static_cast<long long>(age_ms),
-             assembly.repair_requested ? "true" : "false");
+             assembly.repair_requested ? "true" : "false",
+             assembly.parity_payload.empty() ? "false" : "true");
     }
 
     void request_video_chunk_repair_if_due(MuninnVideoFrameAssembly &assembly,
@@ -1196,10 +1424,10 @@ private:
     {
         const uint64_t pressure =
             payloads_decoded_dropped_ + video_assemblies_expired_ + packet_fragments_.expired_count() +
-            video_recovery_dropped_ + video_forward_failures_ + audio_forward_failures_;
+            video_recovery_dropped_ + video_parity_unusable_ + video_forward_failures_ + audio_forward_failures_;
         if (pressure == 1 || pressure % 300 == 0) {
             blog(LOG_WARNING,
-                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu packet_fragments_expired=%llu recovery_dropped=%llu video_failures=%llu audio_failures=%llu",
+                 "Muninn RUDP bridge %s: forwarded=%llu bytes=%llu decode_dropped=%llu assemblies_expired=%llu packet_fragments_expired=%llu recovery_dropped=%llu parity_received=%llu parity_cached=%llu parity_recovered=%llu parity_ignored=%llu parity_unusable=%llu video_failures=%llu audio_failures=%llu",
                  reason,
                  static_cast<unsigned long long>(packets_forwarded_),
                  static_cast<unsigned long long>(bytes_forwarded_),
@@ -1207,6 +1435,11 @@ private:
                  static_cast<unsigned long long>(video_assemblies_expired_),
                  static_cast<unsigned long long>(packet_fragments_.expired_count()),
                  static_cast<unsigned long long>(video_recovery_dropped_),
+                 static_cast<unsigned long long>(video_parity_received_),
+                 static_cast<unsigned long long>(video_parity_cached_),
+                 static_cast<unsigned long long>(video_parity_recovered_),
+                 static_cast<unsigned long long>(video_parity_ignored_),
+                 static_cast<unsigned long long>(video_parity_unusable_),
                  static_cast<unsigned long long>(video_forward_failures_),
                  static_cast<unsigned long long>(audio_forward_failures_));
         }
@@ -1312,6 +1545,7 @@ private:
     std::thread worker_;
     muninn_rudp_url::RudpUrlParts parts_;
     std::map<std::string, MuninnVideoFrameAssembly> video_assemblies_;
+    std::map<std::string, MuninnVideoParityCacheEntry> video_parity_cache_;
     std::deque<std::string> expired_video_frame_order_;
     std::set<std::string> expired_video_frame_keys_;
     muninn_rudp_fragments::FragmentAssembler packet_fragments_;
@@ -1321,6 +1555,11 @@ private:
     uint64_t payloads_decoded_dropped_ = 0;
     uint64_t video_assemblies_expired_ = 0;
     uint64_t video_recovery_dropped_ = 0;
+    uint64_t video_parity_received_ = 0;
+    uint64_t video_parity_cached_ = 0;
+    uint64_t video_parity_ignored_ = 0;
+    uint64_t video_parity_recovered_ = 0;
+    uint64_t video_parity_unusable_ = 0;
     uint64_t video_forward_failures_ = 0;
     uint64_t audio_forward_failures_ = 0;
     bool media_sequence_initialized_ = false;
