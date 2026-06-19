@@ -1768,7 +1768,7 @@ static bool publish_capture_command_rudp(const std::string &target, const std::v
 
 static std::string expected_rudp_stream_url(const MuninnSource *ctx, const std::string &stream_id)
 {
-    const auto reliable_expire_after_ms = std::max<uint32_t>(1, std::min<uint32_t>(ctx->rudp_latency_budget_ms, 600));
+    const auto reliable_expire_after_ms = std::max<uint32_t>(1, ctx->rudp_latency_budget_ms);
     return "rudp://" + ctx->media_target_host + ":" + std::to_string(ctx->media_port) + "/" + stream_id +
            "?channel=media&format=muninn-typed-media&connection=0x6d750001&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=" +
            std::to_string(reliable_expire_after_ms) + "&assembly_deadline_ms=" + std::to_string(ctx->rudp_latency_budget_ms) + "&gap_wait_ms=16";
