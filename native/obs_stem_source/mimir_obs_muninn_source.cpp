@@ -52,6 +52,7 @@ constexpr uint64_t MuninnMediaStartupGraceMs = 3000;
 constexpr uint64_t MuninnMediaStaleMs = 1500;
 constexpr uint64_t MuninnMediaRestartCooldownMs = 5000;
 constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
+constexpr uint64_t MuninnReceiverChunkRepairFirstWaitMs = 64;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
@@ -134,6 +135,7 @@ struct MuninnVideoFrameAssembly {
     uint16_t chunk_count = 0;
     uint16_t chunks_received = 0;
     std::chrono::steady_clock::time_point started_at;
+    bool repair_requested = false;
     std::vector<std::vector<uint8_t>> chunks;
 };
 
@@ -942,6 +944,7 @@ private:
             assembly.chunk_count = media.chunk_count;
             assembly.chunks.resize(media.chunk_count);
             assembly.started_at = std::chrono::steady_clock::now();
+            assembly.repair_requested = false;
         }
         if (assembly.chunk_count != media.chunk_count ||
             assembly.keyframe != media.keyframe ||
@@ -958,6 +961,7 @@ private:
         slot = media.payload;
         ++assembly.chunks_received;
         if (assembly.chunks_received != assembly.chunk_count) {
+            request_video_chunk_repair_if_due(assembly, std::chrono::steady_clock::now(), bridge_sequence);
             return std::nullopt;
         }
 
@@ -978,6 +982,7 @@ private:
     {
         for (auto iterator = video_assemblies_.begin(); iterator != video_assemblies_.end();) {
             if (now - iterator->second.started_at < std::chrono::milliseconds(parts_.video_assembly_deadline_ms)) {
+                request_video_chunk_repair_if_due(iterator->second, now, bridge_sequence);
                 ++iterator;
                 continue;
             }
@@ -996,6 +1001,28 @@ private:
             ++video_assemblies_expired_;
             log_bridge_pressure("expired incomplete video frame assembly");
         }
+    }
+
+    void request_video_chunk_repair_if_due(MuninnVideoFrameAssembly &assembly,
+                                           std::chrono::steady_clock::time_point now,
+                                           uint32_t &bridge_sequence)
+    {
+        if (assembly.chunks_received >= assembly.chunk_count) {
+            return;
+        }
+        if (assembly.repair_requested) {
+            return;
+        }
+        const auto repair_wait_ms = std::max<uint32_t>(parts_.gap_wait_ms, MuninnReceiverChunkRepairFirstWaitMs);
+        if (now - assembly.started_at < std::chrono::milliseconds(repair_wait_ms)) {
+            return;
+        }
+        const auto missing_chunk_keys = missing_video_chunk_keys(assembly);
+        if (missing_chunk_keys.empty()) {
+            return;
+        }
+        send_receiver_feedback_if_due(assembly, missing_chunk_keys, false, bridge_sequence);
+        assembly.repair_requested = true;
     }
 
     void expire_rudp_packet_fragments(std::chrono::steady_clock::time_point now)
@@ -1025,14 +1052,17 @@ private:
         if (!last_remote_ || assembly.stream_id.empty() || assembly.session_id.empty()) {
             return;
         }
-        const uint64_t now = steady_millis();
-        const uint64_t last = last_keyframe_request_ms_.load();
-        if (last != 0 && now >= last && now - last < MuninnReceiverKeyframeRequestCooldownMs) {
-            return;
+        if (requested_keyframe) {
+            const uint64_t now = steady_millis();
+            const uint64_t last = last_keyframe_request_ms_.load();
+            if (last != 0 && now >= last && now - last < MuninnReceiverKeyframeRequestCooldownMs) {
+                return;
+            }
+            last_keyframe_request_ms_.store(now);
         }
-        last_keyframe_request_ms_.store(now);
+        const std::string observed_at = "unix:" + std::to_string(steady_millis());
         const auto payload = muninn_media_wire::encode_receiver_feedback_payload(
-            assembly.stream_id, assembly.session_id, assembly.frame_id, missing_chunk_keys, requested_keyframe);
+            assembly.stream_id, assembly.session_id, assembly.frame_id, missing_chunk_keys, requested_keyframe, observed_at);
         send_media_packet(payload, bridge_sequence++, *last_remote_);
     }
 
