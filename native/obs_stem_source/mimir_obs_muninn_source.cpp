@@ -2469,6 +2469,11 @@ static std::string selected_source_id(
                 return current;
             }
         }
+        for (const auto &source : sources) {
+            if (source.first.rfind(current, 0) == 0) {
+                return source.first;
+            }
+        }
     }
     return sources.empty() ? std::string{} : sources.front().first;
 }
