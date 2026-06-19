@@ -17,6 +17,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdint>
 #include <cctype>
 #include <cstring>
@@ -88,6 +89,7 @@ struct MuninnSource {
     obs_source_t *source = nullptr;
     obs_source_t *media = nullptr;
     obs_source_t *audio_media = nullptr;
+    std::unique_ptr<class FfmpegAudioDecoder> audio_decoder;
     std::unique_ptr<class RudpMediaBridge> bridge;
     std::mutex audio_mutex;
     std::condition_variable audio_cv;
@@ -1272,6 +1274,60 @@ static MuninnStreamOption default_muninn_stream_option()
     };
 }
 
+static void queue_planar_audio(MuninnSource *ctx,
+                               const float *const *planes,
+                               uint32_t frames,
+                               enum speaker_layout speakers,
+                               uint32_t samples_per_sec)
+{
+    if (!ctx || !ctx->source || !planes || frames == 0) {
+        return;
+    }
+
+    MuninnQueuedAudio packet;
+    packet.frames = frames;
+    packet.timestamp = os_gettime_ns();
+    packet.speakers = speakers;
+    packet.samples_per_sec = samples_per_sec;
+    const size_t bytes_per_plane = static_cast<size_t>(frames) * sizeof(float);
+    for (size_t plane = 0; plane < MAX_AV_PLANES; ++plane) {
+        if (!planes[plane]) {
+            continue;
+        }
+        packet.planes[plane].resize(bytes_per_plane);
+        std::memcpy(packet.planes[plane].data(), planes[plane], bytes_per_plane);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(ctx->audio_mutex);
+        if (!ctx->audio_worker_running) {
+            return;
+        }
+        while (ctx->audio_queue.size() >= 4) {
+            ctx->audio_queue.pop_front();
+        }
+        ctx->audio_queue.push_back(std::move(packet));
+    }
+    ctx->audio_cv.notify_one();
+}
+
+static void queue_stereo_interleaved_audio(MuninnSource *ctx, const float *samples, uint32_t frames)
+{
+    if (!samples || frames == 0) {
+        return;
+    }
+    std::vector<float> left(frames);
+    std::vector<float> right(frames);
+    for (uint32_t frame = 0; frame < frames; ++frame) {
+        left[frame] = samples[frame * 2];
+        right[frame] = samples[frame * 2 + 1];
+    }
+    const float *planes[MAX_AV_PLANES] = {};
+    planes[0] = left.data();
+    planes[1] = right.data();
+    queue_planar_audio(ctx, planes, frames, SPEAKERS_STEREO, 48000);
+}
+
 static std::string quote_windows_argument(const std::string &value)
 {
     std::string result = "\"";
@@ -1338,6 +1394,172 @@ static bool run_detached_command(const std::vector<std::string> &args)
     return false;
 #endif
 }
+
+class FfmpegAudioDecoder {
+public:
+    ~FfmpegAudioDecoder()
+    {
+        stop();
+    }
+
+    void start(MuninnSource *ctx, const std::string &audio_url)
+    {
+        stop();
+        if (!ctx || audio_url.empty()) {
+            return;
+        }
+
+#ifdef _WIN32
+        SECURITY_ATTRIBUTES pipe_attrs = {};
+        pipe_attrs.nLength = sizeof(pipe_attrs);
+        pipe_attrs.bInheritHandle = TRUE;
+
+        HANDLE stdout_read = nullptr;
+        HANDLE stdout_write = nullptr;
+        if (!CreatePipe(&stdout_read, &stdout_write, &pipe_attrs, 0)) {
+            blog(LOG_WARNING, "Muninn Stream could not create ffmpeg audio decoder pipe");
+            return;
+        }
+        SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
+
+        HANDLE nul = CreateFileA("NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &pipe_attrs, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (nul == INVALID_HANDLE_VALUE) {
+            nul = nullptr;
+        }
+
+        std::vector<std::string> args{
+            "ffmpeg.exe",
+            "-hide_banner",
+            "-loglevel",
+            "warning",
+            "-fflags",
+            "nobuffer",
+            "-flags",
+            "low_delay",
+            "-probesize",
+            "32768",
+            "-analyzeduration",
+            "0",
+            "-f",
+            "aac",
+            "-i",
+            audio_url,
+            "-vn",
+            "-f",
+            "f32le",
+            "-ac",
+            "2",
+            "-ar",
+            "48000",
+            "pipe:1",
+        };
+
+        std::string command_line;
+        for (const auto &arg : args) {
+            if (!command_line.empty()) {
+                command_line.push_back(' ');
+            }
+            command_line += quote_windows_argument(arg);
+        }
+
+        STARTUPINFOA startup = {};
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        startup.hStdOutput = stdout_write;
+        startup.hStdError = nul ? nul : GetStdHandle(STD_ERROR_HANDLE);
+
+        PROCESS_INFORMATION process = {};
+        std::vector<char> mutable_command(command_line.begin(), command_line.end());
+        mutable_command.push_back('\0');
+        if (!CreateProcessA(nullptr, mutable_command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+            blog(LOG_WARNING, "Muninn Stream could not start local ffmpeg audio decoder for %s", audio_url.c_str());
+            CloseHandle(stdout_read);
+            CloseHandle(stdout_write);
+            if (nul) {
+                CloseHandle(nul);
+            }
+            return;
+        }
+        CloseHandle(stdout_write);
+        if (nul) {
+            CloseHandle(nul);
+        }
+
+        ctx_ = ctx;
+        process_ = process.hProcess;
+        thread_ = process.hThread;
+        stdout_read_ = stdout_read;
+        running_.store(true);
+        worker_ = std::thread([this] { read_loop(); });
+        blog(LOG_INFO, "Muninn Stream local ffmpeg audio decoder started for %s", audio_url.c_str());
+#else
+        (void)ctx;
+        (void)audio_url;
+#endif
+    }
+
+    void stop()
+    {
+#ifdef _WIN32
+        running_.store(false);
+        if (process_) {
+            TerminateProcess(process_, 0);
+        }
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+        if (stdout_read_) {
+            CloseHandle(stdout_read_);
+            stdout_read_ = nullptr;
+        }
+        if (thread_) {
+            CloseHandle(thread_);
+            thread_ = nullptr;
+        }
+        if (process_) {
+            CloseHandle(process_);
+            process_ = nullptr;
+        }
+        ctx_ = nullptr;
+#endif
+    }
+
+private:
+    void read_loop()
+    {
+#ifdef _WIN32
+        constexpr size_t frames_per_chunk = 480;
+        constexpr size_t bytes_per_frame = sizeof(float) * 2;
+        std::vector<uint8_t> buffer(frames_per_chunk * bytes_per_frame);
+        std::vector<uint8_t> pending;
+        pending.reserve(buffer.size() * 2);
+        while (running_.load()) {
+            DWORD read = 0;
+            if (!ReadFile(stdout_read_, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) || read == 0) {
+                break;
+            }
+            pending.insert(pending.end(), buffer.begin(), buffer.begin() + read);
+            const size_t complete_bytes = (pending.size() / bytes_per_frame) * bytes_per_frame;
+            if (complete_bytes == 0) {
+                continue;
+            }
+            const auto *samples = reinterpret_cast<const float *>(pending.data());
+            queue_stereo_interleaved_audio(ctx_, samples, static_cast<uint32_t>(complete_bytes / bytes_per_frame));
+            pending.erase(pending.begin(), pending.begin() + static_cast<std::ptrdiff_t>(complete_bytes));
+        }
+#endif
+    }
+
+    std::atomic<bool> running_ = false;
+    MuninnSource *ctx_ = nullptr;
+    std::thread worker_;
+#ifdef _WIN32
+    HANDLE process_ = nullptr;
+    HANDLE thread_ = nullptr;
+    HANDLE stdout_read_ = nullptr;
+#endif
+};
 
 static std::string command_observed_at()
 {
@@ -2210,6 +2432,9 @@ private:
 
 static void release_ffmpeg_children(MuninnSource *ctx)
 {
+    if (ctx->audio_decoder) {
+        ctx->audio_decoder->stop();
+    }
     if (ctx->audio_media) {
         obs_source_remove_audio_capture_callback(ctx->audio_media, muninn_child_audio, ctx);
         obs_source_remove_active_child(ctx->source, ctx->audio_media);
@@ -2274,7 +2499,7 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
     }
 
     if (starts_with(url, "rudp://")) {
-        if (!force_restart && ctx->bridge && ctx->media && ctx->audio_media && !ctx->stream_url.empty()) {
+        if (!force_restart && ctx->bridge && ctx->media && ctx->audio_decoder && !ctx->stream_url.empty()) {
             const auto previous_parts = muninn_rudp_url::parse(ctx->stream_url);
             const auto next_parts = muninn_rudp_url::parse(url);
             if (previous_parts && next_parts &&
@@ -2295,8 +2520,11 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
         }
         const auto outputs = ctx->bridge->start(url);
         ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Video", outputs.video_url, "h264", false);
-        ctx->audio_media = create_ffmpeg_child_source(ctx, "Muninn Stream Audio", outputs.audio_url, "aac", true);
-        if (ctx->media || ctx->audio_media) {
+        if (!ctx->audio_decoder) {
+            ctx->audio_decoder = std::make_unique<FfmpegAudioDecoder>();
+        }
+        ctx->audio_decoder->start(ctx, outputs.audio_url);
+        if (ctx->media) {
             ctx->stream_url = url;
         } else {
             ctx->stream_url.clear();
@@ -2672,31 +2900,14 @@ static void muninn_child_audio(void *param, obs_source_t *, const struct audio_d
         return;
     }
 
-    MuninnQueuedAudio packet;
-    packet.frames = audio_data->frames;
-    packet.timestamp = audio_data->timestamp;
-    packet.speakers = audio_info.speakers;
-    packet.samples_per_sec = audio_info.samples_per_sec;
-    const size_t bytes_per_plane = static_cast<size_t>(audio_data->frames) * sizeof(float);
+    const float *planes[MAX_AV_PLANES] = {};
     for (size_t plane = 0; plane < MAX_AV_PLANES; ++plane) {
         if (!audio_data->data[plane]) {
             continue;
         }
-        packet.planes[plane].resize(bytes_per_plane);
-        std::memcpy(packet.planes[plane].data(), audio_data->data[plane], bytes_per_plane);
+        planes[plane] = reinterpret_cast<const float *>(audio_data->data[plane]);
     }
-
-    {
-        std::lock_guard<std::mutex> lock(ctx->audio_mutex);
-        if (!ctx->audio_worker_running) {
-            return;
-        }
-        while (ctx->audio_queue.size() >= 4) {
-            ctx->audio_queue.pop_front();
-        }
-        ctx->audio_queue.push_back(std::move(packet));
-    }
-    ctx->audio_cv.notify_one();
+    queue_planar_audio(ctx, planes, audio_data->frames, audio_info.speakers, audio_info.samples_per_sec);
 }
 
 static void muninn_enum_active_sources(void *data, obs_source_enum_proc_t enum_callback, void *param)
