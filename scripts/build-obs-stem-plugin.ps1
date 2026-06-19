@@ -1,6 +1,7 @@
 param(
     [string]$Configuration = "Release",
-    [string]$TemplateVersion = "master"
+    [string]$TemplateVersion = "master",
+    [switch]$SkipTests
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,3 +29,7 @@ cmake `
     -DCMAKE_PREFIX_PATH="$depsRoot"
 
 cmake --build $pluginBuildRoot --config $Configuration --parallel
+
+if (-not $SkipTests) {
+    ctest --test-dir $pluginBuildRoot -C $Configuration --output-on-failure
+}
