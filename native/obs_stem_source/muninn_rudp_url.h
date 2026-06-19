@@ -9,6 +9,7 @@
 namespace muninn_rudp_url {
 
 inline constexpr uint32_t DefaultMediaRudpConnectionId = 0x6d750001;
+inline constexpr uint32_t DefaultAudioRudpConnectionId = 0x6d750004;
 inline constexpr uint32_t DefaultReliableExpireAfterMs = 75;
 inline constexpr uint32_t DefaultVideoAssemblyDeadlineMs = 75;
 inline constexpr uint32_t DefaultGapWaitMs = 8;
@@ -21,6 +22,7 @@ struct RudpUrlParts {
     uint16_t video_local_port = 0;
     uint16_t audio_local_port = 0;
     uint32_t connection_id = DefaultMediaRudpConnectionId;
+    uint32_t audio_connection_id = DefaultAudioRudpConnectionId;
     uint32_t sender_resend_delay_ms = DefaultSenderResendDelayMs;
     uint32_t reliable_expire_after_ms = DefaultReliableExpireAfterMs;
     uint32_t video_assembly_deadline_ms = DefaultVideoAssemblyDeadlineMs;
@@ -82,6 +84,10 @@ inline std::optional<RudpUrlParts> parse(const std::string &url)
             if (key == "connection") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {
                     parts.connection_id = *parsed;
+                }
+            } else if (key == "audio_connection" || key == "audio_connection_id") {
+                if (const auto parsed = parse_u32_hex_or_decimal(value)) {
+                    parts.audio_connection_id = *parsed;
                 }
             } else if (key == "local_port" || key == "video_local_port") {
                 parts.video_local_port = static_cast<uint16_t>(std::stoul(value));

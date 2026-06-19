@@ -83,6 +83,8 @@ struct MuninnStreamOption {
     uint32_t media_packet_bytes = MuninnDefaultMediaPacketBytes;
     uint32_t rudp_video_bitrate_kbps = MuninnDefaultRudpVideoBitrateKbps;
     uint32_t rudp_latency_budget_ms = MuninnDefaultRudpLatencyBudgetMs;
+    std::vector<std::pair<std::string, std::string>> video_sources;
+    std::vector<std::pair<std::string, std::string>> audio_sources;
 };
 
 struct MuninnQueuedAudio {
@@ -113,10 +115,16 @@ struct MuninnSource {
     uint32_t media_packet_bytes = MuninnDefaultMediaPacketBytes;
     uint32_t rudp_video_bitrate_kbps = MuninnDefaultRudpVideoBitrateKbps;
     uint32_t rudp_latency_budget_ms = MuninnDefaultRudpLatencyBudgetMs;
+    std::vector<std::pair<std::string, std::string>> video_sources;
+    std::vector<std::pair<std::string, std::string>> audio_sources;
     uint32_t rudp_audio_reorder_ms = MuninnDefaultRudpAudioReorderMs;
     std::string stream_id;
+    std::string video_source_id;
+    std::string audio_source_id;
     std::string stream_url;
     std::string last_requested_stream_id;
+    std::string last_requested_video_source_id;
+    std::string last_requested_audio_source_id;
     std::vector<MuninnStreamOption> catalog_options;
     std::unique_ptr<class CatalogDiscoveryReceiver> catalog_discovery;
     std::chrono::steady_clock::time_point next_catalog_refresh = std::chrono::steady_clock::now();
@@ -849,11 +857,19 @@ private:
         const uint16_t fragment_count = read_be16(packet + 28);
         const uint32_t payload_len = read_be32(packet + 30);
         const uint8_t channel_len = packet[34];
-        if (version != 0 || connection_id != parts_.connection_id || header_bytes < 36 || size < header_bytes) {
+        const bool is_video_connection = connection_id == parts_.connection_id;
+        const bool is_audio_connection = connection_id == parts_.audio_connection_id;
+        if (version != 0 || (!is_video_connection && !is_audio_connection) || header_bytes < 36 || size < header_bytes) {
             return;
         }
         last_packet_ms_.store(steady_millis());
-        last_remote_ = remote;
+        if (is_video_connection) {
+            last_remote_ = remote;
+        } else {
+            last_audio_remote_ = remote;
+        }
+        auto &connection_ack_tracker = is_audio_connection ? audio_ack_tracker_ : ack_tracker_;
+        auto &connection_fragments = is_audio_connection ? audio_packet_fragments_ : packet_fragments_;
         const size_t payload_offset = static_cast<size_t>(header_bytes);
         if (payload_offset + payload_len > size || 36 + channel_len > header_bytes) {
             return;
@@ -865,8 +881,9 @@ private:
             video_parity_cache_.clear();
             reset_audio_reorder();
             packet_fragments_.reset();
-            ack_tracker_.reset();
-            ack_tracker_.remember(sequence);
+            audio_packet_fragments_.reset();
+            connection_ack_tracker.reset();
+            connection_ack_tracker.remember(sequence);
             packets_forwarded_ = 0;
             bytes_forwarded_ = 0;
             payloads_decoded_dropped_ = 0;
@@ -894,9 +911,12 @@ private:
             if (was_connected) {
                 decoder_reset_requested_.store(true);
             }
-            const auto [ack, ack_mask] = ack_tracker_.state();
-            send_control_packet(2, 0x03, bridge_sequence++, ack, ack_mask, remote);
-            blog(LOG_INFO, "Muninn RUDP bridge accepted media connection sequence %u", sequence);
+            const auto [ack, ack_mask] = connection_ack_tracker.state();
+            send_control_packet(2, 0x03, connection_id, bridge_sequence++, ack, ack_mask, remote);
+            blog(LOG_INFO,
+                 "Muninn RUDP bridge accepted %s media connection sequence %u",
+                 is_audio_connection ? "audio" : "video",
+                 sequence);
             return;
         }
 
@@ -906,7 +926,9 @@ private:
                 video_parity_cache_.clear();
                 reset_audio_reorder();
                 packet_fragments_.reset();
+                audio_packet_fragments_.reset();
                 ack_tracker_.reset();
+                audio_ack_tracker_.reset();
                 packets_forwarded_ = 0;
                 bytes_forwarded_ = 0;
                 payloads_decoded_dropped_ = 0;
@@ -934,14 +956,16 @@ private:
                 decoder_reset_requested_.store(true);
                 blog(LOG_INFO, "Muninn RUDP bridge adopted existing media sender at sequence %u", sequence);
             }
-            ack_tracker_.remember(sequence);
-            observe_media_sequence(sequence);
+            connection_ack_tracker.remember(sequence);
+            if (is_video_connection) {
+                observe_media_sequence(sequence);
+            }
             const std::string channel_id(
                 reinterpret_cast<const char *>(packet + 36),
                 reinterpret_cast<const char *>(packet + 36 + channel_len));
             if (channel_id != "media") {
-                const auto [ack, ack_mask] = ack_tracker_.state();
-                send_control_packet(4, 0x00, bridge_sequence++, ack, ack_mask, remote);
+                const auto [ack, ack_mask] = connection_ack_tracker.state();
+                send_control_packet(4, 0x00, connection_id, bridge_sequence++, ack, ack_mask, remote);
                 return;
             }
             std::optional<std::pair<uint32_t, std::vector<uint8_t>>> delivered;
@@ -951,6 +975,7 @@ private:
                     std::vector<uint8_t>(packet + payload_offset, packet + payload_offset + payload_len));
             } else {
                 delivered = assemble_rudp_packet_fragment(
+                    connection_fragments,
                     channel_id,
                     read_be16(packet + 24),
                     read_be16(packet + 26),
@@ -968,12 +993,13 @@ private:
                                 audio_addr,
                                 bridge_sequence);
             }
-            const auto [ack, ack_mask] = ack_tracker_.state();
-            send_control_packet(4, 0x00, bridge_sequence++, ack, ack_mask, remote);
+            const auto [ack, ack_mask] = connection_ack_tracker.state();
+            send_control_packet(4, 0x00, connection_id, bridge_sequence++, ack, ack_mask, remote);
         }
     }
 
     std::optional<std::pair<uint32_t, std::vector<uint8_t>>> assemble_rudp_packet_fragment(
+        muninn_rudp_fragments::FragmentAssembler &packet_fragments,
         const std::string &channel_id,
         uint16_t fragment_id,
         uint16_t fragment_index,
@@ -989,7 +1015,7 @@ private:
             return std::nullopt;
         }
 
-        const auto result = packet_fragments_.insert(
+        const auto result = packet_fragments.insert(
             channel_id,
             fragment_id,
             fragment_index,
@@ -1617,7 +1643,8 @@ private:
     void expire_rudp_packet_fragments(std::chrono::steady_clock::time_point now)
     {
         const auto expired = packet_fragments_.expire(now, parts_.reliable_expire_after_ms);
-        for (uint64_t index = 0; index < expired; ++index) {
+        const auto audio_expired = audio_packet_fragments_.expire(now, parts_.reliable_expire_after_ms);
+        for (uint64_t index = 0; index < expired + audio_expired; ++index) {
             log_bridge_pressure("expired incomplete RUDP packet fragment assembly");
         }
     }
@@ -1659,6 +1686,7 @@ private:
     {
         const uint64_t pressure =
             payloads_decoded_dropped_ + video_assemblies_expired_ + packet_fragments_.expired_count() +
+            audio_packet_fragments_.expired_count() +
             video_recovery_dropped_ + video_parity_unusable_ + video_forward_failures_ + audio_forward_failures_;
         if (pressure == 1 || pressure % 300 == 0) {
             blog(LOG_WARNING,
@@ -1668,7 +1696,8 @@ private:
                  static_cast<unsigned long long>(bytes_forwarded_),
                  static_cast<unsigned long long>(payloads_decoded_dropped_),
                  static_cast<unsigned long long>(video_assemblies_expired_),
-                 static_cast<unsigned long long>(packet_fragments_.expired_count()),
+                 static_cast<unsigned long long>(
+                     packet_fragments_.expired_count() + audio_packet_fragments_.expired_count()),
                  static_cast<unsigned long long>(video_recovery_dropped_),
                  static_cast<unsigned long long>(video_parity_received_),
                  static_cast<unsigned long long>(video_parity_cached_),
@@ -1715,7 +1744,13 @@ private:
         return false;
     }
 
-    void send_control_packet(uint8_t packet_type, uint8_t flags, uint32_t sequence, uint32_t ack, uint32_t ack_mask, const sockaddr_in &remote)
+    void send_control_packet(uint8_t packet_type,
+                             uint8_t flags,
+                             uint32_t connection_id,
+                             uint32_t sequence,
+                             uint32_t ack,
+                             uint32_t ack_mask,
+                             const sockaddr_in &remote)
     {
         const std::string channel = "control";
         std::vector<uint8_t> response(36 + channel.size());
@@ -1727,7 +1762,7 @@ private:
         response[5] = packet_type;
         response[6] = flags;
         response[7] = static_cast<uint8_t>(36 + channel.size());
-        write_be32(response, 8, parts_.connection_id);
+        write_be32(response, 8, connection_id);
         write_be32(response, 12, sequence);
         write_be32(response, 16, ack);
         write_be32(response, 20, ack_mask);
@@ -1773,6 +1808,7 @@ private:
 
     SOCKET socket_ = INVALID_SOCKET;
     std::optional<sockaddr_in> last_remote_;
+    std::optional<sockaddr_in> last_audio_remote_;
 #endif
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> started_ms_{0};
@@ -1788,7 +1824,9 @@ private:
     std::deque<std::string> expired_video_frame_order_;
     std::set<std::string> expired_video_frame_keys_;
     muninn_rudp_fragments::FragmentAssembler packet_fragments_;
+    muninn_rudp_fragments::FragmentAssembler audio_packet_fragments_;
     muninn_rudp_ack::AckTracker ack_tracker_;
+    muninn_rudp_ack::AckTracker audio_ack_tracker_;
     uint64_t packets_forwarded_ = 0;
     uint64_t bytes_forwarded_ = 0;
     uint64_t payloads_decoded_dropped_ = 0;
@@ -1855,6 +1893,10 @@ static MuninnStreamOption default_muninn_stream_option()
         MuninnDefaultMediaTargetHost,
         MuninnDefaultMediaPort,
         MuninnDefaultMediaPacketBytes,
+        MuninnDefaultRudpVideoBitrateKbps,
+        MuninnDefaultRudpLatencyBudgetMs,
+        {{"display:0", "raven display 1"}},
+        {{"wasapi-loopback:Realtek", "raven loopback (Realtek)"}},
     };
 }
 
@@ -2234,7 +2276,7 @@ static std::vector<uint8_t> encode_capture_stream_command_wire(const MuninnSourc
         ctx->host_id + ":" + canonical_stream_id + ":capture-stream:start:" + observed_at;
 
     muninn_media_wire::MsgpackWriter record;
-    record.write_array_len(16);
+    record.write_array_len(18);
     record.write_string(command_id);
     record.write_string(ctx->host_id);
     record.write_string(canonical_stream_id);
@@ -2251,6 +2293,8 @@ static std::vector<uint8_t> encode_capture_stream_command_wire(const MuninnSourc
     record.write_string(observed_at);
     record.write_u64(ctx->rudp_video_bitrate_kbps);
     record.write_u64(ctx->rudp_latency_budget_ms);
+    record.write_string(ctx->video_source_id);
+    record.write_string(ctx->audio_source_id);
 
     muninn_media_wire::MsgpackWriter document;
     document.write_map_len(9);
@@ -2354,7 +2398,7 @@ static std::string expected_rudp_stream_url(const MuninnSource *ctx, const std::
 {
     const auto reliable_expire_after_ms = std::max<uint32_t>(1, ctx->rudp_latency_budget_ms);
     return "rudp://" + ctx->media_target_host + ":" + std::to_string(ctx->media_port) + "/" + stream_id +
-           "?channel=media&format=muninn-typed-media&connection=0x6d750001&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=" +
+           "?channel=media&format=muninn-typed-media&connection=0x6d750001&audio_connection=0x6d750004&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=" +
            std::to_string(reliable_expire_after_ms) + "&assembly_deadline_ms=" + std::to_string(ctx->rudp_latency_budget_ms) +
            "&gap_wait_ms=16&audio_reorder_ms=" + std::to_string(ctx->rudp_audio_reorder_ms);
 }
@@ -2405,6 +2449,7 @@ static bool equivalent_rudp_stream_url(const std::string &left, const std::strin
         return left_parts->port == right_parts->port &&
                canonical_muninn_stream_id(rudp_url_stream_id(left)) == canonical_muninn_stream_id(rudp_url_stream_id(right)) &&
                left_parts->connection_id == right_parts->connection_id &&
+               left_parts->audio_connection_id == right_parts->audio_connection_id &&
                left_parts->sender_resend_delay_ms == right_parts->sender_resend_delay_ms &&
                left_parts->reliable_expire_after_ms == right_parts->reliable_expire_after_ms &&
                left_parts->video_assembly_deadline_ms == right_parts->video_assembly_deadline_ms &&
@@ -2412,6 +2457,20 @@ static bool equivalent_rudp_stream_url(const std::string &left, const std::strin
     } catch (...) {
         return left == right;
     }
+}
+
+static std::string selected_source_id(
+    const std::vector<std::pair<std::string, std::string>> &sources,
+    const std::string &current)
+{
+    if (!current.empty()) {
+        for (const auto &source : sources) {
+            if (source.first == current) {
+                return current;
+            }
+        }
+    }
+    return sources.empty() ? std::string{} : sources.front().first;
 }
 
 static std::string endpoint_setting(obs_data_t *settings, const char *key, const char *current_default, const char *deprecated_default)
@@ -2433,10 +2492,14 @@ static void request_stream_activation(MuninnSource *ctx, const std::string &stre
     const auto now = std::chrono::steady_clock::now();
     if (!force &&
         ctx->last_requested_stream_id == canonical_stream_id &&
+        ctx->last_requested_video_source_id == ctx->video_source_id &&
+        ctx->last_requested_audio_source_id == ctx->audio_source_id &&
         now - ctx->last_activation_request < std::chrono::milliseconds(MuninnActivationRetryMs)) {
         return;
     }
     ctx->last_requested_stream_id = canonical_stream_id;
+    ctx->last_requested_video_source_id = ctx->video_source_id;
+    ctx->last_requested_audio_source_id = ctx->audio_source_id;
     ctx->last_activation_request = now;
 
     const auto command_target = ctx->command_rudp_target;
@@ -2447,8 +2510,10 @@ static void request_stream_activation(MuninnSource *ctx, const std::string &stre
         }
     }).detach();
     blog(LOG_INFO,
-         "Muninn Stream requested activation for %s over native RUDP %s video_bitrate_kbps=%u latency_budget_ms=%u audio_reorder_ms=%u",
+         "Muninn Stream requested activation for %s video_source=%s audio_source=%s over native RUDP %s video_bitrate_kbps=%u latency_budget_ms=%u audio_reorder_ms=%u",
          canonical_stream_id.c_str(),
+         ctx->video_source_id.c_str(),
+         ctx->audio_source_id.c_str(),
          command_target.c_str(),
          ctx->rudp_video_bitrate_kbps,
          ctx->rudp_latency_budget_ms,
@@ -2678,6 +2743,22 @@ private:
     }
 };
 
+static std::vector<std::pair<std::string, std::string>> pair_source_options(
+    const std::vector<std::string> &ids,
+    const std::vector<std::string> &labels)
+{
+    std::vector<std::pair<std::string, std::string>> options;
+    options.reserve(ids.size());
+    for (size_t index = 0; index < ids.size(); ++index) {
+        if (ids[index].empty()) {
+            continue;
+        }
+        const std::string label = index < labels.size() && !labels[index].empty() ? labels[index] : ids[index];
+        options.emplace_back(ids[index], label);
+    }
+    return options;
+}
+
 static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vector<uint8_t> &payload)
 {
     MsgpackReader reader(payload);
@@ -2699,6 +2780,8 @@ static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vec
     uint32_t media_packet_bytes = MuninnDefaultMediaPacketBytes;
     uint32_t rudp_video_bitrate_kbps = MuninnDefaultRudpVideoBitrateKbps;
     uint32_t rudp_latency_budget_ms = MuninnDefaultRudpLatencyBudgetMs;
+    std::vector<std::pair<std::string, std::string>> video_sources;
+    std::vector<std::pair<std::string, std::string>> audio_sources;
     if (length > 7) {
         command_rudp_target = reader.read_string();
     }
@@ -2729,7 +2812,21 @@ static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vec
             rudp_latency_budget_ms = static_cast<uint32_t>(parsed);
         }
     }
-    for (uint32_t index = 13; index < length; ++index) {
+    if (length > 16) {
+        auto video_source_ids = reader.read_string_array();
+        auto video_source_labels = reader.read_string_array();
+        auto audio_source_ids = reader.read_string_array();
+        auto audio_source_labels = reader.read_string_array();
+        video_sources = pair_source_options(video_source_ids, video_source_labels);
+        audio_sources = pair_source_options(audio_source_ids, audio_source_labels);
+    }
+    if (video_sources.empty()) {
+        video_sources.emplace_back("display:0", "Display 1");
+    }
+    if (audio_sources.empty()) {
+        audio_sources.emplace_back("wasapi-loopback:Realtek", "Realtek loopback");
+    }
+    for (uint32_t index = length > 16 ? 17 : 13; index < length; ++index) {
         reader.skip();
     }
 
@@ -2751,6 +2848,8 @@ static std::vector<MuninnStreamOption> decode_obs_catalog_payload(const std::vec
             media_packet_bytes,
             rudp_video_bitrate_kbps,
             rudp_latency_budget_ms,
+            video_sources,
+            audio_sources,
         };
         if (!is_playable_muninn_stream(option)) {
             continue;
@@ -3172,8 +3271,16 @@ static void reconcile_selected_stream(MuninnSource *ctx)
     const bool selection_changed =
         !previous_canonical_stream_id.empty() && previous_canonical_stream_id != selected_canonical_stream_id;
     ctx->stream_id = selected->stream_id;
-    if (selection_changed) {
+    const auto previous_video_source_id = ctx->video_source_id;
+    const auto previous_audio_source_id = ctx->audio_source_id;
+    ctx->video_source_id = selected_source_id(selected->video_sources, ctx->video_source_id);
+    ctx->audio_source_id = selected_source_id(selected->audio_sources, ctx->audio_source_id);
+    const bool source_selection_changed =
+        ctx->video_source_id != previous_video_source_id || ctx->audio_source_id != previous_audio_source_id;
+    if (selection_changed || source_selection_changed) {
         ctx->last_requested_stream_id.clear();
+        ctx->last_requested_video_source_id.clear();
+        ctx->last_requested_audio_source_id.clear();
         ctx->last_media_restart = std::chrono::steady_clock::time_point::min();
     }
     const auto previous_command_rudp_target = ctx->command_rudp_target;
@@ -3261,6 +3368,34 @@ static void populate_stream_list_from_options(obs_property_t *property, const st
     }
 }
 
+static void populate_source_list(
+    obs_property_t *property,
+    const std::vector<std::pair<std::string, std::string>> &sources)
+{
+    obs_property_list_clear(property);
+    for (const auto &source : sources) {
+        obs_property_list_add_string(property, source.second.c_str(), source.first.c_str());
+    }
+}
+
+static std::vector<std::pair<std::string, std::string>> catalog_video_sources(const MuninnSource *ctx)
+{
+    const auto *selected = ctx ? find_selected(ctx->catalog_options, ctx->stream_id) : nullptr;
+    if (selected && !selected->video_sources.empty()) {
+        return selected->video_sources;
+    }
+    return {{"display:0", "Display 1"}};
+}
+
+static std::vector<std::pair<std::string, std::string>> catalog_audio_sources(const MuninnSource *ctx)
+{
+    const auto *selected = ctx ? find_selected(ctx->catalog_options, ctx->stream_id) : nullptr;
+    if (selected && !selected->audio_sources.empty()) {
+        return selected->audio_sources;
+    }
+    return {{"wasapi-loopback:Realtek", "Realtek loopback"}};
+}
+
 static void populate_stream_list(obs_property_t *property, const std::string &store_path)
 {
     auto options = read_catalog(store_path);
@@ -3281,6 +3416,18 @@ static bool muninn_refresh_streams(obs_properties_t *props, obs_property_t *, vo
     obs_property_t *stream_list = obs_properties_get(props, "stream_id");
     if (stream_list) {
         populate_stream_list(stream_list, store_path);
+    }
+    if (data) {
+        auto *ctx = static_cast<MuninnSource *>(data);
+        refresh_catalog(ctx);
+        obs_property_t *video_list = obs_properties_get(props, "video_source_id");
+        obs_property_t *audio_list = obs_properties_get(props, "audio_source_id");
+        if (video_list) {
+            populate_source_list(video_list, catalog_video_sources(ctx));
+        }
+        if (audio_list) {
+            populate_source_list(audio_list, catalog_audio_sources(ctx));
+        }
     }
     return true;
 }
@@ -3355,6 +3502,8 @@ static void muninn_update(void *data, obs_data_t *settings)
     const auto previous_rudp_video_bitrate_kbps = ctx->rudp_video_bitrate_kbps;
     const auto previous_rudp_latency_budget_ms = ctx->rudp_latency_budget_ms;
     const auto previous_rudp_audio_reorder_ms = ctx->rudp_audio_reorder_ms;
+    const auto previous_video_source_id = ctx->video_source_id;
+    const auto previous_audio_source_id = ctx->audio_source_id;
 
     ctx->store_path = obs_string(settings, "store_path", MuninnStorePath);
     ctx->command_exe_path = obs_string(settings, "command_exe_path", MuninnCommandExePath);
@@ -3385,13 +3534,19 @@ static void muninn_update(void *data, obs_data_t *settings)
         configured_audio_reorder >= 0 ? std::min<int64_t>(configured_audio_reorder, MuninnMaxRudpAudioReorderMs)
                                       : MuninnDefaultRudpAudioReorderMs);
     ctx->stream_id = obs_string(settings, "stream_id", "");
+    ctx->video_source_id = obs_string(settings, "video_source_id", ctx->video_source_id.c_str());
+    ctx->audio_source_id = obs_string(settings, "audio_source_id", ctx->audio_source_id.c_str());
     if (ctx->command_rudp_target != previous_command_rudp_target ||
         ctx->media_target_host != previous_media_target_host ||
         ctx->media_port != previous_media_port ||
         ctx->rudp_video_bitrate_kbps != previous_rudp_video_bitrate_kbps ||
         ctx->rudp_latency_budget_ms != previous_rudp_latency_budget_ms ||
-        ctx->rudp_audio_reorder_ms != previous_rudp_audio_reorder_ms) {
+        ctx->rudp_audio_reorder_ms != previous_rudp_audio_reorder_ms ||
+        ctx->video_source_id != previous_video_source_id ||
+        ctx->audio_source_id != previous_audio_source_id) {
         ctx->last_requested_stream_id.clear();
+        ctx->last_requested_video_source_id.clear();
+        ctx->last_requested_audio_source_id.clear();
     }
 
     refresh_catalog(ctx);
@@ -3445,6 +3600,8 @@ static void muninn_defaults(obs_data_t *settings)
     obs_data_set_default_int(settings, "rudp_latency_budget_ms", MuninnDefaultRudpLatencyBudgetMs);
     obs_data_set_default_int(settings, "rudp_audio_reorder_ms", MuninnDefaultRudpAudioReorderMs);
     obs_data_set_default_string(settings, "stream_id", "");
+    obs_data_set_default_string(settings, "video_source_id", "display:0");
+    obs_data_set_default_string(settings, "audio_source_id", "wasapi-loopback:Realtek");
 }
 
 static obs_properties_t *muninn_properties(void *data)
@@ -3459,6 +3616,17 @@ static obs_properties_t *muninn_properties(void *data)
         populate_stream_list_from_options(streams, ctx->catalog_options);
     } else {
         populate_stream_list(streams, store_path);
+    }
+    obs_property_t *video_sources =
+        obs_properties_add_list(props, "video_source_id", "Muninn video", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+    obs_property_t *audio_sources =
+        obs_properties_add_list(props, "audio_source_id", "Muninn audio", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+    if (ctx) {
+        populate_source_list(video_sources, catalog_video_sources(ctx));
+        populate_source_list(audio_sources, catalog_audio_sources(ctx));
+    } else {
+        populate_source_list(video_sources, {{"display:0", "Display 1"}});
+        populate_source_list(audio_sources, {{"wasapi-loopback:Realtek", "Realtek loopback"}});
     }
     obs_properties_add_int(props, "rudp_video_bitrate_kbps", "Video bitrate (kbps)", 1000, MuninnMaxRudpVideoBitrateKbps, 500);
     obs_properties_add_int(props, "rudp_latency_budget_ms", "Video/transport latency (ms)", 100, MuninnMaxRudpLatencyBudgetMs, 50);
