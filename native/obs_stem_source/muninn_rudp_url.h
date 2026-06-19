@@ -12,6 +12,7 @@ inline constexpr uint32_t DefaultMediaRudpConnectionId = 0x6d750001;
 inline constexpr uint32_t DefaultReliableExpireAfterMs = 75;
 inline constexpr uint32_t DefaultVideoAssemblyDeadlineMs = 75;
 inline constexpr uint32_t DefaultGapWaitMs = 8;
+inline constexpr uint32_t DefaultAudioReorderMs = 1000;
 inline constexpr uint32_t DefaultSenderResendDelayMs = 5;
 inline constexpr uint32_t MaxLatencyBudgetMs = 2000;
 
@@ -24,6 +25,7 @@ struct RudpUrlParts {
     uint32_t reliable_expire_after_ms = DefaultReliableExpireAfterMs;
     uint32_t video_assembly_deadline_ms = DefaultVideoAssemblyDeadlineMs;
     uint32_t gap_wait_ms = DefaultGapWaitMs;
+    uint32_t audio_reorder_ms = DefaultAudioReorderMs;
 };
 
 inline bool starts_with(const std::string &value, const std::string &prefix)
@@ -100,6 +102,10 @@ inline std::optional<RudpUrlParts> parse(const std::string &url)
             } else if (key == "gap_wait_ms") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {
                     parts.gap_wait_ms = std::clamp(*parsed, 0u, 1000u);
+                }
+            } else if (key == "audio_reorder_ms") {
+                if (const auto parsed = parse_u32_hex_or_decimal(value)) {
+                    parts.audio_reorder_ms = std::clamp(*parsed, 0u, MaxLatencyBudgetMs);
                 }
             }
         }

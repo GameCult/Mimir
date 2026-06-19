@@ -19,7 +19,7 @@ void require(bool condition, const std::string &message)
 int main()
 {
     const auto configured = muninn_rudp_url::parse(
-        "rudp://192.168.1.66:5204/muninn.raven.av.rudp?channel=media&format=muninn-typed-media&connection=0x6d750001&sender_resend_delay_ms=5&reliable_expire_after_ms=1200&assembly_deadline_ms=1200&gap_wait_ms=16");
+        "rudp://192.168.1.66:5204/muninn.raven.av.rudp?channel=media&format=muninn-typed-media&connection=0x6d750001&sender_resend_delay_ms=5&reliable_expire_after_ms=1200&assembly_deadline_ms=1200&gap_wait_ms=16&audio_reorder_ms=700");
     require(configured.has_value(), "configured RUDP URL did not parse");
     require(configured->port == 5204, "configured RUDP URL port was not parsed");
     require(configured->video_local_port == 15204, "configured RUDP video local port was not derived");
@@ -28,6 +28,7 @@ int main()
     require(configured->reliable_expire_after_ms == 1200, "configured reliable expiry did not survive parse");
     require(configured->video_assembly_deadline_ms == 1200, "configured assembly deadline did not survive parse");
     require(configured->gap_wait_ms == 16, "configured gap wait did not survive parse");
+    require(configured->audio_reorder_ms == 700, "configured audio reorder wait did not survive parse");
 
     const auto clamped = muninn_rudp_url::parse(
         "rudp://192.168.1.66:5204/muninn.raven.av.rudp?reliable_expire_after_ms=9000&assembly_deadline_ms=9000");
@@ -45,6 +46,8 @@ int main()
             "minimal RUDP URL did not keep the default reliable expiry");
     require(fallback->video_assembly_deadline_ms == muninn_rudp_url::DefaultVideoAssemblyDeadlineMs,
             "minimal RUDP URL did not keep the default assembly deadline");
+    require(fallback->audio_reorder_ms == muninn_rudp_url::DefaultAudioReorderMs,
+            "minimal RUDP URL did not keep the default audio reorder wait");
 
     return 0;
 }
