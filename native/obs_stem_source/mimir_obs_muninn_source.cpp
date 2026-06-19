@@ -948,7 +948,10 @@ private:
             last_media_sequence_ = sequence;
             return;
         }
-        if (sequence <= last_media_sequence_ + 1) {
+        if (sequence <= last_media_sequence_) {
+            return;
+        }
+        if (sequence == last_media_sequence_ + 1) {
             last_media_sequence_ = sequence;
             return;
         }
