@@ -96,6 +96,44 @@ function Get-LatestObsLog {
         Select-Object -First 1
 }
 
+function Assert-LatestObsLogWitness {
+    param(
+        [string]$ConfigRoot,
+        [int]$WaitSeconds = 30
+    )
+
+    $requiredPatterns = @(
+        "Mimir OBS sources loaded: mimir_audio_stem_source, mimir_program_texture_source, muninn_stream_source, muninn_video_source, muninn_audio_source",
+        "mimir_obs_stem_source.dll"
+    )
+    $deadline = (Get-Date).AddSeconds($WaitSeconds)
+    do {
+        $latestLog = Get-LatestObsLog -ConfigRoot $ConfigRoot
+        if ($latestLog) {
+            $missing = @()
+            foreach ($pattern in $requiredPatterns) {
+                if (-not (Select-String -LiteralPath $latestLog.FullName -SimpleMatch -Pattern $pattern -Quiet)) {
+                    $missing += $pattern
+                }
+            }
+            if ($missing.Count -eq 0) {
+                Write-Host "Verified OBS log witness: $($latestLog.FullName)"
+                return
+            }
+        }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+
+    if (-not $latestLog) {
+        throw "OBS started, but no OBS log file was found to verify Muninn source registration."
+    }
+    Write-Host "Newest OBS log: $($latestLog.FullName) ($($latestLog.Length) bytes)"
+    if ($latestLog.Length -gt 0) {
+        Get-Content -LiteralPath $latestLog.FullName -Tail 60 | Write-Host
+    }
+    throw "OBS log is missing the expected Mimir Muninn source registration witness after waiting ${WaitSeconds}s: $($requiredPatterns -join '; ')."
+}
+
 if (-not (Test-Path -LiteralPath $ObsExe)) {
     throw "OBS executable was not found at '$ObsExe'."
 }
@@ -147,3 +185,4 @@ Write-Host "OBS process:"
 $obs | Select-Object Id, ProcessName, StartTime, Responding | Format-Table -AutoSize
 Write-Host "Observed Muninn UDP listeners:"
 $listeners | ForEach-Object { Write-Host $_ }
+Assert-LatestObsLogWitness -ConfigRoot $ObsConfigRoot

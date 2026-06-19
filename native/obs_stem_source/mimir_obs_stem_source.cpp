@@ -211,6 +211,9 @@ bool obs_module_load(void)
     obs_register_source(&mimir_stem_source_info);
     mimir_register_program_texture_source();
     mimir_register_muninn_source();
-    blog(LOG_INFO, "Mimir OBS sources loaded");
+    blog(
+        LOG_INFO,
+        "Mimir OBS sources loaded: mimir_audio_stem_source, mimir_program_texture_source, "
+        "muninn_stream_source, muninn_video_source, muninn_audio_source");
     return true;
 }
