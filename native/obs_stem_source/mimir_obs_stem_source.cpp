@@ -214,6 +214,7 @@ bool obs_module_load(void)
     blog(
         LOG_INFO,
         "Mimir OBS sources loaded: mimir_audio_stem_source, mimir_program_texture_source, "
-        "muninn_stream_source, muninn_video_source, muninn_audio_source");
+        "muninn_stream_source, muninn_video_source, muninn_audio_source; "
+        "Muninn Odin discovery build 20260705.2");
     return true;
 }

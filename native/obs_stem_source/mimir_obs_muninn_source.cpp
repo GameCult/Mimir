@@ -1939,23 +1939,46 @@ static int run_muninn_cli(const std::string &exe, const std::vector<std::string>
     return std::system(command.c_str());
 }
 
-static void refresh_obs_catalog_from_odin(MuninnSource *ctx)
+static bool refresh_obs_catalog_from_odin_store(
+    const std::string &command_exe_path,
+    const std::string &store_path,
+    const std::string &host_id)
 {
-    if (!ctx) {
-        return;
+    if (store_path.empty() || host_id.empty()) {
+        return false;
     }
-    const int exit_code = run_muninn_cli(ctx->command_exe_path, {
+    const int exit_code = run_muninn_cli(command_exe_path, {
         "obs-catalog-status",
         "--store",
-        ctx->store_path,
+        store_path,
         "--host",
-        ctx->host_id,
+        host_id,
         "--odin-cultmesh-uri",
         MuninnOdinCultMeshUri,
     });
     if (exit_code != 0) {
-        blog(LOG_WARNING, "Muninn Stream could not refresh OBS catalog from Odin via %s", ctx->command_exe_path.c_str());
+        blog(LOG_WARNING,
+             "Muninn Stream could not refresh OBS catalog from Odin exe=%s store=%s host=%s exit=%d",
+             command_exe_path.empty() ? MuninnCommandExePath : command_exe_path.c_str(),
+             store_path.c_str(),
+             host_id.c_str(),
+             exit_code);
+        return false;
     }
+    blog(LOG_INFO,
+         "Muninn Stream refreshed OBS catalog from Odin exe=%s store=%s host=%s",
+         command_exe_path.empty() ? MuninnCommandExePath : command_exe_path.c_str(),
+         store_path.c_str(),
+         host_id.c_str());
+    return true;
+}
+
+static bool refresh_obs_catalog_from_odin(MuninnSource *ctx)
+{
+    if (!ctx) {
+        return false;
+    }
+    return refresh_obs_catalog_from_odin_store(ctx->command_exe_path, ctx->store_path, ctx->host_id);
 }
 
 static const MuninnStreamOption *find_selected(const std::vector<MuninnStreamOption> &options, const std::string &stream_id)
@@ -3649,6 +3672,7 @@ static bool refresh_source_properties_for_settings(
 
 static void populate_stream_list(obs_property_t *property, const std::string &store_path)
 {
+    refresh_obs_catalog_from_odin_store(MuninnCommandExePath, store_path, MuninnDefaultHostId);
     auto options = read_catalog(store_path);
     if (options.empty()) {
         options.push_back(default_muninn_stream_option());
