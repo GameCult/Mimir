@@ -55,6 +55,7 @@ constexpr const char *MuninnObsCatalogType = "muninn.obs_stream_catalog";
 constexpr const char *MuninnObsCatalogSchema = "muninn.obs_stream_catalog.v1";
 constexpr const char *MuninnObsCatalogKey = "obs";
 constexpr uint64_t MuninnCatalogRefreshMs = 2000;
+constexpr uint64_t MuninnOdinCatalogRefreshMs = 5000;
 constexpr uint64_t MuninnActivationRetryMs = 5000;
 constexpr uint64_t MuninnMediaStartupGraceMs = 3000;
 constexpr uint64_t MuninnMediaStaleMs = 1500;
@@ -1936,7 +1937,39 @@ static int run_muninn_cli(const std::string &exe, const std::vector<std::string>
         command.push_back(' ');
         command += quote_windows_arg(arg);
     }
+#ifdef _WIN32
+    std::vector<char> command_line(command.begin(), command.end());
+    command_line.push_back('\0');
+
+    STARTUPINFOA startup_info = {};
+    startup_info.cb = sizeof(startup_info);
+    startup_info.dwFlags = STARTF_USESHOWWINDOW;
+    startup_info.wShowWindow = SW_HIDE;
+
+    PROCESS_INFORMATION process_info = {};
+    if (!CreateProcessA(
+            nullptr,
+            command_line.data(),
+            nullptr,
+            nullptr,
+            FALSE,
+            CREATE_NO_WINDOW,
+            nullptr,
+            nullptr,
+            &startup_info,
+            &process_info)) {
+        return static_cast<int>(GetLastError());
+    }
+
+    WaitForSingleObject(process_info.hProcess, INFINITE);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process_info.hProcess, &exit_code);
+    CloseHandle(process_info.hThread);
+    CloseHandle(process_info.hProcess);
+    return static_cast<int>(exit_code);
+#else
     return std::system(command.c_str());
+#endif
 }
 
 static bool refresh_obs_catalog_from_odin_store(
@@ -1947,6 +1980,20 @@ static bool refresh_obs_catalog_from_odin_store(
     if (store_path.empty() || host_id.empty()) {
         return false;
     }
+    static std::mutex refresh_mutex;
+    static std::map<std::string, std::chrono::steady_clock::time_point> next_refresh_by_store;
+    const std::string refresh_key = host_id + "|" + store_path;
+    const auto now = std::chrono::steady_clock::now();
+    {
+        std::lock_guard<std::mutex> lock(refresh_mutex);
+        const auto next_refresh = next_refresh_by_store.find(refresh_key);
+        if (next_refresh != next_refresh_by_store.end() && now < next_refresh->second) {
+            return true;
+        }
+        next_refresh_by_store[refresh_key] =
+            now + std::chrono::milliseconds(MuninnOdinCatalogRefreshMs);
+    }
+
     const int exit_code = run_muninn_cli(command_exe_path, {
         "obs-catalog-status",
         "--store",
