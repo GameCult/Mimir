@@ -166,6 +166,38 @@ struct RudpBridgeOutputs {
     std::string audio_url;
 };
 
+static std::optional<uint16_t> allocate_udp_loopback_port()
+{
+#ifdef _WIN32
+    SOCKET socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (socket == INVALID_SOCKET) {
+        return std::nullopt;
+    }
+
+    sockaddr_in bind_addr = {};
+    bind_addr.sin_family = AF_INET;
+    inet_pton(AF_INET, "127.0.0.1", &bind_addr.sin_addr);
+    bind_addr.sin_port = 0;
+    if (bind(socket, reinterpret_cast<sockaddr *>(&bind_addr), sizeof(bind_addr)) != 0) {
+        closesocket(socket);
+        return std::nullopt;
+    }
+
+    sockaddr_in local_addr = {};
+    int local_len = sizeof(local_addr);
+    if (getsockname(socket, reinterpret_cast<sockaddr *>(&local_addr), &local_len) != 0) {
+        closesocket(socket);
+        return std::nullopt;
+    }
+
+    const uint16_t port = ntohs(local_addr.sin_port);
+    closesocket(socket);
+    return port == 0 ? std::nullopt : std::optional<uint16_t>(port);
+#else
+    return std::nullopt;
+#endif
+}
+
 struct MuninnMediaPayload {
     enum class Kind { Unknown, Video, VideoParity, Audio };
     Kind kind = Kind::Unknown;
@@ -226,6 +258,11 @@ struct MuninnPendingAudioPacket {
 static bool starts_with(const std::string &value, const std::string &prefix)
 {
     return value.rfind(prefix, 0) == 0;
+}
+
+static bool is_cultmesh_uri(const std::string &value)
+{
+    return starts_with(value, "cultmesh://");
 }
 
 static uint64_t steady_millis()
@@ -686,6 +723,18 @@ public:
 
         source_url_ = url;
         parts_ = *parsed;
+        const uint16_t requested_video_port = parts_.video_local_port;
+        const uint16_t requested_audio_port = parts_.audio_local_port;
+        const auto video_port = allocate_udp_loopback_port();
+        const auto audio_port = allocate_udp_loopback_port();
+        if (!video_port || !audio_port || video_port == audio_port) {
+            blog(LOG_WARNING, "Muninn RUDP bridge could not allocate local decoder UDP ports");
+            source_url_.clear();
+            parts_ = {};
+            return {};
+        }
+        parts_.video_local_port = *video_port;
+        parts_.audio_local_port = *audio_port;
         outputs_.video_url = "udp://127.0.0.1:" + std::to_string(parts_.video_local_port) +
                              "?fifo_size=8388608&overrun_nonfatal=1&buffer_size=67108864";
         outputs_.audio_url = "udp://127.0.0.1:" + std::to_string(parts_.audio_local_port) +
@@ -700,8 +749,9 @@ public:
         running_ = true;
         worker_ = std::thread([this] { run(); });
         blog(LOG_INFO,
-             "Muninn RUDP bridge starting udp/%u -> video udp/127.0.0.1:%u audio udp/127.0.0.1:%u sender_resend_delay_ms=%u reliable_expire_after_ms=%u assembly_deadline_ms=%u gap_wait_ms=%u audio_reorder_ms=%u",
+             "Muninn RUDP bridge starting udp/%u -> video udp/127.0.0.1:%u audio udp/127.0.0.1:%u requested_video_port=%u requested_audio_port=%u sender_resend_delay_ms=%u reliable_expire_after_ms=%u assembly_deadline_ms=%u gap_wait_ms=%u audio_reorder_ms=%u",
              parts_.port, parts_.video_local_port, parts_.audio_local_port,
+             requested_video_port, requested_audio_port,
              parts_.sender_resend_delay_ms, parts_.reliable_expire_after_ms,
              parts_.video_assembly_deadline_ms, parts_.gap_wait_ms, parts_.audio_reorder_ms);
         return outputs_;
@@ -2642,11 +2692,16 @@ static std::string selected_source_id(
 static std::string endpoint_setting(obs_data_t *settings, const char *key, const char *current_default, const char *deprecated_default)
 {
     std::string value = obs_string(settings, key, current_default);
-    if (value == deprecated_default) {
+    if (value == deprecated_default || is_cultmesh_uri(value)) {
         obs_data_set_string(settings, key, current_default);
         return current_default;
     }
     return value;
+}
+
+static std::string media_receiver_host(const std::string &candidate)
+{
+    return candidate.empty() || is_cultmesh_uri(candidate) ? MuninnDefaultMediaTargetHost : candidate;
 }
 
 static void request_stream_activation(MuninnSource *ctx, const std::string &stream_id, bool force = false)
@@ -3433,11 +3488,7 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
             (!wants_video || ctx->media) &&
             (!wants_audio || ctx->audio_decoder) &&
             !ctx->stream_url.empty()) {
-            const auto previous_parts = muninn_rudp_url::parse(ctx->stream_url);
-            const auto next_parts = muninn_rudp_url::parse(url);
-            if (previous_parts && next_parts &&
-                previous_parts->video_local_port == next_parts->video_local_port &&
-                previous_parts->audio_local_port == next_parts->audio_local_port) {
+            if (equivalent_rudp_stream_url(ctx->stream_url, url)) {
                 ctx->bridge->start(url);
                 ctx->stream_url = url;
                 return;
@@ -3452,6 +3503,10 @@ static void create_or_update_media(MuninnSource *ctx, const std::string &url, bo
             ctx->bridge = std::make_unique<RudpMediaBridge>();
         }
         const auto outputs = ctx->bridge->start(url);
+        if (outputs.video_url.empty() && outputs.audio_url.empty()) {
+            ctx->stream_url.clear();
+            return;
+        }
         bool activated = false;
         if (wants_video) {
             ctx->media = create_ffmpeg_child_source(ctx, "Muninn Stream Video", outputs.video_url, "h264", false);
@@ -3552,7 +3607,7 @@ static void reconcile_selected_stream(MuninnSource *ctx)
     if (split_ipv4_endpoint(MuninnCommandRudpTarget, bootstrap_host, bootstrap_port)) {
         ctx->command_rudp_target = replace_endpoint_host_if_unspecified(ctx->command_rudp_target, bootstrap_host);
     }
-    ctx->media_target_host = selected->media_target_host.empty() ? MuninnDefaultMediaTargetHost : selected->media_target_host;
+    ctx->media_target_host = media_receiver_host(selected->media_target_host);
     ctx->media_port = selected->media_port == 0 ? MuninnDefaultMediaPort : selected->media_port;
     ctx->media_packet_bytes =
         selected->media_packet_bytes == 0 ? MuninnDefaultMediaPacketBytes : selected->media_packet_bytes;
