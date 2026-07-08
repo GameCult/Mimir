@@ -212,6 +212,12 @@ from one Muninn CultMesh shared-memory frame it performs native admission,
 Mimir fusion, pose-frame creation, proof-surface creation, and Fensalir probe
 lowering. Live Nightwing/Starfire wiring should call this owner path rather
 than preserving separate manual actions and programmatic proof paths.
+`MimirRuntime` now owns the actual Fensalir presentation attachment for the
+proof surface: `PublishMoveProofSurface` stores the latest Mimir-owned
+`mimir.move_proof_surface.v1`, and `CreateFrame` merges its observer-only
+`move-proof-*` probe splines into `AquariumFrame.Scene.SplineFrame` beside the
+audio spectrum preview. Fensalir renders this frame; it still does not decide
+proof.
 
 ## Program Composition
 

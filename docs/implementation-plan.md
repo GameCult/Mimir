@@ -90,6 +90,13 @@ a named invariant that the native runtime cannot protect yet.
   --move-proof-pipeline-smoke` proves that shape against the native reservoir
   debug DLL; live hardware and presented-frame capture still need to call this
   primitive instead of hand-assembling a parallel path.
+- `MimirRuntime` is now the live Fensalir attachment point for proof surfaces.
+  `PublishMoveProofSurface` accepts the Mimir-owned
+  `mimir.move_proof_surface.v1` document, `CreateFrame` composes its
+  observer-only `move-proof-*` splines into `AquariumFrame.Scene.SplineFrame`,
+  and `Mimir.BufferSmoke --move-proof-runtime-frame-smoke` proves the frame is
+  empty before publish, contains the proof splines after publish, and clears
+  without leaving a repair loop behind.
 - `MimirMoveCalibrationProtocol` publishes the typed calibration preflight for
   Starfire/Nightwing Moves: required Muninn evidence streams, optional
   Quest headset/controller pose witnesses, stillness/sweep/validation phases, and
@@ -398,10 +405,11 @@ a named invariant that the native runtime cannot protect yet.
    becomes a deterministic timeline anchor before the actuator moves samples.
 6. Prove the bioacoustic hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
-7. Attach the Move proof surface to the live runtime/Fensalir presentation path:
-   ingest real Muninn Nightwing and Starfire evidence, require calibrated
-   optical witnesses, publish `mimir:starfire:move-pose:<sequence>`, and capture
-   a presented Fensalir frame/probe for the same sequence.
+7. Wire live Move proof production into `MimirRuntime.PublishMoveProofSurface`:
+   ingest real Muninn Nightwing and Starfire evidence through
+   `MimirMoveProofPipeline`, require calibrated optical witnesses, publish
+   `mimir:starfire:move-pose:<sequence>`, and capture a presented Fensalir
+   frame/probe for the same sequence.
 8. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 9. Implement the Mimir program scene graph as the shared commit primitive for

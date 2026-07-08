@@ -2,10 +2,12 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Aquarium.Engine;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
 using GameCult.Mesh;
 using MessagePack;
+using Mimir.Runtime;
 using Mimir.Runtime.Synchronization;
 
 if (args.Any(arg => string.Equals(arg, "--chirplet-self-test", StringComparison.OrdinalIgnoreCase)))
@@ -144,6 +146,11 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-pipeline-smoke", StringComp
 {
     return RunMoveProofPipelineSmoke(
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+}
+
+if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-frame-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofRuntimeFrameSmoke();
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-calibration-protocol-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -2221,6 +2228,106 @@ static int RunMoveProofSurfaceSmoke()
         fallbackSurface.FailureReason.Contains("single-ray", StringComparison.Ordinal)
             ? 0
             : 1;
+}
+
+static int RunMoveProofRuntimeFrameSmoke()
+{
+    var surface = CreateMoveProofSurfaceSmokeDocument();
+    var runtime = new MimirRuntime(
+        new AquariumRuntimeOptions(Headless: true, CultCachePath: null),
+        new MimirSynchronizationSettings());
+    var emptyFrame = runtime.Frame;
+    runtime.PublishMoveProofSurface(surface);
+    var proofFrame = runtime.Frame;
+    var proofSplineCount = proofFrame.Scene.SplineFrame.Splines.Count(spline =>
+        spline.Id.StartsWith("move-proof-", StringComparison.Ordinal));
+    runtime.ClearMoveProofSurface();
+    var clearedFrame = runtime.Frame;
+
+    Console.WriteLine(
+        $"move-proof-runtime-frame-smoke proof={surface.ProofId} frame={surface.FensalirFrameId} verdict={surface.Verdict} before={emptyFrame.Scene.SplineFrame.Splines.Count} proofSplines={proofSplineCount} afterClear={clearedFrame.Scene.SplineFrame.Splines.Count}");
+
+    return emptyFrame.Scene.SplineFrame.Splines.Count == 0 &&
+        proofFrame.Scene.SplineFrame.HasInput &&
+        proofSplineCount >= 3 &&
+        proofFrame.Scene.SplineFrame.Splines.Any(spline => spline.Id.Contains("move-0xA11CE-79", StringComparison.Ordinal)) &&
+        clearedFrame.Scene.SplineFrame.Splines.Count == 0
+            ? 0
+            : 1;
+}
+
+static MimirMoveProofSurfaceDocument CreateMoveProofSurfaceSmokeDocument()
+{
+    var pose = new MimirMoveControllerPoseDocument(
+        PoseId: "move:0xA11CE:79",
+        WandId: "move:0xA11CE",
+        TrackingSpaceId: "mimir-stage-space",
+        CalibrationId: "mimir-move-stage-calibration-v1",
+        FusionAuthorityId: "mimir.runtime.move-fusion",
+        SourceTimestampNs: 1_781_202_600_004_000_000,
+        EstimatedAtNs: 1_781_202_600_006_200_000,
+        Sequence: 79,
+        PositionMeters: new MimirVector3Snapshot(0.0, 1.1, 1.0),
+        Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+        LinearVelocityMetersPerSecond: new MimirVector3Snapshot(0.0, 0.0, 0.0),
+        AngularVelocityRadiansPerSecond: new MimirVector3Snapshot(0.02, -0.01, 0.04),
+        Confidence: 0.82,
+        LatencyMilliseconds: 2.2,
+        Battery01: 0.72,
+        Buttons:
+        [
+            new MimirTrackingButtonSnapshot("move", true, 1.0),
+            new MimirTrackingButtonSnapshot("trigger", true, 0.5)
+        ],
+        EvidenceStreamIds:
+        [
+            "witness:0x00000000000A11CE",
+            "witness:0x0000000000000B0B",
+            "controller:0x00000000000A11CE"
+        ],
+        EvidenceKinds:
+        [
+            "optical-marker:triangulated",
+            "controller-state:buttons-imu",
+            "orientation:imu-unresolved"
+        ],
+        ConsumerContract: "fensalir.move-controller-input");
+    var admission = new MimirMuninnMoveEvidenceAdmission(
+        FrameId: "muninn:nightwing:move-evidence:79",
+        ProducerPeerId: "muninn:nightwing",
+        PublishedAtNs: 1_781_202_600_005_000_000,
+        MimirReadAtNs: 1_781_202_600_005_700_000,
+        SampleCount: 3,
+        OpticalMarkerCount: 2,
+        ControllerStateCount: 1,
+        SourceTimeMinNs: 1_781_202_600_004_000_000,
+        SourceTimeMaxNs: 1_781_202_600_004_000_000,
+        ArrivalMinNs: 1_781_202_600_004_500_000,
+        ArrivalMaxNs: 1_781_202_600_005_700_000,
+        Handle: new MimirNativeSampleHandle(
+            SensorIdHash: 0xF00D,
+            TimestampNs: 1_781_202_600_004_000_000,
+            ArrivalNs: 1_781_202_600_005_700_000,
+            Sequence: 79,
+            PayloadHandle: 0xBEEF,
+            Flags: 0,
+            Reserved: 0),
+        ReservoirEdgeNs: 1_781_202_600_004_000_000,
+        ReservoirWindowStartNs: 1_781_197_600_004_000_000,
+        ReservoirMoveEvidenceCount: 1);
+    var poseFrame = MimirMovePoseStream.CreateFrame(
+        frameId: "mimir:starfire:move-pose:79",
+        producerPeerId: "mimir:starfire",
+        publishedAtNs: pose.EstimatedAtNs,
+        trackingSpaceId: pose.TrackingSpaceId,
+        calibrationId: pose.CalibrationId,
+        poses: [pose]);
+
+    return MimirMoveProofSurface.Create(
+        admission,
+        poseFrame,
+        "fensalir:starfire:presented-frame:79",
+        fensalirPresentedAtNs: 1_781_202_600_007_100_000);
 }
 
 static int RunMoveProofPipelineSmoke(string nativeReservoirPath)

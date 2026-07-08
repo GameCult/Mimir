@@ -62,6 +62,7 @@ direct
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private readonly Queue<IReadOnlyList<MimirAudioSpectrumSnapshot>> spectrumHistory = new();
+    private MimirMoveProofSurfaceDocument? latestMoveProofSurface;
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -144,6 +145,9 @@ direct
             : bufferFieldFrame.HasInput
             ? new Vector3(0.0f, 0.0f, 12.0f)
             : new Vector3(0.0f, 0.0f, cameraZ + 12.0f);
+        var spectrumSplineFrame = ShouldRenderSpectrumPreviewSplines()
+            ? BuildSpectrumSplineFrame()
+            : AquariumSplineFrame.Empty;
         return new AquariumFrame(
             new ViewFrame(Vector2.Zero, 24.0f),
             cameraPosition,
@@ -155,7 +159,7 @@ direct
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
                 BufferFieldFrame = bufferFieldFrame,
-                SplineFrame = ShouldRenderSpectrumPreviewSplines() ? BuildSpectrumSplineFrame() : AquariumSplineFrame.Empty,
+                SplineFrame = ComposeFensalirSplineFrame(spectrumSplineFrame, latestMoveProofSurface),
             });
     }
 
@@ -164,6 +168,44 @@ direct
     public void RegisterStreamSource(IMimirStreamSource source)
     {
         synchronization.AddSource(source);
+    }
+
+    public void PublishMoveProofSurface(MimirMoveProofSurfaceDocument surface)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        latestMoveProofSurface = surface;
+    }
+
+    public void ClearMoveProofSurface()
+    {
+        latestMoveProofSurface = null;
+    }
+
+    public static AquariumSplineFrame ComposeFensalirSplineFrame(
+        AquariumSplineFrame baseFrame,
+        MimirMoveProofSurfaceDocument? moveProofSurface)
+    {
+        ArgumentNullException.ThrowIfNull(baseFrame);
+        if (moveProofSurface is null)
+        {
+            return baseFrame;
+        }
+
+        var proofFrame = MimirMoveProofSurface.BuildFensalirProbeFrame(moveProofSurface);
+        if (!baseFrame.HasInput)
+        {
+            return proofFrame;
+        }
+
+        if (!proofFrame.HasInput)
+        {
+            return baseFrame;
+        }
+
+        return new AquariumSplineFrame
+        {
+            Splines = baseFrame.Splines.Concat(proofFrame.Splines).ToArray()
+        };
     }
 
     public void Start()
@@ -231,6 +273,8 @@ direct
                 panel.Readout("Audio sync state", DescribeAudioSyncState);
                 panel.Readout("Aligned audio", DescribeAlignedAudio);
                 panel.Readout("Chirplet reference", DescribeChirpletReference);
+                panel.Section("Move Proof");
+                panel.Readout("Latest proof", DescribeMoveProofSurface);
                 panel.Section("Live FFT");
                 panel.Readout("Spectrum cadence", () => sceneReady
                     ? $"{lastAudioSpectra.Count} spectra fft={lastAudioSpectra.FirstOrDefault()?.FftSize ?? 0} analyze={lastSpectrumAnalysisMilliseconds:0.00}ms"
@@ -244,6 +288,17 @@ direct
                     monospace: true,
                     tooltip: "Cached FFT spectra from the runtime rolling audio buffers.");
             });
+    }
+
+    private string DescribeMoveProofSurface()
+    {
+        var surface = latestMoveProofSurface;
+        if (surface is null)
+        {
+            return "No Move proof surface published.";
+        }
+
+        return $"{surface.ProofId} verdict={surface.Verdict} confidence={surface.PoseConfidence:0.000} latency={surface.LatencyMilliseconds:0.00}ms chain={surface.MuninnEvidenceFrameId}->{surface.MimirEvidenceFrameId}->{surface.MimirPoseFrameId}->{surface.FensalirFrameId}";
     }
 
     private static AquariumRenderPlan CreateRenderPlan()

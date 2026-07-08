@@ -143,6 +143,12 @@ accepted_design:
     proof surface, and returns the Fensalir spline probe. Direct user actions,
     programmatic smokes, and future live subscribers should use this same path
     so the proof chain does not split into separately repaired truths.
+  - `MimirRuntime` now owns the actual Fensalir presentation attachment for
+    Move proof surfaces. `PublishMoveProofSurface` accepts the latest
+    Mimir-owned proof document, and `CreateFrame` composes its observer-only
+    `move-proof-*` probe splines into `AquariumFrame.Scene.SplineFrame` beside
+    the audio spectrum preview. Fensalir remains a renderer, not a proof
+    authority.
   - `MimirMoveCalibrationProtocol` defines the runnable Starfire/Nightwing Move
     calibration preflight as typed state: required Muninn Move evidence streams,
     optional Quest headset/controller pose witnesses over USB,
