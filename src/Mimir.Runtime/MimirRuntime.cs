@@ -115,6 +115,11 @@ direct
             : null;
         nextAudioSyncSeconds = audioSyncUpdateIntervalSeconds;
         nextTelemetrySeconds = telemetryIntervalSeconds;
+        if (MimirMoveProofDevSurface.IsEnabled())
+        {
+            PublishMoveProofSurface(MimirMoveProofDevSurface.Create());
+        }
+
         ui = CreateUi();
     }
 

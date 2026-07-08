@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Drawing;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -158,6 +159,12 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-driver-smoke", Stri
 {
     return RunMoveProofRuntimeDriverSmoke(
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+}
+
+if (args.Any(arg => string.Equals(arg, "--move-proof-presented-frame-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofPresentedFrameSmoke(
+        ParseStringOption(args, "--output", "artifacts/runtime/move-proof-presented-frame-smoke.png"));
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-calibration-protocol-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -2409,6 +2416,116 @@ static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath)
         duplicateSuppressed
             ? 0
             : 1;
+}
+
+static int RunMoveProofPresentedFrameSmoke(string outputPath)
+{
+    var absoluteOutputPath = Path.GetFullPath(outputPath);
+    Directory.CreateDirectory(Path.GetDirectoryName(absoluteOutputPath) ?? ".");
+    if (File.Exists(absoluteOutputPath))
+    {
+        File.Delete(absoluteOutputPath);
+    }
+
+    var startInfo = new ProcessStartInfo("dotnet")
+    {
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true,
+        WorkingDirectory = Environment.CurrentDirectory,
+    };
+    startInfo.ArgumentList.Add("run");
+    startInfo.ArgumentList.Add("--project");
+    startInfo.ArgumentList.Add(Path.GetFullPath("src/Mimir.App/Mimir.App.csproj"));
+    startInfo.ArgumentList.Add("--");
+    startInfo.ArgumentList.Add("--headless");
+    startInfo.ArgumentList.Add("--headless-width");
+    startInfo.ArgumentList.Add("640");
+    startInfo.ArgumentList.Add("--headless-height");
+    startInfo.ArgumentList.Add("360");
+    startInfo.ArgumentList.Add("--capture-frame");
+    startInfo.ArgumentList.Add(absoluteOutputPath);
+    startInfo.Environment[MimirMoveProofDevSurface.EnableEnvironmentVariable] = "1";
+    startInfo.Environment["AQUARIUM_HEADLESS_READY_FRAMES"] = "2";
+
+    using var process = Process.Start(startInfo);
+    if (process is null)
+    {
+        Console.Error.WriteLine("move-proof-presented-frame-smoke start-failed");
+        return 1;
+    }
+
+    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+    var stderrTask = process.StandardError.ReadToEndAsync();
+    if (!process.WaitForExit((int)TimeSpan.FromSeconds(90).TotalMilliseconds))
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+        }
+
+        Console.Error.WriteLine("move-proof-presented-frame-smoke timeout");
+        return 1;
+    }
+
+    var stdout = stdoutTask.GetAwaiter().GetResult();
+    var stderr = stderrTask.GetAwaiter().GetResult();
+    if (!string.IsNullOrWhiteSpace(stdout))
+    {
+        Console.Write(stdout);
+    }
+
+    if (!string.IsNullOrWhiteSpace(stderr))
+    {
+        Console.Error.Write(stderr);
+    }
+
+    if (process.ExitCode != 0 || !File.Exists(absoluteOutputPath))
+    {
+        Console.Error.WriteLine($"move-proof-presented-frame-smoke failed exit={process.ExitCode} path={absoluteOutputPath}");
+        return 1;
+    }
+
+    var brightPixels = CountBrightPixels(absoluteOutputPath, threshold: 42);
+    var length = new FileInfo(absoluteOutputPath).Length;
+    var surface = MimirMoveProofDevSurface.Create();
+    var captured = stdout.Contains("Headless Aquarium frame captured", StringComparison.Ordinal);
+    Console.WriteLine(
+        $"move-proof-presented-frame-smoke proof={surface.ProofId} frame={surface.FensalirFrameId} verdict={surface.Verdict} path={absoluteOutputPath} bytes={length} brightPixels={brightPixels} captured={captured}");
+
+    return surface.MuninnEvidenceFrameId == "muninn:nightwing:move-evidence:79" &&
+        surface.MimirEvidenceFrameId == "mimir:starfire:move-evidence:79" &&
+        surface.MimirPoseFrameId == "mimir:starfire:move-pose:79" &&
+        surface.FensalirFrameId == "fensalir:starfire:presented-frame:79" &&
+        surface.IsFullPose &&
+        captured &&
+        length > 2048 &&
+        brightPixels > 12
+            ? 0
+            : 1;
+}
+
+static int CountBrightPixels(string path, int threshold)
+{
+    using var bitmap = new Bitmap(path);
+    var count = 0;
+    for (var y = 0; y < bitmap.Height; y++)
+    {
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            var pixel = bitmap.GetPixel(x, y);
+            if (pixel.R + pixel.G + pixel.B >= threshold)
+            {
+                count++;
+            }
+        }
+    }
+
+    return count;
 }
 
 static MimirMoveProofSurfaceDocument CreateMoveProofSurfaceSmokeDocument()

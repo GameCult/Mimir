@@ -225,6 +225,13 @@ suffix, calls `MimirMoveProofPipeline`, suppresses duplicate frame admission,
 and lets `MimirRuntime.Update` publish the resulting proof surface. This proves
 the runtime-owned path for a ring frame; real Nightwing hardware and calibrated
 camera witnesses are still the missing field proof.
+`MimirMoveProofDevSurface` is a dev-only bootstrap gated by
+`MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
+surface through the same `MimirRuntime.PublishMoveProofSurface` attachment so
+`Mimir.BufferSmoke --move-proof-presented-frame-smoke` can run `Mimir.App`
+headless, capture the actual Fensalir-presented PNG, and pixel-check that the
+named proof probe is visible. This is a renderer/probe proof, not live hardware
+evidence.
 
 ## Program Composition
 

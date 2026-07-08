@@ -104,6 +104,12 @@ a named invariant that the native runtime cannot protect yet.
   duplicate frame admission. `Mimir.BufferSmoke --move-proof-runtime-driver-smoke`
   proves `MimirRuntime.Update` can pull one ring frame into the same-sequence
   proof chain and visible spline frame.
+- `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
+  `MIMIR_MOVE_PROOF_DEV_SURFACE`. It uses the same runtime proof attachment so
+  `Mimir.BufferSmoke --move-proof-presented-frame-smoke` can run `Mimir.App`
+  headless, capture the Fensalir-presented PNG, and pixel-check the named
+  proof probe. This verifies the renderer/probe layer; it is not live
+  Nightwing hardware evidence.
 - `MimirMoveCalibrationProtocol` publishes the typed calibration preflight for
   Starfire/Nightwing Moves: required Muninn evidence streams, optional
   Quest headset/controller pose witnesses, stillness/sweep/validation phases, and
@@ -415,8 +421,8 @@ a named invariant that the native runtime cannot protect yet.
 7. Wire real Move proof production into `MimirMoveProofRuntimeDriver`: attach
    real Muninn Nightwing and Starfire evidence rings, require calibrated optical
    witnesses, publish `mimir:starfire:move-pose:<sequence>` through the shared
-   runtime path, and capture a presented Fensalir frame/probe for the same
-   sequence.
+   runtime path, and replace the dev-gated presented-frame smoke with a
+   same-sequence capture from real field evidence.
 8. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 9. Implement the Mimir program scene graph as the shared commit primitive for

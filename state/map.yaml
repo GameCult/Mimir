@@ -155,6 +155,11 @@ accepted_design:
     actual Muninn frame suffix, calls `MimirMoveProofPipeline`, and suppresses
     duplicate frame admission so the live loop cannot re-admit one frame and
     impersonate progress.
+  - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
+    `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
+    surface through the same MimirRuntime attachment so headless Mimir.App can
+    capture and pixel-check a Fensalir-presented proof probe without making
+    Fensalir a proof owner. It is renderer evidence, not field evidence.
   - `MimirMoveCalibrationProtocol` defines the runnable Starfire/Nightwing Move
     calibration preflight as typed state: required Muninn Move evidence streams,
     optional Quest headset/controller pose witnesses over USB,

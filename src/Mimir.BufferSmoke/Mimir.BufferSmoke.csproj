@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
     <ProjectReference Include="..\..\..\CultLib\src\GameCult.Caching.MessagePack\GameCult.Caching.MessagePack.csproj" />
     <ProjectReference Include="..\..\..\CultLib\src\GameCult.Mesh\GameCult.Mesh.csproj" />
     <ProjectReference Include="..\Mimir.Runtime\Mimir.Runtime.csproj" />
