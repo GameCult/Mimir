@@ -56,7 +56,8 @@ public static class MimirMoveProofSurface
         MimirMuninnMoveEvidenceAdmission admission,
         MimirMoveControllerPoseStreamFrame poseFrame,
         string fensalirFrameId,
-        ulong fensalirPresentedAtNs)
+        ulong fensalirPresentedAtNs,
+        string? mimirEvidenceFrameId = null)
     {
         ArgumentNullException.ThrowIfNull(admission);
         ArgumentNullException.ThrowIfNull(poseFrame);
@@ -80,7 +81,9 @@ public static class MimirMoveProofSurface
         return new MimirMoveProofSurfaceDocument(
             ProofId: $"{poseFrame.ProducerPeerId}:move-proof:{SequenceSuffix(poseFrame.FrameId)}",
             MuninnEvidenceFrameId: admission.FrameId,
-            MimirEvidenceFrameId: $"mimir:starfire:move-evidence:{SequenceSuffix(admission.FrameId)}",
+            MimirEvidenceFrameId: string.IsNullOrWhiteSpace(mimirEvidenceFrameId)
+                ? $"mimir:starfire:move-evidence:{SequenceSuffix(admission.FrameId)}"
+                : mimirEvidenceFrameId,
             MimirPoseFrameId: poseFrame.FrameId,
             FensalirFrameId: fensalirFrameId,
             ProducerPeerId: poseFrame.ProducerPeerId,

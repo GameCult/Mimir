@@ -207,6 +207,11 @@ frame, emits `mimir.move_proof_surface.v1`, and lowers an observer-only
 chain. It does not decide pose. Single-ray fallback remains a visible
 non-final verdict until calibrated multi-camera optical evidence earns full
 pose.
+`MimirMoveProofPipeline` is now the reusable commit primitive for that chain:
+from one Muninn CultMesh shared-memory frame it performs native admission,
+Mimir fusion, pose-frame creation, proof-surface creation, and Fensalir probe
+lowering. Live Nightwing/Starfire wiring should call this owner path rather
+than preserving separate manual actions and programmatic proof paths.
 
 ## Program Composition
 

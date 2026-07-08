@@ -140,6 +140,12 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-surface-smoke", StringCompa
     return RunMoveProofSurfaceSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-proof-pipeline-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofPipelineSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-calibration-protocol-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return await RunMoveCalibrationProtocolSmokeAsync(
@@ -2213,6 +2219,145 @@ static int RunMoveProofSurfaceSmoke()
         fallbackSurface.Verdict == MimirMoveProofVerdict.SingleRayFallback &&
         !fallbackSurface.IsFullPose &&
         fallbackSurface.FailureReason.Contains("single-ray", StringComparison.Ordinal)
+            ? 0
+            : 1;
+}
+
+static int RunMoveProofPipelineSmoke(string nativeReservoirPath)
+{
+    const ulong leftWitnessHash = 0x00000000000A11CE;
+    const ulong rightWitnessHash = 0x0000000000000B0B;
+    const string observedAt = "2026-06-11T18:30:00.0040000Z";
+    var streamId = "muninn:nightwing:move-evidence";
+    var frame = new MimirMuninnMoveEvidenceStreamFrame(
+        FrameId: "muninn:nightwing:move-evidence:79",
+        ProducerPeerId: "muninn:nightwing",
+        PublishedAtNs: 1_781_202_600_005_000_000,
+        MarkerCandidates:
+        [
+            new MuninnMoveMarkerCandidateDocument(
+                StreamId: "nightwing:ps3-eye-0:move-marker-candidates",
+                HostId: "nightwing",
+                CameraId: "ps3-eye-0",
+                FrameSequence: 9101,
+                SourceIdHash: leftWitnessHash,
+                TileX: 10,
+                TileY: 10,
+                CenterXPx: 170.0f,
+                CenterYPx: 120.0f,
+                RadiusPx: 12.0f,
+                AreaPx: 452,
+                MeanLuma: 0.64f,
+                PeakLuma: 252,
+                Score: 0.90f,
+                ObservedAt: observedAt),
+            new MuninnMoveMarkerCandidateDocument(
+                StreamId: "starfire:ps3-eye-1:move-marker-candidates",
+                HostId: "starfire",
+                CameraId: "ps3-eye-1",
+                FrameSequence: 9102,
+                SourceIdHash: rightWitnessHash,
+                TileX: 11,
+                TileY: 10,
+                CenterXPx: 150.0f,
+                CenterYPx: 120.0f,
+                RadiusPx: 12.0f,
+                AreaPx: 449,
+                MeanLuma: 0.62f,
+                PeakLuma: 250,
+                Score: 0.86f,
+                ObservedAt: observedAt)
+        ],
+        ControllerStates:
+        [
+            new MuninnMoveControllerStateDocument(
+                StreamId: "nightwing:move-usb:move-controller-state",
+                HostId: "nightwing",
+                MoveId: "move-usb",
+                Sequence: 79,
+                SourceTimestampNs: 1_781_202_600_004_000_000,
+                AccelerometerXyz: [-0.01f, 0.10f, 0.99f],
+                GyroscopeXyz: [0.02f, -0.01f, 0.04f],
+                MagnetometerXyz: [0.0f, 0.0f, 0.0f],
+                TriggerValue: 0.5f,
+                Buttons: ["move", "trigger"],
+                Battery01: 0.72f,
+                ObservedAt: observedAt)
+        ]);
+    var calibration = new MimirMoveFusionRigCalibration(
+        CalibrationId: "mimir-move-stage-calibration-v1",
+        TrackingSpaceId: "mimir-stage-space",
+        Cameras:
+        [
+            new MimirMoveFusionCameraCalibration(
+                CameraId: "nightwing:ps3-eye-0",
+                WitnessIdHash: leftWitnessHash,
+                PositionMeters: new MimirVector3Snapshot(-0.1, 0.0, 0.0),
+                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                FocalLengthXPx: 100.0,
+                FocalLengthYPx: 100.0,
+                PrincipalPointXPx: 160.0,
+                PrincipalPointYPx: 120.0),
+            new MimirMoveFusionCameraCalibration(
+                CameraId: "starfire:ps3-eye-1",
+                WitnessIdHash: rightWitnessHash,
+                PositionMeters: new MimirVector3Snapshot(0.1, 0.0, 0.0),
+                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                FocalLengthXPx: 100.0,
+                FocalLengthYPx: 100.0,
+                PrincipalPointXPx: 160.0,
+                PrincipalPointYPx: 120.0)
+        ],
+        MaximumAssociationSkewMilliseconds: 20.0);
+    var catalog = CultMesh.CreateStreamCatalog();
+    catalog.Declare(MimirMuninnMoveEvidenceAdapter.CreateStreamDescriptor(
+        streamId,
+        "mimir-live",
+        "muninn:nightwing",
+        "nightwing:clock"));
+    using var ring = catalog.CreateSharedMemoryRing(streamId, slotCount: 4, slotByteLength: 8192);
+    var payload = MimirMuninnMoveEvidenceAdapter.SerializeStreamFrame(frame);
+    if (!ring.TryPublishCopy(payload, frame.PublishedAtNs, durationNs: 0, out var published))
+    {
+        Console.Error.WriteLine("move-proof-pipeline-smoke publish-failed");
+        return 1;
+    }
+
+    catalog.PublishFrame(published);
+    using var runtime = new MimirNativeReservoirRuntime(nativeReservoirPath);
+    var options = new MimirMoveProofPipelineOptions(
+        MimirEvidenceSourceId: "mimir:starfire:move-evidence",
+        MimirEvidenceFrameId: "mimir:starfire:move-evidence:79",
+        MimirPoseFrameId: "mimir:starfire:move-pose:79",
+        MimirPoseProducerPeerId: "mimir:starfire",
+        FensalirFrameId: "fensalir:starfire:presented-frame:79",
+        FensalirPresentedAtNs: 1_781_202_600_007_100_000);
+    var built = MimirMoveProofPipeline.TryBuildLatestFromRing(
+        ring,
+        runtime,
+        calibration,
+        options,
+        out var result);
+
+    Console.WriteLine(
+        $"move-proof-pipeline-smoke built={built} proof={result?.ProofSurface.ProofId ?? "none"} chain={result?.ProofSurface.MuninnEvidenceFrameId ?? "none"}->{result?.ProofSurface.MimirEvidenceFrameId ?? "none"}->{result?.ProofSurface.MimirPoseFrameId ?? "none"}->{result?.ProofSurface.FensalirFrameId ?? "none"} verdict={result?.ProofSurface.Verdict.ToString() ?? "none"} samples={result?.Admission.SampleCount ?? 0} poses={result?.PoseFrame.Poses.Length ?? 0} splines={result?.FensalirProbeFrame.Splines.Count ?? 0} reservoirEdgeNs={result?.Admission.ReservoirEdgeNs ?? 0}");
+
+    return built &&
+        result is not null &&
+        result.Admission.FrameId == frame.FrameId &&
+        result.Admission.OpticalMarkerCount == 2 &&
+        result.Admission.ControllerStateCount == 1 &&
+        result.Fusion.Poses.Count == 1 &&
+        result.PoseFrame.FrameId == options.MimirPoseFrameId &&
+        result.PoseFrame.ProducerPeerId == options.MimirPoseProducerPeerId &&
+        result.PoseFrame.Poses.Length == 1 &&
+        result.ProofSurface.IsFullPose &&
+        result.ProofSurface.MimirEvidenceFrameId == options.MimirEvidenceFrameId &&
+        result.ProofSurface.MimirPoseFrameId == options.MimirPoseFrameId &&
+        result.ProofSurface.FensalirFrameId == options.FensalirFrameId &&
+        result.FensalirProbeFrame.HasInput &&
+        result.Admission.Handle.PayloadHandle != 0 &&
+        runtime.Status.MoveEvidenceCount.ToUInt64() == 1
             ? 0
             : 1;
 }

@@ -137,6 +137,12 @@ accepted_design:
     becoming a pose owner. Single-ray fallback is surfaced as non-final; only
     triangulated calibrated optical marker evidence can earn a full-pose
     verdict.
+  - `MimirMoveProofPipeline` is the single shared commit primitive for one
+    Move proof frame. It reads a Muninn CultMesh evidence frame, admits native
+    `move_evidence`, runs Mimir fusion, emits the Mimir pose frame, creates the
+    proof surface, and returns the Fensalir spline probe. Direct user actions,
+    programmatic smokes, and future live subscribers should use this same path
+    so the proof chain does not split into separately repaired truths.
   - `MimirMoveCalibrationProtocol` defines the runnable Starfire/Nightwing Move
     calibration preflight as typed state: required Muninn Move evidence streams,
     optional Quest headset/controller pose witnesses over USB,

@@ -82,6 +82,14 @@ a named invariant that the native runtime cannot protect yet.
   `muninn:nightwing:move-evidence:79 -> mimir:starfire:move-evidence:79 ->
   mimir:starfire:move-pose:79 -> fensalir:starfire:presented-frame:79` chain,
   and rejects single-ray fallback as not full pose.
+- `MimirMoveProofPipeline` is the shared commit primitive for the live Move
+  proof path. It starts from a Muninn CultMesh shared-memory evidence frame,
+  admits samples to the native `move_evidence` reservoir, runs Mimir-owned
+  fusion, creates the Mimir pose stream frame, creates the proof surface, and
+  returns the Fensalir spline probe in one pass. `Mimir.BufferSmoke
+  --move-proof-pipeline-smoke` proves that shape against the native reservoir
+  debug DLL; live hardware and presented-frame capture still need to call this
+  primitive instead of hand-assembling a parallel path.
 - `MimirMoveCalibrationProtocol` publishes the typed calibration preflight for
   Starfire/Nightwing Moves: required Muninn evidence streams, optional
   Quest headset/controller pose witnesses, stillness/sweep/validation phases, and
