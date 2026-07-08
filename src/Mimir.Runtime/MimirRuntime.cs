@@ -62,6 +62,7 @@ direct
     private IReadOnlyList<MimirAudioSynchronizationReport> lastAudioSynchronizationReports = [];
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private readonly Queue<IReadOnlyList<MimirAudioSpectrumSnapshot>> spectrumHistory = new();
+    private readonly List<MimirMoveProofRuntimeDriver> moveProofDrivers = [];
     private MimirMoveProofSurfaceDocument? latestMoveProofSurface;
 
     public MimirRuntime(AquariumRuntimeOptions options)
@@ -181,6 +182,12 @@ direct
         latestMoveProofSurface = null;
     }
 
+    public void RegisterMoveProofDriver(MimirMoveProofRuntimeDriver driver)
+    {
+        ArgumentNullException.ThrowIfNull(driver);
+        moveProofDrivers.Add(driver);
+    }
+
     public static AquariumSplineFrame ComposeFensalirSplineFrame(
         AquariumSplineFrame baseFrame,
         MimirMoveProofSurfaceDocument? moveProofSurface)
@@ -223,6 +230,7 @@ direct
 
         runtimeSeconds += Math.Max(deltaSeconds, 0.0f);
         lastPollCount = synchronization.PollSources();
+        UpdateMoveProofSurfaces();
         QueueCalibrationTimeline();
         UpdateAudioSpectra();
         UpdateAudioSynchronization();
@@ -275,6 +283,7 @@ direct
                 panel.Readout("Chirplet reference", DescribeChirpletReference);
                 panel.Section("Move Proof");
                 panel.Readout("Latest proof", DescribeMoveProofSurface);
+                panel.Readout("Proof drivers", DescribeMoveProofDrivers);
                 panel.Section("Live FFT");
                 panel.Readout("Spectrum cadence", () => sceneReady
                     ? $"{lastAudioSpectra.Count} spectra fft={lastAudioSpectra.FirstOrDefault()?.FftSize ?? 0} analyze={lastSpectrumAnalysisMilliseconds:0.00}ms"
@@ -299,6 +308,41 @@ direct
         }
 
         return $"{surface.ProofId} verdict={surface.Verdict} confidence={surface.PoseConfidence:0.000} latency={surface.LatencyMilliseconds:0.00}ms chain={surface.MuninnEvidenceFrameId}->{surface.MimirEvidenceFrameId}->{surface.MimirPoseFrameId}->{surface.FensalirFrameId}";
+    }
+
+    private string DescribeMoveProofDrivers()
+    {
+        if (moveProofDrivers.Count == 0)
+        {
+            return "No Move proof runtime drivers registered.";
+        }
+
+        return string.Join(Environment.NewLine, moveProofDrivers.Select(driver => driver.Describe()));
+    }
+
+    private void UpdateMoveProofSurfaces()
+    {
+        if (moveProofDrivers.Count == 0)
+        {
+            return;
+        }
+
+        var presentedAtNs = NowUnixNs();
+        foreach (var driver in moveProofDrivers)
+        {
+            if (driver.TryBuildLatest(presentedAtNs, out var result) && result is not null)
+            {
+                PublishMoveProofSurface(result.ProofSurface);
+            }
+        }
+    }
+
+    private static ulong NowUnixNs()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var secondsNs = checked((ulong)now.ToUnixTimeSeconds() * 1_000_000_000UL);
+        var tickRemainderNs = checked((ulong)(now.Ticks % TimeSpan.TicksPerSecond) * 100UL);
+        return checked(secondsNs + tickRemainderNs);
     }
 
     private static AquariumRenderPlan CreateRenderPlan()

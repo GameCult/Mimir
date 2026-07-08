@@ -149,6 +149,12 @@ accepted_design:
     `move-proof-*` probe splines into `AquariumFrame.Scene.SplineFrame` beside
     the audio spectrum preview. Fensalir remains a renderer, not a proof
     authority.
+  - `MimirMoveProofRuntimeDriver` is the runtime bridge from a Muninn CultMesh
+    shared-memory evidence ring into `MimirRuntime.PublishMoveProofSurface`.
+    It derives the Mimir evidence, Mimir pose, and Fensalir frame ids from the
+    actual Muninn frame suffix, calls `MimirMoveProofPipeline`, and suppresses
+    duplicate frame admission so the live loop cannot re-admit one frame and
+    impersonate progress.
   - `MimirMoveCalibrationProtocol` defines the runnable Starfire/Nightwing Move
     calibration preflight as typed state: required Muninn Move evidence streams,
     optional Quest headset/controller pose witnesses over USB,

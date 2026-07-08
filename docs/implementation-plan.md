@@ -97,6 +97,13 @@ a named invariant that the native runtime cannot protect yet.
   and `Mimir.BufferSmoke --move-proof-runtime-frame-smoke` proves the frame is
   empty before publish, contains the proof splines after publish, and clears
   without leaving a repair loop behind.
+- `MimirMoveProofRuntimeDriver` is the bounded runtime bridge from a Muninn
+  CultMesh shared-memory evidence ring to `MimirRuntime.PublishMoveProofSurface`.
+  It derives the Mimir evidence, Mimir pose, and Fensalir frame ids from the
+  actual Muninn frame suffix, calls the shared proof pipeline, and suppresses
+  duplicate frame admission. `Mimir.BufferSmoke --move-proof-runtime-driver-smoke`
+  proves `MimirRuntime.Update` can pull one ring frame into the same-sequence
+  proof chain and visible spline frame.
 - `MimirMoveCalibrationProtocol` publishes the typed calibration preflight for
   Starfire/Nightwing Moves: required Muninn evidence streams, optional
   Quest headset/controller pose witnesses, stillness/sweep/validation phases, and
@@ -405,11 +412,11 @@ a named invariant that the native runtime cannot protect yet.
    becomes a deterministic timeline anchor before the actuator moves samples.
 6. Prove the bioacoustic hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
-7. Wire live Move proof production into `MimirRuntime.PublishMoveProofSurface`:
-   ingest real Muninn Nightwing and Starfire evidence through
-   `MimirMoveProofPipeline`, require calibrated optical witnesses, publish
-   `mimir:starfire:move-pose:<sequence>`, and capture a presented Fensalir
-   frame/probe for the same sequence.
+7. Wire real Move proof production into `MimirMoveProofRuntimeDriver`: attach
+   real Muninn Nightwing and Starfire evidence rings, require calibrated optical
+   witnesses, publish `mimir:starfire:move-pose:<sequence>` through the shared
+   runtime path, and capture a presented Fensalir frame/probe for the same
+   sequence.
 8. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
 9. Implement the Mimir program scene graph as the shared commit primitive for

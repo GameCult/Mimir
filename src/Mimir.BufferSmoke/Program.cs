@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Aquarium.Engine;
+using Aquarium.Engine.Input;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
 using GameCult.Mesh;
@@ -151,6 +152,12 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-pipeline-smoke", StringComp
 if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-frame-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveProofRuntimeFrameSmoke();
+}
+
+if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-driver-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofRuntimeDriverSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-calibration-protocol-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -2234,7 +2241,7 @@ static int RunMoveProofRuntimeFrameSmoke()
 {
     var surface = CreateMoveProofSurfaceSmokeDocument();
     var runtime = new MimirRuntime(
-        new AquariumRuntimeOptions(Headless: true, CultCachePath: null),
+        new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
         new MimirSynchronizationSettings());
     var emptyFrame = runtime.Frame;
     runtime.PublishMoveProofSurface(surface);
@@ -2252,6 +2259,154 @@ static int RunMoveProofRuntimeFrameSmoke()
         proofSplineCount >= 3 &&
         proofFrame.Scene.SplineFrame.Splines.Any(spline => spline.Id.Contains("move-0xA11CE-79", StringComparison.Ordinal)) &&
         clearedFrame.Scene.SplineFrame.Splines.Count == 0
+            ? 0
+            : 1;
+}
+
+static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath)
+{
+    if (!File.Exists(nativeReservoirPath))
+    {
+        Console.Error.WriteLine($"move-proof-runtime-driver-smoke missing-native path={nativeReservoirPath}");
+        return 1;
+    }
+
+    const ulong leftWitnessHash = 0x00000000000A11CE;
+    const ulong rightWitnessHash = 0x0000000000000B0B;
+    const string observedAt = "2026-06-11T18:30:00.0040000Z";
+    var streamId = "muninn:nightwing:move-evidence";
+    var frame = new MimirMuninnMoveEvidenceStreamFrame(
+        FrameId: "muninn:nightwing:move-evidence:79",
+        ProducerPeerId: "muninn:nightwing",
+        PublishedAtNs: 1_781_202_600_005_000_000,
+        MarkerCandidates:
+        [
+            new MuninnMoveMarkerCandidateDocument(
+                StreamId: "nightwing:ps3-eye-0:move-marker-candidates",
+                HostId: "nightwing",
+                CameraId: "ps3-eye-0",
+                FrameSequence: 9101,
+                SourceIdHash: leftWitnessHash,
+                TileX: 10,
+                TileY: 10,
+                CenterXPx: 170.0f,
+                CenterYPx: 120.0f,
+                RadiusPx: 12.0f,
+                AreaPx: 452,
+                MeanLuma: 0.64f,
+                PeakLuma: 252,
+                Score: 0.90f,
+                ObservedAt: observedAt),
+            new MuninnMoveMarkerCandidateDocument(
+                StreamId: "starfire:ps3-eye-1:move-marker-candidates",
+                HostId: "starfire",
+                CameraId: "ps3-eye-1",
+                FrameSequence: 9102,
+                SourceIdHash: rightWitnessHash,
+                TileX: 11,
+                TileY: 10,
+                CenterXPx: 150.0f,
+                CenterYPx: 120.0f,
+                RadiusPx: 12.0f,
+                AreaPx: 449,
+                MeanLuma: 0.62f,
+                PeakLuma: 250,
+                Score: 0.86f,
+                ObservedAt: observedAt)
+        ],
+        ControllerStates:
+        [
+            new MuninnMoveControllerStateDocument(
+                StreamId: "nightwing:move-usb:move-controller-state",
+                HostId: "nightwing",
+                MoveId: "move-usb",
+                Sequence: 79,
+                SourceTimestampNs: 1_781_202_600_004_000_000,
+                AccelerometerXyz: [-0.01f, 0.10f, 0.99f],
+                GyroscopeXyz: [0.02f, -0.01f, 0.04f],
+                MagnetometerXyz: [0.0f, 0.0f, 0.0f],
+                TriggerValue: 0.5f,
+                Buttons: ["move", "trigger"],
+                Battery01: 0.72f,
+                ObservedAt: observedAt)
+        ]);
+    var calibration = new MimirMoveFusionRigCalibration(
+        CalibrationId: "mimir-move-stage-calibration-v1",
+        TrackingSpaceId: "mimir-stage-space",
+        Cameras:
+        [
+            new MimirMoveFusionCameraCalibration(
+                CameraId: "nightwing:ps3-eye-0",
+                WitnessIdHash: leftWitnessHash,
+                PositionMeters: new MimirVector3Snapshot(-0.1, 0.0, 0.0),
+                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                FocalLengthXPx: 100.0,
+                FocalLengthYPx: 100.0,
+                PrincipalPointXPx: 160.0,
+                PrincipalPointYPx: 120.0),
+            new MimirMoveFusionCameraCalibration(
+                CameraId: "starfire:ps3-eye-1",
+                WitnessIdHash: rightWitnessHash,
+                PositionMeters: new MimirVector3Snapshot(0.1, 0.0, 0.0),
+                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                FocalLengthXPx: 100.0,
+                FocalLengthYPx: 100.0,
+                PrincipalPointXPx: 160.0,
+                PrincipalPointYPx: 120.0)
+        ],
+        MaximumAssociationSkewMilliseconds: 20.0);
+    var catalog = CultMesh.CreateStreamCatalog();
+    catalog.Declare(MimirMuninnMoveEvidenceAdapter.CreateStreamDescriptor(
+        streamId,
+        "mimir-live",
+        "muninn:nightwing",
+        "nightwing:clock"));
+    using var ring = catalog.CreateSharedMemoryRing(streamId, slotCount: 4, slotByteLength: 8192);
+    var payload = MimirMuninnMoveEvidenceAdapter.SerializeStreamFrame(frame);
+    if (!ring.TryPublishCopy(payload, frame.PublishedAtNs, durationNs: 0, out var published))
+    {
+        Console.Error.WriteLine("move-proof-runtime-driver-smoke publish-failed");
+        return 1;
+    }
+
+    catalog.PublishFrame(published);
+    using var reservoir = new MimirNativeReservoirRuntime(nativeReservoirPath);
+    var driver = new MimirMoveProofRuntimeDriver(
+        ring,
+        reservoir,
+        calibration,
+        new MimirMoveProofRuntimeDriverOptions(
+            MimirEvidenceSourceId: "mimir:starfire:move-evidence",
+            MimirEvidenceFramePrefix: "mimir:starfire:move-evidence",
+            MimirPoseFramePrefix: "mimir:starfire:move-pose",
+            MimirPoseProducerPeerId: "mimir:starfire",
+            FensalirFramePrefix: "fensalir:starfire:presented-frame"));
+    var runtime = new MimirRuntime(
+        new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
+        new MimirSynchronizationSettings());
+    runtime.RegisterMoveProofDriver(driver);
+    runtime.OnSceneReady();
+    var input = new InputState();
+    runtime.Update(0.016f, input);
+    var proofFrame = runtime.Frame;
+    var proofSurface = driver.LastResult?.ProofSurface;
+    var proofSplineCount = proofFrame.Scene.SplineFrame.Splines.Count(spline =>
+        spline.Id.StartsWith("move-proof-", StringComparison.Ordinal));
+    runtime.Update(0.016f, input);
+    var duplicateSuppressed = reservoir.Status.MoveEvidenceCount.ToUInt64() == 1UL;
+
+    Console.WriteLine(
+        $"move-proof-runtime-driver-smoke proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} splines={proofSplineCount} duplicateSuppressed={duplicateSuppressed}");
+
+    return proofSurface is not null &&
+        proofSurface.IsFullPose &&
+        proofSurface.MuninnEvidenceFrameId == "muninn:nightwing:move-evidence:79" &&
+        proofSurface.MimirEvidenceFrameId == "mimir:starfire:move-evidence:79" &&
+        proofSurface.MimirPoseFrameId == "mimir:starfire:move-pose:79" &&
+        proofSurface.FensalirFrameId == "fensalir:starfire:presented-frame:79" &&
+        proofFrame.Scene.SplineFrame.HasInput &&
+        proofSplineCount >= 3 &&
+        duplicateSuppressed
             ? 0
             : 1;
 }

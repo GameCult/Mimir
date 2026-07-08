@@ -218,6 +218,13 @@ proof surface: `PublishMoveProofSurface` stores the latest Mimir-owned
 `move-proof-*` probe splines into `AquariumFrame.Scene.SplineFrame` beside the
 audio spectrum preview. Fensalir renders this frame; it still does not decide
 proof.
+`MimirMoveProofRuntimeDriver` is the runtime bridge from a Muninn CultMesh
+shared-memory evidence ring into that attachment point. It derives the
+Mimir evidence, Mimir pose, and Fensalir frame ids from the actual Muninn frame
+suffix, calls `MimirMoveProofPipeline`, suppresses duplicate frame admission,
+and lets `MimirRuntime.Update` publish the resulting proof surface. This proves
+the runtime-owned path for a ring frame; real Nightwing hardware and calibrated
+camera witnesses are still the missing field proof.
 
 ## Program Composition
 
