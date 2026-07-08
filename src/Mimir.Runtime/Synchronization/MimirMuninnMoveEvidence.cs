@@ -87,6 +87,23 @@ public sealed record MimirMuninnMoveEvidenceStreamFrame(
     [property: Key(3)] MuninnMoveMarkerCandidateDocument[] MarkerCandidates,
     [property: Key(4)] MuninnMoveControllerStateDocument[] ControllerStates);
 
+public sealed record MimirMuninnMoveEvidenceAdmission(
+    string FrameId,
+    string ProducerPeerId,
+    long PublishedAtNs,
+    ulong MimirReadAtNs,
+    int SampleCount,
+    int OpticalMarkerCount,
+    int ControllerStateCount,
+    ulong SourceTimeMinNs,
+    ulong SourceTimeMaxNs,
+    ulong ArrivalMinNs,
+    ulong ArrivalMaxNs,
+    MimirNativeSampleHandle Handle,
+    ulong ReservoirEdgeNs,
+    ulong ReservoirWindowStartNs,
+    ulong ReservoirMoveEvidenceCount);
+
 public static class MimirMuninnMoveEvidenceAdapter
 {
     private const ulong LiveIdentityWindowNs = 60_000_000_000UL;
@@ -127,10 +144,29 @@ public static class MimirMuninnMoveEvidenceAdapter
         out MimirNativeSampleHandle handle,
         out int sampleCount)
     {
+        var admitted = TryAdmitLatestCultMeshFrame(
+            ring,
+            runtime,
+            producerSourceId,
+            calibrationId,
+            trackingSpaceId,
+            out var admission);
+        handle = admission?.Handle ?? default;
+        sampleCount = admission?.SampleCount ?? 0;
+        return admitted;
+    }
+
+    public static bool TryAdmitLatestCultMeshFrame(
+        CultMeshSharedMemoryFrameRing ring,
+        MimirNativeReservoirRuntime runtime,
+        string producerSourceId,
+        string calibrationId,
+        string trackingSpaceId,
+        out MimirMuninnMoveEvidenceAdmission? admission)
+    {
         ArgumentNullException.ThrowIfNull(ring);
         ArgumentNullException.ThrowIfNull(runtime);
-        handle = default;
-        sampleCount = 0;
+        admission = null;
         if (!ring.TryAcquireLatestRead(out var lease))
         {
             return false;
@@ -138,15 +174,32 @@ public static class MimirMuninnMoveEvidenceAdapter
 
         using (lease)
         {
+            var mimirReadAtNs = NowUnixNs();
             var frame = DeserializeStreamFrame(lease.Memory[..lease.Handle.ByteLength]);
             var samples = BuildNativeSamples(frame.MarkerCandidates, frame.ControllerStates);
-            sampleCount = samples.Count;
-            if (sampleCount == 0)
+            if (samples.Count == 0)
             {
                 return false;
             }
 
-            handle = runtime.AdmitMoveEvidence(producerSourceId, samples, calibrationId, trackingSpaceId);
+            var handle = runtime.AdmitMoveEvidence(producerSourceId, samples, calibrationId, trackingSpaceId);
+            var status = runtime.Status;
+            admission = new MimirMuninnMoveEvidenceAdmission(
+                FrameId: frame.FrameId,
+                ProducerPeerId: frame.ProducerPeerId,
+                PublishedAtNs: frame.PublishedAtNs,
+                MimirReadAtNs: mimirReadAtNs,
+                SampleCount: samples.Count,
+                OpticalMarkerCount: samples.Count(sample => sample.EvidenceKind == (uint)MimirNativeMoveEvidenceKind.OpticalMarker),
+                ControllerStateCount: samples.Count(sample => sample.EvidenceKind == (uint)MimirNativeMoveEvidenceKind.ControllerState),
+                SourceTimeMinNs: samples.Min(sample => sample.SourceTimestampNs),
+                SourceTimeMaxNs: samples.Max(sample => sample.SourceTimestampNs),
+                ArrivalMinNs: samples.Min(sample => sample.ArrivalNs),
+                ArrivalMaxNs: samples.Max(sample => sample.ArrivalNs),
+                Handle: handle,
+                ReservoirEdgeNs: status.EdgeNs,
+                ReservoirWindowStartNs: status.WindowStartNs,
+                ReservoirMoveEvidenceCount: status.MoveEvidenceCount.ToUInt64());
             return true;
         }
     }
@@ -414,6 +467,14 @@ public static class MimirMuninnMoveEvidenceAdapter
         }
 
         return hash == 0 ? 1 : hash;
+    }
+
+    private static ulong NowUnixNs()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var secondsNs = checked((ulong)now.ToUnixTimeSeconds() * 1_000_000_000UL);
+        var tickRemainderNs = checked((ulong)(now.Ticks % TimeSpan.TicksPerSecond) * 100UL);
+        return checked(secondsNs + tickRemainderNs);
     }
 
     private static ulong ObservedAtToUnixNs(string observedAt)

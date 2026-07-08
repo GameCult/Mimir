@@ -52,6 +52,12 @@ a named invariant that the native runtime cannot protect yet.
 - The realtime Move witness path uses CultMesh streaming, not CultCache polling:
   Muninn publishes shared-memory stream frames, Mimir consumes the latest read
   lease, normalizes the frame, and admits it to native `move_evidence`.
+- `MimirMuninnMoveEvidenceAdapter.TryAdmitLatestCultMeshFrame` now exposes a
+  typed admission receipt for that latest read: decoded frame id, producer,
+  publish/read timestamps, sample counts by kind, source/arrival ranges, native
+  reservoir handle, and reservoir edge/window. `Mimir.BufferSmoke
+  --muninn-move-cultmesh-stream-smoke` asserts the receipt so the named proof
+  spine can be traced instead of inferred.
 - `mimir.move_controller_pose.v1` is Mimir's resolved wand pose contract.
   Mimir owns calibration, association, triangulation, IMU fusion, prediction,
   confidence, and latency accounting for those poses before Fensalir consumes
@@ -67,6 +73,15 @@ a named invariant that the native runtime cannot protect yet.
   `mimir.move_controller_pose_stream_frame.v1` over CultMesh shared-memory
   bytes streams so Fensalir and other consumers have a realtime stream contract
   for Mimir-fused controller input.
+- `MimirMoveProofSurface` is the observer-only dev proof surface for the named
+  Move chain. It combines a Muninn evidence admission receipt with a Mimir pose
+  stream frame and a Fensalir presentation/probe timestamp into
+  `mimir.move_proof_surface.v1`, then lowers the verdict to a Fensalir
+  `AquariumSplineFrame` probe. `Mimir.BufferSmoke --move-proof-surface-smoke`
+  proves the explicit
+  `muninn:nightwing:move-evidence:79 -> mimir:starfire:move-evidence:79 ->
+  mimir:starfire:move-pose:79 -> fensalir:starfire:presented-frame:79` chain,
+  and rejects single-ray fallback as not full pose.
 - `MimirMoveCalibrationProtocol` publishes the typed calibration preflight for
   Starfire/Nightwing Moves: required Muninn evidence streams, optional
   Quest headset/controller pose witnesses, stillness/sweep/validation phases, and
@@ -75,13 +90,12 @@ a named invariant that the native runtime cannot protect yet.
 - Muninn publishes Quest access as `muninn.quest_access.v1` for the USB-attached
   Quest. Mimir consumes that access surface and later `muninn.quest_pose_frame.v1`
   samples as optional calibration evidence; Mimir does not own ADB/Quest access.
-- `scripts/start-nightwing-move-tracking.ps1` is the narrow live Nightwing
-  bring-up path: it starts the `/eve/periwinkle` receiver/recorder on Starfire,
-  stages the Nightwing Eye/Move Python worker, keeps a heartbeat for field
-  liveness, and publishes `mimir.psmove_light_state.v1` plus
-  `mimir.move_controller_observation_state.v1` blob observations from both PS3
-  Eyes. The blob stream is optical witness evidence for later pose fusion, not
-  the final 6DoF pose owner.
+- The old `scripts/start-nightwing-move-tracking.ps1` bring-up path is
+  archived. It no longer starts a receiver/recorder pair or stages a socket
+  witness worker. Nightwing Eye/Move evidence must enter through Muninn/Mimir
+  typed CultMesh stream frames and Odin-discovered CultMesh documents. The blob
+  stream remains optical witness evidence for later pose fusion, not the final
+  6DoF pose owner.
 - Structured PS Move light pulses are Muninn output commands. Mimir publishes
   `muninn.move_light_command.v1` over CultNet/CultMesh to the Muninn daemon on
   the host that owns the USB-attached Move. Muninn writes PS Move HID report
@@ -95,6 +109,17 @@ a named invariant that the native runtime cannot protect yet.
   streams; it does not own raw optical extraction. Final pose, stereo
   triangulation, calibration, association, IMU fusion, and prediction belong to
   Mimir.
+- Muninn's Move evidence stream frame no longer hardcodes an empty optical
+  candidate slice. The daemon frame uses the canonical
+  `muninn.move_marker_candidate.v1` record shape, and the Odin unit
+  `move_marker_candidates_publish_in_mimir_compatible_cultmesh_frame` proves a
+  bright Y8 frame can pass through `muninn-move-tracker` and serialize as a
+  non-empty marker candidate beside controller evidence. The daemon now has a
+  source-local Y8 extraction/publish seam and a first `serve` camera producer:
+  `--move-marker-camera <camera-id>=<device-path>` polls a Unix V4L2 YUYV frame,
+  converts it to compact Y8, and feeds that same seam. Unit tests prove the
+  configured camera tick publishes marker evidence through the shared frame
+  contract; Nightwing hardware/live V4L2 proof is still pending.
 - `MimirProcessStreamSource` for bridge/network command edges.
 - `MimirFrameEventProcessStreamSource` for temporary JSON-line frame metadata
   from native probes into the same rolling buffers Fensalir inspects. One probe
@@ -284,22 +309,31 @@ a named invariant that the native runtime cannot protect yet.
   `mimir.cultmesh_media_frame` documents, and `recv` subscribes to those
   documents and writes ordered MPEG-TS bytes to a Starfire-local UDP endpoint
   for compatibility sinks. Its C# implementation now uses explicit CultLib
-  RUDP client/session helpers; the older
+  RUDP client/session helpers behind
+  `cultmesh://asgard.yggdrasil.mimir/media/raven-primary-av`; the older
   `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient` entrypoints no longer own
-  the media transport lane.
+  the media transport lane, and sender/receiver launchers no longer accept raw
+  relay host/port configuration.
 - `scripts/start-raven-cultmesh-av-sender.ps1`,
   `scripts/start-yggdrasil-cultmesh-media-relay.ps1`, and
   `scripts/start-starfire-cultmesh-av-receiver.ps1` are the CultMesh bridge
-  operators. Raven capture defaults to FFmpeg desktop frames plus Mimir's
-  WASAPI loopback capture muxed as H.264/AAC MPEG-TS; DirectShow audio remains
-  an explicit fallback.
-- `src/Mimir.EveDashboard` is a CultMesh/Eve dashboard broker. It publishes
-  `mimir.eve_dashboard_state` through CultNet/CultMesh and can report
-  `idunn.daemon_health` over `cultnet.transport.rudp.v0` for itself and an
-  optional paired service daemon. The live direction is daemon-owned RUDP
-  publication for provider advertisement, retained state, command boundary, and
-  transport profile too; HTTP/WebSocket are client lowerings. This is a health
-  witness for Idunn, not a lifecycle owner.
+  operators. `start-raven-cultmesh-av-sender.ps1` is the Mimir-owned
+  `Mimir.CultMeshMedia` bootstrap/body-bridge lane; it is not the real Muninn
+  OBS/SRT feed owner. The actual Raven OBS/plugin feed now routes through
+  Odin's Muninn actuator `E:\Projects\Odin\scripts\activate-muninn-raven-av-srt.ps1`,
+  with `scripts/start-raven-muninn-obs-feed.ps1` in this repo as a thin local
+  wrapper around the real `GameCult-Muninn-Activate` task and
+  `muninn.exe activate` body. `-LocalBootstrap` on the CultMesh sender remains
+  a direct local bootstrap edge only for the separate body-bridge lane. Raven
+  capture still defaults to FFmpeg desktop frames plus Mimir's WASAPI loopback
+  capture muxed as H.264/AAC MPEG-TS; DirectShow audio remains an explicit
+  fallback.
+- `src/Mimir.EveDashboard` is archived until the dashboard returns as a pure
+  CultMesh/Odin publisher and Eve lowering. The old HTTP/WebSocket deck broker,
+  local health route, socket command channel, and provider route catalog are not
+  daemon transport. Dashboard state must be published as typed CultMesh/Eve
+  documents through Odin, and dashboard commands must arrive as typed Odin/
+  CultMesh command documents.
 - `src/Mimir.EveBrowserReference` serves static browser lowerings and can
   publish its own `idunn.daemon_health` record over
   `cultnet.transport.rudp.v0`. It remains a renderer/reference surface, not
@@ -313,17 +347,17 @@ a named invariant that the native runtime cannot protect yet.
   testing, but Mimir/Eve owns independent controls.
 - The CultMesh media bridge still lowers to local UDP for compatibility sinks
   because OBS is not a CultMesh consumer. Network transit between Raven,
-  Yggdrasil, and Starfire is the CultMesh/CultNet path; OBS-local UDP is an
-  egress adapter only.
+  Yggdrasil, and Starfire is the Odin-discovered CultMesh/CultNet path;
+  OBS-local UDP is an egress adapter only.
 - CultLib RUDP is the default typed CultNet/CultMesh document transport for
   daemon truth. Idunn RUDP health publication is the current freshness witness;
   provider advertisements, command boundaries, transport profiles, and retained
   daemon state should follow the same path. Odin still owns Verse/service
   discovery, Idunn owns keepalive decisions, and Mimir-owned dashboard/reference
-  surfaces only report their own observed state. TCP/HTTP/WebSocket stay
-  lowerings or compatibility evidence.
+  surfaces only report their own observed state. Product/debug render surfaces
+  stay lowerings or compatibility evidence.
 - `Mimir.CultMeshMedia` has completed its explicit RUDP transport cut. Do not
-  add another TCP bridge, HTTP status shim, or WebSocket-derived service truth
+  add another private bridge, status shim, or renderer-derived service truth
   while the RUDP document lane exists.
 - Process-backed stream sources are only acceptable for network bridge feeds or
   diagnostics. Six-camera local ingest belongs behind direct capture drivers.
@@ -337,8 +371,8 @@ a named invariant that the native runtime cannot protect yet.
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
    other cameras.
-2. Cut the remaining dashboard, recorder, and witness service truth paths from
-   older TCP/WebSocket-derived assumptions to explicit CultNet RUDP records,
+2. Cut the remaining dashboard service truth paths from older renderer-derived
+   assumptions to explicit CultNet RUDP records,
    preferably authorized-peer dialing where the peer catalog exists. Preserve
    OBS-local UDP as egress only for compatibility sinks.
 3. Feed those drivers into `MimirVideoCaptureDriverSource` and prove sustained
@@ -356,22 +390,26 @@ a named invariant that the native runtime cannot protect yet.
    becomes a deterministic timeline anchor before the actuator moves samples.
 6. Prove the bioacoustic hybrid fallback through real loopback and microphones
    with probe durations long enough to keep loopback and mic windows live.
-7. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
+7. Attach the Move proof surface to the live runtime/Fensalir presentation path:
+   ingest real Muninn Nightwing and Starfire evidence, require calibrated
+   optical witnesses, publish `mimir:starfire:move-pose:<sequence>`, and capture
+   a presented Fensalir frame/probe for the same sequence.
+8. Bind Fensalir UI to the synchronization hub so buffer depth, stream cadence,
    source timestamps, and output settings are visible and adjustable.
-8. Implement the Mimir program scene graph as the shared commit primitive for
+9. Implement the Mimir program scene graph as the shared commit primitive for
    source subscription, transforms, crop, chroma key, visibility, layer order,
    preview, and output publication. Import the current OBS scene only as an
    initial mirror, then make Eve GUI/TUI the operator surface.
-9. Add the Yggdrasil-facing site publisher daemon that consumes the Mimir
+10. Add the Yggdrasil-facing site publisher daemon that consumes the Mimir
    program output and publishes it without owning a second composition.
-10. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:
+11. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:
    sample buffer-domain paths stochastically by visual contribution, emit SDF
    splat probes, write them into the spatiotemporal splat reservoir, and sample
    that reservoir in the temporally antialiased scene pass. The direct spline
    preview must stay a witness until this path owns rendering.
-11. Move GPU feature extraction, fusion, material fitting, render budgeting, and
+12. Move GPU feature extraction, fusion, material fitting, render budgeting, and
    Spout2 publication into Fensalir.
-12. Move mic alignment, room suppression, voice separation, spatialization, and
+13. Move mic alignment, room suppression, voice separation, spatialization, and
    stem generation into Faust/native DSP.
-13. Keep the OBS bridge witness ledger as evidence before expanding receiver
+14. Keep the OBS bridge witness ledger as evidence before expanding receiver
    machinery.

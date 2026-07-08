@@ -53,11 +53,11 @@ Ownership:
   Fensalir-facing wand pose stream.
 - Mimir owns program composition, source subscription policy, preview/control
   state, stats, and publication intent.
-- Mimir-owned Eve dashboard and browser reference processes publish their own
-  typed health/freshness to Idunn over RUDP when configured. Their intended
-  daemon-owned provider state, command boundaries, and transport profiles also
-  belong on CultNet/RUDP; HTTP/WebSocket are client lowerings and compatibility
-  evidence, not daemon truth.
+- Mimir's old Eve dashboard broker is archived; it does not publish health,
+  provider catalogs, or command surfaces while the socket path is cut. The
+  browser reference remains a client lowering, not daemon truth. Dashboard state
+  must return as typed CultMesh/Eve documents through Odin; product/debug render
+  surfaces are client lowerings and compatibility evidence, not daemon truth.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
   D3D12 interop, runtime UI lowering, and local program texture output.
 - Faust/native DSP owns hot audio alignment, suppression, separation,
@@ -161,17 +161,13 @@ reported authorized Quest 2 device `1WMHHB68PG1515` with product/device
 provide Quest headset/controller poses until a Quest/OpenXR witness bridge
 publishes those pose samples through Muninn.
 
-Live Nightwing bring-up uses `scripts/start-nightwing-move-tracking.ps1`.
-Starfire starts `Mimir.EveSensorReceiver` on `/eve/periwinkle`, stages
-`nw_eye_cap.py`, `nw_move_hint.py`, and `nightwing_typed_witness_publisher.py`
-onto Nightwing, and launches the publisher with `--track-eyes` plus a heartbeat
-freshness file. The publisher can still accept
-`--move-light name=/dev/hidrawN:#rrggbb` as an explicit smoke/bootstrap edge,
-but runtime structured light commands belong to Muninn. The worker publishes
-compact
-`mimir.move_controller_observation_state.v1` blob observations from both PS3
-Eyes. Those Eye/Move observations are the live optical witness feeding the later
-pose/fusion owner; they are not themselves the final 6DoF pose authority.
+The old Nightwing bring-up path is archived:
+`scripts/start-nightwing-move-tracking.ps1`, `Mimir.EveSensorReceiver`,
+`Mimir.VerseRecorder`, and `nightwing_typed_witness_publisher.py` now fail
+closed. Runtime structured light commands belong to Muninn. Eye/Move
+observations must enter through typed CultMesh stream frames or
+Odin-discovered CultMesh documents; they are optical witness evidence for the
+later pose/fusion owner, not the final 6DoF pose authority.
 
 Starfire-local Move illumination smoke uses `scripts/start-starfire-move-light.ps1`.
 That launcher runs `Mimir.PsMoveProbe` against the local Windows HID col01
@@ -193,6 +189,24 @@ those Muninn candidate streams into tracking buffers; it does not own raw
 optical extraction. Mimir is now the explicit owner for stereo triangulation,
 camera calibration, controller association, IMU fusion, prediction, and final
 6DoF wand pose.
+Muninn's `muninn:nightwing:move-evidence:<sequence>` shared-memory frame now
+uses the canonical `muninn.move_marker_candidate.v1` document shape for optical
+markers instead of a placeholder empty slice. A daemon unit proves that a bright
+Y8 frame run through `muninn-move-tracker` serializes a non-empty marker
+candidate into the Mimir-compatible evidence frame. The daemon now has a
+source-local Y8 extraction/publish seam plus a first `serve` camera producer:
+`--move-marker-camera <camera-id>=<device-path>` polls a Unix V4L2 YUYV frame,
+converts it to compact Y8, and feeds that same seam. Windows unit tests prove
+the configured camera tick publishes marker evidence through the shared frame
+contract; Nightwing hardware/live V4L2 proof is still pending.
+`MimirMoveProofSurface` is the first Fensalir-visible proof surface for this
+chain. It consumes the Mimir admission receipt and the Mimir-owned pose stream
+frame, emits `mimir.move_proof_surface.v1`, and lowers an observer-only
+`AquariumSplineFrame` probe with the explicit
+`muninn:nightwing:move-evidence:<sequence> -> mimir:starfire:move-evidence:<sequence> -> mimir:starfire:move-pose:<sequence> -> fensalir:starfire:presented-frame:<sequence>`
+chain. It does not decide pose. Single-ray fallback remains a visible
+non-final verdict until calibrated multi-camera optical evidence earns full
+pose.
 
 ## Program Composition
 
@@ -239,7 +253,7 @@ not become the synchronized program authority.
 flowchart TD
     A["Raven FFmpeg desktop + WASAPI loopback mux"] --> B["Mimir.CultMeshMedia send"]
     B --> C["CultNet reliable UDP media-frame documents"]
-    C --> D["Yggdrasil CultMesh relay on 10.77.0.1:3075"]
+    C --> D["Yggdrasil CultMesh relay discovered through Odin/CultMesh"]
     D --> E["Starfire Mimir.CultMeshMedia recv"]
     E --> F["local MPEG-TS UDP udp://127.0.0.1:5200"]
     F --> G["OBS Raven Monitor + Realtek"]
@@ -253,9 +267,10 @@ mature.
 
 Invariant: Raven media body state is live and bounded. Sender writes rolling
 `mimir.cultmesh_media_frame` slot documents rather than an unbounded durable
-video archive. Yggdrasil relays CultNet reliable UDP over the WireGuard mesh.
-Starfire lowers the subscribed stream to local UDP for compatibility sinks
-because OBS is not a CultMesh runtime.
+video archive. Yggdrasil relays CultNet reliable UDP behind the logical
+`cultmesh://asgard.yggdrasil.mimir/media/raven-primary-av` route discovered
+through Odin/CultMesh. Starfire lowers the subscribed stream to local UDP for
+compatibility sinks because OBS is not a CultMesh runtime.
 
 Source audit correction resolved: `Mimir.CultMeshMedia` now uses explicit
 CultLib RUDP helpers for the sender/receiver and a relay-owned RUDP
@@ -267,14 +282,21 @@ for inspection; live network transit is the RUDP schema-document path.
 Current deployment: Yggdrasil runs the relay from
 `/opt/gamecult/mimir-cultmesh-media/Mimir.CultMeshMedia` with cache
 `/var/lib/gamecult/mimir/cultmesh-media.cc` and log
-`/var/log/gamecult/mimir-cultmesh-media.log`. Starfire runs the receiver from
-`artifacts/mimir-cultmesh-media-win-x64-selfcontained/Mimir.CultMeshMedia.exe`
-and writes `raven-primary-av` to `udp://127.0.0.1:5200`. OBS source
-`Raven Monitor + Realtek` points at that local UDP endpoint.
+`/var/log/gamecult/mimir-cultmesh-media.log`. Senders and receivers target
+`cultmesh://asgard.yggdrasil.mimir/media/raven-primary-av`; concrete RUDP
+bootstrap lives in the CultMesh resolver environment, not in daemon launch
+arguments. Starfire writes `raven-primary-av` to `udp://127.0.0.1:5200`. OBS
+source `Raven Monitor + Realtek` points at that local UDP endpoint.
 
-Raven SSH over WireGuard timed out during the initial deployment pass, so the
-Raven sender still needs to be launched on Raven directly with
-`scripts/start-raven-cultmesh-av-sender.ps1`.
+`scripts/start-raven-cultmesh-av-sender.ps1` is the Mimir-owned CultMesh bridge
+bootstrap for Raven media-body transit. It is not the actual Muninn OBS feed
+owner. The real Raven OBS/SRT feed owner is Odin's Muninn:
+`E:\Projects\Odin\scripts\activate-muninn-raven-av-srt.ps1` drives the
+existing `GameCult-Muninn-Activate` hidden task and `muninn.exe activate`
+body on Raven, and `scripts/start-raven-muninn-obs-feed.ps1` in this repo is
+the thin local wrapper for that actuator. Keep `-LocalBootstrap` on the
+CultMesh sender only as a staging/bootstrap edge when the separate body-bridge
+lane needs direct local proof.
 
 ## Daemon Health And Idunn
 
@@ -286,20 +308,16 @@ private lifecycle supervisor for these surfaces.
 CultLib's current direction is RUDP everywhere for typed CultNet/CultMesh
 documents across runtimes. That means health, provider advertisements, command
 boundaries, transport profiles, and selected program/media document lanes should
-default to `cultnet.transport.rudp.v0`. TCP, HTTP, and WebSocket are acceptable
-as renderer/client lowerings, debug tools, or migration debt; they must not own
-daemon truth once an RUDP contract exists.
+default to `cultnet.transport.rudp.v0`. Product/debug render surfaces are
+lowerings, debug tools, or migration debt; they must not own daemon truth once
+an RUDP contract exists.
 
 Mimir's current daemon-health publishers are local RUDP witnesses:
 
-- `src/Mimir.EveDashboard` publishes `mimir.eve_dashboard_state` through
-  CultNet/CultMesh and, when `--idunn-rudp-health` or
-  `MIMIR_EVE_DASHBOARD_IDUNN_RUDP_HEALTH` is set, sends
-  `idunn.daemon_health` records tagged `cultnet.transport.rudp.v0` for the
-  dashboard broker and optionally a paired service daemon. The next daemon
-  boundary work is to publish its provider advertisement, retained state,
-  command boundary, and transport profile as typed RUDP records so Odin can
-  prefer those over compatibility HTTP catalog ingestion.
+- `src/Mimir.EveDashboard` is a fail-closed archive tombstone. It no longer
+  starts a TCP listener, serves `/eve/deck`, accepts WebSocket commands, or
+  publishes daemon health. `mimir.eve_dashboard_state` must return through Odin/
+  CultMesh state publication before this service can be redeployed.
 - `src/Mimir.EveBrowserReference` serves a static browser lowering and, when
   configured with `--idunn-rudp-health` or
   `MIMIR_EVE_BROWSER_REFERENCE_IDUNN_RUDP_HEALTH`, sends its own
@@ -309,13 +327,12 @@ Invariant: health publication is not ownership. The daemon reports what it can
 honestly observe about itself; Idunn decides keepalive action through the
 shared typed record path.
 
-Source audit debt: `Mimir.EveSensorReceiver`, `Mimir.VerseRecorder`, and the
-browser/dashboard WebSocket paths are still renderer/client lowerings. They may
-remain as lowering adapters, but any provider catalog, retained service state,
-command boundary, transport profile, or lifecycle health claim must be
-published as typed CultNet/RUDP records instead of being inferred from those
-TCP/WebSocket surfaces. The media-frame bridge is already on that side of the
-line.
+Source audit cut: `Mimir.EveSensorReceiver`, `Mimir.VerseRecorder`, the
+Nightwing typed witness publisher, and `start-nightwing-move-tracking.ps1` are
+archived. The old Nightwing/EVE witness lane no longer opens a renderer/client
+subscription surface. Witness publication and recording must use typed
+CultMesh/CultNet documents or CultMesh stream frames discovered through Odin.
+The media-frame bridge is already on that side of the line.
 
 ## Audio Field
 

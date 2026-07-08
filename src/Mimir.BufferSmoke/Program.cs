@@ -135,6 +135,11 @@ if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.O
     return RunMoveFusionSmoke();
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-proof-surface-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofSurfaceSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-calibration-protocol-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return await RunMoveCalibrationProtocolSmokeAsync(
@@ -1911,19 +1916,32 @@ static int RunMuninnMoveCultMeshStreamSmoke(string nativeReservoirPath)
         "mimir:muninn-move-cultmesh-stream-smoke",
         "mimir-move-stage-calibration-v1",
         "mimir-stage-space",
-        out var handle,
-        out var sampleCount);
+        out var admission);
     var status = runtime.Status;
     var latest = catalog.LatestFrame(streamId);
+    var sampleCount = admission?.SampleCount ?? 0;
+    var handle = admission?.Handle ?? default;
 
     Console.WriteLine(
-        $"muninn-move-cultmesh-stream-smoke stream={streamId} bytes={payload.Length} publishedSeq={published.Sequence} latestSeq={latest?.Sequence.ToString() ?? "none"} samples={sampleCount} payload=0x{handle.PayloadHandle:X} total={status.TotalSampleCount} moveEvidence={status.MoveEvidenceCount} edgeNs={status.EdgeNs}");
+        $"muninn-move-cultmesh-stream-smoke stream={streamId} frame={admission?.FrameId ?? "none"} producer={admission?.ProducerPeerId ?? "none"} publishedNs={admission?.PublishedAtNs ?? 0} readNs={admission?.MimirReadAtNs ?? 0} bytes={payload.Length} publishedSeq={published.Sequence} latestSeq={latest?.Sequence.ToString() ?? "none"} samples={sampleCount} optical={admission?.OpticalMarkerCount ?? 0} controller={admission?.ControllerStateCount ?? 0} sourceMinNs={admission?.SourceTimeMinNs ?? 0} sourceMaxNs={admission?.SourceTimeMaxNs ?? 0} payload=0x{handle.PayloadHandle:X} reservoirEdgeNs={admission?.ReservoirEdgeNs ?? 0} reservoirWindowStartNs={admission?.ReservoirWindowStartNs ?? 0} total={status.TotalSampleCount} moveEvidence={status.MoveEvidenceCount} edgeNs={status.EdgeNs}");
 
     return admitted &&
+        admission is not null &&
+        admission.FrameId == frame.FrameId &&
+        admission.ProducerPeerId == frame.ProducerPeerId &&
+        admission.PublishedAtNs == frame.PublishedAtNs &&
+        admission.MimirReadAtNs > 0 &&
         payload.Length > 0 &&
         sampleCount == 2 &&
+        admission.OpticalMarkerCount == 1 &&
+        admission.ControllerStateCount == 1 &&
+        admission.SourceTimeMinNs <= admission.SourceTimeMaxNs &&
+        admission.ArrivalMinNs <= admission.ArrivalMaxNs &&
         latest?.Sequence == published.Sequence &&
         handle.PayloadHandle != 0 &&
+        admission.ReservoirEdgeNs == status.EdgeNs &&
+        admission.ReservoirWindowStartNs == status.WindowStartNs &&
+        admission.ReservoirMoveEvidenceCount == status.MoveEvidenceCount.ToUInt64() &&
         status.TotalSampleCount.ToUInt64() == 1 &&
         status.MoveEvidenceCount.ToUInt64() == 1
             ? 0
@@ -2077,6 +2095,124 @@ static int RunMoveFusionSmoke()
         positionOk &&
         evidenceOk &&
         streamOk
+            ? 0
+            : 1;
+}
+
+static int RunMoveProofSurfaceSmoke()
+{
+    var pose = new MimirMoveControllerPoseDocument(
+        PoseId: "move:0xA11CE:79",
+        WandId: "move:0xA11CE",
+        TrackingSpaceId: "mimir-stage-space",
+        CalibrationId: "mimir-move-stage-calibration-v1",
+        FusionAuthorityId: "mimir.runtime.move-fusion",
+        SourceTimestampNs: 1_781_202_600_004_000_000,
+        EstimatedAtNs: 1_781_202_600_006_200_000,
+        Sequence: 79,
+        PositionMeters: new MimirVector3Snapshot(0.0, 1.1, 1.0),
+        Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+        LinearVelocityMetersPerSecond: new MimirVector3Snapshot(0.0, 0.0, 0.0),
+        AngularVelocityRadiansPerSecond: new MimirVector3Snapshot(0.02, -0.01, 0.04),
+        Confidence: 0.82,
+        LatencyMilliseconds: 2.2,
+        Battery01: 0.72,
+        Buttons:
+        [
+            new MimirTrackingButtonSnapshot("move", true, 1.0),
+            new MimirTrackingButtonSnapshot("trigger", true, 0.5)
+        ],
+        EvidenceStreamIds:
+        [
+            "witness:0x00000000000A11CE",
+            "witness:0x0000000000000B0B",
+            "controller:0x00000000000A11CE"
+        ],
+        EvidenceKinds:
+        [
+            "optical-marker:triangulated",
+            "controller-state:buttons-imu",
+            "orientation:imu-unresolved"
+        ],
+        ConsumerContract: "fensalir.move-controller-input");
+    var admission = new MimirMuninnMoveEvidenceAdmission(
+        FrameId: "muninn:nightwing:move-evidence:79",
+        ProducerPeerId: "muninn:nightwing",
+        PublishedAtNs: 1_781_202_600_005_000_000,
+        MimirReadAtNs: 1_781_202_600_005_700_000,
+        SampleCount: 3,
+        OpticalMarkerCount: 2,
+        ControllerStateCount: 1,
+        SourceTimeMinNs: 1_781_202_600_004_000_000,
+        SourceTimeMaxNs: 1_781_202_600_004_000_000,
+        ArrivalMinNs: 1_781_202_600_004_500_000,
+        ArrivalMaxNs: 1_781_202_600_005_700_000,
+        Handle: new MimirNativeSampleHandle(
+            SensorIdHash: 0xF00D,
+            TimestampNs: 1_781_202_600_004_000_000,
+            ArrivalNs: 1_781_202_600_005_700_000,
+            Sequence: 79,
+            PayloadHandle: 0xBEEF,
+            Flags: 0,
+            Reserved: 0),
+        ReservoirEdgeNs: 1_781_202_600_004_000_000,
+        ReservoirWindowStartNs: 1_781_197_600_004_000_000,
+        ReservoirMoveEvidenceCount: 1);
+    var poseFrame = MimirMovePoseStream.CreateFrame(
+        frameId: "mimir:starfire:move-pose:79",
+        producerPeerId: "mimir:starfire",
+        publishedAtNs: pose.EstimatedAtNs,
+        trackingSpaceId: pose.TrackingSpaceId,
+        calibrationId: pose.CalibrationId,
+        poses: [pose]);
+    var surface = MimirMoveProofSurface.Create(
+        admission,
+        poseFrame,
+        "fensalir:starfire:presented-frame:79",
+        fensalirPresentedAtNs: 1_781_202_600_007_100_000);
+    var probeFrame = MimirMoveProofSurface.BuildFensalirProbeFrame(surface);
+    var encoded = MessagePackSerializer.Serialize(surface);
+    var decoded = MessagePackSerializer.Deserialize<MimirMoveProofSurfaceDocument>(encoded);
+    var fallbackPose = pose with
+    {
+        EvidenceKinds =
+        [
+            "optical-marker:single-ray-depth-prior",
+            "controller-state:buttons-imu",
+            "orientation:imu-unresolved"
+        ]
+    };
+    var fallbackSurface = MimirMoveProofSurface.Create(
+        admission with { OpticalMarkerCount = 1 },
+        MimirMovePoseStream.CreateFrame(
+            "mimir:starfire:move-pose:80",
+            "mimir:starfire",
+            fallbackPose.EstimatedAtNs,
+            fallbackPose.TrackingSpaceId,
+            fallbackPose.CalibrationId,
+            [fallbackPose]),
+        "fensalir:starfire:presented-frame:80",
+        fensalirPresentedAtNs: 1_781_202_600_008_100_000);
+
+    Console.WriteLine(
+        $"move-proof-surface-smoke proof={surface.ProofId} chain={surface.MuninnEvidenceFrameId}->{surface.MimirEvidenceFrameId}->{surface.MimirPoseFrameId}->{surface.FensalirFrameId} verdict={surface.Verdict} splines={probeFrame.Splines.Count} encodedBytes={encoded.Length} fallbackVerdict={fallbackSurface.Verdict}");
+
+    return surface.IsFullPose &&
+        surface.MuninnEvidenceFrameId == "muninn:nightwing:move-evidence:79" &&
+        surface.MimirEvidenceFrameId == "mimir:starfire:move-evidence:79" &&
+        surface.MimirPoseFrameId == "mimir:starfire:move-pose:79" &&
+        surface.FensalirFrameId == "fensalir:starfire:presented-frame:79" &&
+        surface.OpticalMarkerCount == 2 &&
+        surface.ControllerStateCount == 1 &&
+        surface.MimirReadAtNs > (ulong)surface.MuninnPublishedAtNs &&
+        surface.FusionEstimatedAtNs >= surface.SourceTimestampNs &&
+        surface.FensalirPresentedAtNs > (ulong)surface.FusionEstimatedAtNs &&
+        probeFrame.HasInput &&
+        probeFrame.Splines.Count >= 3 &&
+        decoded.ProofId == surface.ProofId &&
+        fallbackSurface.Verdict == MimirMoveProofVerdict.SingleRayFallback &&
+        !fallbackSurface.IsFullPose &&
+        fallbackSurface.FailureReason.Contains("single-ray", StringComparison.Ordinal)
             ? 0
             : 1;
 }
