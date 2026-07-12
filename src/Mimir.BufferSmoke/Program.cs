@@ -1956,10 +1956,16 @@ static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri, bool requireOptica
                 {
                     var frame = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(
                         frameLease.Memory[..frameLease.Handle.ByteLength]);
+                    var markerCameraIds = frame.MarkerCandidates
+                        .Where(marker => !string.IsNullOrWhiteSpace(marker.MoveId))
+                        .Select(marker => marker.CameraId)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
                     var ok = frame.FrameId.StartsWith($"{streamId}:", StringComparison.Ordinal) &&
                         frame.ControllerStates.Length >= 1 &&
                         discovered.Channel == "move-evidence" &&
-                        (!requireOptical || frame.MarkerCandidates.Any(marker => !string.IsNullOrWhiteSpace(marker.MoveId)));
+                        (!requireOptical || markerCameraIds.Length >= 2);
                     if (!ok && requireOptical)
                     {
                         continue;
@@ -1973,6 +1979,15 @@ static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri, bool requireOptica
                         frame.ProducerPeerId,
                         controllers = frame.ControllerStates.Select(state => state.MoveId).Distinct().Order().ToArray(),
                         markers = frame.MarkerCandidates.Length,
+                        markerCameraIds,
+                        markersByCamera = frame.MarkerCandidates
+                            .Where(marker => !string.IsNullOrWhiteSpace(marker.MoveId))
+                            .GroupBy(marker => marker.CameraId, StringComparer.Ordinal)
+                            .OrderBy(group => group.Key, StringComparer.Ordinal)
+                            .ToDictionary(
+                                group => group.Key,
+                                group => group.Select(marker => marker.MoveId).Distinct().Order().ToArray(),
+                                StringComparer.Ordinal),
                         markerMoveIds = frame.MarkerCandidates
                             .Select(marker => marker.MoveId)
                             .Where(moveId => !string.IsNullOrWhiteSpace(moveId))
