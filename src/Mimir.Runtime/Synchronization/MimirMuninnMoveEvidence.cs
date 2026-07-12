@@ -21,7 +21,8 @@ public sealed record MuninnMoveMarkerCandidateDocument(
     [property: Key(11)] float MeanLuma,
     [property: Key(12)] uint PeakLuma,
     [property: Key(13)] float Score,
-    [property: Key(14)] string ObservedAt);
+    [property: Key(14)] string ObservedAt,
+    [property: Key(15)] string MoveId = "");
 
 [CultDocument("muninn.move_controller_state", "muninn.move_controller_state.v1")]
 [MessagePackObject]
@@ -396,7 +397,9 @@ public static class MimirMuninnMoveEvidenceAdapter
 
         return new MimirNativeMoveEvidenceSample(
             WitnessIdHash: witnessHash,
-            ControllerIdHash: 0,
+            ControllerIdHash: string.IsNullOrWhiteSpace(marker.MoveId)
+                ? 0
+                : Fnva64($"{marker.HostId}:{marker.MoveId}"),
             SourceTimestampNs: timestampNs,
             ArrivalNs: timestampNs,
             Sequence: marker.FrameSequence,
