@@ -15,17 +15,23 @@ public interface IMimirMoveProofEvidenceRingProvider
 public sealed class MimirMoveProofEvidenceRingLease : IDisposable
 {
     private readonly bool ownsRing;
+    private readonly IDisposable? transportOwner;
 
-    public MimirMoveProofEvidenceRingLease(CultMeshSharedMemoryFrameRing ring, bool ownsRing = false)
+    public MimirMoveProofEvidenceRingLease(
+        CultMeshSharedMemoryFrameRing ring,
+        bool ownsRing = false,
+        IDisposable? transportOwner = null)
     {
         Ring = ring ?? throw new ArgumentNullException(nameof(ring));
         this.ownsRing = ownsRing;
+        this.transportOwner = transportOwner;
     }
 
     public CultMeshSharedMemoryFrameRing Ring { get; }
 
     public void Dispose()
     {
+        transportOwner?.Dispose();
         if (ownsRing)
         {
             Ring.Dispose();
@@ -42,7 +48,7 @@ public sealed record MimirMoveProofEvidenceFrameSnapshotDocument(
     [property: Key(1)] string EvidenceStreamId,
     [property: Key(2)] string FrameId,
     [property: Key(3)] string ProducerPeerId,
-    [property: Key(4)] long PublishedAtNs,
+    [property: Key(4)] ulong PublishedAtNs,
     [property: Key(5)] ulong CapturedAtNs,
     [property: Key(6)] byte[] Payload);
 
@@ -65,7 +71,7 @@ public static class MimirMoveProofEvidenceFrameSnapshot
             EvidenceStreamId: StreamIdFromFrameId(frame.FrameId),
             FrameId: frame.FrameId,
             ProducerPeerId: frame.ProducerPeerId,
-            PublishedAtNs: frame.PublishedAtNs,
+            PublishedAtNs: checked((ulong)frame.PublishedAtNs),
             CapturedAtNs: capturedAtNs,
             Payload: payload);
     }
@@ -192,6 +198,14 @@ public sealed class MimirConfiguredMoveProofEvidenceRingProvider : IMimirMovePro
         out string diagnostic)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        if (!string.IsNullOrWhiteSpace(configuration.OdinCultMeshUri))
+        {
+            return MimirOdinMoveProofEvidenceRingProvider.Instance.TryOpenEvidenceRing(
+                configuration,
+                out lease,
+                out diagnostic);
+        }
+
         if (string.IsNullOrWhiteSpace(configuration.EvidenceSnapshotPath))
         {
             return MimirUnavailableMoveProofEvidenceRingProvider.Instance.TryOpenEvidenceRing(
@@ -219,7 +233,7 @@ public sealed class MimirConfiguredMoveProofEvidenceRingProvider : IMimirMovePro
         var decoded = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(snapshot.Payload);
         if (!string.Equals(decoded.FrameId, snapshot.FrameId, StringComparison.Ordinal) ||
             !string.Equals(decoded.ProducerPeerId, snapshot.ProducerPeerId, StringComparison.Ordinal) ||
-            decoded.PublishedAtNs != snapshot.PublishedAtNs)
+            decoded.PublishedAtNs != checked((long)snapshot.PublishedAtNs))
         {
             lease = null;
             diagnostic = "Move proof evidence snapshot metadata does not match its encoded Muninn frame payload.";
@@ -230,7 +244,7 @@ public sealed class MimirConfiguredMoveProofEvidenceRingProvider : IMimirMovePro
             configuration.EvidenceStreamId,
             slotCount: 1,
             slotByteLength: snapshot.Payload.Length);
-        if (!ring.TryPublishCopy(snapshot.Payload, snapshot.PublishedAtNs, durationNs: 0, out _))
+        if (!ring.TryPublishCopy(snapshot.Payload, checked((long)snapshot.PublishedAtNs), durationNs: 0, out _))
         {
             ring.Dispose();
             lease = null;

@@ -10,6 +10,10 @@ public sealed class MimirMoveProofRuntimeConfiguration
 
     public string EvidenceSnapshotPath { get; init; } = "";
 
+    public string OdinCultMeshUri { get; init; } = "";
+
+    public string MuninnProviderId { get; init; } = "muninn.telemetry.nightwing";
+
     public string NativeReservoirPath { get; init; } = "";
 
     public string MimirEvidenceSourceId { get; init; } = "mimir:starfire:move-evidence";
@@ -37,6 +41,10 @@ public sealed class MimirMoveProofRuntimeConfiguration
 
         var errors = new List<string>();
         Require(EvidenceStreamId, nameof(EvidenceStreamId), errors);
+        if (!string.IsNullOrWhiteSpace(OdinCultMeshUri))
+        {
+            Require(MuninnProviderId, nameof(MuninnProviderId), errors);
+        }
         Require(NativeReservoirPath, nameof(NativeReservoirPath), errors);
         Require(MimirEvidenceSourceId, nameof(MimirEvidenceSourceId), errors);
         Require(MimirEvidenceFramePrefix, nameof(MimirEvidenceFramePrefix), errors);

@@ -134,6 +134,12 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-cultmesh-stream-smoke", St
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
+if (args.Any(arg => string.Equals(arg, "--muninn-move-odin-live-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMuninnMoveOdinLiveSmoke(
+        ParseStringOption(args, "--odin-cultmesh-uri", "cultmesh://127.0.0.1:17871/rendezvous/provider-catalog"));
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveFusionSmoke();
@@ -192,7 +198,16 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-snapshot-smoke", St
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()),
         activateViaConfiguredSource: true,
         requireActivationSurface: true,
-        activateViaSnapshotProvider: true);
+        activateViaSnapshotProvider: true,
+        snapshotOutputPath: ParseStringOption(args, "--snapshot-output", ""));
+}
+
+if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-snapshot-file-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofRuntimeSnapshotFileSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()),
+        ParseStringOption(args, "--snapshot", ""),
+        args.Any(arg => string.Equals(arg, "--require-full-pose", StringComparison.OrdinalIgnoreCase)));
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-proof-presented-frame-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -1909,6 +1924,58 @@ static async Task<int> RunMuninnMoveLiveRosterSmokeAsync(IReadOnlyList<string> i
             : 1;
 }
 
+static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri)
+{
+    const string providerId = "muninn.telemetry.nightwing";
+    const string streamId = "muninn:nightwing:move-evidence";
+    var discovered = MimirOdinMoveProofEvidenceRingProvider.Discover(odinCultMeshUri, providerId, streamId);
+    var configuration = new MimirMoveProofRuntimeConfiguration
+    {
+        OdinCultMeshUri = odinCultMeshUri,
+        MuninnProviderId = providerId,
+        EvidenceStreamId = streamId
+    };
+    if (!MimirOdinMoveProofEvidenceRingProvider.Instance.TryOpenEvidenceRing(
+            configuration,
+            out var lease,
+            out var diagnostic) || lease is null)
+    {
+        throw new InvalidOperationException(diagnostic);
+    }
+
+    using (lease)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (lease.Ring.TryAcquireLatestRead(out var frameLease))
+            {
+                using (frameLease)
+                {
+                    var frame = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(
+                        frameLease.Memory[..frameLease.Handle.ByteLength]);
+                    var ok = frame.FrameId.StartsWith($"{streamId}:", StringComparison.Ordinal) &&
+                        frame.ControllerStates.Length >= 1 &&
+                        discovered.Channel == "move-evidence";
+                    Console.WriteLine(JsonSerializer.Serialize(new
+                    {
+                        ok,
+                        diagnostic,
+                        discovered,
+                        frame.FrameId,
+                        frame.ProducerPeerId,
+                        controllers = frame.ControllerStates.Select(state => state.MoveId).Distinct().Order().ToArray(),
+                        markers = frame.MarkerCandidates.Length
+                    }));
+                    return ok ? 0 : 1;
+                }
+            }
+            Thread.Sleep(20);
+        }
+    }
+    throw new TimeoutException($"No live frame arrived from Odin-discovered stream {streamId}.");
+}
+
 static int RunMuninnMoveCultMeshStreamSmoke(string nativeReservoirPath)
 {
     if (!File.Exists(nativeReservoirPath))
@@ -2308,7 +2375,8 @@ static int RunMoveProofRuntimeDriverSmoke(
     string nativeReservoirPath,
     bool activateViaConfiguredSource,
     bool requireActivationSurface = false,
-    bool activateViaSnapshotProvider = false)
+    bool activateViaSnapshotProvider = false,
+    string snapshotOutputPath = "")
 {
     if (!File.Exists(nativeReservoirPath))
     {
@@ -2320,8 +2388,11 @@ static int RunMoveProofRuntimeDriverSmoke(
     const ulong rightWitnessHash = 0x0000000000000B0B;
     const string observedAt = "2026-06-11T18:30:00.0040000Z";
     var streamId = "muninn:nightwing:move-evidence";
+    var deleteSnapshotOnExit = activateViaSnapshotProvider && string.IsNullOrWhiteSpace(snapshotOutputPath);
     var snapshotPath = activateViaSnapshotProvider
-        ? Path.Combine(Path.GetTempPath(), $"mimir-move-proof-evidence-{Guid.NewGuid():N}.mpack")
+        ? deleteSnapshotOnExit
+            ? Path.Combine(Path.GetTempPath(), $"mimir-move-proof-evidence-{Guid.NewGuid():N}.mpack")
+            : Path.GetFullPath(snapshotOutputPath)
         : "";
     var frame = new MimirMuninnMoveEvidenceStreamFrame(
         FrameId: "muninn:nightwing:move-evidence:79",
@@ -2555,13 +2626,202 @@ static int RunMoveProofRuntimeDriverSmoke(
         duplicateSuppressed
             ? 0
             : 1;
-    if (!string.IsNullOrWhiteSpace(snapshotPath) && File.Exists(snapshotPath))
+    if (deleteSnapshotOnExit && File.Exists(snapshotPath))
     {
         File.Delete(snapshotPath);
     }
 
     return result;
 }
+
+static int RunMoveProofRuntimeSnapshotFileSmoke(
+    string nativeReservoirPath,
+    string snapshotPath,
+    bool requireFullPose)
+{
+    if (!File.Exists(nativeReservoirPath))
+    {
+        Console.Error.WriteLine($"move-proof-runtime-snapshot-file-smoke missing-native path={nativeReservoirPath}");
+        return 1;
+    }
+
+    if (string.IsNullOrWhiteSpace(snapshotPath) || !File.Exists(snapshotPath))
+    {
+        Console.Error.WriteLine($"move-proof-runtime-snapshot-file-smoke missing-snapshot path={snapshotPath}");
+        return 1;
+    }
+
+    var absoluteSnapshotPath = Path.GetFullPath(snapshotPath);
+    MimirMoveProofEvidenceFrameSnapshotDocument snapshot;
+    MimirMuninnMoveEvidenceStreamFrame decoded;
+    try
+    {
+        snapshot = MimirMoveProofEvidenceFrameSnapshot.Load(absoluteSnapshotPath);
+        decoded = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(snapshot.Payload);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or MessagePackSerializationException)
+    {
+        Console.Error.WriteLine($"move-proof-runtime-snapshot-file-smoke snapshot-decode-failed path={absoluteSnapshotPath} error={ex.Message}");
+        return 1;
+    }
+
+    var suffix = SequenceSuffix(decoded.FrameId);
+    var decodedSamples = MimirMuninnMoveEvidenceAdapter.BuildNativeSamples(
+        decoded.MarkerCandidates,
+        decoded.ControllerStates);
+    var markerSamples = decodedSamples
+        .Where(sample => sample.EvidenceKind == (uint)MimirNativeMoveEvidenceKind.OpticalMarker)
+        .ToArray();
+    var controllerSamples = decodedSamples
+        .Where(sample => sample.EvidenceKind == (uint)MimirNativeMoveEvidenceKind.ControllerState)
+        .ToArray();
+    var distinctMarkerWitnesses = markerSamples
+        .Select(sample => sample.WitnessIdHash)
+        .Where(hash => hash != 0UL)
+        .Distinct()
+        .Count();
+    var markerWitnessSummary = string.Join(
+        ",",
+        decoded.MarkerCandidates
+            .GroupBy(marker => marker.SourceIdHash)
+            .OrderBy(group => group.Key)
+            .Select(group =>
+                $"0x{group.Key:X16}:{group.Count()}@peak{group.Max(marker => marker.PeakLuma)}:area{group.Max(marker => marker.AreaPx)}:radius{group.Max(marker => marker.RadiusPx):0.0}:score{group.Max(marker => marker.Score):0.000}"));
+    var nearestControllerSkewMs = markerSamples.Length == 0 || controllerSamples.Length == 0
+        ? double.NaN
+        : markerSamples
+            .Select(marker => controllerSamples
+                .Min(controller => TimestampDelta(marker.SourceTimestampNs, controller.SourceTimestampNs)))
+            .Min() / 1_000_000.0;
+    var configuration = CreateMoveProofConfigurationForSnapshot(
+        nativeReservoirPath,
+        absoluteSnapshotPath,
+        snapshot,
+        decoded);
+    var configErrors = configuration.Validate();
+    if (configErrors.Length > 0)
+    {
+        Console.Error.WriteLine($"move-proof-runtime-snapshot-file-smoke config-invalid errors={string.Join("|", configErrors)}");
+        return 1;
+    }
+
+    using var runtime = new MimirRuntime(
+        new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
+        new MimirRuntimeConfiguration
+        {
+            Settings = new MimirSynchronizationSettings(),
+            MoveProofSources = [configuration],
+        });
+    runtime.OnSceneReady();
+    var input = new InputState();
+    runtime.Update(0.016f, input);
+    var proofFrame = runtime.Frame;
+    var proofSurface = runtime.LatestMoveProofSurface;
+    var proofSplineCount = proofFrame.Scene.SplineFrame.Splines.Count(spline =>
+        spline.Id.StartsWith("move-proof-", StringComparison.Ordinal));
+    var activationStatus = runtime.MoveProofActivationStatuses.LastOrDefault(status =>
+        string.Equals(status.EvidenceStreamId, configuration.EvidenceStreamId, StringComparison.Ordinal));
+    var activationDocument = runtime
+        .CreateMoveProofRuntimeActivationDocuments(snapshot.CapturedAtNs == 0 ? (ulong)decoded.PublishedAtNs : snapshot.CapturedAtNs)
+        .SingleOrDefault(document => string.Equals(document.EvidenceStreamId, configuration.EvidenceStreamId, StringComparison.Ordinal));
+    var expectedMimirEvidenceFrameId = $"{configuration.MimirEvidenceFramePrefix}:{suffix}";
+    var expectedMimirPoseFrameId = $"{configuration.MimirPoseFramePrefix}:{suffix}";
+    var expectedFensalirFrameId = $"{configuration.FensalirFramePrefix}:{suffix}";
+
+    Console.WriteLine(
+        $"move-proof-runtime-snapshot-file-smoke snapshot=\"{absoluteSnapshotPath}\" proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} fullPose={proofSurface?.IsFullPose.ToString() ?? "False"} markers={proofSurface?.OpticalMarkerCount.ToString() ?? "0"} controllers={proofSurface?.ControllerStateCount.ToString() ?? "0"} poses={proofSurface?.PoseCount.ToString() ?? "0"} markerWitnesses={distinctMarkerWitnesses} markerWitnessSummary=\"{markerWitnessSummary}\" nearestControllerSkewMs={nearestControllerSkewMs:0.000} failure=\"{proofSurface?.FailureReason ?? ""}\" splines={proofSplineCount} activationActive={activationStatus?.Active.ToString() ?? "False"} activationDiagnostic=\"{activationStatus?.Diagnostic ?? ""}\" activationDocumentActive={activationDocument?.Active.ToString() ?? "False"} requireFullPose={requireFullPose}");
+
+    return proofSurface is not null &&
+        activationStatus?.Active == true &&
+        activationDocument is { Active: true, DriverRegistered: true } &&
+        activationDocument.Diagnostic.Contains("one-copy evidence snapshot supplied", StringComparison.Ordinal) &&
+        proofSurface.MuninnEvidenceFrameId == decoded.FrameId &&
+        proofSurface.MimirEvidenceFrameId == expectedMimirEvidenceFrameId &&
+        proofSurface.MimirPoseFrameId == expectedMimirPoseFrameId &&
+        proofSurface.FensalirFrameId == expectedFensalirFrameId &&
+        proofFrame.Scene.SplineFrame.HasInput &&
+        proofSplineCount >= 1 &&
+        (!requireFullPose || proofSurface.IsFullPose)
+            ? 0
+            : 1;
+}
+
+static MimirMoveProofRuntimeConfiguration CreateMoveProofConfigurationForSnapshot(
+    string nativeReservoirPath,
+    string snapshotPath,
+    MimirMoveProofEvidenceFrameSnapshotDocument snapshot,
+    MimirMuninnMoveEvidenceStreamFrame frame)
+{
+    var cameras = frame.MarkerCandidates
+        .Where(marker => marker.SourceIdHash != 0UL)
+        .GroupBy(marker => marker.SourceIdHash)
+        .Select((group, index) =>
+        {
+            var marker = group.First();
+            var side = index == 0 ? -0.1 : 0.1;
+            return new MimirMoveProofCameraCalibrationConfiguration
+            {
+                CameraId = string.IsNullOrWhiteSpace(marker.CameraId)
+                    ? $"snapshot-camera-{index}"
+                    : $"{marker.HostId}:{marker.CameraId}",
+                WitnessIdHash = group.Key,
+                PositionMeters = new MimirVector3Snapshot(side, 0.0, 0.0),
+                Orientation = new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                FocalLengthXPx = 100.0,
+                FocalLengthYPx = 100.0,
+                PrincipalPointXPx = 160.0,
+                PrincipalPointYPx = 120.0,
+            };
+        })
+        .Take(2)
+        .ToList();
+    while (cameras.Count < 2)
+    {
+        var index = cameras.Count;
+        cameras.Add(new MimirMoveProofCameraCalibrationConfiguration
+        {
+            CameraId = $"snapshot-calibration-placeholder-{index}",
+            WitnessIdHash = 0xF00D_0000_0000_0001UL + (ulong)index,
+            PositionMeters = new MimirVector3Snapshot(index == 0 ? -0.1 : 0.1, 0.0, 0.0),
+            Orientation = new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+            FocalLengthXPx = 100.0,
+            FocalLengthYPx = 100.0,
+            PrincipalPointXPx = 160.0,
+            PrincipalPointYPx = 120.0,
+        });
+    }
+
+    return new MimirMoveProofRuntimeConfiguration
+    {
+        EvidenceStreamId = snapshot.EvidenceStreamId,
+        EvidenceSnapshotPath = snapshotPath,
+        NativeReservoirPath = nativeReservoirPath,
+        MimirEvidenceSourceId = "mimir:starfire:move-evidence",
+        MimirEvidenceFramePrefix = "mimir:starfire:move-evidence",
+        MimirPoseFramePrefix = "mimir:starfire:move-pose",
+        MimirPoseProducerPeerId = "mimir:starfire",
+        FensalirFramePrefix = "fensalir:starfire:presented-frame",
+        FusionAuthorityId = "mimir.runtime.move-fusion",
+        ConsumerContract = "fensalir.move-controller-input",
+        Calibration = new MimirMoveProofCalibrationConfiguration
+        {
+            CalibrationId = "mimir-move-snapshot-replay-calibration-v1",
+            TrackingSpaceId = "mimir-stage-space",
+            Cameras = cameras,
+            MaximumAssociationSkewMilliseconds = 1000.0,
+        },
+    };
+}
+
+static string SequenceSuffix(string frameId)
+{
+    var separator = frameId.LastIndexOf(':');
+    return separator >= 0 && separator < frameId.Length - 1
+        ? frameId[(separator + 1)..]
+        : frameId;
+}
+
+static ulong TimestampDelta(ulong left, ulong right) => left >= right ? left - right : right - left;
 
 static int RunMoveProofPresentedFrameSmoke(string outputPath)
 {
