@@ -203,6 +203,11 @@ internal sealed class MimirMoveEvidenceRudpPump : IDisposable
                 startupError = error;
                 started.Set();
             }
+            else if (!stopping.IsCancellationRequested)
+            {
+                Console.Error.WriteLine(
+                    $"Mimir Move evidence receiver stopped stream={stream.StreamId} address={stream.Address}: {error}");
+            }
         }
     }
 
