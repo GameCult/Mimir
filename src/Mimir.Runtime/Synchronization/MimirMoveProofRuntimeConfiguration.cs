@@ -8,6 +8,8 @@ public sealed class MimirMoveProofRuntimeConfiguration
 
     public string EvidenceStreamId { get; init; } = "muninn:nightwing:move-evidence";
 
+    public string EvidenceSnapshotPath { get; init; } = "";
+
     public string NativeReservoirPath { get; init; } = "";
 
     public string MimirEvidenceSourceId { get; init; } = "mimir:starfire:move-evidence";

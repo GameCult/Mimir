@@ -129,6 +129,15 @@ a named invariant that the native runtime cannot protect yet.
   --move-proof-runtime-activation-surface-smoke` proves both an active injected
   ring document and the inactive default runtime document without claiming live
   field evidence.
+- `mimir.move_proof_evidence_frame_snapshot.v1` is the one-copy fallback for
+  captured Muninn evidence frames while C# CultMesh has no cross-process ring
+  opener. A configured `EvidenceSnapshotPath` is loaded by
+  `MimirConfiguredMoveProofEvidenceRingProvider`, metadata-checked against the
+  encoded payload, copied into an owned in-process ring, and then consumed by
+  the same runtime driver/pipeline. `Mimir.BufferSmoke
+  --move-proof-runtime-snapshot-smoke` proves the named proof spine through
+  that file boundary. It is field capture/replay support, not the final live
+  shared-memory proof.
 - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
   `MIMIR_MOVE_PROOF_DEV_SURFACE`. It uses the same runtime proof attachment so
   `Mimir.BufferSmoke --move-proof-presented-frame-smoke` can run `Mimir.App`

@@ -182,7 +182,17 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-activation-surface-
     return RunMoveProofRuntimeDriverSmoke(
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()),
         activateViaConfiguredSource: true,
-        requireActivationSurface: true);
+        requireActivationSurface: true,
+        activateViaSnapshotProvider: false);
+}
+
+if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-snapshot-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofRuntimeDriverSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()),
+        activateViaConfiguredSource: true,
+        requireActivationSurface: true,
+        activateViaSnapshotProvider: true);
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-proof-presented-frame-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -2297,7 +2307,8 @@ static int RunMoveProofRuntimeFrameSmoke()
 static int RunMoveProofRuntimeDriverSmoke(
     string nativeReservoirPath,
     bool activateViaConfiguredSource,
-    bool requireActivationSurface = false)
+    bool requireActivationSurface = false,
+    bool activateViaSnapshotProvider = false)
 {
     if (!File.Exists(nativeReservoirPath))
     {
@@ -2309,6 +2320,9 @@ static int RunMoveProofRuntimeDriverSmoke(
     const ulong rightWitnessHash = 0x0000000000000B0B;
     const string observedAt = "2026-06-11T18:30:00.0040000Z";
     var streamId = "muninn:nightwing:move-evidence";
+    var snapshotPath = activateViaSnapshotProvider
+        ? Path.Combine(Path.GetTempPath(), $"mimir-move-proof-evidence-{Guid.NewGuid():N}.mpack")
+        : "";
     var frame = new MimirMuninnMoveEvidenceStreamFrame(
         FrameId: "muninn:nightwing:move-evidence:79",
         ProducerPeerId: "muninn:nightwing",
@@ -2367,6 +2381,7 @@ static int RunMoveProofRuntimeDriverSmoke(
     var configuration = new MimirMoveProofRuntimeConfiguration
     {
         EvidenceStreamId = streamId,
+        EvidenceSnapshotPath = snapshotPath,
         NativeReservoirPath = nativeReservoirPath,
         MimirEvidenceSourceId = "mimir:starfire:move-evidence",
         MimirEvidenceFramePrefix = "mimir:starfire:move-evidence",
@@ -2422,6 +2437,16 @@ static int RunMoveProofRuntimeDriverSmoke(
         "nightwing:clock"));
     using var ring = catalog.CreateSharedMemoryRing(streamId, slotCount: 4, slotByteLength: 8192);
     var payload = MimirMuninnMoveEvidenceAdapter.SerializeStreamFrame(frame);
+    if (activateViaSnapshotProvider)
+    {
+        MimirMoveProofEvidenceFrameSnapshot.Save(
+            snapshotPath,
+            MimirMoveProofEvidenceFrameSnapshot.Create(
+                frame,
+                payload,
+                capturedAtNs: 1_781_202_600_005_500_000));
+    }
+
     if (!ring.TryPublishCopy(payload, frame.PublishedAtNs, durationNs: 0, out var published))
     {
         Console.Error.WriteLine("move-proof-runtime-driver-smoke publish-failed");
@@ -2434,7 +2459,15 @@ static int RunMoveProofRuntimeDriverSmoke(
         ? null
         : configuration.CreateDriver(ring, manualReservoir!);
     using var runtime = activateViaConfiguredSource
-        ? new MimirRuntime(
+        ? activateViaSnapshotProvider
+            ? new MimirRuntime(
+                new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
+                new MimirRuntimeConfiguration
+                {
+                    Settings = new MimirSynchronizationSettings(),
+                    MoveProofSources = [configuration],
+                })
+            : new MimirRuntime(
             new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
             new MimirRuntimeConfiguration
             {
@@ -2478,10 +2511,12 @@ static int RunMoveProofRuntimeDriverSmoke(
             LatestFensalirFrameId: "fensalir:starfire:presented-frame:79",
             LatestVerdict: MimirMoveProofVerdict.FullPose,
             CalibratedCameraCount: 2
-        };
+        } &&
+        (!activateViaSnapshotProvider ||
+            activationDocument.Diagnostic.Contains("one-copy evidence snapshot supplied", StringComparison.Ordinal));
 
     MimirMoveProofRuntimeActivationDocument? unavailableDocument = null;
-    if (requireActivationSurface)
+    if (requireActivationSurface && !activateViaSnapshotProvider)
     {
         using var unavailableRuntime = new MimirRuntime(
             new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
@@ -2505,9 +2540,9 @@ static int RunMoveProofRuntimeDriverSmoke(
     }
 
     Console.WriteLine(
-        $"move-proof-runtime-{(requireActivationSurface ? "activation-surface" : activateViaConfiguredSource ? "activation" : "driver")}-smoke proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} splines={proofSplineCount} duplicateSuppressed={duplicateSuppressed} configValid={configErrors.Length == 0} invalidDefaultErrors={invalidErrors.Length} activationActive={activationStatus?.Active.ToString() ?? "n/a"} activationDiagnostic=\"{activationStatus?.Diagnostic ?? ""}\" activationDocumentActive={activationDocument?.Active.ToString() ?? "n/a"} activationProvider=\"{activationDocument?.ProviderKind ?? ""}\" unavailableActive={unavailableDocument?.Active.ToString() ?? "n/a"} unavailableDiagnostic=\"{unavailableDocument?.Diagnostic ?? ""}\"");
+        $"move-proof-runtime-{(activateViaSnapshotProvider ? "snapshot" : requireActivationSurface ? "activation-surface" : activateViaConfiguredSource ? "activation" : "driver")}-smoke proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} splines={proofSplineCount} duplicateSuppressed={duplicateSuppressed} configValid={configErrors.Length == 0} invalidDefaultErrors={invalidErrors.Length} activationActive={activationStatus?.Active.ToString() ?? "n/a"} activationDiagnostic=\"{activationStatus?.Diagnostic ?? ""}\" activationDocumentActive={activationDocument?.Active.ToString() ?? "n/a"} activationProvider=\"{activationDocument?.ProviderKind ?? ""}\" unavailableActive={unavailableDocument?.Active.ToString() ?? "n/a"} unavailableDiagnostic=\"{unavailableDocument?.Diagnostic ?? ""}\" snapshot=\"{snapshotPath}\"");
 
-    return proofSurface is not null &&
+    var result = proofSurface is not null &&
         activationOk &&
         activationSurfaceOk &&
         proofSurface.IsFullPose &&
@@ -2520,6 +2555,12 @@ static int RunMoveProofRuntimeDriverSmoke(
         duplicateSuppressed
             ? 0
             : 1;
+    if (!string.IsNullOrWhiteSpace(snapshotPath) && File.Exists(snapshotPath))
+    {
+        File.Delete(snapshotPath);
+    }
+
+    return result;
 }
 
 static int RunMoveProofPresentedFrameSmoke(string outputPath)

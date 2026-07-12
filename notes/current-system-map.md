@@ -247,6 +247,16 @@ diagnostic when the default runtime lacks a live cross-process CultMesh ring
 opener. `Mimir.BufferSmoke --move-proof-runtime-activation-surface-smoke`
 proves both the active injected-ring document and the unavailable default
 document; this is readiness/proof observation, not field evidence.
+`mimir.move_proof_evidence_frame_snapshot.v1` is a one-copy, explicitly
+non-final fallback for captured Muninn evidence frames while C# CultMesh lacks
+a cross-process shared-memory opener. When `EvidenceSnapshotPath` is
+configured, `MimirConfiguredMoveProofEvidenceRingProvider` validates snapshot
+metadata against the encoded Muninn frame payload, publishes the payload into
+an owned in-process ring, and then delegates to the same runtime proof driver
+and pipeline. `Mimir.BufferSmoke --move-proof-runtime-snapshot-smoke` proves
+the same named proof spine through that file boundary. This can support field
+capture/replay, but live proof still requires the real Nightwing/Starfire ring
+or CultMesh page producer.
 `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
 `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
 surface through the same `MimirRuntime.PublishMoveProofSurface` attachment so

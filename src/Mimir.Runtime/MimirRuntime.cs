@@ -81,7 +81,7 @@ direct
             configuration.Settings,
             configuration.SourceFactories,
             configuration.MoveProofSources,
-            MimirUnavailableMoveProofEvidenceRingProvider.Instance)
+            MimirConfiguredMoveProofEvidenceRingProvider.Instance)
     {
     }
 
