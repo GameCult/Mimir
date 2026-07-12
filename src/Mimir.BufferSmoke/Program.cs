@@ -2022,9 +2022,9 @@ static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durati
 {
     var sources = new[]
     {
-        (Provider: "muninn.telemetry.nightwing", Stream: "muninn:nightwing:move-evidence"),
-        (Provider: "muninn.telemetry.nightwing-eye0", Stream: "muninn:nightwing:eye-0:move-evidence")
+        (Provider: "muninn.telemetry.nightwing", Stream: "muninn:nightwing:move-evidence")
     };
+    var cameraIds = new[] { "nightwing-eye-0", "nightwing-eye-1" };
     var leases = new List<(string Provider, string Stream, MimirMoveProofEvidenceRingLease Lease)>();
     try
     {
@@ -2074,8 +2074,8 @@ static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durati
             .GroupBy(observation => observation.MoveId, StringComparer.Ordinal)
             .SelectMany(group =>
             {
-                var first = group.Where(value => value.ProviderId == sources[0].Provider).ToArray();
-                var second = group.Where(value => value.ProviderId == sources[1].Provider).ToArray();
+                var first = group.Where(value => value.CameraId == cameraIds[0]).ToArray();
+                var second = group.Where(value => value.CameraId == cameraIds[1]).ToArray();
                 return first.Select(left => second
                         .Select(right => new MoveCrossCameraCorrespondence(left.MoveId, left, right, Math.Abs(left.PublishedAtNs - right.PublishedAtNs)))
                         .OrderBy(pair => pair.AbsoluteSkewNs).FirstOrDefault())
@@ -2092,6 +2092,8 @@ static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durati
 
         var visibleByProvider = observations.GroupBy(value => value.ProviderId).ToDictionary(
             group => group.Key, group => group.Select(value => value.MoveId).Distinct().Order().ToArray());
+        var visibleByCamera = observations.GroupBy(value => value.CameraId).ToDictionary(
+            group => group.Key, group => group.Select(value => value.MoveId).Distinct().Order().ToArray());
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             receipt.Schema,
@@ -2100,10 +2102,11 @@ static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durati
             controllersByProvider = controllersByProvider.ToDictionary(pair => pair.Key, pair => pair.Value.Order().ToArray()),
             observations = observations.Count,
             correspondences = correspondences.Length,
-            visibleByProvider
+            visibleByProvider,
+            visibleByCamera
         }));
         return sources.All(source => framesByProvider[source.Provider] > 0) &&
-            sources.All(source => visibleByProvider.ContainsKey(source.Provider)) &&
+            cameraIds.All(visibleByCamera.ContainsKey) &&
             correspondences.Length > 0 ? 0 : 1;
     }
     finally
