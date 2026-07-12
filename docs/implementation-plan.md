@@ -138,6 +138,15 @@ a named invariant that the native runtime cannot protect yet.
   --move-proof-runtime-snapshot-smoke` proves the named proof spine through
   that file boundary. It is field capture/replay support, not the final live
   shared-memory proof.
+- Odin/Muninn now has the matching producer-side latest snapshot writer:
+  `--move-evidence-snapshot <path>` writes the Mimir-compatible
+  `mimir.move_proof_evidence_frame_snapshot.v1` artifact from the same Muninn
+  Move evidence publisher after the frame payload is accepted into the stream
+  ring. The Odin unit
+  `move_evidence_snapshot_writes_mimir_compatible_frame_artifact` decodes the
+  snapshot tuple and embedded Muninn frame payload. This lets Nightwing produce
+  a field artifact for Mimir replay while the final live ring/page transport is
+  still pending.
 - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
   `MIMIR_MOVE_PROOF_DEV_SURFACE`. It uses the same runtime proof attachment so
   `Mimir.BufferSmoke --move-proof-presented-frame-smoke` can run `Mimir.App`

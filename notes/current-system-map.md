@@ -257,6 +257,14 @@ and pipeline. `Mimir.BufferSmoke --move-proof-runtime-snapshot-smoke` proves
 the same named proof spine through that file boundary. This can support field
 capture/replay, but live proof still requires the real Nightwing/Starfire ring
 or CultMesh page producer.
+Odin/Muninn can now write that artifact from the producer side with
+`--move-evidence-snapshot <path>`. The snapshot is written by the same Muninn
+Move evidence publisher that owns controller/marker frames, after the frame
+payload is accepted by the stream ring. Its unit coverage decodes the
+`mimir.move_proof_evidence_frame_snapshot.v1` tuple and re-decodes the embedded
+Muninn payload, proving the artifact is shaped for Mimir's snapshot provider.
+This is still one-copy field capture/replay; it does not replace the live ring
+or a CultCache page body producer.
 `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
 `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
 surface through the same `MimirRuntime.PublishMoveProofSurface` attachment so
