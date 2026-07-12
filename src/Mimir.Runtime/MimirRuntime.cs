@@ -40,6 +40,7 @@ direct
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
     private readonly IReadOnlyList<MimirMoveProofRuntimeConfiguration> configuredMoveProofSources;
+    private readonly IMimirMoveProofEvidenceRingProvider moveProofRingProvider;
     private readonly AquariumUiDocument ui;
     private readonly AquariumAudioDocument audio = new();
     private readonly MimirAudioSynchronizationSettings audioSyncSettings;
@@ -64,7 +65,10 @@ direct
     private IReadOnlyList<MimirAudioSpectrumSnapshot> lastAudioSpectra = [];
     private readonly Queue<IReadOnlyList<MimirAudioSpectrumSnapshot>> spectrumHistory = new();
     private readonly List<MimirMoveProofRuntimeDriver> moveProofDrivers = [];
+    private readonly List<IDisposable> moveProofDriverResources = [];
+    private readonly List<MimirMoveProofRuntimeActivationStatus> moveProofActivationStatuses = [];
     private MimirMoveProofSurfaceDocument? latestMoveProofSurface;
+    private bool moveProofSourcesActivated;
 
     public MimirRuntime(AquariumRuntimeOptions options)
         : this(options, MimirRuntimeConfiguration.Load())
@@ -72,7 +76,20 @@ direct
     }
 
     public MimirRuntime(AquariumRuntimeOptions options, MimirRuntimeConfiguration configuration)
-        : this(options, configuration.Settings, configuration.SourceFactories, configuration.MoveProofSources)
+        : this(
+            options,
+            configuration.Settings,
+            configuration.SourceFactories,
+            configuration.MoveProofSources,
+            MimirUnavailableMoveProofEvidenceRingProvider.Instance)
+    {
+    }
+
+    public MimirRuntime(
+        AquariumRuntimeOptions options,
+        MimirRuntimeConfiguration configuration,
+        IMimirMoveProofEvidenceRingProvider moveProofRingProvider)
+        : this(options, configuration.Settings, configuration.SourceFactories, configuration.MoveProofSources, moveProofRingProvider)
     {
     }
 
@@ -85,7 +102,12 @@ direct
         AquariumRuntimeOptions options,
         MimirSynchronizationSettings settings,
         IEnumerable<IMimirStreamSource> streamSources)
-        : this(options, settings, Array.Empty<MimirStreamSourceFactory>(), Array.Empty<MimirMoveProofRuntimeConfiguration>())
+        : this(
+            options,
+            settings,
+            Array.Empty<MimirStreamSourceFactory>(),
+            Array.Empty<MimirMoveProofRuntimeConfiguration>(),
+            MimirUnavailableMoveProofEvidenceRingProvider.Instance)
     {
         foreach (var source in streamSources)
         {
@@ -97,13 +119,15 @@ direct
         AquariumRuntimeOptions options,
         MimirSynchronizationSettings settings,
         IEnumerable<MimirStreamSourceFactory> sourceFactories,
-        IEnumerable<MimirMoveProofRuntimeConfiguration> moveProofSources)
+        IEnumerable<MimirMoveProofRuntimeConfiguration> moveProofSources,
+        IMimirMoveProofEvidenceRingProvider moveProofRingProvider)
     {
         Options = options;
         synchronization = new MimirSynchronizationHub(settings);
         spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize());
         this.sourceFactories = sourceFactories.ToArray();
         configuredMoveProofSources = moveProofSources.ToArray();
+        this.moveProofRingProvider = moveProofRingProvider ?? throw new ArgumentNullException(nameof(moveProofRingProvider));
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
@@ -137,6 +161,10 @@ direct
     public AquariumUiDocument Ui => ui;
 
     public AquariumAudioDocument Audio => audio;
+
+    public IReadOnlyList<MimirMoveProofRuntimeActivationStatus> MoveProofActivationStatuses => moveProofActivationStatuses;
+
+    public MimirMoveProofSurfaceDocument? LatestMoveProofSurface => latestMoveProofSurface;
 
     private AquariumFrame CreateFrame()
     {
@@ -194,6 +222,20 @@ direct
     {
         ArgumentNullException.ThrowIfNull(driver);
         moveProofDrivers.Add(driver);
+    }
+
+    public void ActivateConfiguredMoveProofSources()
+    {
+        if (moveProofSourcesActivated)
+        {
+            return;
+        }
+
+        moveProofSourcesActivated = true;
+        foreach (var configuration in configuredMoveProofSources)
+        {
+            ActivateConfiguredMoveProofSource(configuration);
+        }
     }
 
     public static AquariumSplineFrame ComposeFensalirSplineFrame(
@@ -270,6 +312,11 @@ direct
 
     public void Dispose()
     {
+        foreach (var resource in moveProofDriverResources.AsEnumerable().Reverse())
+        {
+            resource.Dispose();
+        }
+
         synchronization.Dispose();
     }
 
@@ -339,7 +386,19 @@ direct
         return string.Join(
             Environment.NewLine,
             configuredMoveProofSources.Select(source =>
-                $"{source.EvidenceStreamId} -> {source.MimirPoseFramePrefix}:<sequence> cameras={source.Calibration.Cameras.Count}"));
+                $"{source.EvidenceStreamId} -> {source.MimirPoseFramePrefix}:<sequence> cameras={source.Calibration.Cameras.Count} {DescribeMoveProofActivation(source.EvidenceStreamId)}"));
+    }
+
+    private string DescribeMoveProofActivation(string evidenceStreamId)
+    {
+        var status = moveProofActivationStatuses.LastOrDefault(status =>
+            string.Equals(status.EvidenceStreamId, evidenceStreamId, StringComparison.Ordinal));
+        if (status is null)
+        {
+            return "not activated";
+        }
+
+        return status.Active ? "active" : $"inactive: {status.Diagnostic}";
     }
 
     private void UpdateMoveProofSurfaces()
@@ -558,6 +617,54 @@ direct
                 synchronization.AddSource(source);
             }
         }
+
+        ActivateConfiguredMoveProofSources();
+    }
+
+    private void ActivateConfiguredMoveProofSource(MimirMoveProofRuntimeConfiguration configuration)
+    {
+        try
+        {
+            var errors = configuration.Validate();
+            if (errors.Length > 0)
+            {
+                RecordMoveProofActivation(configuration.EvidenceStreamId, false, $"invalid: {string.Join("; ", errors)}");
+                return;
+            }
+
+            if (!moveProofRingProvider.TryOpenEvidenceRing(configuration, out var ringLease, out var diagnostic) || ringLease is null)
+            {
+                RecordMoveProofActivation(configuration.EvidenceStreamId, false, diagnostic);
+                return;
+            }
+
+            try
+            {
+                var reservoir = new MimirNativeReservoirRuntime(configuration.NativeReservoirPath);
+                var driver = configuration.CreateDriver(ringLease.Ring, reservoir);
+                moveProofDrivers.Add(driver);
+                moveProofDriverResources.Add(reservoir);
+                moveProofDriverResources.Add(ringLease);
+                RecordMoveProofActivation(configuration.EvidenceStreamId, true, diagnostic);
+            }
+            catch
+            {
+                ringLease.Dispose();
+                throw;
+            }
+        }
+        catch (Exception exception)
+        {
+            RecordMoveProofActivation(configuration.EvidenceStreamId, false, exception.Message);
+        }
+    }
+
+    private void RecordMoveProofActivation(string evidenceStreamId, bool active, string diagnostic)
+    {
+        moveProofActivationStatuses.Add(new MimirMoveProofRuntimeActivationStatus(
+            evidenceStreamId,
+            active,
+            string.IsNullOrWhiteSpace(diagnostic) ? (active ? "activated" : "not activated") : diagnostic));
     }
 
     private void EmitTelemetry()

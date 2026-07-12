@@ -158,13 +158,22 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-frame-smoke", Strin
 if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-driver-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveProofRuntimeDriverSmoke(
-        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()),
+        activateViaConfiguredSource: false);
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-config-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveProofRuntimeDriverSmoke(
-        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()),
+        activateViaConfiguredSource: false);
+}
+
+if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-activation-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofRuntimeDriverSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()),
+        activateViaConfiguredSource: true);
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-proof-presented-frame-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -2276,7 +2285,7 @@ static int RunMoveProofRuntimeFrameSmoke()
             : 1;
 }
 
-static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath)
+static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath, bool activateViaConfiguredSource)
 {
     if (!File.Exists(nativeReservoirPath))
     {
@@ -2408,26 +2417,47 @@ static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath)
     }
 
     catalog.PublishFrame(published);
-    using var reservoir = new MimirNativeReservoirRuntime(nativeReservoirPath);
-    var driver = configuration.CreateDriver(ring, reservoir);
-    var runtime = new MimirRuntime(
-        new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
-        new MimirSynchronizationSettings());
-    runtime.RegisterMoveProofDriver(driver);
+    using var manualReservoir = activateViaConfiguredSource ? null : new MimirNativeReservoirRuntime(nativeReservoirPath);
+    var manualDriver = activateViaConfiguredSource
+        ? null
+        : configuration.CreateDriver(ring, manualReservoir!);
+    using var runtime = activateViaConfiguredSource
+        ? new MimirRuntime(
+            new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
+            new MimirRuntimeConfiguration
+            {
+                Settings = new MimirSynchronizationSettings(),
+                MoveProofSources = [configuration],
+            },
+            new InProcessMoveProofEvidenceRingProvider(ring))
+        : new MimirRuntime(
+            new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
+            new MimirSynchronizationSettings());
+    if (manualDriver is not null)
+    {
+        runtime.RegisterMoveProofDriver(manualDriver);
+    }
+
     runtime.OnSceneReady();
     var input = new InputState();
     runtime.Update(0.016f, input);
     var proofFrame = runtime.Frame;
-    var proofSurface = driver.LastResult?.ProofSurface;
+    var proofSurface = activateViaConfiguredSource
+        ? runtime.LatestMoveProofSurface
+        : manualDriver?.LastResult?.ProofSurface;
     var proofSplineCount = proofFrame.Scene.SplineFrame.Splines.Count(spline =>
         spline.Id.StartsWith("move-proof-", StringComparison.Ordinal));
     runtime.Update(0.016f, input);
-    var duplicateSuppressed = reservoir.Status.MoveEvidenceCount.ToUInt64() == 1UL;
+    var duplicateSuppressed = activateViaConfiguredSource || manualReservoir!.Status.MoveEvidenceCount.ToUInt64() == 1UL;
+    var activationStatus = runtime.MoveProofActivationStatuses.LastOrDefault(status =>
+        string.Equals(status.EvidenceStreamId, streamId, StringComparison.Ordinal));
+    var activationOk = !activateViaConfiguredSource || activationStatus?.Active == true;
 
     Console.WriteLine(
-        $"move-proof-runtime-driver-smoke proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} splines={proofSplineCount} duplicateSuppressed={duplicateSuppressed} configValid={configErrors.Length == 0} invalidDefaultErrors={invalidErrors.Length}");
+        $"move-proof-runtime-{(activateViaConfiguredSource ? "activation" : "driver")}-smoke proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} splines={proofSplineCount} duplicateSuppressed={duplicateSuppressed} configValid={configErrors.Length == 0} invalidDefaultErrors={invalidErrors.Length} activationActive={activationStatus?.Active.ToString() ?? "n/a"} activationDiagnostic=\"{activationStatus?.Diagnostic ?? ""}\"");
 
     return proofSurface is not null &&
+        activationOk &&
         proofSurface.IsFullPose &&
         proofSurface.MuninnEvidenceFrameId == "muninn:nightwing:move-evidence:79" &&
         proofSurface.MimirEvidenceFrameId == "mimir:starfire:move-evidence:79" &&
@@ -7147,6 +7177,26 @@ public sealed record ComplexContourBandCorrection(
 sealed record MoveTrackingSmokeContext(MimirSynchronizationHub Hub, int Consumed) : IDisposable
 {
     public void Dispose() => Hub.Dispose();
+}
+
+internal sealed class InProcessMoveProofEvidenceRingProvider(CultMeshSharedMemoryFrameRing ring) : IMimirMoveProofEvidenceRingProvider
+{
+    public bool TryOpenEvidenceRing(
+        MimirMoveProofRuntimeConfiguration configuration,
+        out MimirMoveProofEvidenceRingLease? lease,
+        out string diagnostic)
+    {
+        if (!string.Equals(ring.StreamId, configuration.EvidenceStreamId, StringComparison.Ordinal))
+        {
+            lease = null;
+            diagnostic = $"in-process ring stream '{ring.StreamId}' does not match configured evidence stream '{configuration.EvidenceStreamId}'";
+            return false;
+        }
+
+        lease = new MimirMoveProofEvidenceRingLease(ring);
+        diagnostic = "in-process test ring supplied";
+        return true;
+    }
 }
 
 public sealed record ComplexContourReflectionCorrection(

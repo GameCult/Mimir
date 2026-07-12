@@ -230,9 +230,15 @@ surface for that bridge. An enabled source must name the Muninn evidence stream,
 native reservoir path, Mimir evidence/pose frame prefixes, Fensalir
 presented-frame prefix, fusion authority, consumer contract, and at least two
 calibrated camera witnesses. It may create a runtime driver only when the
-supplied CultMesh ring stream id matches the configured evidence stream. This
-does not yet open a cross-process live ring; the current smoke ring is
-in-process proof of the Mimir-side contract.
+supplied CultMesh ring stream id matches the configured evidence stream.
+`MimirRuntime` now owns activation for configured proof sources: on scene-ready
+it asks an `IMimirMoveProofEvidenceRingProvider` for the evidence ring, opens
+the configured native reservoir, registers the runtime driver, retains the
+driver resources, and exposes an activation status. The default provider fails
+explicitly because the current C# CultMesh ring is still in-process only;
+`Mimir.BufferSmoke --move-proof-runtime-activation-smoke` injects an in-process
+provider to prove the activation path without claiming live Nightwing field
+evidence.
 `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
 `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
 surface through the same `MimirRuntime.PublishMoveProofSurface` attachment so

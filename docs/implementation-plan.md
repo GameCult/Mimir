@@ -110,9 +110,17 @@ a named invariant that the native runtime cannot protect yet.
   and pose frame prefixes, Fensalir presented-frame prefix, fusion authority,
   consumer contract, and at least two calibrated camera witnesses. It creates
   `MimirMoveProofRuntimeDriver` only after the supplied ring stream id matches
-  the configured evidence stream. The current C# CultMesh ring used by the
-  smoke is still in-process; real Nightwing/Starfire cross-process ring opening
-  remains pending.
+  the configured evidence stream.
+- `MimirRuntime` now owns configured Move proof activation instead of leaving
+  config as a readout. At scene-ready it asks an
+  `IMimirMoveProofEvidenceRingProvider` for the configured Muninn evidence ring,
+  opens the configured native reservoir, creates the driver, retains the
+  resources, and exposes an activation status. The default provider fails
+  explicitly because the current C# CultMesh ring is still in-process only;
+  `Mimir.BufferSmoke --move-proof-runtime-activation-smoke` injects an
+  in-process provider and proves config activation can produce the same named
+  proof chain. Real Nightwing/Starfire cross-process ring opening remains
+  pending.
 - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
   `MIMIR_MOVE_PROOF_DEV_SURFACE`. It uses the same runtime proof attachment so
   `Mimir.BufferSmoke --move-proof-presented-frame-smoke` can run `Mimir.App`

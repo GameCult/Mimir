@@ -161,9 +161,15 @@ accepted_design:
     Fensalir presented-frame prefix, fusion authority, consumer contract, and
     at least two calibrated camera witnesses. It may create a
     `MimirMoveProofRuntimeDriver` only when the supplied CultMesh ring stream id
-    matches the configured evidence stream. The current C# shared-memory ring
-    smoke is still in-process; real Nightwing/Starfire cross-process ring
-    opening remains pending.
+    matches the configured evidence stream.
+  - `MimirRuntime` owns configured Move proof activation. On scene-ready it asks
+    an `IMimirMoveProofEvidenceRingProvider` for the evidence ring, opens the
+    configured native reservoir, registers the runtime driver, retains the
+    driver resources, and exposes activation status. The default provider fails
+    explicitly because the current C# CultMesh ring is still in-process only;
+    `Mimir.BufferSmoke --move-proof-runtime-activation-smoke` injects an
+    in-process provider to prove the activation path without claiming live
+    Nightwing/Starfire field evidence.
   - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
     `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
     surface through the same MimirRuntime attachment so headless Mimir.App can
