@@ -239,6 +239,14 @@ explicitly because the current C# CultMesh ring is still in-process only;
 `Mimir.BufferSmoke --move-proof-runtime-activation-smoke` injects an in-process
 provider to prove the activation path without claiming live Nightwing field
 evidence.
+`mimir.move_proof_runtime_activation.v1` is the typed readiness/proof-spine
+surface for configured Move proof sources. It reports the configured evidence
+stream, provider kind, active/driver state, native reservoir path, calibrated
+camera ids, latest same-stream proof ids, latest verdict, and the inactive
+diagnostic when the default runtime lacks a live cross-process CultMesh ring
+opener. `Mimir.BufferSmoke --move-proof-runtime-activation-surface-smoke`
+proves both the active injected-ring document and the unavailable default
+document; this is readiness/proof observation, not field evidence.
 `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
 `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
 surface through the same `MimirRuntime.PublishMoveProofSurface` attachment so

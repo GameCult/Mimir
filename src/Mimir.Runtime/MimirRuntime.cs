@@ -166,6 +166,16 @@ direct
 
     public MimirMoveProofSurfaceDocument? LatestMoveProofSurface => latestMoveProofSurface;
 
+    public IReadOnlyList<MimirMoveProofRuntimeActivationDocument> CreateMoveProofRuntimeActivationDocuments(ulong observedAtNs) =>
+        configuredMoveProofSources
+            .Select(configuration => MimirMoveProofRuntimeActivation.CreateDocument(
+                configuration,
+                moveProofActivationStatuses.LastOrDefault(status =>
+                    string.Equals(status.EvidenceStreamId, configuration.EvidenceStreamId, StringComparison.Ordinal)),
+                latestMoveProofSurface,
+                observedAtNs))
+            .ToArray();
+
     private AquariumFrame CreateFrame()
     {
         var channelCount = Math.Max(1, lastAudioSpectra.Count);
@@ -623,48 +633,59 @@ direct
 
     private void ActivateConfiguredMoveProofSource(MimirMoveProofRuntimeConfiguration configuration)
     {
+        var providerKind = moveProofRingProvider.GetType().Name;
         try
         {
             var errors = configuration.Validate();
             if (errors.Length > 0)
             {
-                RecordMoveProofActivation(configuration.EvidenceStreamId, false, $"invalid: {string.Join("; ", errors)}");
+                RecordMoveProofActivation(configuration.EvidenceStreamId, false, $"invalid: {string.Join("; ", errors)}", providerKind, driverRegistered: false);
                 return;
             }
 
             if (!moveProofRingProvider.TryOpenEvidenceRing(configuration, out var ringLease, out var diagnostic) || ringLease is null)
             {
-                RecordMoveProofActivation(configuration.EvidenceStreamId, false, diagnostic);
+                RecordMoveProofActivation(configuration.EvidenceStreamId, false, diagnostic, providerKind, driverRegistered: false);
                 return;
             }
 
+            MimirNativeReservoirRuntime? reservoir = null;
             try
             {
-                var reservoir = new MimirNativeReservoirRuntime(configuration.NativeReservoirPath);
+                reservoir = new MimirNativeReservoirRuntime(configuration.NativeReservoirPath);
                 var driver = configuration.CreateDriver(ringLease.Ring, reservoir);
                 moveProofDrivers.Add(driver);
                 moveProofDriverResources.Add(reservoir);
                 moveProofDriverResources.Add(ringLease);
-                RecordMoveProofActivation(configuration.EvidenceStreamId, true, diagnostic);
+                reservoir = null;
+                ringLease = null;
+                RecordMoveProofActivation(configuration.EvidenceStreamId, true, diagnostic, providerKind, driverRegistered: true);
             }
-            catch
+            finally
             {
-                ringLease.Dispose();
-                throw;
+                reservoir?.Dispose();
+                ringLease?.Dispose();
             }
         }
         catch (Exception exception)
         {
-            RecordMoveProofActivation(configuration.EvidenceStreamId, false, exception.Message);
+            RecordMoveProofActivation(configuration.EvidenceStreamId, false, exception.Message, providerKind, driverRegistered: false);
         }
     }
 
-    private void RecordMoveProofActivation(string evidenceStreamId, bool active, string diagnostic)
+    private void RecordMoveProofActivation(
+        string evidenceStreamId,
+        bool active,
+        string diagnostic,
+        string providerKind,
+        bool driverRegistered)
     {
         moveProofActivationStatuses.Add(new MimirMoveProofRuntimeActivationStatus(
             evidenceStreamId,
             active,
-            string.IsNullOrWhiteSpace(diagnostic) ? (active ? "activated" : "not activated") : diagnostic));
+            string.IsNullOrWhiteSpace(diagnostic) ? (active ? "activated" : "not activated") : diagnostic,
+            providerKind,
+            driverRegistered));
     }
 
     private void EmitTelemetry()

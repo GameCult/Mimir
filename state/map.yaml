@@ -170,6 +170,13 @@ accepted_design:
     `Mimir.BufferSmoke --move-proof-runtime-activation-smoke` injects an
     in-process provider to prove the activation path without claiming live
     Nightwing/Starfire field evidence.
+  - `mimir.move_proof_runtime_activation.v1` is the typed readiness/proof-spine
+    surface for configured Move proof sources. It reports the configured stream,
+    provider kind, active/driver state, native reservoir path, calibrated camera
+    ids, latest same-stream proof ids, latest verdict, and unavailable-provider
+    diagnostic. `Mimir.BufferSmoke --move-proof-runtime-activation-surface-smoke`
+    proves both an active injected-ring document and the inactive default
+    runtime document without claiming live field evidence.
   - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
     `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
     surface through the same MimirRuntime attachment so headless Mimir.App can

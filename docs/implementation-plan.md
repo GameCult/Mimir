@@ -121,6 +121,14 @@ a named invariant that the native runtime cannot protect yet.
   in-process provider and proves config activation can produce the same named
   proof chain. Real Nightwing/Starfire cross-process ring opening remains
   pending.
+- `mimir.move_proof_runtime_activation.v1` is the typed readiness/proof-spine
+  surface for configured Move proof sources. It reports the configured stream,
+  provider kind, active/driver state, native reservoir path, calibrated camera
+  ids, latest same-stream proof ids, latest verdict, and the unavailable
+  default-provider diagnostic. `Mimir.BufferSmoke
+  --move-proof-runtime-activation-surface-smoke` proves both an active injected
+  ring document and the inactive default runtime document without claiming live
+  field evidence.
 - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
   `MIMIR_MOVE_PROOF_DEV_SURFACE`. It uses the same runtime proof attachment so
   `Mimir.BufferSmoke --move-proof-presented-frame-smoke` can run `Mimir.App`
