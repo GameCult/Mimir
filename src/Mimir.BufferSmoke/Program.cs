@@ -146,6 +146,14 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-odin-live-smoke", StringCo
             : 0);
 }
 
+if (args.Any(arg => string.Equals(arg, "--muninn-move-visibility-window-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMuninnMoveVisibilityWindowSmoke(
+        ParseStringOption(args, "--odin-cultmesh-uri", "cultmesh://127.0.0.1:17871/rendezvous/provider-catalog"),
+        ParseIntOption(args, "--duration-seconds", 15),
+        ParseStringOption(args, "--output", "artifacts/move-calibration/muninn-visibility-window.mpack"));
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveFusionSmoke();
@@ -2008,6 +2016,100 @@ static int RunMuninnMoveOdinLiveSmoke(
         }
     }
     throw new TimeoutException($"No live frame arrived from Odin-discovered stream {streamId}.");
+}
+
+static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durationSeconds, string outputPath)
+{
+    var sources = new[]
+    {
+        (Provider: "muninn.telemetry.nightwing", Stream: "muninn:nightwing:move-evidence"),
+        (Provider: "muninn.telemetry.nightwing-eye0", Stream: "muninn:nightwing:eye-0:move-evidence")
+    };
+    var leases = new List<(string Provider, string Stream, MimirMoveProofEvidenceRingLease Lease)>();
+    try
+    {
+        foreach (var source in sources)
+        {
+            var configuration = new MimirMoveProofRuntimeConfiguration
+            {
+                OdinCultMeshUri = odinCultMeshUri,
+                MuninnProviderId = source.Provider,
+                EvidenceStreamId = source.Stream
+            };
+            if (!MimirOdinMoveProofEvidenceRingProvider.Instance.TryOpenEvidenceRing(configuration, out var lease, out var diagnostic) || lease is null)
+            {
+                throw new InvalidOperationException($"{source.Provider}: {diagnostic}");
+            }
+            leases.Add((source.Provider, source.Stream, lease));
+        }
+
+        var startedAtNs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(1, durationSeconds));
+        var seenFrames = new HashSet<string>(StringComparer.Ordinal);
+        var framesByProvider = sources.ToDictionary(source => source.Provider, _ => 0, StringComparer.Ordinal);
+        var controllersByProvider = sources.ToDictionary(source => source.Provider, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
+        var observations = new List<MoveVisibilityObservation>();
+        while (DateTime.UtcNow < deadline)
+        {
+            foreach (var source in leases)
+            {
+                if (!source.Lease.Ring.TryAcquireLatestRead(out var frameLease)) continue;
+                using (frameLease)
+                {
+                    var frame = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(frameLease.Memory[..frameLease.Handle.ByteLength]);
+                    if (!seenFrames.Add($"{source.Provider}:{frame.FrameId}")) continue;
+                    framesByProvider[source.Provider]++;
+                    controllersByProvider[source.Provider].UnionWith(frame.ControllerStates.Select(state => state.MoveId));
+                    observations.AddRange(frame.MarkerCandidates
+                        .Where(marker => !string.IsNullOrWhiteSpace(marker.MoveId))
+                        .Select(marker => new MoveVisibilityObservation(
+                            source.Provider, marker.CameraId, marker.MoveId, frame.FrameId, frame.PublishedAtNs,
+                            marker.CenterXPx, marker.CenterYPx, marker.RadiusPx, marker.Score)));
+                }
+            }
+            Thread.Sleep(5);
+        }
+
+        var correspondences = observations
+            .GroupBy(observation => observation.MoveId, StringComparer.Ordinal)
+            .SelectMany(group =>
+            {
+                var first = group.Where(value => value.ProviderId == sources[0].Provider).ToArray();
+                var second = group.Where(value => value.ProviderId == sources[1].Provider).ToArray();
+                return first.Select(left => second
+                        .Select(right => new MoveCrossCameraCorrespondence(left.MoveId, left, right, Math.Abs(left.PublishedAtNs - right.PublishedAtNs)))
+                        .OrderBy(pair => pair.AbsoluteSkewNs).FirstOrDefault())
+                    .Where(pair => pair is not null)!;
+            })
+            .Cast<MoveCrossCameraCorrespondence>()
+            .ToArray();
+        var receipt = new MoveVisibilityWindowReceipt(
+            "mimir.move_visibility_window.v1", startedAtNs,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000,
+            sources.Select(source => source.Provider).ToArray(), observations.ToArray(), correspondences);
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        File.WriteAllBytes(outputPath, MessagePackSerializer.Serialize(receipt));
+
+        var visibleByProvider = observations.GroupBy(value => value.ProviderId).ToDictionary(
+            group => group.Key, group => group.Select(value => value.MoveId).Distinct().Order().ToArray());
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            receipt.Schema,
+            outputPath,
+            framesByProvider,
+            controllersByProvider = controllersByProvider.ToDictionary(pair => pair.Key, pair => pair.Value.Order().ToArray()),
+            observations = observations.Count,
+            correspondences = correspondences.Length,
+            visibleByProvider
+        }));
+        return sources.All(source => framesByProvider[source.Provider] > 0) &&
+            sources.All(source => visibleByProvider.ContainsKey(source.Provider)) &&
+            correspondences.Length > 0 ? 0 : 1;
+    }
+    finally
+    {
+        foreach (var source in leases) source.Lease.Dispose();
+    }
 }
 
 static int RunMuninnMoveCultMeshStreamSmoke(string nativeReservoirPath)
