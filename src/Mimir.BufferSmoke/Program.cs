@@ -139,7 +139,11 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-odin-live-smoke", StringCo
 {
     return RunMuninnMoveOdinLiveSmoke(
         ParseStringOption(args, "--odin-cultmesh-uri", "cultmesh://127.0.0.1:17871/rendezvous/provider-catalog"),
-        args.Any(arg => string.Equals(arg, "--muninn-move-odin-optical-live-smoke", StringComparison.OrdinalIgnoreCase)));
+        ParseStringOption(args, "--muninn-provider", "muninn.telemetry.nightwing"),
+        ParseStringOption(args, "--move-evidence-stream", "muninn:nightwing:move-evidence"),
+        args.Any(arg => string.Equals(arg, "--muninn-move-odin-optical-live-smoke", StringComparison.OrdinalIgnoreCase))
+            ? ParseIntOption(args, "--required-camera-count", 2)
+            : 0);
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -1926,10 +1930,12 @@ static async Task<int> RunMuninnMoveLiveRosterSmokeAsync(IReadOnlyList<string> i
             : 1;
 }
 
-static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri, bool requireOptical = false)
+static int RunMuninnMoveOdinLiveSmoke(
+    string odinCultMeshUri,
+    string providerId,
+    string streamId,
+    int requiredCameraCount = 0)
 {
-    const string providerId = "muninn.telemetry.nightwing";
-    const string streamId = "muninn:nightwing:move-evidence";
     var discovered = MimirOdinMoveProofEvidenceRingProvider.Discover(odinCultMeshUri, providerId, streamId);
     var configuration = new MimirMoveProofRuntimeConfiguration
     {
@@ -1947,7 +1953,7 @@ static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri, bool requireOptica
 
     using (lease)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(requireOptical ? 45 : 8);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(requiredCameraCount > 0 ? 45 : 8);
         while (DateTime.UtcNow < deadline)
         {
             if (lease.Ring.TryAcquireLatestRead(out var frameLease))
@@ -1965,8 +1971,8 @@ static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri, bool requireOptica
                     var ok = frame.FrameId.StartsWith($"{streamId}:", StringComparison.Ordinal) &&
                         frame.ControllerStates.Length >= 1 &&
                         discovered.Channel == "move-evidence" &&
-                        (!requireOptical || markerCameraIds.Length >= 2);
-                    if (!ok && requireOptical)
+                        (requiredCameraCount == 0 || markerCameraIds.Length >= requiredCameraCount);
+                    if (!ok && requiredCameraCount > 0)
                     {
                         continue;
                     }
