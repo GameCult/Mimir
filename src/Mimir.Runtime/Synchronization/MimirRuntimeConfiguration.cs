@@ -8,6 +8,8 @@ public sealed class MimirRuntimeConfiguration
 
     public IReadOnlyList<MimirStreamSourceFactory> SourceFactories { get; init; } = [];
 
+    public IReadOnlyList<MimirMoveProofRuntimeConfiguration> MoveProofSources { get; init; } = [];
+
     public IReadOnlyList<IMimirStreamSource> CreateSources()
     {
         return SourceFactories
@@ -53,6 +55,16 @@ public sealed class MimirRuntimeConfiguration
             .Where(factory => factory != null)
             .Cast<MimirStreamSourceFactory>()
             .ToArray();
+        var moveProofSources = model.MoveProof
+            .Where(source => source.Enabled)
+            .ToArray();
+        var moveProofErrors = moveProofSources
+            .SelectMany((source, index) => source.Validate().Select(error => $"MoveProof[{index}].{error}"))
+            .ToArray();
+        if (moveProofErrors.Length > 0)
+        {
+            throw new InvalidOperationException($"Invalid Mimir runtime Move proof configuration: {string.Join("; ", moveProofErrors)}");
+        }
 
         return new MimirRuntimeConfiguration
         {
@@ -63,6 +75,7 @@ public sealed class MimirRuntimeConfiguration
                 Streams = streams,
             },
             SourceFactories = sourceFactories,
+            MoveProofSources = moveProofSources,
         };
     }
 
@@ -224,6 +237,8 @@ public sealed class MimirRuntimeConfigFile
     public MimirAudioSyncConfig? AudioSync { get; set; }
 
     public List<MimirStreamConfig> Streams { get; set; } = [];
+
+    public List<MimirMoveProofRuntimeConfiguration> MoveProof { get; set; } = [];
 }
 
 public sealed class MimirAudioSyncConfig

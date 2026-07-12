@@ -104,6 +104,15 @@ a named invariant that the native runtime cannot protect yet.
   duplicate frame admission. `Mimir.BufferSmoke --move-proof-runtime-driver-smoke`
   proves `MimirRuntime.Update` can pull one ring frame into the same-sequence
   proof chain and visible spline frame.
+- `MimirMoveProofRuntimeConfiguration` is the typed runtime configuration and
+  validation contract for future real Move proof subscriptions. An enabled
+  source names the Muninn evidence stream, native reservoir path, Mimir evidence
+  and pose frame prefixes, Fensalir presented-frame prefix, fusion authority,
+  consumer contract, and at least two calibrated camera witnesses. It creates
+  `MimirMoveProofRuntimeDriver` only after the supplied ring stream id matches
+  the configured evidence stream. The current C# CultMesh ring used by the
+  smoke is still in-process; real Nightwing/Starfire cross-process ring opening
+  remains pending.
 - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
   `MIMIR_MOVE_PROOF_DEV_SURFACE`. It uses the same runtime proof attachment so
   `Mimir.BufferSmoke --move-proof-presented-frame-smoke` can run `Mimir.App`

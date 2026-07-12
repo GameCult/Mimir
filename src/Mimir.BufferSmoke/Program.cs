@@ -161,6 +161,12 @@ if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-driver-smoke", Stri
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-proof-runtime-config-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveProofRuntimeDriverSmoke(
+        ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-proof-presented-frame-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveProofPresentedFrameSmoke(
@@ -2337,31 +2343,56 @@ static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath)
                 Battery01: 0.72f,
                 ObservedAt: observedAt)
         ]);
-    var calibration = new MimirMoveFusionRigCalibration(
-        CalibrationId: "mimir-move-stage-calibration-v1",
-        TrackingSpaceId: "mimir-stage-space",
-        Cameras:
-        [
-            new MimirMoveFusionCameraCalibration(
-                CameraId: "nightwing:ps3-eye-0",
-                WitnessIdHash: leftWitnessHash,
-                PositionMeters: new MimirVector3Snapshot(-0.1, 0.0, 0.0),
-                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
-                FocalLengthXPx: 100.0,
-                FocalLengthYPx: 100.0,
-                PrincipalPointXPx: 160.0,
-                PrincipalPointYPx: 120.0),
-            new MimirMoveFusionCameraCalibration(
-                CameraId: "starfire:ps3-eye-1",
-                WitnessIdHash: rightWitnessHash,
-                PositionMeters: new MimirVector3Snapshot(0.1, 0.0, 0.0),
-                Orientation: new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
-                FocalLengthXPx: 100.0,
-                FocalLengthYPx: 100.0,
-                PrincipalPointXPx: 160.0,
-                PrincipalPointYPx: 120.0)
-        ],
-        MaximumAssociationSkewMilliseconds: 20.0);
+    var configuration = new MimirMoveProofRuntimeConfiguration
+    {
+        EvidenceStreamId = streamId,
+        NativeReservoirPath = nativeReservoirPath,
+        MimirEvidenceSourceId = "mimir:starfire:move-evidence",
+        MimirEvidenceFramePrefix = "mimir:starfire:move-evidence",
+        MimirPoseFramePrefix = "mimir:starfire:move-pose",
+        MimirPoseProducerPeerId = "mimir:starfire",
+        FensalirFramePrefix = "fensalir:starfire:presented-frame",
+        Calibration = new MimirMoveProofCalibrationConfiguration
+        {
+            CalibrationId = "mimir-move-stage-calibration-v1",
+            TrackingSpaceId = "mimir-stage-space",
+            Cameras =
+            [
+                new MimirMoveProofCameraCalibrationConfiguration
+                {
+                    CameraId = "nightwing:ps3-eye-0",
+                    WitnessIdHash = leftWitnessHash,
+                    PositionMeters = new MimirVector3Snapshot(-0.1, 0.0, 0.0),
+                    Orientation = new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                    FocalLengthXPx = 100.0,
+                    FocalLengthYPx = 100.0,
+                    PrincipalPointXPx = 160.0,
+                    PrincipalPointYPx = 120.0,
+                },
+                new MimirMoveProofCameraCalibrationConfiguration
+                {
+                    CameraId = "starfire:ps3-eye-1",
+                    WitnessIdHash = rightWitnessHash,
+                    PositionMeters = new MimirVector3Snapshot(0.1, 0.0, 0.0),
+                    Orientation = new MimirQuaternionSnapshot(0.0, 0.0, 0.0, 1.0),
+                    FocalLengthXPx = 100.0,
+                    FocalLengthYPx = 100.0,
+                    PrincipalPointXPx = 160.0,
+                    PrincipalPointYPx = 120.0,
+                }
+            ],
+            MaximumAssociationSkewMilliseconds = 20.0,
+        },
+    };
+    var configErrors = configuration.Validate();
+    var invalidErrors = new MimirMoveProofRuntimeConfiguration().Validate();
+    if (configErrors.Length > 0 || invalidErrors.Length == 0)
+    {
+        Console.Error.WriteLine(
+            $"move-proof-runtime-driver-smoke config-invalid errors={string.Join("|", configErrors)} invalidDefaultErrors={invalidErrors.Length}");
+        return 1;
+    }
+
     var catalog = CultMesh.CreateStreamCatalog();
     catalog.Declare(MimirMuninnMoveEvidenceAdapter.CreateStreamDescriptor(
         streamId,
@@ -2378,16 +2409,7 @@ static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath)
 
     catalog.PublishFrame(published);
     using var reservoir = new MimirNativeReservoirRuntime(nativeReservoirPath);
-    var driver = new MimirMoveProofRuntimeDriver(
-        ring,
-        reservoir,
-        calibration,
-        new MimirMoveProofRuntimeDriverOptions(
-            MimirEvidenceSourceId: "mimir:starfire:move-evidence",
-            MimirEvidenceFramePrefix: "mimir:starfire:move-evidence",
-            MimirPoseFramePrefix: "mimir:starfire:move-pose",
-            MimirPoseProducerPeerId: "mimir:starfire",
-            FensalirFramePrefix: "fensalir:starfire:presented-frame"));
+    var driver = configuration.CreateDriver(ring, reservoir);
     var runtime = new MimirRuntime(
         new AquariumRuntimeOptions(Headless: true, CultCachePath: ""),
         new MimirSynchronizationSettings());
@@ -2403,7 +2425,7 @@ static int RunMoveProofRuntimeDriverSmoke(string nativeReservoirPath)
     var duplicateSuppressed = reservoir.Status.MoveEvidenceCount.ToUInt64() == 1UL;
 
     Console.WriteLine(
-        $"move-proof-runtime-driver-smoke proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} splines={proofSplineCount} duplicateSuppressed={duplicateSuppressed}");
+        $"move-proof-runtime-driver-smoke proof={proofSurface?.ProofId ?? "none"} chain={proofSurface?.MuninnEvidenceFrameId ?? "none"}->{proofSurface?.MimirEvidenceFrameId ?? "none"}->{proofSurface?.MimirPoseFrameId ?? "none"}->{proofSurface?.FensalirFrameId ?? "none"} verdict={proofSurface?.Verdict.ToString() ?? "none"} splines={proofSplineCount} duplicateSuppressed={duplicateSuppressed} configValid={configErrors.Length == 0} invalidDefaultErrors={invalidErrors.Length}");
 
     return proofSurface is not null &&
         proofSurface.IsFullPose &&

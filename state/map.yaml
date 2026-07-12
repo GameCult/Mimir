@@ -155,6 +155,15 @@ accepted_design:
     actual Muninn frame suffix, calls `MimirMoveProofPipeline`, and suppresses
     duplicate frame admission so the live loop cannot re-admit one frame and
     impersonate progress.
+  - `MimirMoveProofRuntimeConfiguration` is the typed selection and validation
+    surface for that runtime bridge. An enabled proof source names the Muninn
+    evidence stream, native reservoir path, Mimir evidence/pose frame prefixes,
+    Fensalir presented-frame prefix, fusion authority, consumer contract, and
+    at least two calibrated camera witnesses. It may create a
+    `MimirMoveProofRuntimeDriver` only when the supplied CultMesh ring stream id
+    matches the configured evidence stream. The current C# shared-memory ring
+    smoke is still in-process; real Nightwing/Starfire cross-process ring
+    opening remains pending.
   - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
     `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
     surface through the same MimirRuntime attachment so headless Mimir.App can

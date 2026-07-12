@@ -39,6 +39,7 @@ direct
     private readonly MimirSynchronizationHub synchronization;
     private readonly MimirAudioSpectrumAnalyzer spectrumAnalyzer;
     private readonly IReadOnlyList<MimirStreamSourceFactory> sourceFactories;
+    private readonly IReadOnlyList<MimirMoveProofRuntimeConfiguration> configuredMoveProofSources;
     private readonly AquariumUiDocument ui;
     private readonly AquariumAudioDocument audio = new();
     private readonly MimirAudioSynchronizationSettings audioSyncSettings;
@@ -71,7 +72,7 @@ direct
     }
 
     public MimirRuntime(AquariumRuntimeOptions options, MimirRuntimeConfiguration configuration)
-        : this(options, configuration.Settings, configuration.SourceFactories)
+        : this(options, configuration.Settings, configuration.SourceFactories, configuration.MoveProofSources)
     {
     }
 
@@ -84,7 +85,7 @@ direct
         AquariumRuntimeOptions options,
         MimirSynchronizationSettings settings,
         IEnumerable<IMimirStreamSource> streamSources)
-        : this(options, settings, Array.Empty<MimirStreamSourceFactory>())
+        : this(options, settings, Array.Empty<MimirStreamSourceFactory>(), Array.Empty<MimirMoveProofRuntimeConfiguration>())
     {
         foreach (var source in streamSources)
         {
@@ -95,12 +96,14 @@ direct
     private MimirRuntime(
         AquariumRuntimeOptions options,
         MimirSynchronizationSettings settings,
-        IEnumerable<MimirStreamSourceFactory> sourceFactories)
+        IEnumerable<MimirStreamSourceFactory> sourceFactories,
+        IEnumerable<MimirMoveProofRuntimeConfiguration> moveProofSources)
     {
         Options = options;
         synchronization = new MimirSynchronizationHub(settings);
         spectrumAnalyzer = new MimirAudioSpectrumAnalyzer(ParseSpectrumFftSize());
         this.sourceFactories = sourceFactories.ToArray();
+        configuredMoveProofSources = moveProofSources.ToArray();
         audioSyncSettings = settings.Audio;
         telemetryIntervalSeconds = ParseTelemetryIntervalSeconds();
         audioSyncUpdateIntervalSeconds = ParseAudioSyncIntervalSeconds();
@@ -288,6 +291,7 @@ direct
                 panel.Readout("Chirplet reference", DescribeChirpletReference);
                 panel.Section("Move Proof");
                 panel.Readout("Latest proof", DescribeMoveProofSurface);
+                panel.Readout("Configured proof", DescribeConfiguredMoveProofSources);
                 panel.Readout("Proof drivers", DescribeMoveProofDrivers);
                 panel.Section("Live FFT");
                 panel.Readout("Spectrum cadence", () => sceneReady
@@ -323,6 +327,19 @@ direct
         }
 
         return string.Join(Environment.NewLine, moveProofDrivers.Select(driver => driver.Describe()));
+    }
+
+    private string DescribeConfiguredMoveProofSources()
+    {
+        if (configuredMoveProofSources.Count == 0)
+        {
+            return "No Move proof sources configured.";
+        }
+
+        return string.Join(
+            Environment.NewLine,
+            configuredMoveProofSources.Select(source =>
+                $"{source.EvidenceStreamId} -> {source.MimirPoseFramePrefix}:<sequence> cameras={source.Calibration.Cameras.Count}"));
     }
 
     private void UpdateMoveProofSurfaces()
