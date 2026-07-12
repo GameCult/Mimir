@@ -134,10 +134,12 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-cultmesh-stream-smoke", St
         ParseStringOption(args, "--native-reservoir", DefaultNativeReservoirPath()));
 }
 
-if (args.Any(arg => string.Equals(arg, "--muninn-move-odin-live-smoke", StringComparison.OrdinalIgnoreCase)))
+if (args.Any(arg => string.Equals(arg, "--muninn-move-odin-live-smoke", StringComparison.OrdinalIgnoreCase)) ||
+    args.Any(arg => string.Equals(arg, "--muninn-move-odin-optical-live-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMuninnMoveOdinLiveSmoke(
-        ParseStringOption(args, "--odin-cultmesh-uri", "cultmesh://127.0.0.1:17871/rendezvous/provider-catalog"));
+        ParseStringOption(args, "--odin-cultmesh-uri", "cultmesh://127.0.0.1:17871/rendezvous/provider-catalog"),
+        args.Any(arg => string.Equals(arg, "--muninn-move-odin-optical-live-smoke", StringComparison.OrdinalIgnoreCase)));
 }
 
 if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
@@ -1924,7 +1926,7 @@ static async Task<int> RunMuninnMoveLiveRosterSmokeAsync(IReadOnlyList<string> i
             : 1;
 }
 
-static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri)
+static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri, bool requireOptical = false)
 {
     const string providerId = "muninn.telemetry.nightwing";
     const string streamId = "muninn:nightwing:move-evidence";
@@ -1945,7 +1947,7 @@ static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri)
 
     using (lease)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(requireOptical ? 45 : 8);
         while (DateTime.UtcNow < deadline)
         {
             if (lease.Ring.TryAcquireLatestRead(out var frameLease))
@@ -1956,7 +1958,12 @@ static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri)
                         frameLease.Memory[..frameLease.Handle.ByteLength]);
                     var ok = frame.FrameId.StartsWith($"{streamId}:", StringComparison.Ordinal) &&
                         frame.ControllerStates.Length >= 1 &&
-                        discovered.Channel == "move-evidence";
+                        discovered.Channel == "move-evidence" &&
+                        (!requireOptical || frame.MarkerCandidates.Any(marker => !string.IsNullOrWhiteSpace(marker.MoveId)));
+                    if (!ok && requireOptical)
+                    {
+                        continue;
+                    }
                     Console.WriteLine(JsonSerializer.Serialize(new
                     {
                         ok,
@@ -1965,7 +1972,13 @@ static int RunMuninnMoveOdinLiveSmoke(string odinCultMeshUri)
                         frame.FrameId,
                         frame.ProducerPeerId,
                         controllers = frame.ControllerStates.Select(state => state.MoveId).Distinct().Order().ToArray(),
-                        markers = frame.MarkerCandidates.Length
+                        markers = frame.MarkerCandidates.Length,
+                        markerMoveIds = frame.MarkerCandidates
+                            .Select(marker => marker.MoveId)
+                            .Where(moveId => !string.IsNullOrWhiteSpace(moveId))
+                            .Distinct()
+                            .Order()
+                            .ToArray()
                     }));
                     return ok ? 0 : 1;
                 }
