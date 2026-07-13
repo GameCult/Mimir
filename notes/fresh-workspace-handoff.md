@@ -81,11 +81,12 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 - Nightwing Move tracking is one Muninn provider with two private per-eye
   PSMoveAPI worker subprocesses. Eye 0 uses exposure 0.3; Eye 1 uses 0.1.
-  Both workers calibrate four Moves and advance continuously. Mimir has proved
-  all four stable IDs on Eye 0, two on Eye 1, and two cross-camera
-  correspondences. Next fix the aggregate evidence RUDP cadence (only two
-  frames reached a persistent subscriber in 20-60 seconds), then earn four-ID
-  stereo overlap before feeding camera calibration.
+  Both workers calibrate four Moves and advance continuously. Mimir has now
+  proved all four stable IDs on both eyes in the same frames. The latest
+  15-second receipt contains 16 observations and eight pair records but only
+  two unique aggregate frame IDs. Next measure parent publication and RUDP send
+  counters directly, fix cadence, then collect diverse correspondences for
+  camera calibration.
 
 - Implement the first concrete Leap direct capture driver and measure cadence.
 - Add remaining camera drivers through `IMimirVideoCaptureDriver`.

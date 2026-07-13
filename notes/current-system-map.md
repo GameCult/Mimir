@@ -205,10 +205,11 @@ and camera-tagged observations over bounded MessagePack pipes.
 calibration, update/observation counters, RGB range, and expected-hue pixel
 evidence. Live exposure is 0.3 for `nightwing-eye-0` and 0.1 for
 `nightwing-eye-1`. Both eyes calibrate all four Moves and produce observations.
-The latest Mimir window saw all four IDs on Eye 0, two on Eye 1, and two
-same-ID cross-camera correspondences. Do not claim full stereo calibration yet:
-four-ID overlap is incomplete and the RUDP subscriber currently receives only
-two aggregate frames per 20-60 second window despite continuous worker updates.
+The latest Mimir window saw all four IDs on both eyes, with 16 camera
+observations and eight same-ID pair records across two aggregate frames. Do not
+claim full stereo calibration yet: the RUDP subscriber still received only two
+unique frame IDs in 15 seconds, so correspondence diversity and cadence remain
+unproven despite complete per-frame overlap.
 `MimirMoveProofSurface` is the first Fensalir-visible proof surface for this
 chain. It consumes the Mimir admission receipt and the Mimir-owned pose stream
 frame, emits `mimir.move_proof_surface.v1`, and lowers an observer-only
