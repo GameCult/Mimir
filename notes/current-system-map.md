@@ -215,6 +215,13 @@ both eyes. The same parent PID survived the run; transport health reported
 5,302 produced frames, 5,301 handoffs, 771 sends, and zero local-ring
 admissions. Full stereo calibration is still not implied: intrinsics and
 spatially diverse correspondences must earn the camera matrices.
+`MimirMoveStereoCalibrationAssessment` is the typed observability gate before
+any fit. It accepts only same aggregate-frame, same-Move correspondences and
+reports synchronized pair count, Move diversity, per-Eye 4x3 grid coverage,
+radius range, and missing physical inputs. The corrected live capture produced
+130 same-frame pairs with zero frame skew, but only 4/12 Eye 0 cells and 2/12
+Eye 1 cells; intrinsics and measured orb radius are also absent, so promotion is
+correctly false.
 `MimirMoveProofSurface` is the first Fensalir-visible proof surface for this
 chain. It consumes the Mimir admission receipt and the Mimir-owned pose stream
 frame, emits `mimir.move_proof_surface.v1`, and lowers an observer-only

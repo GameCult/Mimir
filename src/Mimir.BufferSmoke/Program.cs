@@ -154,6 +154,17 @@ if (args.Any(arg => string.Equals(arg, "--muninn-move-visibility-window-smoke", 
         ParseStringOption(args, "--output", "artifacts/move-calibration/muninn-visibility-window.mpack"));
 }
 
+if (args.Any(arg => string.Equals(arg, "--move-stereo-calibration-assessment", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunMoveStereoCalibrationAssessment(
+        ParseStringOption(args, "--input", "artifacts/move-calibration/muninn-clocked-aggregator.mpack"),
+        ParseStringOption(args, "--output", "artifacts/move-calibration/stereo-assessment.mpack"),
+        ParseIntOption(args, "--image-width", 640),
+        ParseIntOption(args, "--image-height", 480),
+        args.Any(arg => string.Equals(arg, "--intrinsics-available", StringComparison.OrdinalIgnoreCase)),
+        ParseDoubleOption(args, "--orb-radius-meters", 0.0));
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveFusionSmoke();
@@ -2071,16 +2082,20 @@ static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durati
         }
 
         var correspondences = observations
-            .GroupBy(observation => observation.MoveId, StringComparer.Ordinal)
-            .SelectMany(group =>
+            .GroupBy(observation => (observation.FrameId, observation.MoveId))
+            .Select(group =>
             {
-                var first = group.Where(value => value.CameraId == cameraIds[0]).ToArray();
-                var second = group.Where(value => value.CameraId == cameraIds[1]).ToArray();
-                return first.Select(left => second
-                        .Select(right => new MoveCrossCameraCorrespondence(left.MoveId, left, right, Math.Abs(left.PublishedAtNs - right.PublishedAtNs)))
-                        .OrderBy(pair => pair.AbsoluteSkewNs).FirstOrDefault())
-                    .Where(pair => pair is not null)!;
+                var first = group.FirstOrDefault(value => value.CameraId == cameraIds[0]);
+                var second = group.FirstOrDefault(value => value.CameraId == cameraIds[1]);
+                return first is null || second is null
+                    ? null
+                    : new MoveCrossCameraCorrespondence(
+                        group.Key.MoveId,
+                        first,
+                        second,
+                        Math.Abs(first.PublishedAtNs - second.PublishedAtNs));
             })
+            .Where(pair => pair is not null)
             .Cast<MoveCrossCameraCorrespondence>()
             .ToArray();
         var receipt = new MoveVisibilityWindowReceipt(
@@ -2113,6 +2128,65 @@ static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durati
     {
         foreach (var source in leases) source.Lease.Dispose();
     }
+}
+
+static int RunMoveStereoCalibrationAssessment(
+    string inputPath,
+    string outputPath,
+    int imageWidth,
+    int imageHeight,
+    bool intrinsicsAvailable,
+    double orbRadiusMeters)
+{
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"move-stereo-calibration-assessment missing-input path={inputPath}");
+        return 1;
+    }
+
+    var receipt = MessagePackSerializer.Deserialize<MoveVisibilityWindowReceipt>(File.ReadAllBytes(inputPath));
+    var cameraIds = receipt.Observations
+        .Select(value => value.CameraId)
+        .Distinct(StringComparer.Ordinal)
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    var assessment = MimirMoveStereoCalibrationAssessment.Assess(
+        receipt,
+        imageWidth,
+        imageHeight,
+        cameraIds,
+        intrinsicsAvailable,
+        orbRadiusMeters);
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+    File.WriteAllBytes(outputPath, MessagePackSerializer.Serialize(assessment));
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        assessment.Schema,
+        inputPath,
+        outputPath,
+        assessment.CorrespondenceCount,
+        assessment.SynchronizedCorrespondenceCount,
+        assessment.SameFrameCorrespondenceCount,
+        assessment.DistinctMoveCount,
+        assessment.MedianAbsoluteSkewMilliseconds,
+        assessment.MaximumAbsoluteSkewMilliseconds,
+        assessment.IntrinsicsAvailable,
+        assessment.OrbRadiusMetersAvailable,
+        assessment.ReadyForRelativePoseFit,
+        assessment.Promoted,
+        assessment.MissingRequirements,
+        cameras = assessment.Cameras.Select(camera => new
+        {
+            camera.CameraId,
+            camera.ObservationCount,
+            camera.OccupiedGridCells,
+            camera.GridCellCount,
+            spanX = camera.MaximumXPx - camera.MinimumXPx,
+            spanY = camera.MaximumYPx - camera.MinimumYPx,
+            radiusRatio = camera.MinimumRadiusPx > 0.0 ? camera.MaximumRadiusPx / camera.MinimumRadiusPx : double.NaN
+        })
+    }));
+    return assessment.Promoted ? 0 : 2;
 }
 
 static int RunMuninnMoveCultMeshStreamSmoke(string nativeReservoirPath)

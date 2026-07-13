@@ -267,6 +267,14 @@ accepted_design:
     remote handoffs, 771 sends during the subscription, and zero local-ring
     admissions. Cadence and full overlap are earned; calibrated camera matrices
     still require intrinsics and spatially diverse correspondence capture.
+  - `MimirMoveStereoCalibrationAssessment` owns the pre-fit observability gate
+    as `mimir.move_stereo_calibration_assessment.v1`. It consumes a typed
+    visibility receipt, counts only same-frame/same-Move stereo pairs, measures
+    per-Eye image-grid and radius coverage, and refuses promotion when
+    intrinsics, measured orb radius, synchronized sample count, or spatial
+    diversity are missing. The corrected 2026-07-13 live receipt contained 130
+    honest same-frame pairs at zero frame skew, but Eye 0 occupied only 4/12
+    grid cells and Eye 1 only 2/12; no camera matrices were promoted.
   - `MimirMuninnMoveEvidenceAdapter.TryAdmitLatestCultMeshFrame` now exposes a
     typed admission receipt with decoded frame id, producer, publish/read
     timestamps, sample counts by kind, source/arrival ranges, native reservoir
