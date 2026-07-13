@@ -196,9 +196,19 @@ Y8 frame run through `muninn-move-tracker` serializes a non-empty marker
 candidate into the Mimir-compatible evidence frame. The daemon now has a
 source-local Y8 extraction/publish seam plus a first `serve` camera producer:
 `--move-marker-camera <camera-id>=<device-path>` polls a Unix V4L2 YUYV frame,
-converts it to compact Y8, and feeds that same seam. Windows unit tests prove
-the configured camera tick publishes marker evidence through the shared frame
-contract; Nightwing hardware/live V4L2 proof is still pending.
+converts it to compact Y8, and feeds that same seam. Nightwing hardware now
+runs as one Muninn provider with two private per-eye PSMoveAPI subprocesses.
+The parent alone owns lights, identity, commands, provider advertisement,
+persistence, and the aggregate evidence stream; children exchange hue state
+and camera-tagged observations over bounded MessagePack pipes.
+`muninn.move_tracker_health.v1` exposes each worker's camera backend,
+calibration, update/observation counters, RGB range, and expected-hue pixel
+evidence. Live exposure is 0.3 for `nightwing-eye-0` and 0.1 for
+`nightwing-eye-1`. Both eyes calibrate all four Moves and produce observations.
+The latest Mimir window saw all four IDs on Eye 0, two on Eye 1, and two
+same-ID cross-camera correspondences. Do not claim full stereo calibration yet:
+four-ID overlap is incomplete and the RUDP subscriber currently receives only
+two aggregate frames per 20-60 second window despite continuous worker updates.
 `MimirMoveProofSurface` is the first Fensalir-visible proof surface for this
 chain. It consumes the Mimir admission receipt and the Mimir-owned pose stream
 frame, emits `mimir.move_proof_surface.v1`, and lowers an observer-only

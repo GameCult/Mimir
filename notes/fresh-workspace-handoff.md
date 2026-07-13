@@ -34,10 +34,10 @@ Get-Content .\state\evidence.jsonl -Tail 8
   `cultnet.transport.rudp.v0`; TCP/HTTP/WebSocket are client lowerings,
   compatibility probes, or migration debt unless a specific runtime has not
   earned RUDP yet.
-- Mimir has daemon-health publication edges into the Odin/Idunn swarm:
-  `src/Mimir.EveDashboard` and `src/Mimir.EveBrowserReference` publish
-  `idunn.daemon_health` records over `cultnet.transport.rudp.v0` when
-  configured. These are self-health witnesses, not lifecycle owners.
+- Mimir's old Eve dashboard broker is archived and no longer publishes Idunn
+  health, `/eve/deck`, `/eve/dashboard`, or WebSocket commands. The browser
+  reference is a client lowering, not service truth. Dashboard state must return
+  as typed CultMesh/Eve documents through Odin before deployment resumes.
 - The live stream app is C# plus Fensalir: `Mimir.slnx` contains
   `src/Mimir.App` and `src/Mimir.Runtime`.
 - `src/Mimir.App` hosts Fensalir as the windowing/rendering/D3D12 bridge.
@@ -79,6 +79,14 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Current Pressure
 
+- Nightwing Move tracking is one Muninn provider with two private per-eye
+  PSMoveAPI worker subprocesses. Eye 0 uses exposure 0.3; Eye 1 uses 0.1.
+  Both workers calibrate four Moves and advance continuously. Mimir has proved
+  all four stable IDs on Eye 0, two on Eye 1, and two cross-camera
+  correspondences. Next fix the aggregate evidence RUDP cadence (only two
+  frames reached a persistent subscriber in 20-60 seconds), then earn four-ID
+  stereo overlap before feeding camera calibration.
+
 - Implement the first concrete Leap direct capture driver and measure cadence.
 - Add remaining camera drivers through `IMimirVideoCaptureDriver`.
 - Add native audio capture workers for mic, loopback, and network audio feeds.
@@ -89,23 +97,22 @@ Get-Content .\state\evidence.jsonl -Tail 8
   output management.
 - Keep PowerShell/FFmpeg/SRT as bridge utilities until native Mimir program
   output, Eve operation, and Yggdrasil site publication replace them.
-- Yggdrasil currently runs the CultMesh media relay on UDP `3075` from
-  `/opt/gamecult/mimir-cultmesh-media/Mimir.CultMeshMedia`; Starfire currently
-  runs the receiver PID from
-  `artifacts/mimir-cultmesh-media-win-x64-selfcontained/Mimir.CultMeshMedia.exe`
-  and writes `raven-primary-av` to `udp://127.0.0.1:5200`. OBS source
-  `Raven Monitor + Realtek` has been repointed from old SRT to that local UDP
-  endpoint. Raven SSH timed out, so launch
-  `scripts/start-raven-cultmesh-av-sender.ps1` on Raven directly.
-- Keep Eve dashboard/browser-reference RUDP health aligned with Odin/Idunn:
-  Odin accepts the Verse/service map, Idunn owns daemon continuity, and Mimir
-  processes publish typed health/freshness only for themselves. The next
-  dashboard boundary cut is provider advertisement, retained state,
-  command_boundary, and transport_profile over RUDP so HTTP/WebSocket catalog
-  ingestion can be demoted to client/debug lowering.
-- Cut the remaining Eve dashboard, recorder, and witness service truth paths to
-  explicit CultNet RUDP records next; no new TCP, HTTP, or WebSocket surface
-  should be allowed to become daemon or transport truth.
+- Yggdrasil currently runs the CultMesh media relay from
+  `/opt/gamecult/mimir-cultmesh-media/Mimir.CultMeshMedia`; senders and
+  receivers target `cultmesh://asgard.yggdrasil.mimir/media/raven-primary-av`
+  and let the CultMesh resolver choose the concrete RUDP route. Starfire writes
+  `raven-primary-av` to `udp://127.0.0.1:5200`. That is the
+  `Mimir.CultMeshMedia` body bridge, not the OBS plugin feed owner.
+- The actual Raven OBS/SRT feed owner is Odin's Muninn on Raven. Use
+  `scripts/start-raven-muninn-obs-feed.ps1` in this repo as the thin wrapper
+  over `E:\Projects\Odin\scripts\activate-muninn-raven-av-srt.ps1`, which
+  drives Raven's real `GameCult-Muninn-Activate` hidden task and
+  `muninn.exe activate` path. `scripts/start-raven-cultmesh-av-sender.ps1`
+  remains the separate CultMesh bridge/bootstrap lane.
+- Rebuild Eve dashboard only as a CultMesh/Odin surface publisher plus renderer
+  lowering. Provider advertisement, retained state, command boundary, transport
+  profile, and command documents must be typed CultMesh records; no TCP, HTTP,
+  or WebSocket surface should become daemon or transport truth.
 - Kiyo Pro has two UVC extension units. Moving it to a motherboard USB3 port
   changed the descriptor path to `root_hub30` / `bcdUSB=0x0320` and exposed
   720p/1080p YUY2/MJPG/H264/NV12 at 60 fps, but Windows still reports

@@ -194,6 +194,22 @@ accepted_design:
     both the `mimir.move_proof_evidence_frame_snapshot.v1` tuple and embedded
     Muninn payload. This supports Nightwing field capture/replay through Mimir's
     snapshot provider while the final live ring/page transport remains pending.
+  - Nightwing field capture/replay has proven the one-copy snapshot mechanics,
+    but the first `FullPose` replay was physically false-positive evidence.
+    Muninn `d4f229a` bundles latest controller state with aggregated marker
+    candidates from both Nightwing PS3 Eyes into one evidence frame, with the
+    snapshot payload encoded as MessagePack bytes. The preserved artifact
+    `artifacts/runtime/nightwing-move-proof-20260712-1041-aggregate.mpack`
+    replays through `Mimir.BufferSmoke --move-proof-runtime-snapshot-file-smoke`
+    as `muninn:nightwing:move-evidence:1 -> mimir:starfire:move-evidence:1 ->
+    mimir:starfire:move-pose:1 -> fensalir:starfire:presented-frame:1`, but
+    the operator confirmed the Move markers were dark during that capture. Treat
+    its 99 marker candidates as bright image blobs/noise and use the artifact
+    only as evidence that Muninn/Mimir/Fensalir replay plumbing works and needs
+    marker-lit validation. A valid field pose proof still requires lighting the
+    PS Move orb, capturing real optical marker candidates from calibrated camera
+    witnesses, and preserving the explicit same-sequence proof spine. The final
+    live cross-process CultMesh ring/page proof remains pending.
   - `MimirMoveProofDevSurface` is a dev-only bootstrap gated by
     `MIMIR_MOVE_PROOF_DEV_SURFACE`. It publishes a synthetic calibrated proof
     surface through the same MimirRuntime attachment so headless Mimir.App can
@@ -232,9 +248,19 @@ accepted_design:
     evidence. The daemon now has a source-local Y8 extraction/publish seam and
     a first `serve` camera producer: `--move-marker-camera <camera-id>=<device-path>`
     polls a Unix V4L2 YUYV frame, converts it to compact Y8, and feeds that
-    same seam. Unit tests prove the configured camera tick publishes marker
-    evidence through the shared frame contract; Nightwing hardware/live V4L2
-    proof is still pending.
+    same seam. Nightwing now runs one public Muninn provider whose two private
+    per-eye PSMoveAPI subprocesses exchange hue state, observations, and health
+    with the parent through bounded MessagePack pipes. Children own no store,
+    provider advertisement, command route, or light output. Typed
+    `muninn.move_tracker_health.v1` records expose camera backend, calibration,
+    update/observation counts, RGB range, and expected-hue pixel evidence.
+    Live field proof on 2026-07-13 established Eye 0 at exposure 0.3 and Eye 1
+    at 0.1; both calibrated four Moves and produced observations. A Mimir
+    visibility window saw all four IDs on Eye 0, two IDs on Eye 1, and two
+    cross-camera correspondences. Full four-ID stereo coverage and stream
+    cadence remain pending: the remote subscriber received only two aggregate
+    frames during both 20-second and 60-second windows despite continuously
+    advancing tracker workers.
   - `MimirMuninnMoveEvidenceAdapter.TryAdmitLatestCultMeshFrame` now exposes a
     typed admission receipt with decoded frame id, producer, publish/read
     timestamps, sample counts by kind, source/arrival ranges, native reservoir
