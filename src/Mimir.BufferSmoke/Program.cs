@@ -165,6 +165,16 @@ if (args.Any(arg => string.Equals(arg, "--move-stereo-calibration-assessment", S
         ParseDoubleOption(args, "--orb-radius-meters", 0.0));
 }
 
+if (args.Any(arg => string.Equals(arg, "--sensor-calibration-session-live", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunSensorCalibrationSessionLive(
+        ParseStringOption(args, "--odin-cultmesh-uri", "cultmesh://127.0.0.1:17871/rendezvous/provider-catalog"),
+        ParseIntOption(args, "--duration-seconds", 120),
+        ParseStringOption(args, "--output-prefix", "artifacts/move-calibration/live-session"),
+        ParseRepeatedStringOption(args, "--wand-id", [
+            "move-0006f523e2d1", "move-000704a39772", "move-000704a6be5f", "move-000704a800d0"]));
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveFusionSmoke();
@@ -2130,6 +2140,126 @@ static int RunMuninnMoveVisibilityWindowSmoke(string odinCultMeshUri, int durati
     }
 }
 
+static int RunSensorCalibrationSessionLive(
+    string odinCultMeshUri,
+    int durationSeconds,
+    string outputPrefix,
+    IReadOnlyCollection<string> wandIds)
+{
+    const string providerId = "muninn.telemetry.nightwing";
+    const string streamId = "muninn:nightwing:move-evidence";
+    var cameraIds = new[] { "nightwing-eye-0", "nightwing-eye-1" };
+    var configuration = new MimirMoveProofRuntimeConfiguration
+    {
+        OdinCultMeshUri = odinCultMeshUri,
+        MuninnProviderId = providerId,
+        EvidenceStreamId = streamId
+    };
+    if (!MimirOdinMoveProofEvidenceRingProvider.Instance.TryOpenEvidenceRing(configuration, out var lease, out var diagnostic) || lease is null)
+        throw new InvalidOperationException($"{providerId}: {diagnostic}");
+
+    using (lease)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        var session = MimirSensorCalibrationSessions.CreateFourWandOpticalSession(
+            wandIds, cameraIds, startedAt, Math.Max(1, durationSeconds));
+        var observations = new List<MoveVisibilityObservation>();
+        var seenFrames = new HashSet<string>(StringComparer.Ordinal);
+        var deadline = startedAt + TimeSpan.FromSeconds(Math.Max(1, durationSeconds));
+        var lastCheckpoint = DateTimeOffset.MinValue;
+        var evidencePath = $"{outputPrefix}.evidence.mpack";
+        var sessionPath = $"{outputPrefix}.session.mpack";
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(sessionPath))!);
+
+        while (DateTimeOffset.UtcNow < deadline && session.Phase == MimirSensorCalibrationSessionPhase.Collecting)
+        {
+            if (lease.Ring.TryAcquireLatestRead(out var frameLease))
+            {
+                using (frameLease)
+                {
+                    var frame = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(
+                        frameLease.Memory[..frameLease.Handle.ByteLength]);
+                    if (seenFrames.Add(frame.FrameId))
+                    {
+                        observations.AddRange(frame.MarkerCandidates
+                            .Where(marker => !string.IsNullOrWhiteSpace(marker.MoveId))
+                            .Select(marker => new MoveVisibilityObservation(
+                                providerId, marker.CameraId, marker.MoveId, frame.FrameId,
+                                frame.PublishedAtNs, marker.CenterXPx, marker.CenterYPx,
+                                marker.RadiusPx, marker.Score)));
+                    }
+                }
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            if ((now - lastCheckpoint).TotalSeconds >= 1.0)
+            {
+                var evidence = BuildVisibilityReceipt(startedAt, now, providerId, cameraIds, observations);
+                session = MimirSensorCalibrationSessions.UpdateCollection(session, evidence, 640, 480, now);
+                File.WriteAllBytes(evidencePath, MessagePackSerializer.Serialize(evidence));
+                File.WriteAllBytes(sessionPath, MessagePackSerializer.Serialize(session));
+                Console.WriteLine(JsonSerializer.Serialize(new
+                {
+                    session.SessionId,
+                    session.Phase,
+                    elapsedSeconds = Math.Round((now - startedAt).TotalSeconds, 1),
+                    frames = seenFrames.Count,
+                    observations = observations.Count,
+                    correspondences = evidence.Correspondences.Length,
+                    sensors = session.Sensors.Select(sensor => new
+                    {
+                        sensor.SensorId,
+                        sensor.ObservationCount,
+                        sensor.OccupiedGridCells,
+                        sensor.DistinctWandCount,
+                        radiusRatio = sensor.ObservationCount == 0 ? 0.0 : Math.Round(sensor.MaximumRadiusPx / sensor.MinimumRadiusPx, 2),
+                        sensor.MissingGridCells,
+                        sensor.CollectionComplete
+                    }),
+                    session.MissingRequirements
+                }));
+                lastCheckpoint = now;
+            }
+            Thread.Sleep(5);
+        }
+
+        var completedAt = DateTimeOffset.UtcNow;
+        var finalEvidence = BuildVisibilityReceipt(startedAt, completedAt, providerId, cameraIds, observations);
+        session = MimirSensorCalibrationSessions.UpdateCollection(session, finalEvidence, 640, 480, completedAt);
+        File.WriteAllBytes(evidencePath, MessagePackSerializer.Serialize(finalEvidence));
+        File.WriteAllBytes(sessionPath, MessagePackSerializer.Serialize(session));
+        Console.WriteLine(JsonSerializer.Serialize(new { final = true, session.SessionId, session.Phase, evidencePath, sessionPath, session.MissingRequirements }));
+        return session.Phase == MimirSensorCalibrationSessionPhase.Fitting ? 0 : 2;
+    }
+}
+
+static MoveVisibilityWindowReceipt BuildVisibilityReceipt(
+    DateTimeOffset startedAt,
+    DateTimeOffset endedAt,
+    string providerId,
+    IReadOnlyList<string> cameraIds,
+    IReadOnlyCollection<MoveVisibilityObservation> observations)
+{
+    var observationArray = observations.ToArray();
+    var correspondences = observationArray
+        .GroupBy(observation => (observation.FrameId, observation.MoveId))
+        .Select(group =>
+        {
+            var first = group.FirstOrDefault(value => value.CameraId == cameraIds[0]);
+            var second = group.FirstOrDefault(value => value.CameraId == cameraIds[1]);
+            return first is null || second is null ? null : new MoveCrossCameraCorrespondence(
+                group.Key.MoveId, first, second, Math.Abs(first.PublishedAtNs - second.PublishedAtNs));
+        })
+        .Where(value => value is not null)
+        .Cast<MoveCrossCameraCorrespondence>()
+        .ToArray();
+    return new MoveVisibilityWindowReceipt(
+        "mimir.move_visibility_window.v1",
+        startedAt.ToUnixTimeMilliseconds() * 1_000_000,
+        endedAt.ToUnixTimeMilliseconds() * 1_000_000,
+        [providerId], observationArray, correspondences);
+}
+
 static int RunMoveStereoCalibrationAssessment(
     string inputPath,
     string outputPath,
@@ -3361,7 +3491,7 @@ static int RunMoveProofPipelineSmoke(string nativeReservoirPath)
 
 static async Task<int> RunMoveCalibrationProtocolSmokeAsync(string outputPath)
 {
-    var protocol = MimirMoveCalibrationProtocol.CreateStarfireNightwingProtocol(
+    var protocol = MimirMoveCalibrationProtocol.CreateNightwingFourWandProtocol(
         new DateTimeOffset(2026, 6, 12, 14, 45, 0, TimeSpan.Zero));
     var errors = MimirMoveCalibrationProtocol.Validate(protocol);
     if (errors.Length > 0)
@@ -3388,7 +3518,7 @@ static async Task<int> RunMoveCalibrationProtocolSmokeAsync(string outputPath)
         $"move-calibration-protocol-smoke path={outputPath} protocol={protocol.ProtocolId} requiredStreams={requiredStreams} optionalStreams={optionalStreams} phases={protocol.Phases.Length} durationSeconds={totalDuration:0.0} outputs={protocol.Outputs.Length} questOptional={protocol.StreamRequirements.Any(stream => stream.StreamId.StartsWith("quest:", StringComparison.Ordinal))}");
 
     return requiredStreams >= 3 &&
-        protocol.Phases.Length == 7 &&
+        protocol.Phases.Length == 8 &&
         protocol.Outputs.Length == 4 &&
         protocol.Acceptance.RequiredDerivedOutputs.Length == 4
             ? 0

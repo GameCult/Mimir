@@ -1,24 +1,27 @@
 using System.Numerics;
+using MessagePack;
 
 namespace Mimir.Runtime.Synchronization;
 
+[MessagePackObject]
 public sealed record MimirMoveFusionCameraCalibration(
-    string CameraId,
-    ulong WitnessIdHash,
-    MimirVector3Snapshot PositionMeters,
-    MimirQuaternionSnapshot Orientation,
-    double FocalLengthXPx,
-    double FocalLengthYPx,
-    double PrincipalPointXPx,
-    double PrincipalPointYPx);
+    [property: Key(0)] string CameraId,
+    [property: Key(1)] ulong WitnessIdHash,
+    [property: Key(2)] MimirVector3Snapshot PositionMeters,
+    [property: Key(3)] MimirQuaternionSnapshot Orientation,
+    [property: Key(4)] double FocalLengthXPx,
+    [property: Key(5)] double FocalLengthYPx,
+    [property: Key(6)] double PrincipalPointXPx,
+    [property: Key(7)] double PrincipalPointYPx);
 
+[MessagePackObject]
 public sealed record MimirMoveFusionRigCalibration(
-    string CalibrationId,
-    string TrackingSpaceId,
-    IReadOnlyList<MimirMoveFusionCameraCalibration> Cameras,
-    double GyroUnitsPerRadianPerSecond = 1.0,
-    double MaximumAssociationSkewMilliseconds = 20.0,
-    double SingleRayFallbackDepthMeters = 1.5);
+    [property: Key(0)] string CalibrationId,
+    [property: Key(1)] string TrackingSpaceId,
+    [property: Key(2)] IReadOnlyList<MimirMoveFusionCameraCalibration> Cameras,
+    [property: Key(3)] double GyroUnitsPerRadianPerSecond = 1.0,
+    [property: Key(4)] double MaximumAssociationSkewMilliseconds = 20.0,
+    [property: Key(5)] double SingleRayFallbackDepthMeters = 1.5);
 
 public sealed record MimirMoveFusionResult(
     IReadOnlyList<MimirMoveControllerPoseDocument> Poses,

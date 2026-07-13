@@ -56,23 +56,15 @@ public sealed record MimirMoveCalibrationAcceptance(
 
 public static class MimirMoveCalibrationProtocol
 {
-    public static MimirMoveCalibrationProtocolDocument CreateStarfireNightwingProtocol(
+    public static MimirMoveCalibrationProtocolDocument CreateNightwingFourWandProtocol(
         DateTimeOffset? createdAt = null) =>
         new(
-            ProtocolId: "mimir-move-calibration-starfire-nightwing-v1",
+            ProtocolId: "mimir-move-calibration-nightwing-four-wand-v1",
             CreatedAtUtc: (createdAt ?? DateTimeOffset.UtcNow).ToString("O"),
             TrackingSpaceId: "mimir-stage-space",
             FusionAuthorityId: "mimir.runtime.move-fusion",
             StreamRequirements:
             [
-                new(
-                    "muninn:starfire:move-evidence",
-                    "starfire",
-                    "Muninn on Starfire",
-                    "Move optical marker candidates plus USB controller IMU/buttons",
-                    "CultMesh shared-memory bytes frame, same-host when Mimir runs on Starfire",
-                    Required: true,
-                    "Starfire owns the USB-attached Move and local camera witnesses."),
                 new(
                     "muninn:nightwing:move-evidence",
                     "nightwing",
@@ -81,6 +73,14 @@ public static class MimirMoveCalibrationProtocol
                     "CultMesh bytes stream over the Verse; shared-memory on Nightwing, network bridge to Starfire",
                     Required: true,
                     "Nightwing owns its USB-attached Move and local camera witnesses."),
+                new(
+                    "mimir:starfire:sensor-calibration-session",
+                    "starfire",
+                    "Mimir.Runtime",
+                    "Bounded calibration lifecycle, coverage, fit, validation, and promotion state",
+                    "Typed CultMesh state with CultCache persistence",
+                    Required: true,
+                    "Mimir owns the calibration task and its completion verdict."),
                 new(
                     "mimir:starfire:move-controller-poses",
                     "starfire",
@@ -128,36 +128,36 @@ public static class MimirMoveCalibrationProtocol
                     "preflight-streams",
                     "Stream liveness and clock edge check",
                     10.0,
-                    "Hold both Moves still and visible. Confirm Starfire, Nightwing, and optional Quest pose streams are fresh.",
-                    ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence"],
+                    "Hold the four Moves visible. Confirm Nightwing evidence and stable identities are fresh.",
+                    ["muninn:nightwing:move-evidence"],
                     ["stream-freshness", "clock-skew-estimate", "controller-id-map"]),
                 new(
                     "dark-stillness",
                     "IMU bias with orbs off",
                     8.0,
                     "Set Move lights off. Place both Moves still on the calibration surface.",
-                    ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence"],
+                    ["muninn:nightwing:move-evidence"],
                     ["gyro-bias", "accelerometer-gravity-vector", "magnetometer-baseline"]),
                 new(
                     "lit-stillness",
                     "Optical centroid and static gravity alignment",
                     8.0,
                     "Light one Move at a time, then both. Keep them still and visible to both camera sets.",
-                    ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence"],
+                    ["muninn:nightwing:move-evidence"],
                     ["camera-marker-centroid-stability", "light-command-to-controller-association"]),
                 new(
                     "axis-sweeps",
                     "Slow single-axis rotations",
                     24.0,
                     "Sweep each Move slowly through pitch, yaw, and roll while keeping the orb visible.",
-                    ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence"],
+                    ["muninn:nightwing:move-evidence"],
                     ["gyro-scale-fit", "accelerometer-frame-fit", "optical-angular-consistency"]),
                 new(
                     "figure-eight",
                     "Magnetometer and cross-axis motion",
                     20.0,
                     "Move each controller through a broad figure-eight. Leave the Quest headset/controllers stationary as the external VR reference cluster.",
-                    ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence"],
+                    ["muninn:nightwing:move-evidence"],
                     ["magnetometer-hard-soft-iron-fit", "cross-axis-coupling-check"]),
                 new(
                     "quest-reference",
@@ -167,11 +167,18 @@ public static class MimirMoveCalibrationProtocol
                     ["quest:usb:headset-pose", "quest:usb:left-controller-pose", "quest:usb:right-controller-pose"],
                     ["external-vr-pose-frame", "quest-to-mimir-frame-fit", "quest-clock-offset-estimate"]),
                 new(
+                    "wand-volume-sweep",
+                    "Four-wand optical volume coverage",
+                    120.0,
+                    "Wave all four uniquely identified wands throughout the shared camera volume until Mimir reports sufficient per-sensor coverage.",
+                    ["muninn:nightwing:move-evidence", "mimir:starfire:sensor-calibration-session"],
+                    ["sensor-grid-coverage", "same-frame-correspondences", "sphere-radius-range", "fit-and-held-out-partitions"]),
+                new(
                     "validation-pass",
                     "Held-out tracking validation",
                     15.0,
                     "Run free hand motion with both orbs visible. Mimir may publish validation poses, but not promote calibration if confidence fails.",
-                    ["muninn:starfire:move-evidence", "muninn:nightwing:move-evidence", "mimir:starfire:move-controller-poses"],
+                    ["muninn:nightwing:move-evidence", "mimir:starfire:move-controller-poses"],
                     ["triangulated-position-residuals", "imu-prediction-residuals", "promotion-decision"])
             ],
             Outputs:
@@ -227,14 +234,19 @@ public static class MimirMoveCalibrationProtocol
             errors.Add("required-streams-too-small");
         }
 
-        if (!protocol.StreamRequirements.Any(stream => stream.StreamId == "muninn:starfire:move-evidence" && stream.Required))
-        {
-            errors.Add("missing-starfire-muninn-move-evidence");
-        }
-
         if (!protocol.StreamRequirements.Any(stream => stream.StreamId == "muninn:nightwing:move-evidence" && stream.Required))
         {
             errors.Add("missing-nightwing-muninn-move-evidence");
+        }
+
+        if (!protocol.StreamRequirements.Any(stream => stream.StreamId == "mimir:starfire:sensor-calibration-session" && stream.Required))
+        {
+            errors.Add("missing-mimir-calibration-session");
+        }
+
+        if (!protocol.Phases.Any(phase => phase.PhaseId == "wand-volume-sweep"))
+        {
+            errors.Add("missing-wand-volume-sweep");
         }
 
         if (!protocol.Phases.Any(phase => phase.PhaseId == "dark-stillness"))
