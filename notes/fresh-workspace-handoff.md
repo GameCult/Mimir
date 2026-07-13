@@ -198,6 +198,17 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Immediate Re-entry Instruction
 
+The active priority is Nightwing Move calibration. One public Muninn observer
+owns two private Eye workers and one aggregate evidence stream. Odin commits
+`39c839a`, `a340c33`, `8aefd1c`, and `f82ca7a` give daemon health a persistent
+serviced RUDP session and move optical aggregation onto its own deadline-clocked
+loop. The 2026-07-13 receipt at
+`artifacts/move-calibration/muninn-clocked-aggregator.mpack` contains 622 frames,
+2,647 observations, and 1,384 cross-camera correspondences in 15 seconds, with
+all four Move IDs visible to both Eyes. Next collect spatially diverse samples,
+calibrate intrinsics/extrinsics, and publish residual-bearing typed calibration.
+Radius is a weighted range cue, not a substitute for camera calibration.
+
 The corrected two-hour study pass ran from
 `2026-05-23T23:54:42.9041588+01:00` to at least
 `2026-05-24T01:54:56.9747630+01:00`. Use its map first, then implement the

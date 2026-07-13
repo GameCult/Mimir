@@ -256,11 +256,17 @@ accepted_design:
     update/observation counts, RGB range, and expected-hue pixel evidence.
     Live field proof on 2026-07-13 established Eye 0 at exposure 0.3 and Eye 1
     at 0.1; both calibrated four Moves and produced observations. A Mimir
-    visibility window now sees all four IDs on both eyes. The latest 15-second
-    receipt carried 16 camera observations and eight same-ID pair records.
-    Stream cadence remains pending: only two unique aggregate frame IDs reached
-    the remote subscriber despite continuously advancing tracker workers, so
-    calibration diversity is not yet earned.
+    visibility window now sees all four IDs on both eyes. Muninn's dedicated
+    evidence aggregator owns frame sequencing and transport independently of
+    the 15-second CultCache telemetry loop; controller state is bundled but
+    cannot create an optical frame. Its deadline clock is capped by the
+    configured camera cadence. Field proof on 2026-07-13 kept one Muninn parent
+    PID alive, received 622 unique frames in 15 seconds, carried 2,647 camera
+    observations and 1,384 same-ID cross-camera correspondences, and saw every
+    stable Move ID from both eyes. Producer health reported 5,302 frames, 5,301
+    remote handoffs, 771 sends during the subscription, and zero local-ring
+    admissions. Cadence and full overlap are earned; calibrated camera matrices
+    still require intrinsics and spatially diverse correspondence capture.
   - `MimirMuninnMoveEvidenceAdapter.TryAdmitLatestCultMeshFrame` now exposes a
     typed admission receipt with decoded frame id, producer, publish/read
     timestamps, sample counts by kind, source/arrival ranges, native reservoir
@@ -628,13 +634,13 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Use the new bioacoustic timeline watermark as the active acoustic sync
-    direction. Cut the next implementation in this order: streaming indexed
-    log-mel/MFCC motif decoder state with a global clock/path hypothesis fed by
-    `--bioacoustic-train` receipts, calibration-session command/replay proof that learns
-    per-output/mic motif/formant response, fractional-delay/SRO actuator, then
-    native camera payload handles and Fensalir lowering. Keep chirp-bin
-    calibration captures as reference evidence, not the runtime target.
+    Use the stable single-provider Nightwing Move stream to collect a spatially
+    diverse stereo calibration session. Calibrate each Eye's intrinsics, fit
+    their relative extrinsics from timestamped same-ID correspondences, use
+    apparent orb radius only as a weighted distance cue after radius calibration,
+    and publish typed camera calibration plus residual evidence. Do not claim
+    precise camera matrices from overlap or radius alone. Then feed calibrated
+    witnesses through MimirMoveFusion and the named Fensalir proof spine.
     Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
     loopback, live mic buffers stay populated, runtime sync analysis now runs as
     a bounded rotating service without UI/telemetry re-entry, and the bioacoustic

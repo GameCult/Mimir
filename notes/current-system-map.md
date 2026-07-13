@@ -205,11 +205,16 @@ and camera-tagged observations over bounded MessagePack pipes.
 calibration, update/observation counters, RGB range, and expected-hue pixel
 evidence. Live exposure is 0.3 for `nightwing-eye-0` and 0.1 for
 `nightwing-eye-1`. Both eyes calibrate all four Moves and produce observations.
-The latest Mimir window saw all four IDs on both eyes, with 16 camera
-observations and eight same-ID pair records across two aggregate frames. Do not
-claim full stereo calibration yet: the RUDP subscriber still received only two
-unique frame IDs in 15 seconds, so correspondence diversity and cadence remain
-unproven despite complete per-frame overlap.
+Muninn's dedicated evidence aggregator now owns sequence and transport outside
+the 15-second CultCache telemetry loop. Cached controller state is bundled into
+fresh optical frames but cannot create frames by itself, and a deadline clock
+caps publication at the configured camera cadence. A 2026-07-13 Mimir field
+window received 622 unique frames in 15 seconds, 2,647 observations, and 1,384
+same-ID cross-camera correspondences while seeing all four stable Move IDs from
+both eyes. The same parent PID survived the run; transport health reported
+5,302 produced frames, 5,301 handoffs, 771 sends, and zero local-ring
+admissions. Full stereo calibration is still not implied: intrinsics and
+spatially diverse correspondences must earn the camera matrices.
 `MimirMoveProofSurface` is the first Fensalir-visible proof surface for this
 chain. It consumes the Mimir admission receipt and the Mimir-owned pose stream
 frame, emits `mimir.move_proof_surface.v1`, and lowers an observer-only
