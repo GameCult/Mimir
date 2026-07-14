@@ -36,7 +36,10 @@ public sealed class MimirOdinMoveProofEvidenceRingProvider : IMimirMoveProofEvid
         {
             var stream = Discover(configuration.OdinCultMeshUri, configuration.MuninnProviderId, configuration.EvidenceStreamId);
             ring = new CultMeshSharedMemoryFrameRing(configuration.EvidenceStreamId, slotCount: 4, slotByteLength: 256 * 1024);
-            pump = new MimirMoveEvidenceRudpPump(stream, ring);
+            pump = new MimirMoveEvidenceRudpPump(
+                stream,
+                ring,
+                () => Discover(configuration.OdinCultMeshUri, configuration.MuninnProviderId, configuration.EvidenceStreamId));
             pump.Start();
             lease = new MimirMoveProofEvidenceRingLease(ring, ownsRing: true, transportOwner: pump);
             diagnostic = $"Odin discovered {stream.ProviderId}/{stream.StreamId}; lowering {stream.Address}/{stream.Channel} into local CultMesh ring";
@@ -135,17 +138,23 @@ public sealed class MimirOdinMoveProofEvidenceRingProvider : IMimirMoveProofEvid
 
 internal sealed class MimirMoveEvidenceRudpPump : IDisposable
 {
-    private readonly MimirDiscoveredCultMeshInputStream stream;
+    private static readonly TimeSpan SourceStaleAfter = TimeSpan.FromSeconds(2);
+    private readonly MimirDiscoveredCultMeshInputStream initialStream;
     private readonly CultMeshSharedMemoryFrameRing ring;
+    private readonly Func<MimirDiscoveredCultMeshInputStream> rediscover;
     private readonly CancellationTokenSource stopping = new();
     private readonly ManualResetEventSlim started = new(false);
     private Thread? thread;
     private Exception? startupError;
 
-    public MimirMoveEvidenceRudpPump(MimirDiscoveredCultMeshInputStream stream, CultMeshSharedMemoryFrameRing ring)
+    public MimirMoveEvidenceRudpPump(
+        MimirDiscoveredCultMeshInputStream initialStream,
+        CultMeshSharedMemoryFrameRing ring,
+        Func<MimirDiscoveredCultMeshInputStream> rediscover)
     {
-        this.stream = stream;
+        this.initialStream = initialStream;
         this.ring = ring;
+        this.rediscover = rediscover;
     }
 
     public void Start()
@@ -154,60 +163,92 @@ internal sealed class MimirMoveEvidenceRudpPump : IDisposable
         thread.Start();
         if (!started.Wait(TimeSpan.FromSeconds(6)))
         {
-            throw new TimeoutException($"Timed out starting Move evidence receiver for {stream.Address}.");
+            throw new TimeoutException($"Timed out starting Move evidence receiver for {initialStream.Address}.");
         }
         if (startupError is not null)
         {
             throw new InvalidOperationException(
-                $"Could not connect Odin-discovered Move evidence stream {stream.StreamId} at {stream.Address}: {startupError.Message}",
+                $"Could not connect Odin-discovered Move evidence stream {initialStream.StreamId} at {initialStream.Address}: {startupError.Message}",
                 startupError);
         }
     }
 
     private void Run()
     {
-        try
+        var stream = initialStream;
+        while (!stopping.IsCancellationRequested)
         {
-            using var transport = CultMesh.CreateRudpClient(
-                "mimir-move-evidence-consumer",
-                stream.ConnectionId,
-                CultMesh.ResolveRudpEndpoint($"rudp://{stream.Address}"));
-            if (!transport.ConnectAndWait([], TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(5)))
+            try
             {
-                throw new TimeoutException($"Timed out connecting to {stream.Address}.");
+                ReceiveSession(stream);
             }
-            transport.Send("hid.subscribe", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { streamId = stream.StreamId })));
-            started.Set();
-            while (!stopping.IsCancellationRequested)
+            catch (Exception error) when (!stopping.IsCancellationRequested)
             {
-                transport.PollResends();
-                var frame = transport.ReceiveOnce();
-                if (frame is null || !string.Equals(frame.ChannelId, stream.Channel, StringComparison.Ordinal))
+                if (!started.IsSet)
                 {
-                    Thread.Sleep(2);
-                    continue;
+                    startupError = error;
+                    started.Set();
+                    return;
                 }
-                var decoded = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(frame.Payload);
-                if (!string.Equals(decoded.FrameId, stream.StreamId, StringComparison.Ordinal) &&
-                    !decoded.FrameId.StartsWith($"{stream.StreamId}:", StringComparison.Ordinal))
+
+                Console.Error.WriteLine(
+                    $"Mimir Move evidence receiver reconnecting stream={stream.StreamId} address={stream.Address}: {error.Message}");
+                if (stopping.Token.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(250)))
                 {
-                    continue;
+                    return;
                 }
-                ring.TryPublishCopy(frame.Payload, decoded.PublishedAtNs, durationNs: 0, out _);
+                try
+                {
+                    stream = rediscover();
+                }
+                catch (Exception discoveryError)
+                {
+                    Console.Error.WriteLine(
+                        $"Mimir Move evidence rediscovery failed provider={stream.ProviderId} stream={stream.StreamId}: {discoveryError.Message}");
+                }
             }
         }
-        catch (Exception error)
+    }
+
+    private void ReceiveSession(MimirDiscoveredCultMeshInputStream stream)
+    {
+        using var transport = CultMesh.CreateRudpClient(
+            "mimir-move-evidence-consumer",
+            stream.ConnectionId,
+            CultMesh.ResolveRudpEndpoint($"rudp://{stream.Address}"));
+        if (!transport.ConnectAndWait([], TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(5)))
         {
-            if (!started.IsSet)
+            throw new TimeoutException($"Timed out connecting to {stream.Address}.");
+        }
+        transport.Send("hid.subscribe", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { streamId = stream.StreamId })));
+        started.Set();
+        var lastFrameAt = DateTime.UtcNow;
+        while (!stopping.IsCancellationRequested)
+        {
+            transport.PollResends();
+            var frame = transport.ReceiveOnce();
+            if (frame is null)
             {
-                startupError = error;
-                started.Set();
+                if (DateTime.UtcNow - lastFrameAt >= SourceStaleAfter)
+                {
+                    throw new TimeoutException(
+                        $"No Move evidence frame arrived for {SourceStaleAfter.TotalSeconds:0.#} seconds.");
+                }
+                Thread.Sleep(2);
+                continue;
             }
-            else if (!stopping.IsCancellationRequested)
+            if (!string.Equals(frame.ChannelId, stream.Channel, StringComparison.Ordinal))
             {
-                Console.Error.WriteLine(
-                    $"Mimir Move evidence receiver stopped stream={stream.StreamId} address={stream.Address}: {error}");
+                continue;
             }
+            var decoded = MimirMuninnMoveEvidenceAdapter.DeserializeStreamFrame(frame.Payload);
+            if (!string.Equals(decoded.FrameId, stream.StreamId, StringComparison.Ordinal) &&
+                !decoded.FrameId.StartsWith($"{stream.StreamId}:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            lastFrameAt = DateTime.UtcNow;
+            ring.TryPublishCopy(frame.Payload, decoded.PublishedAtNs, durationNs: 0, out _);
         }
     }
 
