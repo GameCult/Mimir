@@ -16,7 +16,7 @@ public enum MimirSensorCalibrationSessionPhase
 [CultDocument("mimir.sensor_calibration_session", "mimir.sensor_calibration_session.v1")]
 [MessagePackObject]
 public sealed record MimirSensorCalibrationSessionDocument(
-    [property: Key(0)] [property: CultName] string SessionId,
+    [property: Key(0)][property: CultName] string SessionId,
     [property: Key(1)] string TrackingSpaceId,
     [property: Key(2)] string Owner,
     [property: Key(3)] string StartedAtUtc,
@@ -58,7 +58,7 @@ public sealed record MimirSensorCalibrationSensorProgress(
 [CultDocument("mimir.sensor_calibration_receipt", "mimir.sensor_calibration_receipt.v1")]
 [MessagePackObject]
 public sealed record MimirSensorCalibrationReceiptDocument(
-    [property: Key(0)] [property: CultName] string ReceiptId,
+    [property: Key(0)][property: CultName] string ReceiptId,
     [property: Key(1)] string SessionId,
     [property: Key(2)] string TrackingSpaceId,
     [property: Key(3)] string CompletedAtUtc,
@@ -79,7 +79,9 @@ public sealed record MimirSensorCalibrationFitResiduals(
     [property: Key(4)] double MedianAssociationSkewMilliseconds,
     [property: Key(5)] double MaximumAssociationSkewMilliseconds,
     [property: Key(6)] double ConditionEstimate,
-    [property: Key(7)] int Iterations);
+    [property: Key(7)] int Iterations,
+    [property: Key(8)] double TrainingInlierFraction = 0.0,
+    [property: Key(9)] double HeldOutInlierFraction = 0.0);
 
 public static class MimirSensorCalibrationSessions
 {

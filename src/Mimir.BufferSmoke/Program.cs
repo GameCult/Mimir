@@ -175,6 +175,22 @@ if (args.Any(arg => string.Equals(arg, "--sensor-calibration-session-live", Stri
             "move-0006f523e2d1", "move-000704a39772", "move-000704a6be5f", "move-000704a800d0"]));
 }
 
+if (args.Any(arg => string.Equals(arg, "--sensor-calibration-fit", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunSensorCalibrationFit(
+        ParseStringOption(args, "--session", "artifacts/move-calibration/live-session.session.mpack"),
+        ParseStringOption(args, "--evidence", "artifacts/move-calibration/live-session.evidence.mpack"),
+        ParseStringOption(args, "--output", "artifacts/move-calibration/live-session.calibration-receipt.mpack"),
+        ParseIntOption(args, "--image-width", 640),
+        ParseIntOption(args, "--image-height", 480),
+        ParseDoubleOption(args, "--orb-radius-meters", 0.0));
+}
+
+if (args.Any(arg => string.Equals(arg, "--sensor-calibration-fit-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    return RunSensorCalibrationFitSmoke();
+}
+
 if (args.Any(arg => string.Equals(arg, "--move-fusion-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     return RunMoveFusionSmoke();
@@ -2319,6 +2335,172 @@ static int RunMoveStereoCalibrationAssessment(
     return assessment.Promoted ? 0 : 2;
 }
 
+static int RunSensorCalibrationFit(
+    string sessionPath,
+    string evidencePath,
+    string outputPath,
+    int imageWidth,
+    int imageHeight,
+    double orbRadiusMeters)
+{
+    if (!File.Exists(sessionPath) || !File.Exists(evidencePath))
+    {
+        Console.Error.WriteLine($"sensor-calibration-fit missing-input session={sessionPath} evidence={evidencePath}");
+        return 1;
+    }
+
+    var session = MessagePackSerializer.Deserialize<MimirSensorCalibrationSessionDocument>(File.ReadAllBytes(sessionPath));
+    var evidence = MessagePackSerializer.Deserialize<MoveVisibilityWindowReceipt>(File.ReadAllBytes(evidencePath));
+    var receipt = MimirMoveSphereCalibrationFitter.Fit(session, evidence, imageWidth, imageHeight, orbRadiusMeters);
+    var observationStats = evidence.Observations
+        .GroupBy(value => value.CameraId, StringComparer.Ordinal)
+        .Select(group =>
+        {
+            var radii = group.Where(value => float.IsFinite(value.RadiusPx) && value.RadiusPx > 0).Select(value => (double)value.RadiusPx).Order().ToArray();
+            var confidence = group.Where(value => float.IsFinite(value.Confidence)).Select(value => (double)value.Confidence).Order().ToArray();
+            return new
+            {
+                CameraId = group.Key,
+                Count = group.Count(),
+                RadiusP01 = CalibrationCliPercentile(radii, 0.01),
+                RadiusP10 = CalibrationCliPercentile(radii, 0.10),
+                RadiusP50 = CalibrationCliPercentile(radii, 0.50),
+                RadiusP90 = CalibrationCliPercentile(radii, 0.90),
+                RadiusP99 = CalibrationCliPercentile(radii, 0.99),
+                ConfidenceP10 = CalibrationCliPercentile(confidence, 0.10),
+                ConfidenceP50 = CalibrationCliPercentile(confidence, 0.50)
+            };
+        }).ToArray();
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+    File.WriteAllBytes(outputPath, MessagePackSerializer.Serialize(receipt));
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        receipt.ReceiptId,
+        receipt.SessionId,
+        receipt.Verdict,
+        receipt.TrainingCorrespondenceCount,
+        receipt.HeldOutCorrespondenceCount,
+        receipt.Residuals,
+        receipt.RejectionReasons,
+        observationStats,
+        calibration = receipt.PromotedCalibration is null ? null : new
+        {
+            receipt.PromotedCalibration.CalibrationId,
+            cameras = receipt.PromotedCalibration.Cameras.Select(camera => new
+            {
+                camera.CameraId,
+                camera.PositionMeters,
+                camera.Orientation,
+                camera.FocalLengthXPx,
+                camera.FocalLengthYPx,
+                camera.PrincipalPointXPx,
+                camera.PrincipalPointYPx
+            })
+        },
+        outputPath
+    }));
+    return receipt.Verdict == MimirSensorCalibrationSessionPhase.Promoted ? 0 : 2;
+}
+
+static double CalibrationCliPercentile(double[] sorted, double percentile)
+{
+    if (sorted.Length == 0) return double.NaN;
+    var position = Math.Clamp(percentile, 0, 1) * (sorted.Length - 1);
+    var lower = (int)Math.Floor(position);
+    var upper = (int)Math.Ceiling(position);
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+}
+
+static int RunSensorCalibrationFitSmoke()
+{
+    const int width = 640;
+    const int height = 480;
+    const double radius = 0.0225;
+    const double focal0 = 505.0;
+    const double focal1 = 535.0;
+    var camera1WorldToCamera = Quaternion.CreateFromYawPitchRoll(0.11f, -0.035f, 0.025f);
+    var camera1Position = new Vector3(0.34f, 0.025f, 0.07f);
+    var camera1Translation = Vector3.Transform(-camera1Position, camera1WorldToCamera);
+    var random = new Random(1789);
+    var observations = new List<MoveVisibilityObservation>();
+    var correspondences = new List<MoveCrossCameraCorrespondence>();
+    var wandIds = new[] { "move-a", "move-b", "move-c", "move-d" };
+    for (var index = 0; index < 1400; index++)
+    {
+        var world = new Vector3(
+            (float)(random.NextDouble() * 1.8 - 0.9),
+            (float)(random.NextDouble() * 1.2 - 0.6),
+            (float)(0.65 + random.NextDouble() * 3.0));
+        var camera1 = Vector3.Transform(world, camera1WorldToCamera) + camera1Translation;
+        if (camera1.Z <= 0.2f) { index--; continue; }
+        var frameId = $"synthetic:{index}";
+        var wandId = wandIds[index % wandIds.Length];
+        var first = SyntheticSphereObservation("eye-0", wandId, frameId, index, world, focal0, width, height, radius, random);
+        var second = SyntheticSphereObservation("eye-1", wandId, frameId, index, camera1, focal1, width, height, radius, random);
+        if (first.CenterXPx is < 0 or >= width || first.CenterYPx is < 0 or >= height ||
+            second.CenterXPx is < 0 or >= width || second.CenterYPx is < 0 or >= height)
+        {
+            index--;
+            continue;
+        }
+        observations.Add(first);
+        observations.Add(second);
+        correspondences.Add(new MoveCrossCameraCorrespondence(wandId, first, second, 0));
+    }
+
+    var started = DateTimeOffset.UtcNow;
+    var session = MimirSensorCalibrationSessions.CreateFourWandOpticalSession(wandIds, ["eye-0", "eye-1"], started) with
+    {
+        Phase = MimirSensorCalibrationSessionPhase.Fitting,
+        MissingRequirements = []
+    };
+    var evidence = new MoveVisibilityWindowReceipt("mimir.move_visibility_window.v1",
+        started.ToUnixTimeMilliseconds() * 1_000_000,
+        started.AddSeconds(20).ToUnixTimeMilliseconds() * 1_000_000,
+        ["synthetic"], observations.ToArray(), correspondences.ToArray());
+    var receipt = MimirMoveSphereCalibrationFitter.Fit(session, evidence, width, height, radius);
+    var fitted = receipt.PromotedCalibration?.Cameras.ToArray() ?? [];
+    var focalError0 = fitted.Length == 2 ? Math.Abs(fitted[0].FocalLengthXPx - focal0) : double.PositiveInfinity;
+    var focalError1 = fitted.Length == 2 ? Math.Abs(fitted[1].FocalLengthXPx - focal1) : double.PositiveInfinity;
+    var positionError = fitted.Length == 2
+        ? Vector3.Distance(new Vector3((float)fitted[1].PositionMeters.X, (float)fitted[1].PositionMeters.Y, (float)fitted[1].PositionMeters.Z), camera1Position)
+        : double.PositiveInfinity;
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        receipt.Verdict,
+        receipt.Residuals,
+        receipt.RejectionReasons,
+        focalError0,
+        focalError1,
+        positionError
+    }));
+    return receipt.Verdict == MimirSensorCalibrationSessionPhase.Promoted &&
+        focalError0 < 12.0 && focalError1 < 12.0 && positionError < 0.03 ? 0 : 1;
+}
+
+static MoveVisibilityObservation SyntheticSphereObservation(
+    string cameraId,
+    string wandId,
+    string frameId,
+    int sequence,
+    Vector3 point,
+    double focal,
+    int width,
+    int height,
+    double radius,
+    Random random)
+{
+    var noiseX = (random.NextDouble() - 0.5) * 0.16;
+    var noiseY = (random.NextDouble() - 0.5) * 0.16;
+    var noiseRadius = (random.NextDouble() - 0.5) * 0.08;
+    return new MoveVisibilityObservation(
+        "synthetic", cameraId, wandId, frameId, sequence * 16_666_667L,
+        (float)(width * 0.5 + focal * point.X / point.Z + noiseX),
+        (float)(height * 0.5 - focal * point.Y / point.Z + noiseY),
+        (float)(focal * radius / Math.Sqrt(point.Z * point.Z - radius * radius) + noiseRadius),
+        0.95f);
+}
+
 static int RunMuninnMoveCultMeshStreamSmoke(string nativeReservoirPath)
 {
     if (!File.Exists(nativeReservoirPath))
@@ -2915,17 +3097,17 @@ static int RunMoveProofRuntimeDriverSmoke(
     var activationDocument = activationDocuments.SingleOrDefault(document =>
         string.Equals(document.EvidenceStreamId, streamId, StringComparison.Ordinal));
     var activationSurfaceOk = !requireActivationSurface || activationDocument is
-        {
-            Active: true,
-            DriverRegistered: true,
-            LatestProofId: "mimir:starfire:move-proof:79",
-            LatestMuninnEvidenceFrameId: "muninn:nightwing:move-evidence:79",
-            LatestMimirEvidenceFrameId: "mimir:starfire:move-evidence:79",
-            LatestMimirPoseFrameId: "mimir:starfire:move-pose:79",
-            LatestFensalirFrameId: "fensalir:starfire:presented-frame:79",
-            LatestVerdict: MimirMoveProofVerdict.FullPose,
-            CalibratedCameraCount: 2
-        } &&
+    {
+        Active: true,
+        DriverRegistered: true,
+        LatestProofId: "mimir:starfire:move-proof:79",
+        LatestMuninnEvidenceFrameId: "muninn:nightwing:move-evidence:79",
+        LatestMimirEvidenceFrameId: "mimir:starfire:move-evidence:79",
+        LatestMimirPoseFrameId: "mimir:starfire:move-pose:79",
+        LatestFensalirFrameId: "fensalir:starfire:presented-frame:79",
+        LatestVerdict: MimirMoveProofVerdict.FullPose,
+        CalibratedCameraCount: 2
+    } &&
         (!activateViaSnapshotProvider ||
             activationDocument.Diagnostic.Contains("one-copy evidence snapshot supplied", StringComparison.Ordinal));
 

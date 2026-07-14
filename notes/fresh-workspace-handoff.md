@@ -198,6 +198,19 @@ Get-Content .\state\evidence.jsonl -Tail 8
 
 ## Immediate Re-entry Instruction
 
+The 2026-07-14 live two-wand session at
+`artifacts/move-calibration/live-two-wand-20260714-004210.*` passed collection
+coverage with 1,168 admitted same-frame pairs. The new Mimir-owned sphere
+stereo fitter recovers synthetic 505/535 px focal lengths within 0.43 px and a
+34 cm baseline within 0.22 mm, with 0.34/0.63 px held-out median/P95 error.
+The live artifact remains rejected: after robust radius admission its consensus
+fits at 0.51/2.08 px, but only 53.8 percent of held-out pairs agree and Eye 1's
+focal estimate leaves the physical range. PSMoveAPI age is currently projected
+as marker confidence by Muninn, so fresh wrong-color matches arrive near 0.996
+confidence. Repair source-local observation quality/continuity and calibrate
+per-Eye blob-radius response before asking the operator for another sweep. Do
+not promote the nominal 22.5 mm diagnostic fit.
+
 The active priority is Nightwing Move calibration. One public Muninn observer
 owns two private Eye workers and one aggregate evidence stream. Odin commits
 `39c839a`, `a340c33`, `8aefd1c`, and `f82ca7a` give daemon health a persistent

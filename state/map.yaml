@@ -87,6 +87,14 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - `MimirMoveSphereCalibrationFitter` owns the bounded two-Eye optical fit
+    after spatial collection. Eye 0 defines the tracking-space gauge; a robust
+    training consensus estimates both focal lengths and Eye 1 rigid pose, while
+    a deterministic untouched 20 percent partition owns promotion evidence.
+    Promotion requires low held-out median/P95 reprojection error and at least
+    65 percent held-out consensus. Physical orb radius is explicit and never
+    guessed. PSMoveAPI blob radius and position age are not calibrated sphere
+    radius or optical confidence.
   - `Mimir.slnx` owns the app surface.
   - `src/Mimir.App` launches Fensalir as host/window/D3D12 library.
   - `src/Mimir.Runtime` owns `MimirSynchronizationHub`,

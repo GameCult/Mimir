@@ -78,6 +78,23 @@ sitting around the Move.
 - `mimir.move_calibration_receipt.v1`: sample counts, residuals, rejected
   phases, and promotion decision.
 
+## Optical Sphere Fit Authority
+
+`MimirMoveSphereCalibrationFitter` owns the bounded two-Eye optical fit after a
+collection session reaches `Fitting`. Eye 0 defines the tracking-space gauge.
+The fitter jointly estimates both focal lengths and Eye 1's rigid pose from
+same-frame, same-Move correspondences, using a deterministic 80/20 training and
+held-out partition. A robust training consensus may reject contaminated marker
+pairs, but promotion also requires at least 65 percent of the untouched
+held-out pairs to agree and must pass the session's median and P95 reprojection
+limits.
+
+The physical orb radius is an explicit input; it is never guessed by the
+solver. PSMoveAPI's reported blob radius is a color-segmentation result, not a
+calibrated sphere silhouette. It may seed or weight depth only after the
+per-camera radius response has been validated. A fresh PSMoveAPI position age
+is also not optical confidence and must not be interpreted as one.
+
 ## Preflight Command
 
 ```powershell
