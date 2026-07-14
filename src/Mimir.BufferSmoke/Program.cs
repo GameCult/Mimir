@@ -2398,6 +2398,9 @@ static int RunSensorCalibrationFit(
             })
         },
         outputPath
+    }, new JsonSerializerOptions
+    {
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals
     }));
     return receipt.Verdict == MimirSensorCalibrationSessionPhase.Promoted ? 0 : 2;
 }

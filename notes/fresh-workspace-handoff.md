@@ -211,6 +211,17 @@ confidence. Repair source-local observation quality/continuity and calibrate
 per-Eye blob-radius response before asking the operator for another sweep. Do
 not promote the nominal 22.5 mm diagnostic fit.
 
+Odin `d0eded6` is deployed on Nightwing as binary SHA-256
+`a604fedaf90b26a49db6594b16b8b3499e3aed540152c6fda9dd9dbe87d37d39`.
+Each Eye worker now rejects stale, sub-2 px, out-of-bounds, and discontinuous
+PSMoveAPI positions before aggregation; tracker health publishes rejection
+counters, and candidate score is explicitly uncalibrated `0.5` instead of age
+masquerading as confidence. A post-deploy 10-second Mimir window received 555
+frames, 2,246 observations, and 443 stereo pairs. Radius P01 rose from about
+0.707 px to 3.13/3.64 px and confidence P50 is now 0.5 on both Eyes. Eye 1 saw
+only two plausible stationary IDs, which is honest and means another sweep is
+needed after Mimir models per-Eye blob-radius response.
+
 The active priority is Nightwing Move calibration. One public Muninn observer
 owns two private Eye workers and one aggregate evidence stream. Odin commits
 `39c839a`, `a340c33`, `8aefd1c`, and `f82ca7a` give daemon health a persistent
