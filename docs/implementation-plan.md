@@ -465,6 +465,15 @@ the 40 ms reorder budget and feeds them through the existing playout owner.
 Both sides use the experimental CultLib/CultMesh snapshot lineage used by Eve,
 Aetheria, and VoidBot; no stable-branch transport shim was introduced.
 
+Receiver pressure now closes into the long-lived NVENC encoder as bounded AIMD
+bitrate control. Late/decode/repair/queue pressure backs off by 15 percent;
+clean recovery adds five percent of the configured ceiling only after two
+stable seconds. The live encoder proof reconfigured 12 Mbps to 6 Mbps without a
+restart and emitted the required transition IDR. The exact remaining completion
+gate is tracked in
+`docs/research/moonlight-reliability-acceptance-2026-07-16.md`; no cross-host
+claim is allowed until its Raven-to-Starfire field matrix passes.
+
 The production receiver follow-up fixed two contract contradictions: early
 video repair no longer declares the frame late (which had made Odin discard all
 repair requests), and the OBS audio decoder now consumes Muninn's actual float

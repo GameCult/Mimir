@@ -87,6 +87,15 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - Muninn now closes receiver congestion pressure into the live NVENC context.
+    Every 500 ms it applies multiplicative 15 percent backoff for late frames,
+    requested recovery, deferred repair, sender queue loss, or combined
+    jitter/decode pressure above 75 percent of the consumer deadline. Recovery
+    adds only five percent of the configured ceiling after each two stable
+    seconds, with a one-quarter/1 Mbps floor. A live 2560x1440 D3D11 proof
+    changed 12 Mbps to 6 Mbps at frame 35; FFmpeg/NVENC reconfigured the same
+    session, emitted an IDR at frame 35, and the Annex-B stream decoded cleanly.
+    Muninn's full suite now passes 176 tests.
   - Receiver-driven video recovery now reaches the actual NVENC frame owner.
     Odin's `native/muninn-video-encoder` is a long-lived libavdevice desktop
     capture and `h264_nvenc` process; a new decode-chain invalidation edge makes
