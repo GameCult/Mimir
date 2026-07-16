@@ -439,6 +439,15 @@ a named invariant that the native runtime cannot protect yet.
 
 ## Next
 
+Before expanding Muninn media or Sleipnir input transport, apply the traffic
+contracts distilled in
+`docs/research/moonlight-muninn-sleipnir-study-2026-07-16.md`: latest-state,
+ordered-edge, video-deadline, audio-playout, and reliable-control. Preserve the
+existing Muninn packetizer/feedback foundations. The first implementation pass
+should make input supersession and edge preservation structural, replace the
+two-second media default with consumer-derived field budgets, and prove the
+result under controlled loss/jitter/reorder before changing carriers.
+
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
    other cameras.

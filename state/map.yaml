@@ -87,6 +87,18 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - The Moonlight comparison at
+    `docs/research/moonlight-muninn-sleipnir-study-2026-07-16.md` establishes
+    that realtime delivery policy belongs to signal semantics, not generic RUDP
+    reliability. Muninn media already owns access-unit boundaries, deadlines,
+    video parity, dependency/keyframe metadata, receiver damage feedback, and a
+    bounded repair cache; these foundations stay. The next transport cut must
+    close feedback into sender pacing/bitrate/parity and derive retry/repair
+    lifetime from video/audio consumption deadlines instead of the current
+    broad two-second default. Sleipnir/Muninn input must explicitly separate
+    replaceable latest state from ordered non-replaceable edges, coalesce before
+    enqueue, acknowledge applied edge/state sequences, and use a proved clock
+    model before reporting cross-host wall-clock subtraction as one-way latency.
   - Nightwing Muninn `d0eded6` now owns PSMoveAPI observation admission in each
     private Eye worker. It rejects stale, sub-2 px, out-of-frame, and
     discontinuous positions before the parent aggregates evidence; typed
