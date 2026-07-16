@@ -471,10 +471,13 @@ repair requests), and the OBS audio decoder now consumes Muninn's actual float
 PCM contract rather than treating it as AAC. Audio reorder is bounded to 40 ms
 with short silence concealment. The next audio cut is Opus with explicit
 FEC/PLC for variable-rate compressed audio; PCM now has bounded 4+2 erasure
-recovery plus concealment. The next video cut is a controllable encoder owner
-that can force IDR without restarting the video session. Receiver keyframe
-pressure is deliberately not allowed to restart the whole A/V stream and hide
-the missing authority.
+recovery plus concealment. The controllable video encoder owner now exists and
+forces the next NVENC frame to IDR without restarting the video session. A live
+D3D11 desktop proof verified the command-generated IDR. The remaining field
+cut is to install its bundle on Raven, route the existing activation task
+through `--video-encoder`, and run the named impairment profiles. Raven's
+WireGuard SSH route timed out during the first deployment attempt, so no
+interactive workstation task was disturbed.
 
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the

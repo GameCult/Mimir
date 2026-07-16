@@ -87,6 +87,21 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - Receiver-driven video recovery now reaches the actual NVENC frame owner.
+    Odin's `native/muninn-video-encoder` is a long-lived libavdevice desktop
+    capture and `h264_nvenc` process; a new decode-chain invalidation edge makes
+    Muninn write `IDR` to its stdin without restarting video, audio, or CultNet.
+    A live 2560x1440 D3D11 proof with a deliberately 600-frame GOP produced the
+    requested second IDR at frame 22, and its Annex-B stream decoded cleanly.
+    The normal quarter-second scheduled IDR remains independent fallback.
+    The repeatable bundle includes the OBS experimental FFmpeg dependency
+    snapshot. Raven installation and real impairment acceptance remain pending
+    because Raven's documented WireGuard SSH route timed out on 2026-07-16.
+  - Muninn input now bounds disconnected unacknowledged button history at 256
+    edges. Overflow rotates the controller epoch and rebases Sleipnir from the
+    next complete latest-state frame, rather than dropping an arbitrary press
+    or retaining history forever. Sleipnir rejects sparse future edge gaps over
+    256. Full Muninn (174) and Sleipnir (26) suites pass.
   - The 2026-07-16 loss-recovery cut is now live on both sides of the Muninn
     audio boundary. Odin emits typed `muninn.media_audio_parity_shard.v1`
     records using fixed 4+2 GF(256) parity for constant-size 10 ms PCM packets.
