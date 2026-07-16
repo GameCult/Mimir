@@ -87,6 +87,24 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - The 2026-07-16 loss-recovery cut is now live on both sides of the Muninn
+    audio boundary. Odin emits typed `muninn.media_audio_parity_shard.v1`
+    records using fixed 4+2 GF(256) parity for constant-size 10 ms PCM packets.
+    Mimir's production OBS receiver retains a bounded recent data window,
+    reconstructs up to two erased packets per block before the 40 ms playout
+    deadline, and then hands recovered packets to the same reorder queue that
+    owns normal playout. The FEC cache is not a second timeline. Native tests
+    exhaust every one- and two-erasure permutation, and the production plugin
+    DLL builds with all three native suites passing. The OBS input ceiling is
+    now 500 ms and the default remains 100 ms; old 1.2-2.0 second test/config
+    assumptions are not realtime authority.
+  - Odin now carries a deterministic bidirectional UDP impairment proxy with
+    seeded clean, iid loss, burst loss, delay/jitter, reorder, duplicate, and
+    stall profiles. This is the acceptance substrate for real CultNet endpoints,
+    not a simulated transport replacement. The remaining critical sender gap
+    is an encoder owner that can actuate a receiver-requested next IDR without
+    restarting the video session; stock FFmpeg CLI capture cannot own that
+    command dynamically.
   - The 2026-07-16 production receiver audit cut two false contracts. Native
     Mimir/OBS early video repair feedback no longer marks live frames late, so
     Odin can actually return cached missing chunks; only assembly expiry emits

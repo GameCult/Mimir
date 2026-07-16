@@ -456,13 +456,25 @@ encoder keyframe actuation, production parity recovery, audio FEC/concealment,
 bounded long-disconnect edge admission, adaptive sender response, and the
 fault-injected socket timeline harness.
 
+The socket harness and bounded PCM loss recovery have now landed. Odin's
+`cultnet-impair` proxy supplies deterministic seeded loss/burst/reorder/
+duplicate/jitter/stall profiles around real CultNet endpoints. Muninn emits a
+typed fixed 4+2 audio parity block after each four constant-size PCM packets;
+the production Mimir OBS receiver reconstructs up to two missing packets inside
+the 40 ms reorder budget and feeds them through the existing playout owner.
+Both sides use the experimental CultLib/CultMesh snapshot lineage used by Eve,
+Aetheria, and VoidBot; no stable-branch transport shim was introduced.
+
 The production receiver follow-up fixed two contract contradictions: early
 video repair no longer declares the frame late (which had made Odin discard all
 repair requests), and the OBS audio decoder now consumes Muninn's actual float
 PCM contract rather than treating it as AAC. Audio reorder is bounded to 40 ms
 with short silence concealment. The next audio cut is Opus with explicit
-FEC/PLC; the next video cut is a controllable encoder owner that can force IDR
-without restarting the A/V session.
+FEC/PLC for variable-rate compressed audio; PCM now has bounded 4+2 erasure
+recovery plus concealment. The next video cut is a controllable encoder owner
+that can force IDR without restarting the video session. Receiver keyframe
+pressure is deliberately not allowed to restart the whole A/V stream and hide
+the missing authority.
 
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
