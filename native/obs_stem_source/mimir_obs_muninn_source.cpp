@@ -76,6 +76,7 @@ constexpr uint32_t MuninnMaxRudpVideoBitrateKbps = 100000;
 constexpr uint32_t MuninnMaxRudpLatencyBudgetMs = 2000;
 constexpr uint32_t MuninnMaxRudpAudioReorderMs = 2000;
 constexpr size_t MuninnAudioReorderMaxPackets = 128;
+constexpr uint64_t MuninnAudioConcealmentMaxPackets = 4;
 constexpr size_t MuninnAudioQueueMaxPackets = 32;
 constexpr const char *MuninnDisabledVideoSourceId = "video:none";
 constexpr const char *MuninnDisabledAudioSourceId = "audio:none";
@@ -975,6 +976,7 @@ private:
             audio_packets_reordered_ = 0;
             audio_packets_skipped_ = 0;
             audio_packets_stale_ = 0;
+            audio_packets_concealed_ = 0;
             media_sequence_initialized_ = false;
             last_media_sequence_ = 0;
             media_sequence_gap_events_ = 0;
@@ -1020,6 +1022,7 @@ private:
                 audio_packets_reordered_ = 0;
                 audio_packets_skipped_ = 0;
                 audio_packets_stale_ = 0;
+                audio_packets_concealed_ = 0;
                 media_sequence_initialized_ = false;
                 last_media_sequence_ = 0;
                 media_sequence_gap_events_ = 0;
@@ -1250,7 +1253,20 @@ private:
         if (gap_expired || queue_overflow) {
             const uint64_t first_available = pending_audio_packets_.begin()->first;
             if (first_available > next_audio_packet_id_) {
-                audio_packets_skipped_ += first_available - next_audio_packet_id_;
+                const uint64_t missing_packets = first_available - next_audio_packet_id_;
+                const uint64_t concealment_packets =
+                    std::min(missing_packets, MuninnAudioConcealmentMaxPackets);
+                const std::vector<uint8_t> silence(
+                    pending_audio_packets_.begin()->second.payload.size(), 0);
+                for (uint64_t index = 0; index < concealment_packets; ++index) {
+                    if (!send_audio_packet(audio_socket, audio_addr, silence)) {
+                        return std::nullopt;
+                    }
+                    forwarded_bytes += silence.size();
+                    forwarded_any = true;
+                    ++audio_packets_concealed_;
+                }
+                audio_packets_skipped_ += missing_packets - concealment_packets;
                 next_audio_packet_id_ = first_available;
             }
             audio_gap_started_at_ = std::chrono::steady_clock::time_point::min();
@@ -1652,6 +1668,7 @@ private:
                 iterator->second,
                 missing_chunk_keys,
                 needs_decoder_recovery,
+                true,
                 bridge_sequence);
             if (needs_decoder_recovery) {
                 waiting_for_video_keyframe_ = true;
@@ -1711,7 +1728,7 @@ private:
         if (missing_chunk_keys.empty()) {
             return;
         }
-        send_receiver_feedback_if_due(assembly, missing_chunk_keys, false, bridge_sequence);
+        send_receiver_feedback_if_due(assembly, missing_chunk_keys, false, false, bridge_sequence);
         assembly.repair_requested = true;
     }
 
@@ -1738,6 +1755,7 @@ private:
     void send_receiver_feedback_if_due(const MuninnVideoFrameAssembly &assembly,
                                        const std::vector<std::string> &missing_chunk_keys,
                                        bool requested_keyframe,
+                                       bool late_frame,
                                        uint32_t &bridge_sequence)
     {
         if (!last_remote_ || assembly.stream_id.empty() || assembly.session_id.empty()) {
@@ -1751,9 +1769,15 @@ private:
             }
             last_keyframe_request_ms_.store(now);
         }
-        const std::string observed_at = "unix:" + std::to_string(steady_millis());
+        const std::string observed_at = muninn_media_wire::feedback_observed_at();
         const auto payload = muninn_media_wire::encode_receiver_feedback_payload(
-            assembly.stream_id, assembly.session_id, assembly.frame_id, missing_chunk_keys, requested_keyframe, observed_at);
+            assembly.stream_id,
+            assembly.session_id,
+            assembly.frame_id,
+            missing_chunk_keys,
+            requested_keyframe,
+            late_frame,
+            observed_at);
         send_media_packet(payload, bridge_sequence++, *last_remote_);
     }
 
@@ -1917,6 +1941,7 @@ private:
     uint64_t audio_packets_reordered_ = 0;
     uint64_t audio_packets_skipped_ = 0;
     uint64_t audio_packets_stale_ = 0;
+    uint64_t audio_packets_concealed_ = 0;
     std::string audio_stream_id_;
     std::string audio_session_id_;
     bool next_audio_packet_ready_ = false;
@@ -2278,7 +2303,11 @@ public:
             "-analyzeduration",
             "0",
             "-f",
-            "aac",
+            "f32le",
+            "-ac",
+            "2",
+            "-ar",
+            "48000",
             "-i",
             audio_url,
             "-vn",

@@ -31,3 +31,10 @@ target_compile_features(muninn_rudp_url_tests PRIVATE cxx_std_20)
 target_include_directories(muninn_rudp_url_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME muninn_rudp_url_tests COMMAND muninn_rudp_url_tests)
+
+add_executable(muninn_media_wire_tests
+    tests/muninn_media_wire_tests.cpp)
+target_compile_features(muninn_media_wire_tests PRIVATE cxx_std_20)
+target_include_directories(muninn_media_wire_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME muninn_media_wire_tests COMMAND muninn_media_wire_tests)

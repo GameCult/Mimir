@@ -87,6 +87,15 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - The 2026-07-16 production receiver audit cut two false contracts. Native
+    Mimir/OBS early video repair feedback no longer marks live frames late, so
+    Odin can actually return cached missing chunks; only assembly expiry emits
+    `late_frame_ids`. A C++-generated feedback fixture now decodes in Odin's
+    Rust tests. Muninn's typed audio body is 10 ms `pcm-f32le-interleaved`, so
+    the OBS bridge now opens its local decoder as `f32le` stereo 48 kHz instead
+    of AAC, uses a 40 ms reorder budget instead of 2000 ms, and emits bounded
+    silence packets for short unrecoverable gaps to preserve cadence. Opus
+    FEC/PLC remains required before audio reaches Moonlight-level loss quality.
   - Odin's 2026-07-16 Moonlight-derived reliability cut now runs Muninn and
     Sleipnir against the experimental CultLib runtime snapshot at `8965f3c0`.
     HID latest state and ordered button edges have separate epoch/sequence and

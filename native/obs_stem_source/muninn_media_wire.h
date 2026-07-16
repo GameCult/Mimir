@@ -172,12 +172,18 @@ inline void write_u64_array(MsgpackWriter &writer, const std::vector<uint64_t> &
     }
 }
 
+inline std::vector<uint64_t> receiver_feedback_late_frame_ids(uint64_t frame_id, bool late_frame)
+{
+    return late_frame ? std::vector<uint64_t>{frame_id} : std::vector<uint64_t>{};
+}
+
 inline std::vector<uint8_t> encode_receiver_feedback_payload(
     const std::string &stream_id,
     const std::string &session_id,
     uint64_t frame_id,
     const std::vector<std::string> &missing_chunk_keys,
     bool requested_keyframe,
+    bool late_frame,
     const std::string &observed_at)
 {
     MsgpackWriter record;
@@ -191,7 +197,7 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
         record.write_nil();
     }
     write_u64_array(record, {});
-    write_u64_array(record, {frame_id});
+    write_u64_array(record, receiver_feedback_late_frame_ids(frame_id, late_frame));
     record.write_bool(requested_keyframe);
     record.write_i64(0);
     record.write_i64(0);
@@ -246,6 +252,7 @@ inline std::vector<uint8_t> encode_receiver_feedback_payload(
         session_id,
         frame_id,
         missing_chunk_keys,
+        requested_keyframe,
         requested_keyframe,
         feedback_observed_at());
 }
