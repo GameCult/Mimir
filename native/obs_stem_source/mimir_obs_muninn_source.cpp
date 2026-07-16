@@ -12,6 +12,7 @@
 #include "muninn_rudp_ack.h"
 #include "muninn_rudp_fragments.h"
 #include "muninn_rudp_url.h"
+#include "muninn_udp_socket.h"
 
 #include <algorithm>
 #include <array>
@@ -171,7 +172,7 @@ struct RudpBridgeOutputs {
 static std::optional<uint16_t> allocate_udp_loopback_port()
 {
 #ifdef _WIN32
-    SOCKET socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    SOCKET socket = muninn_udp_socket::create();
     if (socket == INVALID_SOCKET) {
         return std::nullopt;
     }
@@ -870,22 +871,24 @@ private:
     void run()
     {
 #ifdef _WIN32
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
         WSADATA data;
         WSAStartup(MAKEWORD(2, 2), &data);
 
-        socket_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        socket_ = muninn_udp_socket::create(true);
         if (socket_ == INVALID_SOCKET) {
             blog(LOG_WARNING, "Muninn RUDP bridge could not create socket");
             running_ = false;
             WSACleanup();
             return;
         }
-        const int socket_buffer_bytes = 4 * 1024 * 1024;
-        const BOOL reuse_addr = TRUE;
-        setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&reuse_addr),
-                   sizeof(reuse_addr));
+        const int socket_buffer_bytes = 16 * 1024 * 1024;
         setsockopt(socket_, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&socket_buffer_bytes),
                    sizeof(socket_buffer_bytes));
+        int actual_receive_buffer_bytes = 0;
+        int actual_receive_buffer_size = sizeof(actual_receive_buffer_bytes);
+        getsockopt(socket_, SOL_SOCKET, SO_RCVBUF,
+                   reinterpret_cast<char *>(&actual_receive_buffer_bytes), &actual_receive_buffer_size);
         const DWORD receive_timeout_ms = 2;
         setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&receive_timeout_ms),
                    sizeof(receive_timeout_ms));
@@ -902,9 +905,11 @@ private:
             WSACleanup();
             return;
         }
+        blog(LOG_INFO, "Muninn RUDP bridge receive owner priority=highest socket_buffer_bytes=%d",
+             actual_receive_buffer_bytes);
 
-        const SOCKET video_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        const SOCKET audio_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        const SOCKET video_socket = muninn_udp_socket::create();
+        const SOCKET audio_socket = muninn_udp_socket::create();
         setsockopt(video_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char *>(&socket_buffer_bytes),
                    sizeof(socket_buffer_bytes));
         setsockopt(audio_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char *>(&socket_buffer_bytes),
@@ -920,15 +925,25 @@ private:
 
         std::vector<uint8_t> buffer(65535);
         uint32_t bridge_sequence = 1;
+        bool logged_receive_loop = false;
+        bool logged_datagram = false;
         while (running_) {
             sockaddr_in remote = {};
             int remote_len = sizeof(remote);
             const int received = recvfrom(socket_, reinterpret_cast<char *>(buffer.data()), static_cast<int>(buffer.size()), 0,
                                           reinterpret_cast<sockaddr *>(&remote), &remote_len);
             if (received <= 0) {
+                if (!logged_receive_loop) {
+                    logged_receive_loop = true;
+                    blog(LOG_INFO, "Muninn RUDP bridge receive loop active udp/%u error=%d", parts_.port, WSAGetLastError());
+                }
                 expire_rudp_packet_fragments(std::chrono::steady_clock::now());
                 expire_video_assemblies(std::chrono::steady_clock::now(), bridge_sequence);
                 continue;
+            }
+            if (!logged_datagram) {
+                logged_datagram = true;
+                blog(LOG_INFO, "Muninn RUDP bridge received first datagram bytes=%d", received);
             }
             handle_packet(buffer.data(), static_cast<size_t>(received), remote, bridge_sequence, video_socket, video_addr, audio_socket, audio_addr);
         }
@@ -1033,6 +1048,16 @@ private:
         }
 
         if (packet_type == 3) {
+            auto &logged_first_data = is_audio_connection ? logged_first_audio_data_ : logged_first_video_data_;
+            if (!logged_first_data) {
+                logged_first_data = true;
+                blog(LOG_INFO,
+                     "Muninn RUDP bridge first %s data sequence=%u payload=%u fragment_id=%u fragment_index=%u fragment_count=%u datagram=%zu",
+                     is_audio_connection ? "audio" : "video", sequence, payload_len,
+                     static_cast<unsigned int>(read_be16(packet + 24)),
+                     static_cast<unsigned int>(read_be16(packet + 26)),
+                     static_cast<unsigned int>(fragment_count), size);
+            }
             if (!media_connected_) {
                 video_assemblies_.clear();
                 video_parity_cache_.clear();
@@ -1076,7 +1101,7 @@ private:
             const std::string channel_id(
                 reinterpret_cast<const char *>(packet + 36),
                 reinterpret_cast<const char *>(packet + 36 + channel_len));
-            if (channel_id != "media") {
+            if (channel_id != parts_.channel_id) {
                 const auto [ack, ack_mask] = connection_ack_tracker.state();
                 send_control_packet(4, 0x00, connection_id, bridge_sequence++, ack, ack_mask, remote);
                 return;
@@ -1156,6 +1181,15 @@ private:
             ++payloads_decoded_dropped_;
             log_bridge_pressure("dropped undecodable media payload");
             return;
+        }
+        if (!logged_first_decoded_media_) {
+            logged_first_decoded_media_ = true;
+            blog(LOG_INFO,
+                 "Muninn RUDP bridge decoded first media kind=%u payload=%zu frame=%llu chunk=%u/%u",
+                 static_cast<unsigned int>(media->kind), media->payload.size(),
+                 static_cast<unsigned long long>(media->frame_id),
+                 static_cast<unsigned int>(media->chunk_index),
+                 static_cast<unsigned int>(media->chunk_count));
         }
         size_t forwarded_bytes = 0;
         if (media->kind == MuninnMediaPayload::Kind::Video || media->kind == MuninnMediaPayload::Kind::VideoParity) {
@@ -1978,7 +2012,7 @@ private:
 
     void send_media_packet(const std::vector<uint8_t> &payload, uint32_t sequence, const sockaddr_in &remote)
     {
-        const std::string channel = "media";
+        const std::string &channel = parts_.channel_id;
         std::vector<uint8_t> response(36 + channel.size() + payload.size());
         response[0] = 'C';
         response[1] = 'N';
@@ -2060,6 +2094,9 @@ private:
     uint64_t last_video_expiry_scan_ms_ = 0;
     bool waiting_for_video_keyframe_ = true;
     bool media_connected_ = false;
+    bool logged_first_video_data_ = false;
+    bool logged_first_audio_data_ = false;
+    bool logged_first_decoded_media_ = false;
     std::atomic<uint64_t> last_keyframe_request_ms_ = 0;
     std::string source_url_;
     RudpBridgeOutputs outputs_;
@@ -2686,7 +2723,7 @@ static bool publish_capture_command_rudp(const std::string &target, const std::v
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         return false;
     }
-    SOCKET socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    SOCKET socket = muninn_udp_socket::create();
     if (socket == INVALID_SOCKET) {
         WSACleanup();
         return false;
@@ -2742,7 +2779,7 @@ static std::string expected_rudp_stream_url(const MuninnSource *ctx, const std::
 {
     const auto reliable_expire_after_ms = std::max<uint32_t>(1, ctx->rudp_latency_budget_ms);
     return "rudp://" + ctx->media_target_host + ":" + std::to_string(ctx->media_port) + "/" + stream_id +
-           "?channel=media&format=muninn-typed-media&connection=0x6d750001&audio_connection=0x6d750004&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=" +
+           "?channel=realtime&format=muninn-typed-media&connection=0x6d750001&audio_connection=0x6d750004&profile=muninn.rudp.low_latency_h264_lan.v1&sender_resend_delay_ms=5&reliable_expire_after_ms=" +
            std::to_string(reliable_expire_after_ms) + "&assembly_deadline_ms=" + std::to_string(ctx->rudp_latency_budget_ms) +
            "&gap_wait_ms=16&audio_reorder_ms=" + std::to_string(ctx->rudp_audio_reorder_ms);
 }
@@ -3378,7 +3415,7 @@ private:
             return;
         }
 #endif
-        socket_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        socket_ = muninn_udp_socket::create(true);
         if (socket_ == INVALID_SOCKET) {
 #ifdef _WIN32
             WSACleanup();

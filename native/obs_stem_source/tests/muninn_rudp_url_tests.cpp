@@ -19,9 +19,10 @@ void require(bool condition, const std::string &message)
 int main()
 {
     const auto configured = muninn_rudp_url::parse(
-        "rudp://192.168.1.66:5204/muninn.raven.av.rudp?channel=media&format=muninn-typed-media&connection=0x6d750001&audio_connection=0x6d750004&sender_resend_delay_ms=5&reliable_expire_after_ms=120&assembly_deadline_ms=120&gap_wait_ms=16&audio_reorder_ms=80");
+        "rudp://192.168.1.66:5204/muninn.raven.av.rudp?channel=realtime&format=muninn-typed-media&connection=0x6d750001&audio_connection=0x6d750004&sender_resend_delay_ms=5&reliable_expire_after_ms=120&assembly_deadline_ms=120&gap_wait_ms=16&audio_reorder_ms=80");
     require(configured.has_value(), "configured RUDP URL did not parse");
     require(configured->port == 5204, "configured RUDP URL port was not parsed");
+    require(configured->channel_id == "realtime", "configured RUDP realtime channel was not parsed");
     require(configured->video_local_port == 15204, "configured RUDP video local port was not derived");
     require(configured->audio_local_port == 15205, "configured RUDP audio local port was not derived");
     require(configured->connection_id == 0x6d750001, "configured RUDP connection id was not parsed");
@@ -41,6 +42,7 @@ int main()
 
     const auto fallback = muninn_rudp_url::parse("rudp://192.168.1.66:5204/muninn.raven.av.rudp");
     require(fallback.has_value(), "minimal RUDP URL did not parse");
+    require(fallback->channel_id == "realtime", "minimal RUDP URL did not use the experimental realtime lane");
     require(fallback->connection_id == muninn_rudp_url::DefaultMediaRudpConnectionId,
             "minimal RUDP URL did not keep the default connection id");
     require(fallback->audio_connection_id == muninn_rudp_url::DefaultAudioRudpConnectionId,

@@ -18,6 +18,7 @@ inline constexpr uint32_t DefaultSenderResendDelayMs = 5;
 inline constexpr uint32_t MaxLatencyBudgetMs = 500;
 
 struct RudpUrlParts {
+    std::string channel_id = "realtime";
     uint16_t port = 0;
     uint16_t video_local_port = 0;
     uint16_t audio_local_port = 0;
@@ -81,7 +82,9 @@ inline std::optional<RudpUrlParts> parse(const std::string &url)
             }
             const auto key = item.substr(0, equals);
             const auto value = item.substr(equals + 1);
-            if (key == "connection") {
+            if (key == "channel" && !value.empty()) {
+                parts.channel_id = value;
+            } else if (key == "connection") {
                 if (const auto parsed = parse_u32_hex_or_decimal(value)) {
                     parts.connection_id = *parsed;
                 }

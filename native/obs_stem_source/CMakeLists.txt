@@ -45,3 +45,15 @@ target_compile_features(muninn_audio_fec_tests PRIVATE cxx_std_20)
 target_include_directories(muninn_audio_fec_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME muninn_audio_fec_tests COMMAND muninn_audio_fec_tests)
+
+add_executable(muninn_udp_socket_tests
+    tests/muninn_udp_socket_tests.cpp)
+target_compile_features(muninn_udp_socket_tests PRIVATE cxx_std_20)
+target_compile_definitions(muninn_udp_socket_tests PRIVATE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+    _WIN32_WINNT=0x0A00)
+target_include_directories(muninn_udp_socket_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(muninn_udp_socket_tests PRIVATE ws2_32)
+add_test(NAME muninn_udp_socket_tests COMMAND muninn_udp_socket_tests)
