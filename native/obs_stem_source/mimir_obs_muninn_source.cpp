@@ -8,6 +8,7 @@
 #include <util/platform.h>
 
 #include "muninn_media_wire.h"
+#include "muninn_audio_fec.h"
 #include "muninn_rudp_ack.h"
 #include "muninn_rudp_fragments.h"
 #include "muninn_rudp_url.h"
@@ -70,11 +71,11 @@ constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
 constexpr uint32_t MuninnCommandRudpConnectionId = 0x6d750002;
 constexpr uint32_t MuninnDefaultMediaPacketBytes = 848;
 constexpr uint32_t MuninnDefaultRudpVideoBitrateKbps = 12000;
-constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 2000;
+constexpr uint32_t MuninnDefaultRudpLatencyBudgetMs = 100;
 constexpr uint32_t MuninnDefaultRudpAudioReorderMs = muninn_rudp_url::DefaultAudioReorderMs;
 constexpr uint32_t MuninnMaxRudpVideoBitrateKbps = 100000;
-constexpr uint32_t MuninnMaxRudpLatencyBudgetMs = 2000;
-constexpr uint32_t MuninnMaxRudpAudioReorderMs = 2000;
+constexpr uint32_t MuninnMaxRudpLatencyBudgetMs = 500;
+constexpr uint32_t MuninnMaxRudpAudioReorderMs = 250;
 constexpr size_t MuninnAudioReorderMaxPackets = 128;
 constexpr uint64_t MuninnAudioConcealmentMaxPackets = 4;
 constexpr size_t MuninnAudioQueueMaxPackets = 32;
@@ -200,7 +201,7 @@ static std::optional<uint16_t> allocate_udp_loopback_port()
 }
 
 struct MuninnMediaPayload {
-    enum class Kind { Unknown, Video, VideoParity, Audio };
+    enum class Kind { Unknown, Video, VideoParity, Audio, AudioParity };
     Kind kind = Kind::Unknown;
     std::string stream_id;
     std::string session_id;
@@ -211,6 +212,11 @@ struct MuninnMediaPayload {
     uint32_t audio_timebase_num = 0;
     uint32_t audio_timebase_den = 0;
     uint64_t audio_deadline_ticks = 0;
+    uint64_t audio_base_packet_id = 0;
+    uint16_t audio_data_shard_count = 0;
+    uint16_t audio_parity_index = 0;
+    uint16_t audio_parity_shard_count = 0;
+    uint32_t audio_shard_payload_bytes = 0;
     bool keyframe = false;
     std::optional<uint64_t> dependency_frame_id;
     uint16_t chunk_index = 0;
@@ -699,6 +705,35 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             media.payload = record.read_bytes();
             return media;
         }
+        if (schema_id == "muninn.media_audio_parity_shard.v1") {
+            if (record_len < 14) {
+                return std::nullopt;
+            }
+            MuninnMediaPayload media;
+            media.kind = MuninnMediaPayload::Kind::AudioParity;
+            media.stream_id = record.read_string();
+            media.session_id = record.read_string();
+            media.audio_base_packet_id = record.read_unsigned();
+            record.skip(); // codec
+            record.skip(); // base_pts_ticks
+            record.skip(); // packet_duration_ticks
+            record.skip(); // timebase_num
+            record.skip(); // timebase_den
+            media.audio_deadline_ticks = record.read_unsigned();
+            media.audio_data_shard_count = static_cast<uint16_t>(record.read_unsigned());
+            media.audio_parity_index = static_cast<uint16_t>(record.read_unsigned());
+            media.audio_parity_shard_count = static_cast<uint16_t>(record.read_unsigned());
+            media.audio_shard_payload_bytes = static_cast<uint32_t>(record.read_unsigned());
+            media.payload = record.read_bytes();
+            if (media.audio_data_shard_count != muninn_audio_fec::DataShards ||
+                media.audio_parity_shard_count != muninn_audio_fec::ParityShards ||
+                media.audio_parity_index >= muninn_audio_fec::ParityShards ||
+                media.audio_shard_payload_bytes == 0 ||
+                media.payload.size() != media.audio_shard_payload_bytes) {
+                return std::nullopt;
+            }
+            return media;
+        }
     } catch (const std::exception &error) {
         blog(LOG_WARNING, "Muninn RUDP bridge could not decode typed media payload: %s", error.what());
     }
@@ -1149,6 +1184,12 @@ private:
                 return;
             }
             forwarded_bytes = *audio_forwarded_bytes;
+        } else if (media->kind == MuninnMediaPayload::Kind::AudioParity) {
+            const auto audio_forwarded_bytes = forward_audio_parity(*media, audio_socket, audio_addr);
+            if (!audio_forwarded_bytes) {
+                return;
+            }
+            forwarded_bytes = *audio_forwarded_bytes;
         } else {
             ++payloads_decoded_dropped_;
             log_bridge_pressure("dropped unknown media payload");
@@ -1194,6 +1235,11 @@ private:
             audio_session_id_ = media.session_id;
         }
 
+        audio_fec_data_cache_[media.audio_packet_id] = MuninnPendingAudioPacket{media.payload, now};
+        while (audio_fec_data_cache_.size() > MuninnAudioFecDataCacheMaxPackets) {
+            audio_fec_data_cache_.erase(audio_fec_data_cache_.begin());
+        }
+
         if (!next_audio_packet_ready_) {
             next_audio_packet_ready_ = true;
             next_audio_packet_id_ = media.audio_packet_id;
@@ -1214,6 +1260,58 @@ private:
             ++audio_packets_reordered_;
         }
 
+        return flush_audio_packets(now, audio_socket, audio_addr);
+    }
+
+    std::optional<size_t> forward_audio_parity(const MuninnMediaPayload &media,
+                                               SOCKET audio_socket,
+                                               const sockaddr_in &audio_addr)
+    {
+        if (media.stream_id.empty() || media.session_id.empty() || media.payload.empty()) {
+            ++payloads_decoded_dropped_;
+            return std::nullopt;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (audio_stream_id_ != media.stream_id || audio_session_id_ != media.session_id) {
+            reset_audio_reorder();
+            audio_stream_id_ = media.stream_id;
+            audio_session_id_ = media.session_id;
+        }
+
+        const muninn_audio_fec::BlockKey key{
+            media.stream_id, media.session_id, media.audio_base_packet_id};
+        std::vector<muninn_audio_fec::RecoveredPacket> recovered;
+        for (size_t index = 0; index < muninn_audio_fec::DataShards; ++index) {
+            const auto packet = audio_fec_data_cache_.find(media.audio_base_packet_id + index);
+            if (packet != audio_fec_data_cache_.end()) {
+                auto newly_recovered = audio_fec_receiver_.insert(
+                    key, index, packet->second.payload, now);
+                recovered.insert(recovered.end(),
+                                 std::make_move_iterator(newly_recovered.begin()),
+                                 std::make_move_iterator(newly_recovered.end()));
+            }
+        }
+        auto parity_recovered = audio_fec_receiver_.insert(
+            key,
+            muninn_audio_fec::DataShards + media.audio_parity_index,
+            media.payload,
+            now);
+        recovered.insert(recovered.end(),
+                         std::make_move_iterator(parity_recovered.begin()),
+                         std::make_move_iterator(parity_recovered.end()));
+
+        for (auto &packet : recovered) {
+            if (!next_audio_packet_ready_) {
+                next_audio_packet_ready_ = true;
+                next_audio_packet_id_ = packet.packet_id;
+            }
+            if (packet.packet_id >= next_audio_packet_id_ &&
+                pending_audio_packets_.emplace(
+                    packet.packet_id,
+                    MuninnPendingAudioPacket{std::move(packet.payload), now}).second) {
+                ++audio_packets_fec_recovered_;
+            }
+        }
         return flush_audio_packets(now, audio_socket, audio_addr);
     }
 
@@ -1302,6 +1400,8 @@ private:
         audio_stream_id_.clear();
         audio_session_id_.clear();
         pending_audio_packets_.clear();
+        audio_fec_data_cache_.clear();
+        audio_fec_receiver_.clear();
         next_audio_packet_ready_ = false;
         next_audio_packet_id_ = 0;
         audio_gap_started_at_ = std::chrono::steady_clock::time_point::min();
@@ -1942,12 +2042,16 @@ private:
     uint64_t audio_packets_skipped_ = 0;
     uint64_t audio_packets_stale_ = 0;
     uint64_t audio_packets_concealed_ = 0;
+    uint64_t audio_packets_fec_recovered_ = 0;
     std::string audio_stream_id_;
     std::string audio_session_id_;
     bool next_audio_packet_ready_ = false;
     uint64_t next_audio_packet_id_ = 0;
     std::chrono::steady_clock::time_point audio_gap_started_at_ = std::chrono::steady_clock::time_point::min();
     std::map<uint64_t, MuninnPendingAudioPacket> pending_audio_packets_;
+    static constexpr size_t MuninnAudioFecDataCacheMaxPackets = 512;
+    std::map<uint64_t, MuninnPendingAudioPacket> audio_fec_data_cache_;
+    muninn_audio_fec::BlockReceiver audio_fec_receiver_{std::chrono::milliseconds(40), 128};
     bool media_sequence_initialized_ = false;
     uint32_t last_media_sequence_ = 0;
     uint64_t media_sequence_gap_events_ = 0;

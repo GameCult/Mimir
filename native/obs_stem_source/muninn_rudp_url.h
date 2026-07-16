@@ -15,7 +15,7 @@ inline constexpr uint32_t DefaultVideoAssemblyDeadlineMs = 75;
 inline constexpr uint32_t DefaultGapWaitMs = 8;
 inline constexpr uint32_t DefaultAudioReorderMs = 40;
 inline constexpr uint32_t DefaultSenderResendDelayMs = 5;
-inline constexpr uint32_t MaxLatencyBudgetMs = 2000;
+inline constexpr uint32_t MaxLatencyBudgetMs = 500;
 
 struct RudpUrlParts {
     uint16_t port = 0;
