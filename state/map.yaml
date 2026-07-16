@@ -87,6 +87,16 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - Odin's 2026-07-16 Moonlight-derived reliability cut now runs Muninn and
+    Sleipnir against the experimental CultLib runtime snapshot at `8965f3c0`.
+    HID latest state and ordered button edges have separate epoch/sequence and
+    application-ack semantics; wall timestamps no longer order input. Muninn
+    media uses CultNet's unreliable `realtime` lane rather than the experimental
+    reliable-without-expiry `media` lane, defaults LAN usefulness to 100 ms,
+    bounds producer/pending queues, expires repair material, refuses repair for
+    receiver-late frames, and reserves keyframe requests for decode-chain
+    invalidation. Odin records the live authority and remaining gaps in
+    `docs/realtime-delivery-authority.md`.
   - The Moonlight comparison at
     `docs/research/moonlight-muninn-sleipnir-study-2026-07-16.md` establishes
     that realtime delivery policy belongs to signal semantics, not generic RUDP

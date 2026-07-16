@@ -19,8 +19,9 @@ neutralizes stale output.
 
 The weakness is that these parts do not yet form one closed realtime policy:
 
-- generic RUDP reliability remains the dominant substrate instead of a thin
-  carrier beneath media-aware recovery;
+- video already uses unreliable media delivery with parity/manual repair, but
+  audio and HID still lean on generic expiring reliability and none of the
+  lanes yet forms one closed media/input policy;
 - the default Muninn media latency budget is 2000 ms, which is an archive-shaped
   tolerance wearing a realtime badge;
 - receiver feedback is measured and repair/keyframe pressure is recorded, but
@@ -134,7 +135,7 @@ Source: [Moonlight frame-pacing FAQ](https://github.com/moonlight-stream/moonlig
 |---|---|---|---|
 | Video unit | Encoded frame, FEC blocks, dependency recovery | Encoded access unit, chunks/parity, frame/dependency IDs, deadlines | The conceptual unit is already correct. Keep it. |
 | Video loss | FEC first; abandon damaged/obsolete work; request IDR | Parity, missing-chunk feedback, repair cache, keyframe pressure | Close the loop into encoder action and measure whether repair beats deadline. |
-| Audio loss | Small FEC blocks, reorder-aware wait, decoder concealment | Typed audio packets and deadlines; generic reliable delivery remains prominent | Add an audio continuity policy with bounded FEC/reorder/concealment ownership. |
+| Audio loss | Small FEC blocks, reorder-aware wait, decoder concealment | Typed audio packets and deadlines over generic expiring reliable delivery | Add an audio continuity policy with bounded FEC/reorder/concealment ownership. |
 | Congestion | Stream-specific queues and feedback behavior | Sender queue bounds and receiver feedback stats, fixed configured bitrate | Feedback must alter pacing/bitrate/parity or it is only an autopsy report. |
 | Latency budget | Minimal queueing; frame pacing explicitly trades latency for smoothness | Default media budget 2000 ms; Sleipnir reliable expiry 25 ms | Replace one broad media budget with video/audio/input budgets derived from consumption deadlines. |
 | Input state | Coalesces replaceable motion/sensor/analog values | Producer emits latest full controller state; receiver filters regressions | Make coalescing and edge preservation typed protocol semantics, not an accident of polling. |

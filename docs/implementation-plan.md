@@ -448,6 +448,14 @@ should make input supersession and edge preservation structural, replace the
 two-second media default with consumer-derived field budgets, and prove the
 result under controlled loss/jitter/reorder before changing carriers.
 
+The first cut landed in Odin on 2026-07-16: experimental CultLib snapshot
+`8965f3c0`, epoch/sequence/edge-ack HID delivery, 100 ms default LAN media
+deadline, CultNet `realtime` A/V delivery, bounded queues, expiring/late-aware
+repair, and decode-chain-owned keyframe pressure. Next reliability work is real
+encoder keyframe actuation, production parity recovery, audio FEC/concealment,
+bounded long-disconnect edge admission, adaptive sender response, and the
+fault-injected socket timeline harness.
+
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the
    other cameras.
