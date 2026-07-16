@@ -1,7 +1,7 @@
 {
   "status": "starting",
-  "startedAt": "2026-07-13T23:49:47.066Z",
+  "startedAt": "2026-07-15T02:30:47.016Z",
   "stateFile": "E:\\Projects\\Mimir\\.voidbot\\state\\mimir.cc",
   "launcher": "repo_face_heartbeat",
-  "reason": "repo_face_napping_with_short_term_memory"
+  "reason": "repo_face_stale_short_term_memory"
 }
