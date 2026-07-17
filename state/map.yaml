@@ -186,6 +186,16 @@ accepted_design:
     replaceable latest state from ordered non-replaceable edges, coalesce before
     enqueue, acknowledge applied edge/state sequences, and use a proved clock
     model before reporting cross-host wall-clock subtraction as one-way latency.
+  - The 2026-07-17 Raven LAN field pass used hidden scheduled tasks and the
+    experimental CultLib snapshot at `8965f3c0`; Raven used no WireGuard path.
+    Seeded 1% media loss completed 99.93% of 14,400 additional OBS payload
+    groups without video assembly expiry and produced zero audio failures or
+    skips. Sleipnir neutralized a non-neutral virtual pad 1.56 s after input
+    loss and recovered automatically. Bounding its continuous receive drain to
+    2 ms reduced live receive-to-apply from roughly 48-57 ms to typically
+    69-204 us. Cross-host source latency is now explicitly unavailable until a
+    clock offset/uncertainty model exists; a 16 ms receiver-side spike, edge
+    impairment proof, glass-to-glass age, A/V skew, and mixed soak remain open.
   - Nightwing Muninn `d0eded6` now owns PSMoveAPI observation admission in each
     private Eye worker. It rejects stale, sub-2 px, out-of-frame, and
     discontinuous positions before the parent aggregates evidence; typed

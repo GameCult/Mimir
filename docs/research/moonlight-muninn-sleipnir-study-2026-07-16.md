@@ -257,6 +257,36 @@ loss:
 Muninn and Sleipnir already have enough organs to become strong. The next work
 is to give each signal one explicit survival law and make the transport obey it.
 
+## 2026-07-17 LAN field results
+
+The Moonlight-derived ownership changes now have Raven-to-Starfire field
+evidence over LAN, with Raven processes launched only through hidden scheduled
+tasks:
+
+- Muninn video uses independently recoverable block parity plus bounded repair.
+  During a seeded 1% datagram-loss run, the OBS receiver advanced from 2 to 12
+  video assembly expiries while forwarding 14,400 additional payload groups:
+  99.93% completed without expiry. Audio reported zero failures, skips, or stale
+  packets in the same interval. The impairment proxy forwarded 2,147,356 of
+  2,169,105 datagrams with zero queue overflow.
+- Sleipnir latest-state delivery remained live through seeded 1% loss. Cutting
+  the proxy caused the non-neutral virtual Xbox pad to neutralize after 1.56 s,
+  owned by the named stale-input lease; restoring the hidden proxy reconnected
+  and resumed state without operator action.
+- A continuous 64-packet receive drain was retaining the newest input for about
+  48-57 ms before HID application. Bounding that drain to 2 ms reduced live
+  receiver-owned receive-to-apply time to typically 69-204 microseconds. A
+  witnessed 16 ms spike remains to characterize.
+- Starfire and Raven wall clocks differ by roughly 2.38 s. Sleipnir no longer
+  publishes their raw subtraction as one-way latency. Its surface reports that
+  source-clock latency is unavailable without a clock model and exposes only
+  monotonic receiver-owned stage durations.
+
+These results clear the initial 99.9% media-completion and disconnect-safety
+gates at 1% independent loss. They do not yet prove glass-to-glass latency,
+A/V skew, ordered quick-tap delivery under loss, 5%/burst behavior, or a long
+mixed-impairment soak. Those remain acceptance gates, not footnotes.
+
 The field comparison also exposed a generic transport invariant Moonlight's
 long-running sessions force us to respect: bounded wire identifiers must wrap
 deliberately. CultNet's fragmented-message ID previously saturated at the
