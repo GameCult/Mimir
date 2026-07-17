@@ -451,10 +451,13 @@ result under controlled loss/jitter/reorder before changing carriers.
 The first cut landed in Odin on 2026-07-16: experimental CultLib snapshot
 `8965f3c0`, epoch/sequence/edge-ack HID delivery, 100 ms default LAN media
 deadline, CultNet `realtime` A/V delivery, bounded queues, expiring/late-aware
-repair, and decode-chain-owned keyframe pressure. Next reliability work is real
-encoder keyframe actuation, production parity recovery, audio FEC/concealment,
-bounded long-disconnect edge admission, adaptive sender response, and the
-fault-injected socket timeline harness.
+repair, and decode-chain-owned keyframe pressure. The production video path now
+uses typed V3 Cauchy GF(256) FEC with sixteen parity shards per access unit;
+the OBS receiver reconstructs arbitrary erasure sets up to the received parity
+count, while V2 stripe parity remains a distinct non-authoritative schema.
+Sender access units enter the handoff queue independently, and CultMesh catalog
+publication runs outside the realtime media loop. The remaining work is the
+full direct/proxy impairment matrix, Opus FEC/PLC, and long-duration mixed soak.
 
 The socket harness and bounded PCM loss recovery have now landed. Odin's
 `cultnet-impair` proxy supplies deterministic seeded loss/burst/reorder/

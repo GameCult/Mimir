@@ -46,6 +46,13 @@ target_include_directories(muninn_audio_fec_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME muninn_audio_fec_tests COMMAND muninn_audio_fec_tests)
 
+add_executable(muninn_video_fec_tests
+    tests/muninn_video_fec_tests.cpp)
+target_compile_features(muninn_video_fec_tests PRIVATE cxx_std_20)
+target_include_directories(muninn_video_fec_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME muninn_video_fec_tests COMMAND muninn_video_fec_tests)
+
 add_executable(muninn_udp_socket_tests
     tests/muninn_udp_socket_tests.cpp)
 target_compile_features(muninn_udp_socket_tests PRIVATE cxx_std_20)

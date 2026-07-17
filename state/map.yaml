@@ -87,6 +87,16 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - Muninn video FEC is now typed as `muninn.media_video_parity_shard.v3`.
+    Odin emits 16 Cauchy GF(256) parity shards after each multi-chunk access
+    unit, so any erasure set up to the received parity count is recoverable;
+    Mimir's OBS receiver owns the matching bounded matrix recovery before the
+    assembly deadline. V2 stripe parity is never reinterpreted as V3. Native
+    receiver tests prove consecutive bursts from one through sixteen shards,
+    Odin's 180 Muninn tests pass, and the first direct Raven LAN field minute
+    at a 250 ms recovery deadline had no video assembly expiry or A/V failure.
+    Normal frames are forwarded immediately; the recovery deadline is not a
+    playout buffer. The ten-minute and impaired acceptance gates remain open.
   - Muninn now closes receiver congestion pressure into the live NVENC context.
     Every 500 ms it applies multiplicative 15 percent backoff for late frames,
     requested recovery, deferred repair, sender queue loss, or combined
@@ -95,7 +105,7 @@ accepted_design:
     seconds, with a one-quarter/1 Mbps floor. A live 2560x1440 D3D11 proof
     changed 12 Mbps to 6 Mbps at frame 35; FFmpeg/NVENC reconfigured the same
     session, emitted an IDR at frame 35, and the Annex-B stream decoded cleanly.
-    Muninn's full suite now passes 176 tests.
+    Muninn's full suite now passes 180 tests.
   - Receiver-driven video recovery now reaches the actual NVENC frame owner.
     Odin's `native/muninn-video-encoder` is a long-lived libavdevice desktop
     capture and `h264_nvenc` process; a new decode-chain invalidation edge makes

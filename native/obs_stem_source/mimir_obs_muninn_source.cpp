@@ -13,6 +13,7 @@
 #include "muninn_rudp_fragments.h"
 #include "muninn_rudp_url.h"
 #include "muninn_udp_socket.h"
+#include "muninn_video_fec.h"
 
 #include <algorithm>
 #include <array>
@@ -224,6 +225,7 @@ struct MuninnMediaPayload {
     uint16_t chunk_count = 1;
     uint16_t parity_index = 0;
     uint16_t parity_count = 0;
+    bool video_fec_cauchy = false;
     std::vector<uint32_t> chunk_payload_lengths;
     std::vector<uint8_t> payload;
 };
@@ -240,6 +242,7 @@ struct MuninnVideoFrameAssembly {
     bool repair_requested = false;
     std::vector<uint32_t> chunk_payload_lengths;
     uint16_t parity_count = 0;
+    bool video_fec_cauchy = false;
     std::map<uint16_t, std::vector<uint8_t>> parity_payloads;
     std::vector<std::vector<uint8_t>> chunks;
 };
@@ -253,6 +256,7 @@ struct MuninnVideoParityCacheEntry {
     uint16_t chunk_count = 0;
     uint16_t parity_index = 0;
     uint16_t parity_count = 0;
+    bool video_fec_cauchy = false;
     std::chrono::steady_clock::time_point received_at;
     std::vector<uint32_t> chunk_payload_lengths;
     std::vector<uint8_t> payload;
@@ -655,7 +659,8 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             media.payload = record.read_bytes();
             return media;
         }
-        if (schema_id == "muninn.media_video_parity_shard.v2") {
+        if (schema_id == "muninn.media_video_parity_shard.v2" ||
+            schema_id == "muninn.media_video_parity_shard.v3") {
             if (record_len < 17) {
                 return std::nullopt;
             }
@@ -675,6 +680,7 @@ static std::optional<MuninnMediaPayload> decode_muninn_media_payload(const uint8
             media.chunk_count = static_cast<uint16_t>(record.read_unsigned());
             media.parity_index = static_cast<uint16_t>(record.read_unsigned());
             media.parity_count = static_cast<uint16_t>(record.read_unsigned());
+            media.video_fec_cauchy = schema_id == "muninn.media_video_parity_shard.v3";
             const uint32_t chunk_payload_bytes = static_cast<uint32_t>(record.read_unsigned());
             const uint32_t last_chunk_payload_bytes = static_cast<uint32_t>(record.read_unsigned());
             if (media.chunk_count == 0 ||
@@ -1600,7 +1606,15 @@ private:
             log_bridge_pressure("dropped video parity with mixed stripe count");
             return std::nullopt;
         }
+        if (assembly.parity_count != 0 && assembly.video_fec_cauchy != media.video_fec_cauchy) {
+            video_assemblies_.erase(key);
+            ++payloads_decoded_dropped_;
+            ++video_parity_unusable_;
+            log_bridge_pressure("dropped video parity with mixed FEC scheme");
+            return std::nullopt;
+        }
         assembly.parity_count = media.parity_count;
+        assembly.video_fec_cauchy = media.video_fec_cauchy;
         assembly.parity_payloads[media.parity_index] = media.payload;
         if (try_recover_video_assembly_from_parity(assembly)) {
             ++video_parity_recovered_;
@@ -1621,6 +1635,7 @@ private:
         entry.chunk_count = media.chunk_count;
         entry.parity_index = media.parity_index;
         entry.parity_count = media.parity_count;
+        entry.video_fec_cauchy = media.video_fec_cauchy;
         entry.received_at = std::chrono::steady_clock::now();
         entry.chunk_payload_lengths = media.chunk_payload_lengths;
         entry.payload = media.payload;
@@ -1641,9 +1656,12 @@ private:
                 entry.dependency_frame_id == assembly.dependency_frame_id &&
                 entry.parity_count != 0 &&
                 entry.parity_index < entry.parity_count &&
-                (assembly.parity_count == 0 || assembly.parity_count == entry.parity_count)) {
+                (assembly.parity_count == 0 ||
+                    (assembly.parity_count == entry.parity_count &&
+                     assembly.video_fec_cauchy == entry.video_fec_cauchy))) {
                 assembly.chunk_payload_lengths = entry.chunk_payload_lengths;
                 assembly.parity_count = entry.parity_count;
+                assembly.video_fec_cauchy = entry.video_fec_cauchy;
                 assembly.parity_payloads[entry.parity_index] = entry.payload;
             } else {
                 ++video_parity_unusable_;
@@ -1671,58 +1689,21 @@ private:
     bool try_recover_video_assembly_from_parity(MuninnVideoFrameAssembly &assembly)
     {
         if (assembly.parity_count == 0 ||
+            !assembly.video_fec_cauchy ||
             assembly.parity_payloads.empty() ||
             assembly.chunk_payload_lengths.size() != assembly.chunk_count ||
             assembly.chunks.size() != assembly.chunk_count) {
             return false;
         }
-        bool recovered_any = true;
-        while (recovered_any && assembly.chunks_received < assembly.chunk_count) {
-            recovered_any = false;
-            for (const auto &parity : assembly.parity_payloads) {
-                const uint16_t parity_index = parity.first;
-                if (parity_index >= assembly.parity_count || parity.second.empty()) {
-                    continue;
-                }
-                uint16_t missing_index = 0;
-                uint16_t missing_count = 0;
-                for (uint16_t index = parity_index; index < assembly.chunk_count; index += assembly.parity_count) {
-                    if (assembly.chunks[index].empty()) {
-                        missing_index = index;
-                        ++missing_count;
-                    }
-                }
-                if (missing_count != 1) {
-                    continue;
-                }
-                const uint32_t missing_len = assembly.chunk_payload_lengths[missing_index];
-                if (missing_len == 0 || missing_len > parity.second.size()) {
-                    continue;
-                }
-                std::vector<uint8_t> recovered = parity.second;
-                bool stripe_complete = true;
-                for (uint16_t index = parity_index; index < assembly.chunk_count; index += assembly.parity_count) {
-                    if (index == missing_index) {
-                        continue;
-                    }
-                    const auto &chunk = assembly.chunks[index];
-                    if (chunk.empty()) {
-                        stripe_complete = false;
-                        break;
-                    }
-                    for (size_t offset = 0; offset < chunk.size() && offset < recovered.size(); ++offset) {
-                        recovered[offset] ^= chunk[offset];
-                    }
-                }
-                if (!stripe_complete) {
-                    continue;
-                }
-                recovered.resize(missing_len);
-                assembly.chunks[missing_index] = std::move(recovered);
-                ++assembly.chunks_received;
-                recovered_any = true;
-            }
+        const uint16_t missing = assembly.chunk_count - assembly.chunks_received;
+        if (!muninn_video_fec::recover(
+                assembly.chunks,
+                assembly.chunk_payload_lengths,
+                assembly.parity_count,
+                assembly.parity_payloads)) {
+            return false;
         }
+        assembly.chunks_received += missing;
         return assembly.chunks_received == assembly.chunk_count;
     }
 
