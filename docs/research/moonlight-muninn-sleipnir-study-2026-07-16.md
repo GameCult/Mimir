@@ -293,3 +293,41 @@ deliberately. CultNet's fragmented-message ID previously saturated at the
 maximum `u16`, so fragmented audio became unreassemblable after the boundary.
 Wrap-to-one plus a boundary test removed the repeatable minute-eight collapse;
 a subsequent 10-minute direct LAN run remained clean across the boundary.
+
+## 2026-07-17 ordered-input closure
+
+The quick-tap gate exposed four authorities that generic RUDP reliability had
+blurred together:
+
+- A Windows sleep requested at two milliseconds could still miss a short tap.
+  Muninn now observes XInput on a dedicated high-resolution worker; transport,
+  discovery, serialization, and logging cannot delay capture.
+- Global cumulative ACKs could not retire a reliable packet arriving more than
+  32 realtime sequence numbers late, and reliable duplicates were not ACKed
+  after application deduplication. CultNet now directly acknowledges the late
+  packet and acknowledges reliable duplicates. This collapsed a runaway field
+  trace from hundreds of thousands of resend datagrams to a bounded flow.
+- Muninn used semantic application ACK as permission to send the next edge.
+  One delayed ACK therefore serialized the entire controller. It now sends a
+  bounded window of captured edges; CultNet owns retransmission, Sleipnir's
+  epoch/sequence cursor owns ordering, and semantic ACK only retires history.
+- Sleipnir published CultMesh/Eve and Idunn state synchronously on the actuator
+  thread. Those writes produced 0.7-1.8 second visible button holds. A bounded
+  coalescing publisher worker now owns control-plane projection, leaving the
+  input thread to receive, order, actuate, and acknowledge.
+
+The resulting first-hot-plug field proof generated 100 taps with a 16 ms source
+press and 84 ms gap. Under seeded 1% independent loss, every layer observed
+exactly 100 presses and 100 releases; Raven-visible durations were 24-57 ms.
+Under eight consecutive dropped packets every 200 datagrams, every layer again
+observed exactly 100 presses and 100 releases; visible durations were 24-40 ms,
+the final virtual pad was neutral, and the impairment proxy reported no queue
+overflow. Raven ran through hidden scheduled tasks over `192.168.1.0/24`; no
+WireGuard route participated. Both daemons used the Eve/Aetheria/VoidBot
+experimental CultLib lineage pinned at `8965f3c0`.
+
+This closes ordered digital edges at one 60 Hz source frame. It does not prove
+sub-frame synthetic ViGEm pulses: eight-millisecond state-only pulses can fall
+between XInput snapshots, and `XInputGetKeystroke` was rejected after it emitted
+stale events from a reused user slot. Analog motion under a sender stall,
+mixed media/input endurance, glass-to-glass video age, and A/V skew remain open.

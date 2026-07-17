@@ -194,8 +194,23 @@ accepted_design:
     loss and recovered automatically. Bounding its continuous receive drain to
     2 ms reduced live receive-to-apply from roughly 48-57 ms to typically
     69-204 us. Cross-host source latency is now explicitly unavailable until a
-    clock offset/uncertainty model exists; a 16 ms receiver-side spike, edge
-    impairment proof, glass-to-glass age, A/V skew, and mixed soak remain open.
+    clock offset/uncertainty model exists.
+  - The 2026-07-17 ordered-input field cut removed transport and control-plane
+    stalls from the Muninn/Sleipnir path. Muninn observes XInput on a dedicated
+    1 kHz, one-millisecond-timer worker and derives exact button edges from
+    consecutive snapshots. Captured edges are sent as a bounded reliable
+    window; application ACKs retire history but never gate the next edge.
+    CultNet directly ACKs late reliable packets outside its 32-packet
+    cumulative window and ACKs reliable duplicates, preventing immortal resend
+    storms. Sleipnir actuates ordered edges for at least 24 ms and publishes
+    CultMesh/Eve/Idunn state on a separate coalescing worker. Raven field proof
+    over LAN, hidden tasks, experimental CultLib `8965f3c0`, and no WireGuard
+    produced exact 100/100 one-frame taps under seeded 1% loss and exact
+    100/100 under eight-packet bursts. Burst visible durations were 24-40 ms,
+    final state was neutral, and the impairment proxy had no queue overflow.
+    A steady-state 5% run was exact at 20/20; repeat the 100-tap 5% first-session
+    gate after the stale XInput keystroke path was deleted. Glass-to-glass age,
+    A/V skew, analog motion under stall, and mixed soak remain open.
   - Nightwing Muninn `d0eded6` now owns PSMoveAPI observation admission in each
     private Eye worker. It rejects stale, sub-2 px, out-of-frame, and
     discontinuous positions before the parent aggregates evidence; typed
