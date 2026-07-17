@@ -97,8 +97,12 @@ accepted_design:
     recovery bound. Odin's 180 Muninn tests pass. A per-byte elimination draft
     was rejected after one recovery stalled the receiver thread; production
     inverts the coefficient matrix once per frame and uses table-driven field
-    arithmetic. The fresh direct Raven LAN session has no video assembly expiry
-    or A/V failure in its initial minute at a 250 ms recovery deadline.
+    arithmetic. Direct Raven LAN evidence then exposed a remaining layout fault:
+    a 24-datagram tail burst erased four final data chunks plus all sixteen
+    trailing parity shards, so no parity survived to repair the otherwise small
+    data loss. Repair retransmission is now capped behind fresh media and video
+    datagrams use a 50 microsecond spin pacer, but parity dispersion/adaptive
+    block sizing remains required before the clean ten-minute gate can pass.
     Normal frames are forwarded immediately; the recovery deadline is not a
     playout buffer. The ten-minute and impaired acceptance gates remain open.
   - Muninn now closes receiver congestion pressure into the live NVENC context.
