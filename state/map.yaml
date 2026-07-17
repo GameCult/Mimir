@@ -93,8 +93,12 @@ accepted_design:
     Mimir's OBS receiver owns the matching bounded matrix recovery before the
     assembly deadline. V2 stripe parity is never reinterpreted as V3. Native
     receiver tests prove consecutive bursts from one through sixteen shards,
-    Odin's 180 Muninn tests pass, and the first direct Raven LAN field minute
-    at a 250 ms recovery deadline had no video assembly expiry or A/V failure.
+    including production-sized 64 by 1400-byte frames under a 50 ms per-frame
+    recovery bound. Odin's 180 Muninn tests pass. A per-byte elimination draft
+    was rejected after one recovery stalled the receiver thread; production
+    inverts the coefficient matrix once per frame and uses table-driven field
+    arithmetic. The fresh direct Raven LAN session has no video assembly expiry
+    or A/V failure in its initial minute at a 250 ms recovery deadline.
     Normal frames are forwarded immediately; the recovery deadline is not a
     playout buffer. The ten-minute and impaired acceptance gates remain open.
   - Muninn now closes receiver congestion pressure into the live NVENC context.
