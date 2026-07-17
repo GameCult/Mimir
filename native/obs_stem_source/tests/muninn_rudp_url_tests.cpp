@@ -53,7 +53,7 @@ int main()
             "minimal RUDP URL did not keep the default assembly deadline");
     require(fallback->audio_reorder_ms == muninn_rudp_url::DefaultAudioReorderMs,
             "minimal RUDP URL did not keep the default audio reorder wait");
-    require(fallback->audio_reorder_ms == 40,
+    require(fallback->audio_reorder_ms == 120,
             "minimal RUDP URL did not use the bounded realtime audio reorder budget");
 
     return 0;
