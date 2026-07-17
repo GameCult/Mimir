@@ -42,7 +42,7 @@ int main()
 
     const auto fallback = muninn_rudp_url::parse("rudp://192.168.1.66:5204/muninn.raven.av.rudp");
     require(fallback.has_value(), "minimal RUDP URL did not parse");
-    require(fallback->channel_id == "realtime", "minimal RUDP URL did not use the experimental realtime lane");
+    require(fallback->channel_id == "media", "minimal RUDP URL did not use bounded reliable media delivery");
     require(fallback->connection_id == muninn_rudp_url::DefaultMediaRudpConnectionId,
             "minimal RUDP URL did not keep the default connection id");
     require(fallback->audio_connection_id == muninn_rudp_url::DefaultAudioRudpConnectionId,

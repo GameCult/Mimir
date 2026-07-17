@@ -18,7 +18,7 @@ inline constexpr uint32_t DefaultSenderResendDelayMs = 5;
 inline constexpr uint32_t MaxLatencyBudgetMs = 500;
 
 struct RudpUrlParts {
-    std::string channel_id = "realtime";
+    std::string channel_id = "media";
     uint16_t port = 0;
     uint16_t video_local_port = 0;
     uint16_t audio_local_port = 0;

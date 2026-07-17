@@ -10,14 +10,15 @@ permission to call the field path done.
 |---|---|---|---|
 | Experimental CultMesh/CultNet lineage | Odin vendored CultLib snapshot `8965f3c0` | Snapshot provenance plus CultNet/Muninn/Sleipnir suites | proved locally |
 | Low-delay NVENC | Muninn controllable encoder | D3D11 desktop capture, no B frames/lookahead, two-frame VBV, clean Annex-B decode | proved locally |
-| Consumer deadline owns media lifetime | Muninn queues, repair cache, Mimir assembly/reorder | 100 ms default, bounded queues/cache, late-frame repair refusal | proved structurally |
-| Recoverable video loss avoids decoder reset | Mimir parity/repair, Odin repair cache | Production XOR parity; live early-feedback fixture; repair expiry tests | proved locally |
+| Consumer deadline owns media lifetime | Muninn queues, repair cache, Mimir assembly/reorder | 100 ms default/250 ms Raven profile, bounded queues/cache/reliable expiry, late-frame repair refusal | proved structurally |
+| Recoverable video loss avoids decoder reset | Mimir V4 block FEC/repair, Odin repair cache | Exhaustive 2..80 chunk, burst 1..8 tests in Rust/C++; completed-frame tombstones | proved locally |
 | Decoder-chain loss forces immediate IDR | Muninn feedback owner and native encoder | Live 2560x1440 command produced IDR at frame 22 under a 600-frame GOP | proved locally |
-| Congestion changes encoder output in-session | Muninn AIMD controller and native encoder | Live 12-to-6 Mbps reconfiguration produced clean IDR at frame 35 | proved locally |
+| Congestion changes encoder output in-session | Muninn AIMD controller and native encoder | Half-ceiling start and protected cap; live 12-to-6 Mbps reconfiguration produced clean IDR | proved locally |
 | Audio survives small erasure bursts | Odin 4+2 GF(256), Mimir FEC/reorder/concealment | Exhaustive one/two-erasure Rust and C++ tests; production DLL build | proved locally |
 | Latest input state supersedes stale state | Muninn epoch/state sequence, Sleipnir cursor | Duplicate/reorder/stale epoch tests | proved locally |
 | Button edges are not lost or retained forever | Muninn replay/app ACK/epoch rebase, Sleipnir ordered cursor | Quick-tap, ACK, overflow rebase, sparse-gap tests | proved locally |
-| Real field path survives impairment and soak | Raven sender, Starfire receiver/OBS, `cultnet-impair` | No current run: Raven WireGuard SSH/TCP 22 timed out | **missing** |
+| Raven runtime is LAN-only and non-interrupting | Hidden Raven scheduled task, direct LAN SSH/media | One coherent Muninn/WASAPI/NVENC/FFmpeg tree; no WireGuard route; `-WindowStyle Hidden` | proved operationally |
+| Real field path survives impairment and soak | Raven sender, Starfire receiver/OBS, `cultnet-impair` | Direct LAN clean run 05:34:17–05:44:37: 79,200 records, 697,450,085 bytes, 18,588 recovered shards, zero decode/assembly/media/audio failures and zero sender capacity eviction; proxy matrix and long soak remain | **direct clean passed** |
 
 ## Field acceptance matrix
 
@@ -37,6 +38,27 @@ timeline, not only proxy CSV counters.
 | stall 250 ms | obsolete media expires; queues remain bounded; input latest state converges within 35 ms after release |
 | reconnect | old input epoch cannot act; neutral/current state within 100 ms; decoded video within 500 ms |
 | mixed 60-minute soak | stable memory/handle/thread counts and no progressive A/V drift |
+
+The first seeded 1% proxy run is a failed acceptance result, not a pass: 987 of
+95,741 datagrams were dropped; in roughly one minute the receiver recorded 38
+expired video assemblies and 56 skipped audio packets while remaining bounded
+and avoiding decoder reset. CultNet fragmentation currently sits below
+application-level FEC, so one lost transport fragment discards an entire FEC
+shard. The next reliability cut is to make protected media shards fit one wire
+datagram or move fragmentation above the erasure-code boundary.
+
+## Field scars
+
+- A fragmented CultNet RUDP session failed repeatably after roughly eight to
+  nine minutes because the `u16` fragment-set ID used saturating increment and
+  became permanently stuck at 65,535. Every later fragmented audio document
+  then collided in one receiver reassembly key. The allocator now wraps from
+  65,535 to 1, with a boundary test. The clean field run above crossed that
+  boundary without a single audio reorder, skip, stale packet, or failure.
+- Audio and video producer ingress now use separate bounded channels. Video
+  capture can no longer block audio ingestion before the audio-priority send
+  scheduler sees it. Capacity-eviction counters proved zero during the clean
+  acceptance run.
 
 ## Completion rule
 

@@ -17,20 +17,24 @@ and keyframe requests. Sleipnir already rejects regressing sequence/timestamp
 pairs, expires reliable HID sends after 25 ms, reports stage latency, and
 neutralizes stale output.
 
-The weakness is that these parts do not yet form one closed realtime policy:
+The 2026-07-17 field cut closes most of the original mechanism gaps:
 
-- video already uses unreliable media delivery with parity/manual repair, but
-  audio and HID still lean on generic expiring reliability and none of the
-  lanes yet forms one closed media/input policy;
-- the default Muninn media latency budget is 2000 ms, which is an archive-shaped
-  tolerance wearing a realtime badge;
-- receiver feedback is measured and repair/keyframe pressure is recorded, but
-  the encoder and sender do not visibly adapt bitrate, parity, or pacing from it;
-- Sleipnir coalesces whole controller snapshots implicitly at the producer, but
-  its protocol does not name which values are replaceable state and which are
-  non-replaceable edges;
-- wall-clock source age is reported as latency even though no explicit clock
-  synchronization contract proves that subtraction valid across hosts.
+- canonical video and video parity use the unreliable `realtime` lane; typed
+  8+8 GF(256) blocks, selective repair, and decode-chain IDR recovery own loss;
+- canonical 10 ms PCM audio uses `realtime`, with 4+2 FEC, a 40 ms reorder
+  owner, and short concealment; reliable delivery is reserved for control;
+- the consumer deadline is 100 ms by default and 250 ms in the Raven field
+  profile; queues, retransmits, repair material, and assemblies derive from it;
+- receiver pressure actuates the live NVENC encoder through multiplicative
+  backoff and conservative additive recovery; startup begins at half the
+  requested ceiling because fixed video parity can roughly double wire load;
+- Sleipnir latest state and ordered edges have distinct epoch/sequence and
+  application-ack semantics, including bounded overflow rebase.
+
+The remaining claim boundary is evidence: direct and impaired Raven-to-
+Starfire soaks, reconnect repetition, A/V skew measurement, and a live virtual
+HID exercise. The machine is no longer missing a named owner for these paths;
+it still has to prove those owners under pressure.
 
 Do not transplant Moonlight wholesale. Distill its ownership model into the
 existing typed Muninn/Sleipnir pipeline.
@@ -134,12 +138,12 @@ Source: [Moonlight frame-pacing FAQ](https://github.com/moonlight-stream/moonlig
 | Concern | Moonlight | Muninn / Sleipnir now | Distilled judgment |
 |---|---|---|---|
 | Video unit | Encoded frame, FEC blocks, dependency recovery | Encoded access unit, chunks/parity, frame/dependency IDs, deadlines | The conceptual unit is already correct. Keep it. |
-| Video loss | FEC first; abandon damaged/obsolete work; request IDR | Parity, missing-chunk feedback, repair cache, keyframe pressure | Close the loop into encoder action and measure whether repair beats deadline. |
-| Audio loss | Small FEC blocks, reorder-aware wait, decoder concealment | Typed audio packets and deadlines over generic expiring reliable delivery | Add an audio continuity policy with bounded FEC/reorder/concealment ownership. |
-| Congestion | Stream-specific queues and feedback behavior | Sender queue bounds and receiver feedback stats, fixed configured bitrate | Feedback must alter pacing/bitrate/parity or it is only an autopsy report. |
-| Latency budget | Minimal queueing; frame pacing explicitly trades latency for smoothness | Default media budget 2000 ms; Sleipnir reliable expiry 25 ms | Replace one broad media budget with video/audio/input budgets derived from consumption deadlines. |
-| Input state | Coalesces replaceable motion/sensor/analog values | Producer emits latest full controller state; receiver filters regressions | Make coalescing and edge preservation typed protocol semantics, not an accident of polling. |
-| Input edges | Button/type changes terminate batches; text is ordered | Whole snapshots contain buttons and axes | Add edge sequence/ack or a compact transition log so a press/release cannot vanish between snapshots. |
+| Video loss | FEC first; abandon damaged/obsolete work; request IDR | Typed 8+8 block FEC, deadline-bound repair, completed-frame tombstones, IDR actuation | Same ownership pattern; field loss ratios and parity overhead remain tunable. |
+| Audio loss | Small FEC blocks, reorder-aware wait, decoder concealment | Realtime 4+2 PCM FEC, 40 ms reorder, bounded concealment | Mechanism is closed; Opus FEC/PLC is a later efficiency/quality cut. |
+| Congestion | Stream-specific queues and feedback behavior | Half-ceiling startup, 15% pressure backoff, bounded additive ramp, fresh media ahead of repair | Closed loop exists; impairment evidence decides its final constants. |
+| Latency budget | Minimal queueing; frame pacing explicitly trades latency for smoothness | Consumer-owned 100 ms default/250 ms Raven proof; 25 ms HID expiry | Correct owner and bounded values; glass-to-glass measurement remains. |
+| Input state | Coalesces replaceable motion/sensor/analog values | Epoch-scoped latest state supersedes stale state | Structural rather than polling-accidental. |
+| Input edges | Button/type changes terminate batches; text is ordered | Ordered edge sequence, application ACK, bounded replay, epoch rebase | Structural; live virtual-HID impairment proof remains. |
 | Staleness | Queue construction prevents much stale work | Receiver drops regressing timestamps and neutralizes after timeout | Keep the guard, but move freshness authority earlier into enqueue/supersession. |
 | Timing | RTP/media clocks and local queue timing | source Unix nanoseconds plus receiver instants | Use monotonic source time plus an explicit clock-offset/uncertainty model; do not call raw wall-clock subtraction latency. |
 | Security | Authenticated encryption in modern stream generations | CultNet typed transport policy varies by lane | Preserve typed schemas, but specify replay/authentication guarantees for hot media and HID lanes. |
@@ -252,3 +256,10 @@ loss:
 
 Muninn and Sleipnir already have enough organs to become strong. The next work
 is to give each signal one explicit survival law and make the transport obey it.
+
+The field comparison also exposed a generic transport invariant Moonlight's
+long-running sessions force us to respect: bounded wire identifiers must wrap
+deliberately. CultNet's fragmented-message ID previously saturated at the
+maximum `u16`, so fragmented audio became unreassemblable after the boundary.
+Wrap-to-one plus a boundary test removed the repeatable minute-eight collapse;
+a subsequent 10-minute direct LAN run remained clean across the boundary.

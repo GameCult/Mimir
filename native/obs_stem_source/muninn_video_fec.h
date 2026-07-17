@@ -158,4 +158,24 @@ inline bool recover(std::vector<std::vector<uint8_t>> &chunks,
     return true;
 }
 
+inline bool recover_block(std::vector<std::vector<uint8_t>> &frame_chunks,
+                          uint16_t data_start,
+                          const std::vector<uint32_t> &block_lengths,
+                          uint16_t parity_count,
+                          const std::map<uint16_t, std::vector<uint8_t>> &parity)
+{
+    if (block_lengths.empty() ||
+        static_cast<size_t>(data_start) + block_lengths.size() > frame_chunks.size())
+        return false;
+    std::vector<std::vector<uint8_t>> block_chunks;
+    block_chunks.reserve(block_lengths.size());
+    for (size_t index = 0; index < block_lengths.size(); ++index)
+        block_chunks.push_back(frame_chunks[data_start + index]);
+    if (!recover(block_chunks, block_lengths, parity_count, parity))
+        return false;
+    for (size_t index = 0; index < block_lengths.size(); ++index)
+        frame_chunks[data_start + index] = std::move(block_chunks[index]);
+    return true;
+}
+
 } // namespace muninn_video_fec

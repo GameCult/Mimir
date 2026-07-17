@@ -452,12 +452,15 @@ The first cut landed in Odin on 2026-07-16: experimental CultLib snapshot
 `8965f3c0`, epoch/sequence/edge-ack HID delivery, 100 ms default LAN media
 deadline, CultNet `realtime` A/V delivery, bounded queues, expiring/late-aware
 repair, and decode-chain-owned keyframe pressure. The production video path now
-uses typed V3 Cauchy GF(256) FEC with sixteen parity shards per access unit;
-the OBS receiver reconstructs arbitrary erasure sets up to the received parity
-count, while V2 stripe parity remains a distinct non-authoritative schema.
-Sender access units enter the handoff queue independently, and CultMesh catalog
-publication runs outside the realtime media loop. The remaining work is the
-full direct/proxy impairment matrix, Opus FEC/PLC, and long-duration mixed soak.
+uses typed V4 Cauchy GF(256) FEC in independent 8-data/8-parity blocks. Each
+block schedules data and parity as separate lanes, including fixed protection
+for a short tail block. Canonical video and parity use CultNet's unreliable
+`realtime` lane; selective repair and IDR recovery remain deadline-bound.
+Canonical audio and its parity also use `realtime`; 4+2 FEC, reorder, and
+concealment own continuity without an ACK/retransmit window. Sender access units enter the
+handoff queue independently, and CultMesh catalog publication runs outside the
+realtime media loop. The remaining work is the full direct/proxy impairment
+matrix, Opus FEC/PLC, and long-duration mixed soak.
 
 The socket harness and bounded PCM loss recovery have now landed. Odin's
 `cultnet-impair` proxy supplies deterministic seeded loss/burst/reorder/
@@ -469,9 +472,11 @@ Both sides use the experimental CultLib/CultMesh snapshot lineage used by Eve,
 Aetheria, and VoidBot; no stable-branch transport shim was introduced.
 
 Receiver pressure now closes into the long-lived NVENC encoder as bounded AIMD
-bitrate control. Late/decode/repair/queue pressure backs off by 15 percent;
-clean recovery adds five percent of the configured ceiling only after two
-stable seconds. The live encoder proof reconfigured 12 Mbps to 6 Mbps without a
+bitrate control. Startup begins at half of the configured encoder ceiling
+because fixed block parity can roughly double wire rate, and additive recovery
+is capped at half of that configured ceiling. Late/decode/repair/queue
+pressure backs off by 15 percent; clean recovery adds one-fiftieth of the safe
+cap only after ten stable seconds. The live encoder proof reconfigured 12 Mbps to 6 Mbps without a
 restart and emitted the required transition IDR. The exact remaining completion
 gate is tracked in
 `docs/research/moonlight-reliability-acceptance-2026-07-16.md`; no cross-host
@@ -485,11 +490,13 @@ with short silence concealment. The next audio cut is Opus with explicit
 FEC/PLC for variable-rate compressed audio; PCM now has bounded 4+2 erasure
 recovery plus concealment. The controllable video encoder owner now exists and
 forces the next NVENC frame to IDR without restarting the video session. A live
-D3D11 desktop proof verified the command-generated IDR. The remaining field
-cut is to install its bundle on Raven, route the existing activation task
-through `--video-encoder`, and run the named impairment profiles. Raven's
-WireGuard SSH route timed out during the first deployment attempt, so no
-interactive workstation task was disturbed.
+D3D11 desktop proof verified the command-generated IDR. The Raven bundle and
+OBS receiver are now deployed over the direct LAN route. Raven activation is an
+interactive-token scheduled task whose PowerShell action uses
+`-WindowStyle Hidden`; no WireGuard path or foreground terminal is part of the
+runtime. The active field cut uses D3D11/NVENC video, WASAPI loopback audio,
+typed CultNet media, and the experimental CultLib lineage. The named direct and
+proxy impairment profiles and long soak remain the completion gate.
 
 1. Replace the frame-event diagnostic bridge with concrete direct capture
    drivers for Leap stereo IR first, then the

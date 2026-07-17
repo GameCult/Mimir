@@ -337,6 +337,42 @@ not become the synchronized program authority.
 
 ## CultMesh Media Bridge
 
+The live Raven-to-Starfire program path is Muninn's typed CultNet media body:
+
+```mermaid
+flowchart TD
+    A["Raven D3D11 desktop capture"] --> B["Long-lived NVENC encoder"]
+    C["Raven WASAPI loopback"] --> D["10 ms float PCM packetizer"]
+    B --> E["V4 8+8 block FEC and realtime video lane"]
+    D --> F["4+2 audio FEC and realtime audio lane"]
+    E --> G["Starfire OBS Muninn receiver udp/5200"]
+    F --> G
+    G --> H["Frame assembly / FEC / IDR feedback"]
+    G --> I["40 ms audio reorder / concealment"]
+    H --> J["OBS-local video decoder socket"]
+    I --> K["OBS-local audio decoder socket"]
+```
+
+Owner: Muninn owns Raven capture children, access-unit/audio packetization,
+CultNet delivery, repair material, and encoder feedback response. The Mimir OBS
+plugin owns receipt admission, frame/FEC assembly, audio continuity, and local
+OBS lowering. OBS owns decode and composition. Odin/CultMesh discovery names
+the provider surface; neither discovery nor the compatibility decoder sockets
+own hot media truth.
+
+Invariant: video packets are useful only before their assembly deadline.
+Canonical video and V4 parity use unreliable `realtime`; block FEC, selective
+repair, and IDR recovery own loss. Canonical audio and 4+2 parity also use
+`realtime`; reorder and bounded concealment own playout continuity. Completed
+video frames are tombstoned so late shards cannot
+become a second assembly owner. Raven uses direct LAN only and starts through a
+hidden interactive-token scheduled task; no WireGuard hop or foreground
+terminal participates.
+
+The older `Mimir.CultMeshMedia` relay description below is retained as a
+non-authoritative historical/body-bridge map. It does not own the active Muninn
+OBS feed.
+
 ```mermaid
 flowchart TD
     A["Raven FFmpeg desktop + WASAPI loopback mux"] --> B["Mimir.CultMeshMedia send"]

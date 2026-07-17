@@ -87,41 +87,32 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
-  - Muninn video FEC is now typed as `muninn.media_video_parity_shard.v3`.
-    Odin emits 16 Cauchy GF(256) parity shards around each multi-chunk access
-    unit, so any erasure set up to the received parity count is recoverable;
-    Mimir's OBS receiver owns the matching bounded matrix recovery before the
-    assembly deadline. V2 stripe parity is never reinterpreted as V3. Native
-    receiver tests prove consecutive bursts from one through sixteen shards,
-    including production-sized 64 by 1400-byte frames under a 50 ms per-frame
-    recovery bound. Odin's 180 Muninn tests pass. A per-byte elimination draft
-    was rejected after one recovery stalled the receiver thread; production
-    inverts the coefficient matrix once per frame and uses table-driven field
-    arithmetic. Direct Raven LAN evidence exposed two distinct faults. First,
-    successful early FEC completion did not tombstone the frame, so late
-    original chunks resurrected a partial ghost assembly and manufactured loss
-    feedback; the receiver now remembers completed frame keys and ignores that
-    residue. A seven-minute proof then kept every video failure counter at zero
-    while recovering 12,504 frames. Second, a genuine 24-datagram tail burst
-    left one frame at 18/33 chunks: the leading parity bookend supplied only
-    eight equations and the trailing eight were lost with fifteen data shards.
-    Repair retransmission is capped behind fresh media, IDR requests are
-    coalesced to 500 ms, and video datagrams use a 50 microsecond spin pacer,
-    but Moonlight-style independently recoverable FEC blocks remain required
-    before the clean ten-minute gate can pass. An experimental weighted audio/
-    video scheduler was deleted after its accumulated audio debt caused bounded
-    queue eviction; audio retains strict latency priority.
-    Normal frames are forwarded immediately; the recovery deadline is not a
-    playout buffer. The ten-minute and impaired acceptance gates remain open.
+  - Muninn video FEC is typed as `muninn.media_video_parity_shard.v4`.
+    Odin divides each access unit into independent blocks of at most eight data
+    shards and emits eight Cauchy GF(256) parity rows for every block, including
+    a short tail. Data/parity lanes are round-robin scheduled per block. Mimir's
+    OBS receiver owns bounded block recovery before the assembly deadline,
+    forwards only the canonical completed frame, and tombstones completed frame
+    keys so late shards cannot resurrect ghost assemblies. V2/V3 remain legacy
+    decode shapes and never own V4 behavior. Rust tests exhaust every burst of
+    one through eight packets at every alignment for chunk counts 2 through 80;
+    native tests prove the matching receiver. Canonical video and parity now use
+    CultNet `realtime` without per-packet reliable queues. Repair is selective
+    and behind fresh media; unrecoverable dependency damage requests a live
+    NVENC IDR. Normal frames forward immediately; the recovery deadline is not
+    a playout buffer. Direct Raven LAN validation is active; impaired and soak
+    gates remain open until recorded in the acceptance ledger.
   - Muninn now closes receiver congestion pressure into the live NVENC context.
     Every 500 ms it applies multiplicative 15 percent backoff for late frames,
     requested recovery, deferred repair, sender queue loss, or combined
     jitter/decode pressure above 75 percent of the consumer deadline. Recovery
-    adds only five percent of the configured ceiling after each two stable
-    seconds, with a one-quarter/1 Mbps floor. A live 2560x1440 D3D11 proof
+    adds one-fiftieth of a safe cap after each ten stable seconds. The safe cap
+    is half of the requested encoder ceiling, with a one-quarter/1 Mbps
+    floor. Startup begins at half ceiling because fixed block parity can roughly
+    double wire rate. A live 2560x1440 D3D11 proof
     changed 12 Mbps to 6 Mbps at frame 35; FFmpeg/NVENC reconfigured the same
     session, emitted an IDR at frame 35, and the Annex-B stream decoded cleanly.
-    Muninn's full suite now passes 180 tests.
+    Muninn's full suite now passes 184 tests.
   - Receiver-driven video recovery now reaches the actual NVENC frame owner.
     Odin's `native/muninn-video-encoder` is a long-lived libavdevice desktop
     capture and `h264_nvenc` process; a new decode-chain invalidation edge makes
@@ -130,8 +121,9 @@ accepted_design:
     requested second IDR at frame 22, and its Annex-B stream decoded cleanly.
     The normal quarter-second scheduled IDR remains independent fallback.
     The repeatable bundle includes the OBS experimental FFmpeg dependency
-    snapshot. Raven installation and real impairment acceptance remain pending
-    because Raven's documented WireGuard SSH route timed out on 2026-07-16.
+    snapshot. Raven now runs the bundle over direct LAN from a hidden scheduled
+    task; WireGuard is not a runtime or administration path. Real impairment
+    acceptance remains pending.
   - Muninn input now bounds disconnected unacknowledged button history at 256
     edges. Overflow rotates the controller epoch and rebases Sleipnir from the
     next complete latest-state frame, rather than dropping an arbitrary press
@@ -140,6 +132,8 @@ accepted_design:
   - The 2026-07-16 loss-recovery cut is now live on both sides of the Muninn
     audio boundary. Odin emits typed `muninn.media_audio_parity_shard.v1`
     records using fixed 4+2 GF(256) parity for constant-size 10 ms PCM packets.
+    Canonical audio and parity use `realtime`; 4+2 FEC, reorder, and bounded
+    concealment own continuity without a media ACK/retransmit window.
     Mimir's production OBS receiver retains a bounded recent data window,
     reconstructs up to two erased packets per block before the 40 ms playout
     deadline, and then hands recovered packets to the same reorder queue that
@@ -168,11 +162,16 @@ accepted_design:
     Sleipnir against the experimental CultLib runtime snapshot at `8965f3c0`.
     HID latest state and ordered button edges have separate epoch/sequence and
     application-ack semantics; wall timestamps no longer order input. Muninn
-    media uses CultNet's unreliable `realtime` lane rather than the experimental
-    reliable-without-expiry `media` lane, defaults LAN usefulness to 100 ms,
+    video and audio bodies use CultNet's unreliable `realtime` lane; reliable
+    delivery remains control/feedback authority. LAN usefulness
+    defaults to 100 ms,
     bounds producer/pending queues, expires repair material, refuses repair for
     receiver-late frames, and reserves keyframe requests for decode-chain
-    invalidation. Odin records the live authority and remaining gaps in
+    invalidation. CultNet fragmented-message IDs wrap from 65535 to 1;
+    saturation at 65535 previously caused every later fragmented audio
+    document to collide after roughly eight minutes. Audio and video producer
+    ingress are separately bounded before the audio-priority scheduler, with
+    explicit eviction counts. Odin records the live authority and remaining gaps in
     `docs/realtime-delivery-authority.md`.
   - The Moonlight comparison at
     `docs/research/moonlight-muninn-sleipnir-study-2026-07-16.md` establishes
