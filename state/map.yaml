@@ -89,13 +89,13 @@ invariants:
 accepted_design:
   - Muninn video FEC is typed as `muninn.media_video_parity_shard.v4`.
     Odin divides each access unit into independent blocks of at most eight data
-    shards and emits eight Cauchy GF(256) parity rows for every block, including
+    shards and emits four Cauchy GF(256) parity rows for every block, including
     a short tail. Data/parity lanes are round-robin scheduled per block. Mimir's
     OBS receiver owns bounded block recovery before the assembly deadline,
     forwards only the canonical completed frame, and tombstones completed frame
     keys so late shards cannot resurrect ghost assemblies. V2/V3 remain legacy
     decode shapes and never own V4 behavior. Rust tests exhaust every burst of
-    one through eight packets at every alignment for chunk counts 2 through 80;
+    one through four packets at every alignment, plus tail-block burst coverage;
     native tests prove the matching receiver. Canonical video and parity now use
     CultNet `realtime` without per-packet reliable queues. Repair is selective
     and behind fresh media; unrecoverable dependency damage requests a live
@@ -122,8 +122,9 @@ accepted_design:
     The normal quarter-second scheduled IDR remains independent fallback.
     The repeatable bundle includes the OBS experimental FFmpeg dependency
     snapshot. Raven now runs the bundle over direct LAN from a hidden scheduled
-    task; WireGuard is not a runtime or administration path. Real impairment
-    acceptance remains pending.
+    task; WireGuard is not a runtime or administration path. Seeded 1% loss,
+    burst-4, reorder, and bounded stall recovery now pass; longer matrix and
+    soak acceptance remain pending.
   - Muninn input now bounds disconnected unacknowledged button history at 256
     edges. Overflow rotates the controller epoch and rebases Sleipnir from the
     next complete latest-state frame, rather than dropping an arbitrary press
@@ -131,11 +132,11 @@ accepted_design:
     256. Full Muninn (174) and Sleipnir (26) suites pass.
   - The 2026-07-16 loss-recovery cut is now live on both sides of the Muninn
     audio boundary. Odin emits typed `muninn.media_audio_parity_shard.v1`
-    records using fixed 4+2 GF(256) parity for constant-size 10 ms PCM packets.
+    records using fixed 4+2 GF(256) parity for padded AAC ADTS packets.
     Canonical audio and parity use `realtime`; 4+2 FEC, reorder, and bounded
     concealment own continuity without a media ACK/retransmit window.
     Mimir's production OBS receiver retains a bounded recent data window,
-    reconstructs up to two erased packets per block before the 40 ms playout
+    reconstructs up to two erased packets per block before the 120 ms playout
     deadline, and then hands recovered packets to the same reorder queue that
     owns normal playout. The FEC cache is not a second timeline. Native tests
     exhaust every one- and two-erasure permutation, and the production plugin

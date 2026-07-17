@@ -452,15 +452,18 @@ The first cut landed in Odin on 2026-07-16: experimental CultLib snapshot
 `8965f3c0`, epoch/sequence/edge-ack HID delivery, 100 ms default LAN media
 deadline, CultNet `realtime` A/V delivery, bounded queues, expiring/late-aware
 repair, and decode-chain-owned keyframe pressure. The production video path now
-uses typed V4 Cauchy GF(256) FEC in independent 8-data/8-parity blocks. Each
+uses typed V4 Cauchy GF(256) FEC in independent 8-data/4-parity blocks. Each
 block schedules data and parity as separate lanes, including fixed protection
 for a short tail block. Canonical video and parity use CultNet's unreliable
 `realtime` lane; selective repair and IDR recovery remain deadline-bound.
-Canonical audio and its parity also use `realtime`; 4+2 FEC, reorder, and
+Canonical AAC ADTS audio and its fixed 864-byte parity shards also use
+`realtime`; 4+2 FEC, 120 ms reorder, and
 concealment own continuity without an ACK/retransmit window. Sender access units enter the
 handoff queue independently, and CultMesh catalog publication runs outside the
-realtime media loop. The remaining work is the full direct/proxy impairment
-matrix, Opus FEC/PLC, and long-duration mixed soak.
+realtime media loop. Repair material becomes available when a video frame enters
+the queue, and the receiver may issue bounded repair requests at 64/96/128 ms.
+The remaining work is duplicate/reconnect acceptance, longer iid runs, and the
+long-duration mixed soak.
 
 The socket harness and bounded PCM loss recovery have now landed. Odin's
 `cultnet-impair` proxy supplies deterministic seeded loss/burst/reorder/

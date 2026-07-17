@@ -342,13 +342,13 @@ The live Raven-to-Starfire program path is Muninn's typed CultNet media body:
 ```mermaid
 flowchart TD
     A["Raven D3D11 desktop capture"] --> B["Long-lived NVENC encoder"]
-    C["Raven WASAPI loopback"] --> D["10 ms float PCM packetizer"]
-    B --> E["V4 8+8 block FEC and realtime video lane"]
-    D --> F["4+2 audio FEC and realtime audio lane"]
+    C["Raven WASAPI loopback"] --> D["AAC-LC / ADTS encoder"]
+    B --> E["V4 8+4 block FEC and realtime video lane"]
+    D --> F["Fixed 864-byte 4+2 audio FEC lane"]
     E --> G["Starfire OBS Muninn receiver udp/5200"]
     F --> G
     G --> H["Frame assembly / FEC / IDR feedback"]
-    G --> I["40 ms audio reorder / concealment"]
+    G --> I["120 ms audio reorder / concealment"]
     H --> J["OBS-local video decoder socket"]
     I --> K["OBS-local audio decoder socket"]
 ```
@@ -361,8 +361,9 @@ the provider surface; neither discovery nor the compatibility decoder sockets
 own hot media truth.
 
 Invariant: video packets are useful only before their assembly deadline.
-Canonical video and V4 parity use unreliable `realtime`; block FEC, selective
-repair, and IDR recovery own loss. Canonical audio and 4+2 parity also use
+Canonical video and V4 parity use unreliable `realtime`; 8+4 block FEC,
+queue-admitted selective repair, and IDR recovery own loss. Canonical AAC audio
+and fixed 4+2 parity also use
 `realtime`; reorder and bounded concealment own playout continuity. Completed
 video frames are tombstoned so late shards cannot
 become a second assembly owner. Raven uses direct LAN only and starts through a

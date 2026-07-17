@@ -65,6 +65,8 @@ constexpr uint64_t MuninnMediaStaleMs = 1500;
 constexpr uint64_t MuninnMediaRestartCooldownMs = 5000;
 constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
 constexpr uint64_t MuninnReceiverChunkRepairFirstWaitMs = 64;
+constexpr uint64_t MuninnReceiverChunkRepairRetryWaitMs = 32;
+constexpr uint32_t MuninnReceiverChunkRepairMaxRequests = 3;
 constexpr uint64_t MuninnVideoAssemblyExpiryScanMs = 10;
 constexpr size_t MuninnExpiredVideoFrameRememberCount = 4096;
 constexpr size_t MuninnCompletedVideoFrameRememberCount = 4096;
@@ -256,7 +258,9 @@ struct MuninnVideoFrameAssembly {
     uint16_t chunk_count = 0;
     uint16_t chunks_received = 0;
     std::chrono::steady_clock::time_point started_at;
-    bool repair_requested = false;
+    uint32_t repair_request_count = 0;
+    std::chrono::steady_clock::time_point last_repair_requested_at =
+        std::chrono::steady_clock::time_point::min();
     std::map<uint16_t, MuninnVideoFecBlockAssembly> fec_blocks;
     std::vector<std::vector<uint8_t>> chunks;
 };
@@ -1650,6 +1654,15 @@ private:
     {
         expire_video_assemblies(std::chrono::steady_clock::now(), bridge_sequence);
         expire_video_parity_cache(std::chrono::steady_clock::now());
+        const std::string key =
+            media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
+        if (waiting_for_video_keyframe_ && !media.keyframe) {
+            video_assemblies_.erase(key);
+            video_parity_cache_.erase(key);
+            remember_completed_video_frame(key);
+            ++video_recovery_dropped_;
+            return std::nullopt;
+        }
         if (media.kind == MuninnMediaPayload::Kind::VideoParity) {
             return assemble_video_parity_payload(media, bridge_sequence);
         }
@@ -1658,8 +1671,6 @@ private:
             log_bridge_pressure("dropped invalid video chunk metadata");
             return std::nullopt;
         }
-        const std::string key =
-            media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
         if (video_frame_is_settled(key)) {
             return std::nullopt;
         }
@@ -1677,7 +1688,7 @@ private:
             assembly.chunk_count = media.chunk_count;
             assembly.chunks.resize(media.chunk_count);
             assembly.started_at = std::chrono::steady_clock::now();
-            assembly.repair_requested = false;
+            assembly.repair_request_count = 0;
             apply_cached_video_parity(key, assembly);
         }
         if (assembly.chunk_count != media.chunk_count ||
@@ -1999,11 +2010,18 @@ private:
             if (needs_decoder_recovery) {
                 waiting_for_video_keyframe_ = true;
             }
-            log_video_assembly_expiry(iterator->second, missing_chunk_keys, now);
+            const bool bootstrap_keyframe = waiting_for_video_keyframe_ && iterator->second.keyframe;
+            if (!bootstrap_keyframe) {
+                log_video_assembly_expiry(iterator->second, missing_chunk_keys, now);
+            }
             remember_expired_video_frame(iterator->first);
             iterator = video_assemblies_.erase(iterator);
-            ++video_assemblies_expired_;
-            log_bridge_pressure("expired incomplete video frame assembly");
+            if (bootstrap_keyframe) {
+                ++video_recovery_dropped_;
+            } else {
+                ++video_assemblies_expired_;
+                log_bridge_pressure("expired incomplete video frame assembly");
+            }
         }
     }
 
@@ -2046,7 +2064,7 @@ private:
              static_cast<unsigned int>(assembly.chunk_count),
              missing_chunk_keys.size(),
              static_cast<long long>(age_ms),
-             assembly.repair_requested ? "true" : "false",
+             assembly.repair_request_count > 0 ? "true" : "false",
              assembly.fec_blocks.empty() ? "false" : "true",
              fec_state.str().c_str());
     }
@@ -2058,11 +2076,17 @@ private:
         if (assembly.chunks_received >= assembly.chunk_count) {
             return;
         }
-        if (assembly.repair_requested) {
+        if (assembly.repair_request_count >= MuninnReceiverChunkRepairMaxRequests) {
             return;
         }
-        const auto repair_wait_ms = std::max<uint32_t>(parts_.gap_wait_ms, MuninnReceiverChunkRepairFirstWaitMs);
-        if (now - assembly.started_at < std::chrono::milliseconds(repair_wait_ms)) {
+        const auto first_wait_ms = std::max<uint32_t>(parts_.gap_wait_ms, MuninnReceiverChunkRepairFirstWaitMs);
+        if (assembly.repair_request_count == 0 &&
+            now - assembly.started_at < std::chrono::milliseconds(first_wait_ms)) {
+            return;
+        }
+        if (assembly.repair_request_count > 0 &&
+            now - assembly.last_repair_requested_at <
+                std::chrono::milliseconds(MuninnReceiverChunkRepairRetryWaitMs)) {
             return;
         }
         const auto missing_chunk_keys = missing_video_chunk_keys(assembly);
@@ -2070,7 +2094,8 @@ private:
             return;
         }
         send_receiver_feedback_if_due(assembly, missing_chunk_keys, false, false, bridge_sequence);
-        assembly.repair_requested = true;
+        assembly.last_repair_requested_at = now;
+        ++assembly.repair_request_count;
     }
 
     void expire_rudp_packet_fragments(std::chrono::steady_clock::time_point now)

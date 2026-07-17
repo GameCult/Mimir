@@ -60,6 +60,37 @@ datagram or move fragmentation above the erasure-code boundary.
   scheduler sees it. Capacity-eviction counters proved zero during the clean
   acceptance run.
 
+## 2026-07-17 bounded-media field cut
+
+The live path now keeps every protected shard in one datagram, sends AAC ADTS
+in fixed 864-byte 4+2 audio blocks, uses 768-byte video shards with 8+4 block
+FEC, and begins each decoder epoch at a complete IDR. The sender admits video
+to its repair cache when the frame enters the queue, accepts the production
+CultNet `realtime` channel, and can service bounded repair requests at
+64/96/128 ms in batches of up to eight chunks.
+
+Seeded Raven-to-Starfire evidence:
+
+- iid 1%: 802 of 78,406 datagrams dropped; zero decode drop, video expiry,
+  audio failure, or audio skip; 1,800 video frames recovered;
+- burst-4: 1,436 of 71,910 datagrams dropped; zero expiry or audio skip across
+  1,800 forwarded frames;
+- reorder: 2,872 reorder events; zero expiry or audio skip across 900 frames;
+- iid 3%: 2,564 of 85,731 datagrams dropped; three of 5,400 frames expired,
+  zero audio skip (99.94 percent video delivery);
+- burst-8: 190 chunks repaired; one of 1,800 frames expired, zero audio skip;
+- 250 ms stall: 420 datagrams withheld, one frame expired, 68 chunks repaired,
+  an IDR was requested, and another 900 frames arrived without a stuck decoder
+  or audio skip.
+
+Delay/jitter produced one expiry in 900 frames. Duplicate, reconnect, longer
+iid runs, and the 60-minute mixed soak remain open acceptance rows.
+
+Field scar: production video uses the `realtime` channel, but the repair cache
+previously admitted only legacy `media` payloads. Synthetic tests built the
+legacy shape and certified a repair path that was empty in production. The
+production-channel regression test now owns this boundary.
+
 ## Completion rule
 
 Moonlight-level performance is reasonably expected only after all local rows
