@@ -67,6 +67,7 @@ constexpr uint64_t MuninnReceiverKeyframeRequestCooldownMs = 500;
 constexpr uint64_t MuninnReceiverChunkRepairFirstWaitMs = 64;
 constexpr uint64_t MuninnVideoAssemblyExpiryScanMs = 10;
 constexpr size_t MuninnExpiredVideoFrameRememberCount = 4096;
+constexpr size_t MuninnCompletedVideoFrameRememberCount = 4096;
 constexpr size_t MuninnVideoParityCacheMaxEntries = 4096;
 constexpr uint16_t MuninnCatalogDiscoveryPort = 17874;
 constexpr uint32_t MuninnCatalogDiscoveryConnectionId = 0x6d750003;
@@ -1515,14 +1516,14 @@ private:
             log_bridge_pressure("dropped invalid video chunk metadata");
             return std::nullopt;
         }
-        if (media.chunk_count == 1) {
-            return media.payload;
-        }
-
         const std::string key =
             media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
-        if (expired_video_frame_keys_.find(key) != expired_video_frame_keys_.end()) {
+        if (video_frame_is_settled(key)) {
             return std::nullopt;
+        }
+        if (media.chunk_count == 1) {
+            remember_completed_video_frame(key);
+            return media.payload;
         }
         auto &assembly = video_assemblies_[key];
         if (assembly.chunks.empty()) {
@@ -1579,7 +1580,7 @@ private:
         }
         const std::string key =
             media.stream_id + ":" + media.session_id + ":" + std::to_string(media.frame_id);
-        if (expired_video_frame_keys_.find(key) != expired_video_frame_keys_.end()) {
+        if (video_frame_is_settled(key)) {
             ++video_parity_ignored_;
             return std::nullopt;
         }
@@ -1683,7 +1684,25 @@ private:
         }
         video_assemblies_.erase(key);
         video_parity_cache_.erase(key);
+        remember_completed_video_frame(key);
         return assembled;
+    }
+
+    bool video_frame_is_settled(const std::string &key) const
+    {
+        return expired_video_frame_keys_.find(key) != expired_video_frame_keys_.end() ||
+               completed_video_frame_keys_.find(key) != completed_video_frame_keys_.end();
+    }
+
+    void remember_completed_video_frame(const std::string &key)
+    {
+        if (completed_video_frame_keys_.insert(key).second) {
+            completed_video_frame_order_.push_back(key);
+        }
+        while (completed_video_frame_order_.size() > MuninnCompletedVideoFrameRememberCount) {
+            completed_video_frame_keys_.erase(completed_video_frame_order_.front());
+            completed_video_frame_order_.pop_front();
+        }
     }
 
     bool try_recover_video_assembly_from_parity(MuninnVideoFrameAssembly &assembly)
@@ -2037,6 +2056,8 @@ private:
     std::map<std::string, std::vector<MuninnVideoParityCacheEntry>> video_parity_cache_;
     std::deque<std::string> expired_video_frame_order_;
     std::set<std::string> expired_video_frame_keys_;
+    std::deque<std::string> completed_video_frame_order_;
+    std::set<std::string> completed_video_frame_keys_;
     muninn_rudp_fragments::FragmentAssembler packet_fragments_;
     muninn_rudp_fragments::FragmentAssembler audio_packet_fragments_;
     muninn_rudp_ack::AckTracker ack_tracker_;

@@ -88,7 +88,7 @@ invariants:
 
 accepted_design:
   - Muninn video FEC is now typed as `muninn.media_video_parity_shard.v3`.
-    Odin emits 16 Cauchy GF(256) parity shards after each multi-chunk access
+    Odin emits 16 Cauchy GF(256) parity shards around each multi-chunk access
     unit, so any erasure set up to the received parity count is recoverable;
     Mimir's OBS receiver owns the matching bounded matrix recovery before the
     assembly deadline. V2 stripe parity is never reinterpreted as V3. Native
@@ -97,12 +97,20 @@ accepted_design:
     recovery bound. Odin's 180 Muninn tests pass. A per-byte elimination draft
     was rejected after one recovery stalled the receiver thread; production
     inverts the coefficient matrix once per frame and uses table-driven field
-    arithmetic. Direct Raven LAN evidence then exposed a remaining layout fault:
-    a 24-datagram tail burst erased four final data chunks plus all sixteen
-    trailing parity shards, so no parity survived to repair the otherwise small
-    data loss. Repair retransmission is now capped behind fresh media and video
-    datagrams use a 50 microsecond spin pacer, but parity dispersion/adaptive
-    block sizing remains required before the clean ten-minute gate can pass.
+    arithmetic. Direct Raven LAN evidence exposed two distinct faults. First,
+    successful early FEC completion did not tombstone the frame, so late
+    original chunks resurrected a partial ghost assembly and manufactured loss
+    feedback; the receiver now remembers completed frame keys and ignores that
+    residue. A seven-minute proof then kept every video failure counter at zero
+    while recovering 12,504 frames. Second, a genuine 24-datagram tail burst
+    left one frame at 18/33 chunks: the leading parity bookend supplied only
+    eight equations and the trailing eight were lost with fifteen data shards.
+    Repair retransmission is capped behind fresh media, IDR requests are
+    coalesced to 500 ms, and video datagrams use a 50 microsecond spin pacer,
+    but Moonlight-style independently recoverable FEC blocks remain required
+    before the clean ten-minute gate can pass. An experimental weighted audio/
+    video scheduler was deleted after its accumulated audio debt caused bounded
+    queue eviction; audio retains strict latency priority.
     Normal frames are forwarded immediately; the recovery deadline is not a
     playout buffer. The ten-minute and impaired acceptance gates remain open.
   - Muninn now closes receiver congestion pressure into the live NVENC context.
