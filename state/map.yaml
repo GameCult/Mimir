@@ -1,7 +1,7 @@
 workspace:
   name: Mimir
   status: active
-  focus: direct-driver-fensalir-stream-app
+  focus: iphone-truedepth-face-witness
   implementation_name: Mimir public surface / native runtime contracts
   premise: >
     Mimir is the local realtime field machine: cameras, microphones, speakers,
@@ -15,10 +15,12 @@ objective:
     microphones, two speakers, Leap timing, Fensalir GPU rendering, Faust DSP,
     Eve operator surfaces, and Yggdrasil site publication.
   current: >
-    Promote the active bioacoustic packet-song receiver into runtime state:
-    self-identifying song contours should pin multiple time/frequency anchors
-    per heard call, learn per-path response, and drive the audio actuator while
-    direct camera/audio capture continues feeding Mimir.Runtime buffers.
+    Admit a salvaged iPhone XS Max as a face-tracking-only witness: Epic Live
+    Link Face supplies Apple ARKit UDP v6 datagrams, while Mimir.Runtime owns
+    normalization and the typed CultCache observation ledger. Hardware
+    acceptance waits on App Store installation and phone-side
+    consent/configuration; CultMesh/Eve publication waits on the live
+    authenticated Yggdrasil/Odin provider boundary.
 
 constraints:
   - Sender is Windows.
@@ -87,6 +89,18 @@ invariants:
     are temporary smoke/bootstrap edges only.
 
 accepted_design:
+  - The iPhone TrueDepth face path is Mimir-owned, not Starfire-owned. Epic Live
+    Link Face is the minimum Windows-practical sender and UDP v6 is only its
+    xenos ingress. `MimirLiveLinkFaceDecoder` validates the complete big-endian
+    61-channel packet; `MimirFaceObservationLedger` owns monotonic admission and
+    emits bounded typed MessagePack `mimir.face_tracking_observation.v1`
+    CultCache `.cc` slots. Source timecode and Starfire arrival keep separate
+    clock domains, and sender restart increments an explicit source epoch.
+    CultMesh/Eve publication is not yet wired and must cross the live
+    authenticated Yggdrasil/Odin provider boundary; the retired Starfire Odin
+    and archived WebSocket sensor receiver are not revived. A custom sender
+    requires macOS/Xcode signing; pymobiledevice3 can inspect/install an already
+    signed artifact but is not signing authority.
   - Muninn video FEC is typed as `muninn.media_video_parity_shard.v4`.
     Odin divides each access unit into independent blocks of at most eight data
     shards and emits four Cauchy GF(256) parity rows for every block, including
@@ -779,31 +793,11 @@ current_status:
     Kiyo 30.18 fps, PS3 Eye 0 59.66 fps, and PS3 Eye 1 59.95 fps. A mouse in
     the Leap USB neighborhood does not reproduce the Focusrite-induced collapse.
   next_action: >
-    Use the stable single-provider Nightwing Move stream to collect a spatially
-    diverse stereo calibration session. Calibrate each Eye's intrinsics, fit
-    their relative extrinsics from timestamped same-ID correspondences, use
-    apparent orb radius only as a weighted distance cue after radius calibration,
-    and publish typed camera calibration plus residual evidence. Do not claim
-    precise camera matrices from overlap or radius alone. Then feed calibrated
-    witnesses through MimirMoveFusion and the named Fensalir proof spine.
-    Current app testing proves Fensalir WASAPI output wakes Scarlett speaker
-    loopback, live mic buffers stay populated, runtime sync analysis now runs as
-    a bounded rotating service without UI/telemetry re-entry, and the bioacoustic
-    motif timeline produces deterministic synthetic active sync. The next
-    invariant is self-identifying song contours producing stable intra-call
-    time/frequency anchors and clock fits through real loopback and microphones,
-    so the actuator can use decoded time instead of filtered lag guesses.
-    Replace the remaining
-    diagnostic JSON-line process bridges with direct native capture drivers that
-    push buffer handles into Mimir.Runtime. Mimir.BufferSmoke still proves live buffers and sync reports
-    for Scarlett loopback, Focusrite mic, Kiyo mic, and Kiyo Pro mic when
-    calibration witnesses are playing. Treat PS3 Eye audio as
-    enumeration/runtime-fragile, not unavailable. Keep the Focusrite away from
-    the Leap USB neighborhood. The Scarlett Solo 4th Gen is now attached to
-    Starfire, and `native/probes/asio_audio_cadence` proves local Focusrite USB
-    ASIO access with 4 inputs / 2 outputs including Loopback 1/2, 192-frame
-    preferred buffers, 44.1-192 kHz support, and nonzero 4-channel Int32LSB
-    input callbacks at 192 kHz. Raven also has a 192 kHz loopback-capable
-    Scarlett for co-streamer/game timing evidence, but Starfire owns the heavy
-    soundfield and sensor-fusion work. Treat Kiyo Pro as a ~25 fps source until
-    its SuperSpeed negotiation is fixed.
+    Install Epic Live Link Face from the App Store on the paired iPhone11,6,
+    grant Camera and Local Network consent, select Apple ARKit mode, and target
+    Starfire's private-LAN IPv4 UDP port 11111. Run Mimir.FaceReceiver and prove
+    advancing accepted source frames plus growth of the CultCache observation
+    ledger. Then enter Guided Access with Touch disabled so the damaged
+    digitizer cannot steer the dedicated tracker. Publish the accepted schema
+    through the authenticated Yggdrasil/Odin boundary in a separate
+    CultMesh/Eve cut.

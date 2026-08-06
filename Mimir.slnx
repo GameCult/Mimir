@@ -7,5 +7,6 @@
     <Project Path="src/Mimir.VerseRecorder/Mimir.VerseRecorder.csproj" />
     <Project Path="src/Mimir.PsMoveProbe/Mimir.PsMoveProbe.csproj" />
     <Project Path="src/Mimir.CultMeshMedia/Mimir.CultMeshMedia.csproj" />
+    <Project Path="src/Mimir.FaceReceiver/Mimir.FaceReceiver.csproj" />
   </Folder>
 </Solution>

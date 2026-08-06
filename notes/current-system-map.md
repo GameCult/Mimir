@@ -1,5 +1,18 @@
 # Current System Map
 
+## iPhone face-tracking ingress
+
+`Mimir.FaceReceiver` owns the Starfire-local ingress from Epic Live Link Face.
+It validates Apple ARKit Live Link UDP v6 and calls the same
+`MimirFaceObservationLedger` used by replay/self-test. Mimir assigns normalized
+sequence, source epoch, and arrival time, then stores bounded
+`mimir.face_tracking_observation.v1` slots in CultCache. CultMesh publication is
+not yet wired: the retired Starfire Odin path must not be revived, and the live
+Yggdrasil provider boundary has not been assumed. The phone, Starfire, Odin,
+Eve, OBS, and Fensalir do not own admitted face truth. Source timecode and
+Starfire arrival carry distinct clock-domain fields until a cross-device clock
+model exists.
+
 Source-level code ownership is mapped in [[docs/code-algorithm-map|Code Algorithm Map]].
 The indexed problem-domain map is
 [[docs/perfect-machine-domain-index|Perfect Machine Domain Index]]; the

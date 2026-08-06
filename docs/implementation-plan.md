@@ -1,5 +1,20 @@
 # Implementation Plan
 
+## iPhone TrueDepth face witness
+
+- Implemented: `Mimir.FaceReceiver` admits Epic Live Link Face Apple ARKit UDP
+  v6 from one configured iPhone/subject into bounded typed
+  `mimir.face_tracking_observation.v1` CultCache slots. Decoder, normalization,
+  distinct source/arrival clocks, stale rejection, source restart epoch, and
+  malformed-value rejection share one commit path with the self-test.
+- Physical handoff: install Live Link Face from the App Store, grant Camera and
+  Local Network consent, select Apple ARKit mode, target Starfire private-LAN
+  UDP 11111, prove ledger growth, then use Guided Access with Touch disabled.
+- Next: publish the Mimir-owned schema through the live authenticated
+  Yggdrasil/Odin provider boundary and derive an Eve surface. Do not reactivate
+  retired Starfire Odin, resurrect `Mimir.EveSensorReceiver`, or call an
+  inaccessible in-process ring a CultMesh publication.
+
 ## Current Cut Line
 
 Mimir is now a C# app/runtime plus native reservoir project. The live stream

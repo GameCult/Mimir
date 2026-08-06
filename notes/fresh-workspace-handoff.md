@@ -1,5 +1,21 @@
 # Fresh Workspace Handoff
 
+## 2026-08-06 iPhone face witness
+
+Mimir now has a narrow Starfire receiver for Epic Live Link Face Apple ARKit
+UDP v6 in `src/Mimir.FaceReceiver`, with normalization/ledger contracts in
+`Mimir.Runtime`. It persists a bounded typed MessagePack
+`mimir.face_tracking_observation.v1` CultCache ledger; no JSON/HTTP or
+archived Eve sensor receiver path owns live state. Build and `--self-test` pass.
+The USB-attached `iPhone11,6` on iOS 18.7.9 is paired and reachable, but Live
+Link Face is not installed. Next physical action: install the App Store app,
+grant Camera/Local Network, select Apple ARKit mode, target Starfire LAN IPv4
+UDP 11111, confirm advancing accepted frames/`.cc` state, then enter Guided
+Access with Touch disabled. See `docs/iphone-truedepth-face-receiver.md`.
+CultMesh/Eve publication remains a named next cut through the live authenticated
+Yggdrasil/Odin provider boundary; this pass does not revive retired Starfire
+Odin or pretend an in-process ring is published state.
+
 This is the short re-entry packet for `E:\Projects\Mimir`.
 
 Do not trust this file for exact branch, HEAD, or dirty state. Ask git.
