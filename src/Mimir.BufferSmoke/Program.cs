@@ -1938,10 +1938,7 @@ static async Task<int> RunMuninnMoveLiveRosterSmokeAsync(IReadOnlyList<string> i
             continue;
         }
 
-        using var cache = await CultCacheMessagePack.OpenAsync(fullPath, new CultCacheOpenOptions
-        {
-            PullOnOpen = true
-        }).ConfigureAwait(false);
+        using var cache = await CultCacheMessagePack.OpenAsync(fullPath).ConfigureAwait(false);
         var storeIdentities = cache.GetAll<MuninnMoveIdentityDocument>().ToArray();
         identities.AddRange(storeIdentities);
         loadedStores++;
@@ -3686,10 +3683,7 @@ static async Task<int> RunMoveCalibrationProtocolSmokeAsync(string outputPath)
     }
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
-    using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
-    {
-        PullOnOpen = File.Exists(outputPath)
-    }).ConfigureAwait(false);
+    using var cache = await CultCacheMessagePack.OpenAsync(outputPath).ConfigureAwait(false);
     await cache.UpsertAsync(
         protocol,
         new CultRecordHandle<MimirMoveCalibrationProtocolDocument>(new CultRecordKey($"mimir-move-calibration-protocol:{protocol.ProtocolId}")))
@@ -3985,10 +3979,7 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         "mimir-move-stage-calibration-v1");
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
-    using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
-    {
-        PullOnOpen = File.Exists(outputPath)
-    }).ConfigureAwait(false);
+    using var cache = await CultCacheMessagePack.OpenAsync(outputPath).ConfigureAwait(false);
     await cache.UpsertAsync(
         codebook,
         new CultRecordHandle<MimirBioacousticCodebookState>(new CultRecordKey($"mimir-codebook:{codebook.CodebookId}")))
@@ -4061,10 +4052,7 @@ static async Task<int> ImportObsProgramSceneAsync(string inputPath, string scene
         importedAt);
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
-    using var cache = await CultCacheMessagePack.OpenAsync(outputPath, new CultCacheOpenOptions
-    {
-        PullOnOpen = File.Exists(outputPath)
-    }).ConfigureAwait(false);
+    using var cache = await CultCacheMessagePack.OpenAsync(outputPath).ConfigureAwait(false);
     await cache.UpsertAsync(
         scene,
         new CultRecordHandle<MimirProgramSceneDocument>(new CultRecordKey($"mimir-program-scene:{scene.SceneId}")))
@@ -7617,10 +7605,7 @@ static float[] ReconstructDetectedBioacousticSong(IReadOnlyList<CepstralWordObse
 
 static async Task WriteBioacousticTrainingCacheAsync(string cachePath, IReadOnlyList<BioacousticTrainingResult> results)
 {
-    using var cache = await CultCacheMessagePack.OpenAsync(cachePath, new CultCacheOpenOptions
-    {
-        PullOnOpen = File.Exists(cachePath)
-    }).ConfigureAwait(false);
+    using var cache = await CultCacheMessagePack.OpenAsync(cachePath).ConfigureAwait(false);
     foreach (var result in results)
     {
         await cache.UpsertAsync(
