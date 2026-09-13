@@ -464,9 +464,7 @@ internal sealed class EveBrowserReferenceVerseRuntime : IDisposable
         string observedAtUtc) where T : class
     {
         var descriptor = registry.GetRequired<T>();
-        var payload = descriptor.GeneratedPayloadSerializer != null
-            ? descriptor.GeneratedPayloadSerializer(document)
-            : MessagePackSerializer.Serialize(typeof(T), document, CultNetSchemaMessageSerialization.Options);
+        var payload = MessagePackSerializer.Serialize(typeof(T), document, CultNetSchemaMessageSerialization.Options);
         schemas[descriptor.SchemaId] = descriptor.ToCatalogEntry();
         records.Add(new CultPersistedRecord
         {
