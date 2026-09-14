@@ -419,7 +419,7 @@ sealed class RudpMediaRelay : IDisposable
         }
 
         await registry.ApplyRawDocumentPutMessageAsync(cache, put).ConfigureAwait(false);
-        await cache.FlushAsync(soft: true).ConfigureAwait(false);
+        await cache.FlushAsync().ConfigureAwait(false);
         var change = new CultNetDatabaseChangeRawMessage
         {
             MessageId = Guid.NewGuid().ToString("N"),
