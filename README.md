@@ -8,6 +8,18 @@ OBS-facing program surface.
 
 The plain version: Mimir is trying to make a room computable.
 
+## Front Door
+
+- **Value:** a measured room: cameras, microphones, loopbacks and network feeds aligned in time tightly enough to recover where a sound came from and how a body moved, then handed to OBS as one program surface.
+- **Problem:** loose devices each keep their own clock, so a flat stream cannot localize voices, separate sources or fuse cameras. Mimir owns the synchronization evidence that makes the feeds one field.
+- **Entry points:**
+  - `docs/perfect-machine.md`: the target machine; `docs/viable-stream-app.md`: the first usable app cut; `docs/audio-field.md`: the live audio decoder and timing model.
+  - `src/Mimir.Runtime` (rolling buffers, stream sources, synchronization state) and `src/Mimir.App` (the Fensalir-hosted window and render app); solution `Mimir.slnx`.
+  - `src/Mimir.BufferSmoke`: the synthetic sync proofs, run with `dotnet run --project src/Mimir.BufferSmoke/Mimir.BufferSmoke.csproj -- --hybrid-sync-self-test` (also `--chirp-bin-self-test`, `--passive-sync-self-test`).
+  - `native/probes/asio_audio_cadence` (ASIO cadence probe) and `native/reservoir` (native rolling-buffer ABI).
+- **Live:** passive, chirp-only and hybrid audio sync with synthetic proofs, the ASIO cadence probe and measured capture-cadence evidence, the runtime buffers, and FFmpeg/SRT bridge scripts as an OBS-compatible edge (`scripts/sender-start.ps1`).
+- **Planned:** direct native capture workers with driver-boundary timestamps, Fensalir GPU fusion, the volumetric sound field, realtime 4D Gaussian splatting, motion capture and AR anchoring. The bridge scripts are not the synchronization authority.
+
 A normal streaming setup sees loose devices. A webcam has its clock, a mic has
 another clock, speakers add their own delay, and OBS receives whatever arrives.
 That is enough for a flat livestream. It is not enough to know where a voice
@@ -289,6 +301,7 @@ Run the old OBS bridge only when you need the compatibility path:
 
 ```powershell
 .\scripts\sender-discover.ps1
+Copy-Item .\config\localcast.example.json .\config\localcast.json
 .\scripts\sender-start.ps1 -Config .\config\localcast.json -DryRun
 ```
 
