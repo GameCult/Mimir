@@ -680,10 +680,12 @@ active_subgoals:
     replaces them.
   - Launch Raven's CultMesh sender directly on Raven because SSH to Raven over
     WireGuard timed out during the initial relay deployment pass.
-  - `Mimir.EveSensorReceiver`, `Mimir.VerseRecorder`, the
-    Nightwing typed witness publisher, and `start-nightwing-move-tracking.ps1`
-    are archived so the old witness subscription lane cannot retake transport
-    authority. `src/Mimir.CultMeshMedia` has completed this cut for the
+  - `Mimir.VerseRecorder` and the Nightwing typed witness publisher are
+    archived so the old witness subscription lane cannot retake transport
+    authority. `Mimir.EveSensorReceiver` (the `/eve/camera` ingest that
+    `start-nightwing-move-tracking.ps1` launches) is still built and live, and
+    is frozen: neither extended nor removed until Thing 2
+    (`thing2:ruling:mimir-sensor-receiver-frozen`, 2026-10-22). `src/Mimir.CultMeshMedia` has completed this cut for the
     Raven/Yggdrasil/Starfire media-frame lane.
 
 current_status:
