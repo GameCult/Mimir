@@ -1477,10 +1477,6 @@ static int RunPerfectMachineProfileSmoke()
         "mimir-site-program",
         scene.SceneId,
         MimirProgramPublicationConfigurations.YggdrasilSiteProgram);
-    var eveSurface = MimirCultMeshContractFactory.CreateOperatorSurface(
-        "mimir-eve-gui-compositor",
-        scene.SceneId,
-        MimirProgramPublicationConfigurations.OperatorSurfaces[0]);
     var observations = new[]
     {
         new MimirBioacousticWordObservation(0, MimirBioacousticTimeline.Default.EventForIndex(0).StartSeconds * MimirBioacousticTimeline.SampleRate + 317.375, 0.95),
@@ -1565,7 +1561,7 @@ static int RunPerfectMachineProfileSmoke()
     Console.WriteLine(
         $"perfect-machine-actuator source={actuator.SourceId} delay={actuator.TargetDelaySamples:0.000} ratio={actuator.ResampleRatio:0.000000000} controls={actuator.FaustControls.Length}");
     Console.WriteLine(
-        $"perfect-machine-program scene={scene.SceneId} layers={scene.Layers.Length} output={output.OutputId} route={output.PublisherRoute} eveCommands={eveSurface.CommandTopics.Length}");
+        $"perfect-machine-program scene={scene.SceneId} layers={scene.Layers.Length} output={output.OutputId} route={output.PublisherRoute}");
     Console.WriteLine(
         $"perfect-machine-clock anchors={clock?.AnchorCount ?? 0} coverage={clock?.AnchorCoverage ?? 0:0.000} offset={clock?.SourceOffsetSamples ?? double.NaN:0.000} confidence={clock?.Confidence ?? 0:0.000}");
     Console.WriteLine(
@@ -3927,11 +3923,6 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         scene.SceneId,
         MimirProgramPublicationConfigurations.YggdrasilSiteProgram,
         createdAt);
-    var eveSurface = MimirCultMeshContractFactory.CreateOperatorSurface(
-        "mimir-eve-gui-compositor",
-        scene.SceneId,
-        MimirProgramPublicationConfigurations.OperatorSurfaces[0],
-        createdAt);
     var starfireMove = MimirTrackingObservation.PsMove(
         "starfire:move:primary",
         "psmove:starfire:00",
@@ -4005,10 +3996,6 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
         new CultRecordHandle<MimirProgramOutputDocument>(new CultRecordKey($"mimir-program-output:{output.OutputId}")))
         .ConfigureAwait(false);
     await cache.UpsertAsync(
-        eveSurface,
-        new CultRecordHandle<MimirEveOperatorSurfaceDocument>(new CultRecordKey($"mimir-eve-surface:{eveSurface.SurfaceId}")))
-        .ConfigureAwait(false);
-    await cache.UpsertAsync(
         starfireMove,
         new CultRecordHandle<MimirTrackingObservation>(new CultRecordKey($"mimir-move-tracking:{starfireMove.ObservationId}")))
         .ConfigureAwait(false);
@@ -4023,7 +4010,7 @@ static async Task<int> RunPerfectMachineContractSmokeAsync(string outputPath)
     await cache.FlushAsync().ConfigureAwait(false);
 
     Console.WriteLine(
-        $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length} sceneLayers={scene.Layers.Length} programOutput={output.OutputId} eveCommands={eveSurface.CommandTopics.Length} moveTracking=2 fusedMovePose={fusedMovePose.PoseId} authority={fusedMovePose.FusionAuthorityId} consumer={fusedMovePose.ConsumerContract} hosts={starfireMove.HostId},{nightwingMove.HostId}");
+        $"perfect-machine-contract-smoke path={outputPath} codebookMotifs={codebook.Motifs.Length} decoder={decoder.Configuration.Id} pathBands={pathState.BandResponses.Length} actuatorControls={actuator.FaustControls.Length} sceneLayers={scene.Layers.Length} programOutput={output.OutputId} moveTracking=2 fusedMovePose={fusedMovePose.PoseId} authority={fusedMovePose.FusionAuthorityId} consumer={fusedMovePose.ConsumerContract} hosts={starfireMove.HostId},{nightwingMove.HostId}");
     return 0;
 }
 
@@ -4045,11 +4032,6 @@ static async Task<int> ImportObsProgramSceneAsync(string inputPath, string scene
         scene.SceneId,
         MimirProgramPublicationConfigurations.YggdrasilSiteProgram,
         importedAt);
-    var eveSurface = MimirCultMeshContractFactory.CreateOperatorSurface(
-        "mimir-eve-gui-compositor",
-        scene.SceneId,
-        MimirProgramPublicationConfigurations.OperatorSurfaces[0],
-        importedAt);
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
     using var cache = await CultCacheMessagePack.OpenAsync(outputPath).ConfigureAwait(false);
@@ -4060,10 +4042,6 @@ static async Task<int> ImportObsProgramSceneAsync(string inputPath, string scene
     await cache.UpsertAsync(
         output,
         new CultRecordHandle<MimirProgramOutputDocument>(new CultRecordKey($"mimir-program-output:{output.OutputId}")))
-        .ConfigureAwait(false);
-    await cache.UpsertAsync(
-        eveSurface,
-        new CultRecordHandle<MimirEveOperatorSurfaceDocument>(new CultRecordKey($"mimir-eve-surface:{eveSurface.SurfaceId}")))
         .ConfigureAwait(false);
     await cache.FlushAsync().ConfigureAwait(false);
 

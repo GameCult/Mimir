@@ -29,7 +29,7 @@ Inputs become outputs like this:
 - OBS can receive ordinary media-source URLs for compatibility; it does not need
   a plugin for this bridge path.
 - Audio remains separately mixable at the compatibility edge, but the durable
-  control surface belongs to Mimir/Eve.
+  control surface belongs to Mimir.
 - Ports are stable and derived from one base port plus explicit offsets.
 - Secrets, if used, stay in local config and are not committed.
 

@@ -20,8 +20,6 @@ public enum MimirProgramAudioPublicationKind
 
 public enum MimirProgramControlPublicationKind
 {
-    EveGui,
-    EveTui,
     CultMeshCommandSurface
 }
 
@@ -71,24 +69,8 @@ public static class MimirProgramPublicationConfigurations
     public static IReadOnlyList<MimirProgramControlSurface> OperatorSurfaces { get; } =
     [
         new(
-            "eve-gui-compositor",
-            "Primary Eve GUI composition surface: preview, source selection, transforms, crop/key controls, audio stem controls, and stream health.",
-            MimirProgramControlPublicationKind.EveGui,
-            CanPreviewProgram: true,
-            CanEditComposition: true,
-            CanSelectSources: true,
-            CanShowStats: true),
-        new(
-            "eve-tui-operator",
-            "Compact Eve TUI operator surface for source health, live stats, scene selection, and emergency command paths.",
-            MimirProgramControlPublicationKind.EveTui,
-            CanPreviewProgram: false,
-            CanEditComposition: false,
-            CanSelectSources: true,
-            CanShowStats: true),
-        new(
             "cultmesh-command-surface",
-            "Typed CultMesh command surface consumed by Eve lowerers and trusted devices; Mimir remains the scene authority.",
+            "Typed CultMesh command surface consumed by trusted devices; Mimir remains the scene authority.",
             MimirProgramControlPublicationKind.CultMeshCommandSurface,
             CanPreviewProgram: false,
             CanEditComposition: true,

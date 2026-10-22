@@ -11,14 +11,14 @@ temporary compatibility sink only.
 - Owner: Mimir owns the program scene graph and subscription policy.
 - Inputs: Muninn-published local and remote monitor, window, camera, audio,
   loopback, and health streams.
-- Outputs: a Mimir program video surface, aligned audio stems or final bus, Eve
-  GUI/TUI operator surfaces, and a Yggdrasil-facing site publication feed.
+- Outputs: a Mimir program video surface, aligned audio stems or final bus,
+  and a Yggdrasil-facing site publication feed.
 - Derived state: OBS receives a compatibility feed when useful; it does not own
   scene truth, broadcast truth, preview truth, stats, source selection, or
   publication.
 - Forbidden writers: OBS scenes, browser dashboards, site daemons, and Muninn
   capture hosts must not independently decide the program composition.
-- Shared paths: direct operator edits, remote Eve commands, preset loads,
+- Shared paths: direct operator edits, remote commands, preset loads,
   calibration-driven source selection, and recovery scripts must commit through
   the same Mimir scene graph command surface.
 - Deletion line: old OBS-owned composition docs and config names are demoted to
@@ -39,7 +39,6 @@ flowchart TD
     F --> I["Faust/native DSP"]
     H --> J["program video surface"]
     I --> K["program audio stems/bus"]
-    G --> L["Eve GUI/TUI operator surfaces"]
     J --> M["Yggdrasil site publisher daemon"]
     K --> M
     M --> N["GameCult site"]
@@ -68,22 +67,7 @@ The current OBS scene can be mirrored as an initial Mimir scene:
   active.
 
 After import, OBS is not the editor of record. It may display the Mimir program
-feed, but operator edits happen through Mimir/Eve command surfaces.
-
-## Eve Operator Surface
-
-Mimir publishes Eve GUI/TUI documents for:
-
-- live program preview;
-- source catalog and subscription state;
-- layer transform, crop, chroma key, visibility, and ordering;
-- audio stem gain/mute/route controls;
-- stream health, latency, buffer depth, timing confidence, and publication
-  status;
-- emergency scene selection and publisher recovery commands.
-
-Eve lowerers render those controls on any device without owning the underlying
-scene graph.
+feed, but operator edits happen through Mimir command surfaces.
 
 ## Site Publisher
 

@@ -365,14 +365,12 @@ a named invariant that the native runtime cannot protect yet.
 - Windows bridge scripts for sender discovery/start/stop and simple OBS Media
   Source compatibility ingest.
 - `src/Mimir.Runtime/Synchronization` now contains the first typed program
-  composition contracts: `mimir.program_scene.v1`, `mimir.program_output.v1`,
-  and `mimir.eve_operator_surface.v1`. These make Mimir's scene graph,
-  Yggdrasil/site publication route, and Eve operator control/preview surface
+  composition contracts: `mimir.program_scene.v1` and `mimir.program_output.v1`.
+  These make Mimir's scene graph and Yggdrasil/site publication route
   manifestable through CultMesh.
 - `docs/mimir-program-composition.md` is the current authority map for the new
   stream-program architecture: Muninn observes on Starfire/Nightwing/Raven-class
-  hosts, Mimir consumes selected streams and composes the program, Eve lowers
-  controls/previews/stats, Yggdrasil publishes to the site, and OBS is
+  hosts, Mimir consumes selected streams and composes the program, Yggdrasil publishes to the site, and OBS is
   compatibility-only.
 - `src/Mimir.CultMeshMedia` is the first explicit CultMesh media/body bridge:
   `relay` hosts the document relay on CultNet RUDP `3075`, `send` reads an
@@ -399,23 +397,13 @@ a named invariant that the native runtime cannot protect yet.
   capture still defaults to FFmpeg desktop frames plus Mimir's WASAPI loopback
   capture muxed as H.264/AAC MPEG-TS; DirectShow audio remains an explicit
   fallback.
-- `src/Mimir.EveDashboard` is archived until the dashboard returns as a pure
-  CultMesh/Odin publisher and Eve lowering. The old HTTP/WebSocket deck broker,
-  local health route, socket command channel, and provider route catalog are not
-  daemon transport. Dashboard state must be published as typed CultMesh/Eve
-  documents through Odin, and dashboard commands must arrive as typed Odin/
-  CultMesh command documents.
-- `src/Mimir.EveBrowserReference` serves static browser lowerings and can
-  publish its own `idunn.daemon_health` record over
-  `cultnet.transport.rudp.v0`. It remains a renderer/reference surface, not
-  program authority.
 - Documentation for OBS receiver setup, native rebuild boundaries, the viable
   stream app, and the Mimir Face.
 
 ## Temporary
 
 - Audio and video may still traverse separate OBS/SRT endpoints during bridge
-  testing, but Mimir/Eve owns independent controls.
+  testing, but Mimir owns independent controls.
 - The CultMesh media bridge still lowers to local UDP for compatibility sinks
   because OBS is not a CultMesh consumer. Network transit between Raven,
   Yggdrasil, and Starfire is the Odin-discovered CultMesh/CultNet path;
@@ -533,7 +521,7 @@ proxy impairment profiles and long soak remain the completion gate.
 9. Implement the Mimir program scene graph as the shared commit primitive for
    source subscription, transforms, crop, chroma key, visibility, layer order,
    preview, and output publication. Import the current OBS scene only as an
-   initial mirror, then make Eve GUI/TUI the operator surface.
+   initial mirror; the operator surface returns on Thing 2.
 10. Add the Yggdrasil-facing site publisher daemon that consumes the Mimir
    program output and publishes it without owning a second composition.
 11. Lower `AquariumBufferFieldFrame` spline tube fields into Fensalir compute:

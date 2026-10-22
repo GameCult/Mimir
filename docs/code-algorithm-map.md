@@ -16,7 +16,7 @@ Timestamp for this pass: 2026-05-23, starting at 23:24 Europe/London.
 Mimir collects local and network audio/video samples into bounded rolling
 runtime buffers, uses active/passive timing evidence to place audio streams on a
 canonical timeline, and lets Mimir own program composition while Fensalir lowers
-pixels, Faust/native DSP moves audio, Eve exposes operator surfaces, and
+pixels, Faust/native DSP moves audio, and
 Yggdrasil publishes the public feed.
 
 ## Current Mechanism
@@ -61,8 +61,6 @@ reflection taps.
   program video output.
 - Faust/native DSP will own hot resampling, fractional delay, separation,
   spatialization, and stems.
-- Eve GUI/TUI lowerers render Mimir operator surfaces without owning scene
-  truth.
 - The Yggdrasil-facing publisher daemon consumes Mimir program output without
   owning composition.
 - OBS is a compatibility sink only.
@@ -91,7 +89,6 @@ flowchart TD
     Probes["native/probes/*"] --> FrameEvents["MimirFrameEventProcessStreamSource"]
     FrameEvents --> Sources
     Runtime --> Scene["Mimir program scene graph"]
-    Scene --> Eve["Eve operator surfaces"]
     Scene --> Publisher["Yggdrasil site publisher"]
     Scene -. "compatibility" .-> Obs["OBS adapter"]
     Reservoir["native/reservoir"] -. "future lower ABI" .-> Hub
@@ -108,7 +105,7 @@ flowchart TD
 - `native/probes/*` are measurement and diagnostic tools.
 - `scripts/*` are bridge utilities, not the final synchronized program path.
 - `docs/mimir-program-composition.md` is the authority map for Muninn capture
-  hosts, Mimir composition, Eve operation, Yggdrasil publication, and OBS
+  hosts, Mimir composition, Yggdrasil publication, and OBS
   compatibility.
 
 ## Stage 0: Solution And App Host

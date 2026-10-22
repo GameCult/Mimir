@@ -44,7 +44,6 @@
   "authorities": {
     "configurationCalibrationLaunchStatus": "Mimir",
     "programComposition": "Mimir",
-    "operatorSurfaces": "Eve",
     "sitePublication": "Yggdrasil publisher daemon",
     "denseVisualFusion": "Fensalir",
     "gpuMaterialAndBrushReconciliation": "Fensalir",
@@ -97,10 +96,8 @@
       ]
     },
     "operator": {
-      "owner": "Mimir/Eve",
+      "owner": "Mimir",
       "surfaces": [
-        "eve-gui-compositor",
-        "eve-tui-operator",
         "cultmesh-command-surface"
       ]
     },
@@ -120,7 +117,6 @@
       "native-reservoir",
       "Fensalir",
       "Faust",
-      "Eve",
       "Yggdrasil publisher daemon"
     ],
     "neverInCompatibilityEdges": [

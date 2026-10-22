@@ -28,7 +28,6 @@ flowchart TD
     N --> F["Faust/native DSP"]
     E --> G["Mimir program video"]
     F --> H["program stems + spatial bed"]
-    E --> I["Eve GUI/TUI operator surfaces"]
     G --> J["Yggdrasil site publisher"]
     H --> J
     G -. "compatibility" .-> K["OBS adapter"]
@@ -53,17 +52,10 @@ Ownership:
   Fensalir-facing wand pose stream.
 - Mimir owns program composition, source subscription policy, preview/control
   state, stats, and publication intent.
-- Mimir's old Eve dashboard broker is archived; it does not publish health,
-  provider catalogs, or command surfaces while the socket path is cut. The
-  browser reference remains a client lowering, not daemon truth. Dashboard state
-  must return as typed CultMesh/Eve documents through Odin; product/debug render
-  surfaces are client lowerings and compatibility evidence, not daemon truth.
 - Fensalir owns dense visual fusion, material/brush/splat reconciliation,
   D3D12 interop, runtime UI lowering, and local program texture output.
 - Faust/native DSP owns hot audio alignment, suppression, separation,
   spatialization, and stem generation.
-- Eve GUI/TUI lowerers render Mimir's operator surfaces on any device without
-  owning scene truth.
 - The Yggdrasil-facing publisher daemon consumes Mimir program output and
   publishes it to the site without owning composition.
 - OBS is a temporary compatibility sink, not a composition or broadcast
@@ -302,7 +294,7 @@ evidence.
 authority map for stream-program output. Muninn runs on Starfire, Nightwing, and
 Raven-class capture hosts to publish local stream capabilities and selected
 media bodies. Mimir consumes only the streams it needs for calibration and
-composition, commits one typed scene graph, emits Eve GUI/TUI operator surfaces,
+composition, commits one typed scene graph,
 and publishes program output locally plus through a Yggdrasil-facing site
 publisher.
 
@@ -439,14 +431,6 @@ an RUDP contract exists.
 
 Mimir's current daemon-health publishers are local RUDP witnesses:
 
-- `src/Mimir.EveDashboard` is a fail-closed archive tombstone. It no longer
-  starts a TCP listener, serves `/eve/deck`, accepts WebSocket commands, or
-  publishes daemon health. `mimir.eve_dashboard_state` must return through Odin/
-  CultMesh state publication before this service can be redeployed.
-- `src/Mimir.EveBrowserReference` serves a static browser lowering and, when
-  configured with `--idunn-rudp-health` or
-  `MIMIR_EVE_BROWSER_REFERENCE_IDUNN_RUDP_HEALTH`, sends its own
-  `idunn.daemon_health` record over the same RUDP document path.
 
 Invariant: health publication is not ownership. The daemon reports what it can
 honestly observe about itself; Idunn decides keepalive action through the

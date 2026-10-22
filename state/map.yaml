@@ -652,16 +652,6 @@ accepted_design:
     receiver. The old `CultMesh.StartNodeAsync`/`CultMesh.ConnectClient`
     node/client path and raw sender/receiver host-port config are no longer
     transport authorities for this media lane.
-  - `src/Mimir.EveDashboard` is archived as a fail-closed tombstone. It no
-    longer opens a TCP listener, serves `/eve/deck`, accepts WebSocket commands,
-    or publishes Idunn health. Its replacement must publish provider
-    advertisement, retained state, command boundary, and transport profile as
-    typed CultMesh/Odin documents; product/debug render surfaces remain client
-    lowerings.
-  - `src/Mimir.EveBrowserReference` serves a static Eve/browser lowering and
-    can publish its own `idunn.daemon_health` record over
-    `cultnet.transport.rudp.v0`. It is a renderer/reference health witness, not
-    an authority over Mimir program state or Idunn keepalive decisions.
   - `research/perfect-machine-study-2026-05-23/` preserves the architecture
     rumination, optimization ledger, research references, source/hotspot audits,
     Fensalir/native boundary maps, benchmark plan, calibration-session spec,
@@ -690,13 +680,7 @@ active_subgoals:
     replaces them.
   - Launch Raven's CultMesh sender directly on Raven because SSH to Raven over
     WireGuard timed out during the initial relay deployment pass.
-  - Keep Mimir Eve dashboard and browser reference aligned with Odin/Idunn
-    doctrine: Odin accepts Verse/service visibility, Idunn owns keepalive, and
-    Mimir surfaces publish typed CultMesh/Odin state rather than private
-    watchdog loops, product status probes, or socket brokers.
-  - Rebuild `src/Mimir.EveDashboard` only after daemon truth, provider catalogs,
-    command boundaries, and typed program document paths use explicit CultMesh/
-    Odin documents. `Mimir.EveSensorReceiver`, `Mimir.VerseRecorder`, the
+  - `Mimir.EveSensorReceiver`, `Mimir.VerseRecorder`, the
     Nightwing typed witness publisher, and `start-nightwing-move-tracking.ps1`
     are archived so the old witness subscription lane cannot retake transport
     authority. `src/Mimir.CultMeshMedia` has completed this cut for the
