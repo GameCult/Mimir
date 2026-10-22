@@ -10,8 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\CultLib\src\GameCult.Caching.MessagePack\GameCult.Caching.MessagePack.csproj" />
-    <ProjectReference Include="..\..\..\CultLib\src\GameCult.Networking\GameCult.Networking.csproj" />
+    <ProjectReference Include="$(CultLibRoot)\src\GameCult.Caching.MessagePack\GameCult.Caching.MessagePack.csproj" />
+    <ProjectReference Include="$(CultLibRoot)\src\GameCult.Networking\GameCult.Networking.csproj" />
   </ItemGroup>
 
 </Project>

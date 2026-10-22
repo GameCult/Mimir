@@ -1,0 +1,30 @@
+<Project>
+  <!-- Builds consume CultLib at one admitted revision. Point CultLibRoot (or CULTLIB_ROOT) at a clean
+       worktree of that revision: git worktree add <path> cultlib-unity-v2.0.0 (detached) (in CultLib). -->
+  <Target Name="VerifyCultLibRevision"
+          BeforeTargets="ResolveProjectReferences"
+          Condition="'$(SkipCultLibRevisionCheck)' != 'true'">
+    <ItemGroup>
+      <_CultLibReference Include="@(ProjectReference)"
+                         Condition="$([System.String]::Copy('%(Filename)').StartsWith('GameCult.')) or '%(Filename)' == 'CultMath'" />
+    </ItemGroup>
+    <Error Condition="'@(_CultLibReference)' != '' and !Exists('$(CultLibRoot)\src\GameCult.Caching\GameCult.Caching.csproj')"
+           Text="CultLibRoot '$(CultLibRoot)' is not a CultLib checkout." />
+    <Exec Condition="'@(_CultLibReference)' != ''"
+          Command="&quot;$(GitExecutable)&quot; -C &quot;$(CultLibRoot)&quot; rev-parse HEAD"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="ActualCultLibRevision" />
+    </Exec>
+    <Error Condition="'@(_CultLibReference)' != '' and '$([System.String]::Copy($(ActualCultLibRevision)).Trim())' != '$(CultLibRevision)'"
+           Text="CultLib must be revision $(CultLibRevision) (cultlib-unity-v2.0.0); found $([System.String]::Copy($(ActualCultLibRevision)).Trim()). Set CultLibRoot to a clean worktree of that tag." />
+    <Exec Condition="'@(_CultLibReference)' != ''"
+          Command="&quot;$(GitExecutable)&quot; -C &quot;$(CultLibRoot)&quot; status --porcelain --untracked-files=normal"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="CultLibStatus" />
+    </Exec>
+    <Error Condition="'@(_CultLibReference)' != '' and '$([System.String]::Copy($(CultLibStatus)).Trim())' != ''"
+           Text="CultLibRoot '$(CultLibRoot)' must be clean before this repo consumes it." />
+  </Target>
+</Project>
